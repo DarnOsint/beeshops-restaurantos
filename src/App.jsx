@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Login from './pages/auth/Login'
 import Executive from './pages/executive/Executive'
+import POS from './pages/pos/POS'
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth()
@@ -26,7 +27,6 @@ function RoleRoute() {
 
   if (!profile) return <Navigate to="/login" />
 
-  // Redirect based on role
   switch (profile.role) {
     case 'owner': return <Navigate to="/executive" />
     case 'manager': return <Navigate to="/management" />
@@ -49,6 +49,11 @@ function App() {
         <Route path="/executive" element={
           <PrivateRoute>
             <Executive />
+          </PrivateRoute>
+        } />
+        <Route path="/pos" element={
+          <PrivateRoute>
+            <POS />
           </PrivateRoute>
         } />
         <Route path="/" element={<Navigate to="/dashboard" />} />

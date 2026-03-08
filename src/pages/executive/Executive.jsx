@@ -21,7 +21,7 @@ export default function Executive() {
   const { profile, signOut } = useAuth()
 
   const stats = [
-    { label: "Today's Revenue", value: "R0.00", icon: TrendingUp, color: "text-green-400", bg: "bg-green-400/10" },
+    { label: "Today's Revenue", value: "₦0.00", icon: TrendingUp, color: "text-green-400", bg: "bg-green-400/10" },
     { label: "Open Orders", value: "0", icon: ShoppingBag, color: "text-amber-400", bg: "bg-amber-400/10" },
     { label: "Occupied Tables", value: "0/60", icon: LayoutDashboard, color: "text-blue-400", bg: "bg-blue-400/10" },
     { label: "Occupied Rooms", value: "0/20", icon: BedDouble, color: "text-purple-400", bg: "bg-purple-400/10" },
@@ -76,7 +76,7 @@ export default function Executive() {
                 <stat.icon size={20} className={stat.color} />
               </div>
               <p className="text-gray-400 text-sm">{stat.label}</p>
-              <p className="text-white text-2xl font-bold mt-1">{stat.value}</p>
+              { label: "Today's Revenue", value: "₦0.00", icon: TrendingUp, color: "text-green-400", bg: "bg-green-400/10" },
             </div>
           ))}
         </div>
