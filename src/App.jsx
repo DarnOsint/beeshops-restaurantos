@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext'
 import Login from './pages/auth/Login'
 import Executive from './pages/executive/Executive'
 import POS from './pages/pos/POS'
+import Management from './pages/management/Management'
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth()
@@ -54,6 +55,11 @@ function App() {
         <Route path="/pos" element={
           <PrivateRoute>
             <POS />
+          </PrivateRoute>
+        } />
+        <Route path="/management" element={
+          <PrivateRoute>
+            <Management />
           </PrivateRoute>
         } />
         <Route path="/" element={<Navigate to="/dashboard" />} />

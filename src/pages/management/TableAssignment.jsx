@@ -1,0 +1,217 @@
+import { useState, useEffect } from 'react'
+import { supabase } from '../../lib/supabase'
+import { X, Users, UserPlus, UserMinus } from 'lucide-react'
+
+const categoryColors = {
+  'Outdoor': { card: 'bg-green-500/10 border-green-500/20', text: 'text-green-400', badge: 'bg-green-500/20 text-green-300' },
+  'Indoor': { card: 'bg-blue-500/10 border-blue-500/20', text: 'text-blue-400', badge: 'bg-blue-500/20 text-blue-300' },
+  'VIP Lounge': { card: 'bg-amber-500/10 border-amber-500/20', text: 'text-amber-400', badge: 'bg-amber-500/20 text-amber-300' },
+  'The Nook': { card: 'bg-purple-500/10 border-purple-500/20', text: 'text-purple-400', badge: 'bg-purple-500/20 text-purple-300' },
+}
+
+export default function TableAssignment({ onClose }) {
+  const [categories, setCategories] = useState([])
+  const [staff, setStaff] = useState([])
+  const [assignments, setAssignments] = useState({})
+  const [selectedStaff, setSelectedStaff] = useState({})
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchAll()
+  }, [])
+
+  const fetchAll = async () => {
+    await Promise.all([
+      fetchCategories(),
+      fetchActiveStaff(),
+      fetchAssignments()
+    ])
+    setLoading(false)
+  }
+
+  const fetchCategories = async () => {
+    const { data } = await supabase
+      .from('table_categories')
+      .select('*, tables(id, status)')
+      .order('name')
+    if (data) setCategories(data)
+  }
+
+  const fetchActiveStaff = async () => {
+    const { data } = await supabase
+      .from('till_sessions')
+      .select('*, profiles(id, full_name, role)')
+      .eq('status', 'open')
+    if (data) setStaff(data)
+  }
+
+  const fetchAssignments = async () => {
+    const { data } = await supabase
+      .from('zone_assignments')
+      .select('*, profiles(id, full_name)')
+      .eq('is_active', true)
+    
+    if (data) {
+      const map = {}
+      data.forEach(a => {
+        if (!map[a.category_id]) map[a.category_id] = []
+        map[a.category_id].push(a)
+      })
+      setAssignments(map)
+    }
+  }
+
+  const addStaffToZone = async (categoryId) => {
+    const staffId = selectedStaff[categoryId]
+    if (!staffId) return
+
+    // Check if already assigned
+    const existing = assignments[categoryId] || []
+    if (existing.find(a => a.staff_id === staffId)) {
+      alert('This staff member is already assigned to this zone!')
+      return
+    }
+
+    const { error } = await supabase
+      .from('zone_assignments')
+      .insert({
+        category_id: categoryId,
+        staff_id: staffId,
+        is_active: true
+      })
+
+    if (!error) {
+      setSelectedStaff(prev => ({ ...prev, [categoryId]: '' }))
+      fetchAssignments()
+    }
+  }
+
+  const removeStaffFromZone = async (assignmentId, categoryId) => {
+    const { error } = await supabase
+      .from('zone_assignments')
+      .delete()
+      .eq('id', assignmentId)
+
+    if (!error) fetchAssignments()
+  }
+
+  const getAvailableStaff = (categoryId) => {
+    const assigned = (assignments[categoryId] || []).map(a => a.staff_id)
+    return staff.filter(s => !assigned.includes(s.profiles?.id))
+  }
+
+  if (loading) return (
+    <div className="flex items-center justify-center p-8">
+      <div className="text-amber-500">Loading...</div>
+    </div>
+  )
+
+  return (
+    <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h3 className="text-white font-bold text-lg">Zone Assignment</h3>
+          <p className="text-gray-400 text-xs mt-0.5">Assign multiple waitrons to sections</p>
+        </div>
+        {onClose && (
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
+            <X size={18} />
+          </button>
+        )}
+      </div>
+
+      {staff.length === 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 mb-4">
+          <p className="text-amber-400 text-sm">
+            No staff on shift. Clock in staff first before assigning zones.
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {categories.map(category => {
+          const colors = categoryColors[category.name] || { card: 'bg-gray-800 border-gray-700', text: 'text-gray-400', badge: 'bg-gray-700 text-gray-300' }
+          const totalTables = category.tables?.length || 0
+          const occupiedTables = category.tables?.filter(t => t.status === 'occupied').length || 0
+          const zoneAssignments = assignments[category.id] || []
+          const available = getAvailableStaff(category.id)
+
+          return (
+            <div key={category.id} className={`rounded-xl border p-4 ${colors.card}`}>
+              
+              {/* Zone Header */}
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h4 className={`font-semibold ${colors.text}`}>{category.name}</h4>
+                  <p className="text-gray-500 text-xs">
+                    {occupiedTables}/{totalTables} tables occupied
+                  </p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Users size={14} className={colors.text} />
+                  <span className={`text-xs font-medium ${colors.text}`}>
+                    {zoneAssignments.length} assigned
+                  </span>
+                </div>
+              </div>
+
+              {/* Assigned Staff */}
+              {zoneAssignments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {zoneAssignments.map(assignment => (
+                    <div
+                      key={assignment.id}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${colors.badge}`}
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                      {assignment.profiles?.full_name}
+                      <button
+                        onClick={() => removeStaffFromZone(assignment.id, category.id)}
+                        className="ml-1 opacity-60 hover:opacity-100 transition-opacity"
+                      >
+                        <UserMinus size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add Staff */}
+              {staff.length > 0 && available.length > 0 && (
+                <div className="flex gap-2">
+                  <select
+                    value={selectedStaff[category.id] || ''}
+                    onChange={(e) => setSelectedStaff(prev => ({ 
+                      ...prev, 
+                      [category.id]: e.target.value 
+                    }))}
+                    className="flex-1 bg-black/20 text-white text-sm rounded-lg px-3 py-1.5 border border-white/10 focus:outline-none focus:border-white/30"
+                  >
+                    <option value="">-- Add waitron --</option>
+                    {available.map(s => (
+                      <option key={s.profiles?.id} value={s.profiles?.id}>
+                        {s.profiles?.full_name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => addStaffToZone(category.id)}
+                    disabled={!selectedStaff[category.id]}
+                    className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white rounded-lg px-3 py-1.5 text-sm transition-colors"
+                  >
+                    <UserPlus size={14} />
+                    Add
+                  </button>
+                </div>
+              )}
+
+              {staff.length > 0 && available.length === 0 && zoneAssignments.length > 0 && (
+                <p className="text-xs text-gray-500 mt-1">All on-shift staff assigned to this zone</p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
