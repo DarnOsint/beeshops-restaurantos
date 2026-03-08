@@ -76,7 +76,7 @@ export default function Executive() {
                 <stat.icon size={20} className={stat.color} />
               </div>
               <p className="text-gray-400 text-sm">{stat.label}</p>
-              { label: "Today's Revenue", value: "₦0.00", icon: TrendingUp, color: "text-green-400", bg: "bg-green-400/10" },
+              <p className="text-white text-2xl font-bold mt-1">{stat.value}</p>
             </div>
           ))}
         </div>
