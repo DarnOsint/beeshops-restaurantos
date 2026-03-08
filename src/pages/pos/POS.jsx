@@ -9,17 +9,18 @@ export default function POS() {
   const { profile, signOut } = useAuth()
   const [tables, setTables] = useState([])
   const [menuItems, setMenuItems] = useState([])
+  const [zonePrices, setZonePrices] = useState([])
   const [selectedTable, setSelectedTable] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetchTables()
     fetchMenu()
+    fetchZonePrices()
 
-    // Real-time updates
     const channel = supabase
       .channel('tables-channel')
-      .on('postgres_changes', 
+      .on('postgres_changes',
         { event: '*', schema: 'public', table: 'tables' },
         () => fetchTables()
       )
@@ -31,9 +32,8 @@ export default function POS() {
   const fetchTables = async () => {
     const { data, error } = await supabase
       .from('tables')
-      .select('*, table_categories(name)')
+      .select('*, table_categories(id, name)')
       .order('name')
-
     if (!error) setTables(data)
     setLoading(false)
   }
@@ -44,12 +44,37 @@ export default function POS() {
       .select('*, menu_categories(name)')
       .eq('is_available', true)
       .order('name')
-
     if (!error) setMenuItems(data)
   }
 
+  const fetchZonePrices = async () => {
+    const { data, error } = await supabase
+      .from('menu_item_zone_prices')
+      .select('*')
+    if (!error) setZonePrices(data)
+  }
+
+  const getMenuItemsWithZonePrices = (table) => {
+    if (!table) return menuItems
+    const categoryId = table.table_categories?.id
+
+    return menuItems.map(item => {
+      const zonePrice = zonePrices.find(
+        zp => zp.menu_item_id === item.id && zp.category_id === categoryId
+      )
+      return {
+        ...item,
+        price: zonePrice ? zonePrice.price : item.price,
+        hasZonePrice: !!zonePrice
+      }
+    })
+  }
+
+  const handleSelectTable = (table) => {
+    setSelectedTable(table)
+  }
+
   const handlePlaceOrder = async ({ table, items, notes, total }) => {
-    // Create order
     const { data: order, error: orderError } = await supabase
       .from('orders')
       .insert({
@@ -68,7 +93,6 @@ export default function POS() {
       return
     }
 
-    // Create order items
     const orderItems = items.map(item => ({
       order_id: order.id,
       menu_item_id: item.id,
@@ -80,7 +104,6 @@ export default function POS() {
 
     await supabase.from('order_items').insert(orderItems)
 
-    // Update table status
     await supabase
       .from('tables')
       .update({ status: 'occupied' })
@@ -88,7 +111,6 @@ export default function POS() {
 
     setSelectedTable(null)
     fetchTables()
-    alert('Order sent to kitchen!')
   }
 
   if (loading) return (
@@ -100,7 +122,6 @@ export default function POS() {
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col">
 
-      {/* Header */}
       <nav className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center">
@@ -125,24 +146,20 @@ export default function POS() {
         </div>
       </nav>
 
-      {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-
-        {/* Table Grid */}
         <div className={`${selectedTable ? 'hidden md:flex' : 'flex'} flex-1 flex-col overflow-hidden`}>
           <TableGrid
             tables={tables}
-            onSelectTable={setSelectedTable}
+            onSelectTable={handleSelectTable}
             selectedTable={selectedTable}
           />
         </div>
 
-        {/* Order Panel */}
         {selectedTable && (
           <div className="w-full md:w-96 border-l border-gray-800 flex flex-col overflow-hidden">
             <OrderPanel
               table={selectedTable}
-              menuItems={menuItems}
+              menuItems={getMenuItemsWithZonePrices(selectedTable)}
               onPlaceOrder={handlePlaceOrder}
               onClose={() => setSelectedTable(null)}
             />
