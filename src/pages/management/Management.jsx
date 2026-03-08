@@ -3,10 +3,11 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { 
   Beer, LogOut, Users, LayoutDashboard, 
-  ShoppingBag, TrendingUp, Clock, ChevronRight
+  ShoppingBag, TrendingUp, Clock, ChevronRight, DollarSign
 } from 'lucide-react'
 import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
+import TillManagement from './TillManagement'
 
 export default function Management() {
   const { profile, signOut } = useAuth()
@@ -62,6 +63,7 @@ export default function Management() {
     { id: 'shifts', label: 'Shifts', icon: Clock },
     { id: 'tables', label: 'Tables', icon: Users },
     { id: 'orders', label: 'Orders', icon: ShoppingBag },
+    { id: 'till', label: 'Till', icon: DollarSign },
   ]
 
   return (
@@ -121,6 +123,7 @@ export default function Management() {
                 { label: 'Occupied Tables', value: `${stats.occupiedTables}/60`, icon: LayoutDashboard, color: 'text-blue-400', bg: 'bg-blue-400/10' },
                 { label: 'Staff On Shift', value: stats.staffOnShift, icon: Users, color: 'text-green-400', bg: 'bg-green-400/10' },
                 { label: 'Revenue Today', value: `₦${stats.todayRevenue.toLocaleString()}`, icon: TrendingUp, color: 'text-purple-400', bg: 'bg-purple-400/10' },
+                { label: 'Till Management', sub: 'Cash control and payouts', tab: 'till', icon: DollarSign },
               ].map((stat, i) => (
                 <div key={i} className="bg-gray-900 rounded-2xl p-4 border border-gray-800">
                   <div className={`inline-flex p-2 rounded-lg ${stat.bg} mb-2`}>
@@ -171,6 +174,8 @@ export default function Management() {
 
         {/* Orders Tab */}
         {activeTab === 'orders' && <OpenOrders />}
+
+        {activeTab === 'till' && <TillManagement />}
       </div>
     </div>
   )
