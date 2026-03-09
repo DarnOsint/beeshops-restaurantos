@@ -48,12 +48,23 @@ export default function POS() {
       setAssignedTableIds(null) // null = no restriction
       return
     }
-    // Fetch tables assigned to this waitron
-    const { data } = await supabase
+    // Fetch zones assigned to this waitron
+    const { data: zoneData } = await supabase
       .from('zone_assignments')
-      .select('table_id')
+      .select('category_id')
       .eq('staff_id', profile?.id)
-    if (data) setAssignedTableIds(data.map(r => r.table_id))
+      .eq('is_active', true)
+    if (!zoneData || zoneData.length === 0) {
+      setAssignedTableIds([]) // no zones assigned — no tables
+      return
+    }
+    // Get all tables in those zones
+    const categoryIds = zoneData.map(z => z.category_id)
+    const { data: tableData } = await supabase
+      .from('tables')
+      .select('id')
+      .in('category_id', categoryIds)
+    if (tableData) setAssignedTableIds(tableData.map(t => t.id))
     else setAssignedTableIds([])
   }
 
