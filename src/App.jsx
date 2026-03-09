@@ -56,6 +56,7 @@ function RoleRoute() {
   if (profile.role === 'kitchen') return <Navigate to="/kds/kitchen" />
   if (profile.role === 'bar') return <Navigate to="/kds/bar" />
   if (profile.role === 'griller') return <Navigate to="/kds/griller" />
+  if (profile.role === 'apartment_manager') return <Navigate to="/apartment" />
   return <Navigate to="/login" />
 }
 
