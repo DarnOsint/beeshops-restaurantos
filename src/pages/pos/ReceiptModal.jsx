@@ -103,7 +103,10 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
     URL.revokeObjectURL(url)
   }
 
-  const total = items.reduce((sum, i) => sum + i.total_price, 0)
+  const subtotal = items.reduce((sum, i) => sum + (i.total_price || 0) + (i.extra_charge || 0), 0)
+  const vatRate = 0.075 // 7.5% Nigerian VAT
+  const vatAmount = subtotal * vatRate
+  const total = subtotal + vatAmount
 
   // QR code URL — links to customer order view
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`${window.location.origin}/order/${order.id}`)}&color=000000&bgcolor=ffffff`
@@ -194,10 +197,22 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
 
                 <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
 
-                {/* Total */}
+                {/* Totals */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', margin: '3px 0' }}>
+                  <span>Subtotal</span>
+                  <span>₦{subtotal.toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', margin: '3px 0' }}>
+                  <span>VAT (7.5%)</span>
+                  <span>₦{vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div style={{ borderTop: '1px solid #000', margin: '3px 0' }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '14px', margin: '4px 0' }}>
                   <span>TOTAL</span>
-                  <span>₦{total.toLocaleString()}</span>
+                  <span>₦{total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div style={{ fontSize: '9px', color: '#666', margin: '2px 0' }}>
+                  VAT Reg: [Your TIN Number]
                 </div>
 
                 {order.notes && (
@@ -284,9 +299,16 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
                 <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
 
                 {/* Total */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', margin: '2px 0' }}>
+                  <span>Subtotal</span><span>₦{subtotal.toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', margin: '2px 0' }}>
+                  <span>VAT (7.5%)</span><span>₦{vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div style={{ borderTop: '1px solid #000', margin: '3px 0' }} />
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: '13px' }}>
                   <span>TOTAL CHARGED</span>
-                  <span>₦{total.toLocaleString()}</span>
+                  <span>₦{total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
 
                 {order.notes && (

@@ -24,7 +24,9 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
   const [splitPayMethod, setSplitPayMethod] = useState('cash')
   const [splitCash, setSplitCash] = useState('')
 
-  const total = order?.total_amount || 0
+  const subtotal = order?.total_amount || 0
+  const vatAmount = subtotal * 0.075
+  const total = subtotal + vatAmount
   const change = paymentMethod === 'cash' && cashTendered
     ? parseFloat(cashTendered) - total
     : 0
