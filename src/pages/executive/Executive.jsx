@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { 
   LayoutDashboard, ShoppingBag, Users, BedDouble,
   TrendingUp, Package, LogOut, Beer, RefreshCw, Settings,
-  BookOpen, BarChart2
+  BookOpen, BarChart2, MapPin
 } from 'lucide-react'
 
 function getGreeting() {
@@ -17,6 +17,8 @@ function getGreeting() {
 
 export default function Executive() {
   const { profile, signOut } = useAuth()
+  const [geofenceEnabled, setGeofenceEnabled] = useState(true)
+  const [geoToggling, setGeoToggling] = useState(false)
   const navigate = useNavigate()
   const [stats, setStats] = useState({
     revenue: 0, openOrders: 0, occupiedTables: 0,
@@ -28,6 +30,9 @@ export default function Executive() {
 
   useEffect(() => {
     fetchStats()
+    // Fetch geofence setting
+    supabase.from('settings').select('value').eq('id', 'geofence_enabled').single()
+      .then(({ data }) => { if (data) setGeofenceEnabled(data.value === 'true') })
     const interval = setInterval(fetchStats, 30000)
     const channel = supabase
       .channel('executive-realtime')
@@ -37,8 +42,16 @@ export default function Executive() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => fetchStats())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'room_stays' }, () => fetchStats())
       .subscribe()
-    return () => { clearInterval(interval); supabase.removeChannel(channel) }
+  return () => { clearInterval(interval); supabase.removeChannel(channel) }
   }, [])
+
+  const toggleGeofence = async () => {
+    setGeoToggling(true)
+    const newVal = (!geofenceEnabled).toString()
+    await supabase.from('settings').update({ value: newVal, updated_at: new Date().toISOString() }).eq('id', 'geofence_enabled')
+    setGeofenceEnabled(!geofenceEnabled)
+    setGeoToggling(false)
+  }
 
   const fetchStats = async () => {
     const today = new Date()
@@ -147,6 +160,17 @@ export default function Executive() {
             <p className="text-gray-400 mt-1">Here is what is happening at Beeshops Place today.</p>
           </div>
           <div className="flex items-center gap-3">
+            {/* Geofence Toggle */}
+            <button onClick={toggleGeofence} disabled={geoToggling}
+              className={`flex items-center gap-2 text-xs px-3 py-2 rounded-xl border transition-colors ${
+                geofenceEnabled
+                  ? 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'
+                  : 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20'
+              }`}>
+              <MapPin size={13} />
+              {geoToggling ? 'Updating...' : geofenceEnabled ? 'Geofence ON' : 'Geofence OFF'}
+              <span className={`w-2 h-2 rounded-full ${geofenceEnabled ? 'bg-green-400' : 'bg-red-400'}`} />
+            </button>
             {stats.lowStock > 0 && (
               <button onClick={() => navigate('/backoffice')}
                 className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 hover:bg-red-500/20 transition-colors">
