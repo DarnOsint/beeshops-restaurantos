@@ -45,7 +45,7 @@ export default function GrillerKDS() {
       .subscribe()
 
     // Timer to update elapsed times
-    const timer = setInterval(() => setTick(t => t + 1), 10000)
+    const timer = setInterval(() => setTick(t => t + 1), 1000)
 
     return () => {
       supabase.removeChannel(channel)

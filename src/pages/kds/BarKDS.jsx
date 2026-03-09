@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
@@ -11,6 +11,7 @@ export default function BarKDS() {
   if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
     fetchOrders()
@@ -21,6 +22,7 @@ export default function BarKDS() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
       .subscribe()
 
+    clearInterval(timer)
     return () => supabase.removeChannel(channel)
   }, [])
 
@@ -71,9 +73,11 @@ export default function BarKDS() {
   }
 
   const getElapsedTime = (createdAt) => {
-    const diff = Math.floor((new Date() - new Date(createdAt)) / 1000 / 60)
-    if (diff < 1) return 'Just now'
-    return `${diff}m ago`
+    const totalSeconds = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000)
+    if (totalSeconds < 60) return `${totalSeconds}s`
+    const mins = Math.floor(totalSeconds / 60)
+    const secs = totalSeconds % 60
+    return `${mins}m ${secs}s`
   }
 
   const getUrgencyColor = (createdAt) => {
@@ -137,7 +141,7 @@ export default function BarKDS() {
                   <h2 className="text-white font-bold text-lg">{order.tables?.name}</h2>
                   <div className="flex items-center gap-1 text-gray-400 text-xs">
                     <Clock size={12} />
-                    <span>{getElapsedTime(order.created_at)}</span>
+                    <span className={getTimerColor(order.created_at)}>{getElapsedTime(order.created_at)}</span>
                   </div>
                 </div>
 
