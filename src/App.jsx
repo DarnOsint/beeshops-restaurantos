@@ -1,3 +1,6 @@
+import { useNotifications } from './hooks/useNotifications'
+import NotificationToast from './components/NotificationToast'
+import { useAuth } from './context/AuthContext'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Login from './pages/auth/Login'
@@ -118,6 +121,17 @@ function AppRoutes() {
 
       <Route path="/" element={<Navigate to="/dashboard" />} />
     </Routes>
+  )
+}
+
+function AppInner() {
+  const { profile } = useAuth()
+  const { toasts, dismiss } = useNotifications(profile)
+  return (
+    <>
+      <NotificationToast toasts={toasts} onDismiss={dismiss} />
+      <AppRoutes />
+    </>
   )
 }
 
