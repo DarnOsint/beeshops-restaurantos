@@ -42,11 +42,10 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) 
 
   const total = orderItems.reduce((sum, item) => sum + item.total, 0)
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     if (orderItems.length === 0) return
-    onPlaceOrder({ table, items: orderItems, notes, total })
-    setOrderItems([])
-    setNotes('')
+    console.log('Placing order:', { table, items: orderItems, notes, total })
+    await onPlaceOrder({ table, items: orderItems, notes, total })
   }
 
   return (
@@ -124,7 +123,7 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) 
                 </button>
               </div>
               <span className="text-gray-300 text-sm flex-1">{item.name}</span>
-              <span className="text-white text-sm">R{item.total.toFixed(2)}</span>
+              <span className="text-white text-sm">₦{item.total.toFixed(2)}</span>
               <button onClick={() => deleteItem(item.id)} className="text-red-400">
                 <Trash2 size={14} />
               </button>

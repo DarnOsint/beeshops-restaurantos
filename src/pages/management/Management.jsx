@@ -1,60 +1,57 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { useNavigate } from 'react-router-dom'
 import { 
   Beer, LogOut, Users, LayoutDashboard, 
-  ShoppingBag, TrendingUp, Clock, ChevronRight, DollarSign
+  ShoppingBag, TrendingUp, Clock, ChevronRight, DollarSign, Settings, BookOpen, BedDouble
 } from 'lucide-react'
 import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
 import TillManagement from './TillManagement'
+import WaiterCalls from './WaiterCalls'
 
 export default function Management() {
   const { profile, signOut } = useAuth()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('overview')
   const [stats, setStats] = useState({
     openOrders: 0,
     occupiedTables: 0,
+    occupiedRooms: 0,
     staffOnShift: 0,
     todayRevenue: 0
   })
 
   useEffect(() => {
     fetchStats()
-
     const channel = supabase
       .channel('management-channel')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        () => fetchStats()
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchStats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => fetchStats())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_stays' }, () => fetchStats())
       .subscribe()
-
     return () => supabase.removeChannel(channel)
   }, [])
 
   const fetchStats = async () => {
-    const [ordersRes, tablesRes, staffRes] = await Promise.all([
-      supabase.from('orders').select('id, total_amount').eq('status', 'open'),
-      supabase.from('tables').select('id').eq('status', 'occupied'),
-      supabase.from('till_sessions').select('id').eq('status', 'open')
-    ])
-
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    const { data: revenueData } = await supabase
-      .from('orders')
-      .select('total_amount')
-      .eq('payment_status', 'paid')
-      .gte('created_at', today.toISOString())
 
-    const todayRevenue = revenueData?.reduce((sum, o) => sum + o.total_amount, 0) || 0
+    const [ordersRes, tablesRes, roomsRes, staffRes, revenueRes] = await Promise.all([
+      supabase.from('orders').select('id').eq('status', 'open'),
+      supabase.from('tables').select('id').eq('status', 'occupied'),
+      supabase.from('rooms').select('status'),
+      supabase.from('till_sessions').select('id').eq('status', 'open'),
+      supabase.from('orders').select('total_amount').eq('status', 'paid').gte('created_at', today.toISOString())
+    ])
 
     setStats({
       openOrders: ordersRes.data?.length || 0,
       occupiedTables: tablesRes.data?.length || 0,
+      occupiedRooms: roomsRes.data?.filter(r => r.status === 'occupied').length || 0,
       staffOnShift: staffRes.data?.length || 0,
-      todayRevenue
+      todayRevenue: revenueRes.data?.reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0
     })
   }
 
@@ -69,7 +66,9 @@ export default function Management() {
   return (
     <div className="min-h-screen bg-gray-950">
 
-      {/* Header */}
+      {/* Waiter call alerts — floats top right */}
+      <WaiterCalls />
+
       <nav className="bg-gray-900 border-b border-gray-800 px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -81,7 +80,28 @@ export default function Management() {
               <p className="text-gray-400 text-xs">Management</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/rooms')}
+              className="flex items-center gap-1.5 text-gray-400 hover:text-purple-400 text-xs transition-colors border border-gray-700 hover:border-purple-500/50 rounded-lg px-3 py-1.5"
+            >
+              <BedDouble size={13} />
+              Rooms
+            </button>
+            <button
+              onClick={() => navigate('/accounting')}
+              className="flex items-center gap-1.5 text-gray-400 hover:text-green-400 text-xs transition-colors border border-gray-700 hover:border-green-500/50 rounded-lg px-3 py-1.5"
+            >
+              <BookOpen size={13} />
+              Accounting
+            </button>
+            <button
+              onClick={() => navigate('/backoffice')}
+              className="flex items-center gap-1.5 text-gray-400 hover:text-amber-400 text-xs transition-colors border border-gray-700 hover:border-amber-500/50 rounded-lg px-3 py-1.5"
+            >
+              <Settings size={13} />
+              Back Office
+            </button>
             <div className="text-right">
               <p className="text-white text-sm">{profile?.full_name}</p>
               <p className="text-amber-500 text-xs capitalize">{profile?.role}</p>
@@ -93,13 +113,12 @@ export default function Management() {
         </div>
       </nav>
 
-      {/* Tabs */}
-      <div className="flex border-b border-gray-800 bg-gray-900 px-4">
+      <div className="flex border-b border-gray-800 bg-gray-900 px-4 overflow-x-auto">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === tab.id
                 ? 'border-amber-500 text-amber-500'
                 : 'border-transparent text-gray-400 hover:text-white'
@@ -111,19 +130,16 @@ export default function Management() {
         ))}
       </div>
 
-      {/* Content */}
       <div className="p-4">
-
-        {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               {[
                 { label: 'Open Orders', value: stats.openOrders, icon: ShoppingBag, color: 'text-amber-400', bg: 'bg-amber-400/10' },
                 { label: 'Occupied Tables', value: `${stats.occupiedTables}/60`, icon: LayoutDashboard, color: 'text-blue-400', bg: 'bg-blue-400/10' },
+                { label: 'Occupied Rooms', value: `${stats.occupiedRooms}/20`, icon: BedDouble, color: 'text-purple-400', bg: 'bg-purple-400/10' },
                 { label: 'Staff On Shift', value: stats.staffOnShift, icon: Users, color: 'text-green-400', bg: 'bg-green-400/10' },
-                { label: 'Revenue Today', value: `₦${stats.todayRevenue.toLocaleString()}`, icon: TrendingUp, color: 'text-purple-400', bg: 'bg-purple-400/10' },
-                { label: 'Till Management', sub: 'Cash control and payouts', tab: 'till', icon: DollarSign },
+                { label: 'Revenue Today', value: `₦${stats.todayRevenue.toLocaleString()}`, icon: TrendingUp, color: 'text-pink-400', bg: 'bg-pink-400/10' },
               ].map((stat, i) => (
                 <div key={i} className="bg-gray-900 rounded-2xl p-4 border border-gray-800">
                   <div className={`inline-flex p-2 rounded-lg ${stat.bg} mb-2`}>
@@ -135,18 +151,21 @@ export default function Management() {
               ))}
             </div>
 
-            {/* Quick Actions */}
             <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4">
               <h3 className="text-white font-semibold mb-3">Quick Actions</h3>
               <div className="space-y-2">
                 {[
-                  { label: 'Manage Staff Shifts', sub: 'Clock in/out staff members', tab: 'shifts', icon: Clock },
-                  { label: 'Assign Tables', sub: 'Assign tables to waitrons', tab: 'tables', icon: Users },
-                  { label: 'View Open Orders', sub: 'Monitor active orders', tab: 'orders', icon: ShoppingBag },
+                  { label: 'Manage Staff Shifts', sub: 'Clock in/out staff members', action: () => setActiveTab('shifts'), icon: Clock },
+                  { label: 'Assign Tables', sub: 'Assign tables to waitrons', action: () => setActiveTab('tables'), icon: Users },
+                  { label: 'View Open Orders', sub: 'Monitor active orders', action: () => setActiveTab('orders'), icon: ShoppingBag },
+                  { label: 'Till Management', sub: 'Cash control and payouts', action: () => setActiveTab('till'), icon: DollarSign },
+                  { label: 'Room Management', sub: 'Check-in, check-out and room status', action: () => navigate('/rooms'), icon: BedDouble },
+                  { label: 'Accounting', sub: 'Sales reports, trends and expenses', action: () => navigate('/accounting'), icon: BookOpen },
+                  { label: 'Back Office', sub: 'Menu, staff and table config', action: () => navigate('/backoffice'), icon: Settings },
                 ].map((action, i) => (
                   <button
                     key={i}
-                    onClick={() => setActiveTab(action.tab)}
+                    onClick={action.action}
                     className="w-full flex items-center justify-between bg-gray-800 hover:bg-gray-700 rounded-xl p-3 transition-colors"
                   >
                     <div className="flex items-center gap-3">
@@ -166,15 +185,9 @@ export default function Management() {
           </div>
         )}
 
-        {/* Shifts Tab */}
         {activeTab === 'shifts' && <ShiftManager />}
-
-        {/* Tables Tab */}
         {activeTab === 'tables' && <TableAssignment />}
-
-        {/* Orders Tab */}
         {activeTab === 'orders' && <OpenOrders />}
-
         {activeTab === 'till' && <TillManagement />}
       </div>
     </div>
@@ -187,15 +200,10 @@ function OpenOrders() {
 
   useEffect(() => {
     fetchOrders()
-
     const channel = supabase
       .channel('orders-channel')
-      .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        () => fetchOrders()
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders())
       .subscribe()
-
     return () => supabase.removeChannel(channel)
   }, [])
 
@@ -231,9 +239,7 @@ function OpenOrders() {
             </div>
             <div className="text-right">
               <p className="text-amber-400 font-bold">₦{order.total_amount?.toLocaleString()}</p>
-              <p className="text-gray-500 text-xs">
-                {new Date(order.created_at).toLocaleTimeString()}
-              </p>
+              <p className="text-gray-500 text-xs">{new Date(order.created_at).toLocaleTimeString()}</p>
             </div>
           </div>
           <div className="space-y-1">

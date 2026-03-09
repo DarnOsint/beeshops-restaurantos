@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
-import { LogOut, Beer, RefreshCw } from 'lucide-react'
+import { LogOut, Beer, RefreshCw, ShoppingBag, Phone } from 'lucide-react'
 import TableGrid from './TableGrid'
 import OrderPanel from './OrderPanel'
+import PaymentModal from './PaymentModal'
+import CashSaleModal from './CashSaleModal'
+import WaiterCalls from '../management/WaiterCalls'
 
 export default function POS() {
   const { profile, signOut } = useAuth()
@@ -12,6 +15,10 @@ export default function POS() {
   const [zonePrices, setZonePrices] = useState([])
   const [selectedTable, setSelectedTable] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [activeOrder, setActiveOrder] = useState(null)
+  const [showPayment, setShowPayment] = useState(false)
+  const [showCashSale, setShowCashSale] = useState(false)
+  const [cashSaleType, setCashSaleType] = useState('cash_sale')
 
   useEffect(() => {
     fetchTables()
@@ -41,7 +48,7 @@ export default function POS() {
   const fetchMenu = async () => {
     const { data, error } = await supabase
       .from('menu_items')
-      .select('*, menu_categories(name)')
+      .select('*, menu_categories(name, destination)')
       .eq('is_available', true)
       .order('name')
     if (!error) setMenuItems(data)
@@ -57,7 +64,6 @@ export default function POS() {
   const getMenuItemsWithZonePrices = (table) => {
     if (!table) return menuItems
     const categoryId = table.table_categories?.id
-
     return menuItems.map(item => {
       const zonePrice = zonePrices.find(
         zp => zp.menu_item_id === item.id && zp.category_id === categoryId
@@ -70,7 +76,24 @@ export default function POS() {
     })
   }
 
-  const handleSelectTable = (table) => {
+  const handleSelectTable = async (table) => {
+    if (table.status === 'occupied') {
+      const { data } = await supabase
+        .from('orders')
+        .select('*, order_items(*, menu_items(name))')
+        .eq('table_id', table.id)
+        .eq('status', 'open')
+        .limit(1)
+
+      if (data && data.length > 0) {
+        setActiveOrder(data[0])
+        setSelectedTable(table)
+        setShowPayment(true)
+        return
+      }
+    }
+    setActiveOrder(null)
+    setShowPayment(false)
     setSelectedTable(table)
   }
 
@@ -89,7 +112,8 @@ export default function POS() {
       .single()
 
     if (orderError) {
-      alert('Error creating order')
+      console.error('Order error:', orderError)
+      alert('Error creating order: ' + orderError.message)
       return
     }
 
@@ -99,18 +123,25 @@ export default function POS() {
       quantity: item.quantity,
       unit_price: item.price,
       total_price: item.total,
-      status: 'pending'
+      status: 'pending',
+      destination: item.menu_categories?.destination || 'bar'
     }))
 
-    await supabase.from('order_items').insert(orderItems)
+    const { error: itemsError } = await supabase.from('order_items').insert(orderItems)
+    if (itemsError) {
+      console.error('Order items error:', itemsError)
+      alert('Error adding items: ' + itemsError.message)
+      return
+    }
 
-    await supabase
-      .from('tables')
-      .update({ status: 'occupied' })
-      .eq('id', table.id)
-
+    await supabase.from('tables').update({ status: 'occupied' }).eq('id', table.id)
+    await fetchTables()
     setSelectedTable(null)
-    fetchTables()
+  }
+
+  const openCashSale = (type) => {
+    setCashSaleType(type)
+    setShowCashSale(true)
   }
 
   if (loading) return (
@@ -122,6 +153,9 @@ export default function POS() {
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col">
 
+      {/* Waiter call alerts — only shows calls for this waitron's tables */}
+      <WaiterCalls />
+
       <nav className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center">
@@ -132,8 +166,24 @@ export default function POS() {
             <p className="text-gray-400 text-xs">Point of Sale</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={fetchTables} className="text-gray-400 hover:text-white">
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => openCashSale('cash_sale')}
+            className="flex items-center gap-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors"
+          >
+            <ShoppingBag size={14} />
+            Cash Sale
+          </button>
+          <button
+            onClick={() => openCashSale('takeaway')}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors"
+          >
+            <Phone size={14} />
+            Takeaway
+          </button>
+
+          <button onClick={fetchTables} className="text-gray-400 hover:text-white ml-1">
             <RefreshCw size={16} />
           </button>
           <div className="text-right">
@@ -147,7 +197,7 @@ export default function POS() {
       </nav>
 
       <div className="flex-1 flex overflow-hidden">
-        <div className={`${selectedTable ? 'hidden md:flex' : 'flex'} flex-1 flex-col overflow-hidden`}>
+        <div className={`${selectedTable && !showPayment ? 'hidden md:flex' : 'flex'} flex-1 flex-col overflow-hidden`}>
           <TableGrid
             tables={tables}
             onSelectTable={handleSelectTable}
@@ -155,17 +205,48 @@ export default function POS() {
           />
         </div>
 
-        {selectedTable && (
+        {selectedTable && !showPayment && (
           <div className="w-full md:w-96 border-l border-gray-800 flex flex-col overflow-hidden">
             <OrderPanel
               table={selectedTable}
               menuItems={getMenuItemsWithZonePrices(selectedTable)}
               onPlaceOrder={handlePlaceOrder}
-              onClose={() => setSelectedTable(null)}
+              onClose={() => {
+                setSelectedTable(null)
+                setActiveOrder(null)
+              }}
             />
           </div>
         )}
       </div>
+
+      {showPayment && activeOrder && selectedTable && (
+        <PaymentModal
+          order={activeOrder}
+          table={selectedTable}
+          onSuccess={() => {
+            setShowPayment(false)
+            setActiveOrder(null)
+            setSelectedTable(null)
+            fetchTables()
+          }}
+          onClose={() => {
+            setShowPayment(false)
+            setActiveOrder(null)
+            setSelectedTable(null)
+          }}
+        />
+      )}
+
+      {showCashSale && (
+        <CashSaleModal
+          type={cashSaleType}
+          menuItems={menuItems}
+          staffId={profile.id}
+          onSuccess={() => setShowCashSale(false)}
+          onClose={() => setShowCashSale(false)}
+        />
+      )}
     </div>
   )
 }

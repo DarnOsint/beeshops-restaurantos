@@ -9,16 +9,39 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
+    // Check for PIN session first
+    const pinSession = localStorage.getItem('pin_session')
+    if (pinSession) {
+      try {
+        const parsed = JSON.parse(pinSession)
+        // Validate session is not older than 12 hours
+        const loggedInAt = new Date(parsed.logged_in_at)
+        const hoursSince = (Date.now() - loggedInAt.getTime()) / (1000 * 60 * 60)
+        if (hoursSince < 12) {
+          setProfile(parsed)
+          setUser({ id: parsed.id, pin_session: true })
+          setLoading(false)
+          return
+        } else {
+          // Expired — clear it
+          localStorage.removeItem('pin_session')
+        }
+      } catch {
+        localStorage.removeItem('pin_session')
+      }
+    }
+
+    // Otherwise check Supabase Auth session (email login)
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       if (session?.user) fetchProfile(session.user.id)
       else setLoading(false)
     })
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
+        // Ignore auth changes if we're in a PIN session
+        if (localStorage.getItem('pin_session')) return
         setUser(session?.user ?? null)
         if (session?.user) fetchProfile(session.user.id)
         else {
@@ -37,12 +60,19 @@ export function AuthProvider({ children }) {
       .select('*')
       .eq('id', userId)
       .single()
-
     if (!error) setProfile(data)
     setLoading(false)
   }
 
   const signOut = async () => {
+    const pinSession = localStorage.getItem('pin_session')
+    if (pinSession) {
+      localStorage.removeItem('pin_session')
+      setUser(null)
+      setProfile(null)
+      window.location.href = '/login'
+      return
+    }
     await supabase.auth.signOut()
     setUser(null)
     setProfile(null)

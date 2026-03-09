@@ -38,11 +38,26 @@ export default function TableAssignment({ onClose }) {
   }
 
   const fetchActiveStaff = async () => {
-    const { data } = await supabase
+    // Get open till sessions
+    const { data: sessions } = await supabase
       .from('till_sessions')
-      .select('*, profiles(id, full_name, role)')
+      .select('staff_id')
       .eq('status', 'open')
-    if (data) setStaff(data)
+
+    if (!sessions || sessions.length === 0) {
+      setStaff([])
+      return
+    }
+
+    // Get profiles for those staff IDs
+    const staffIds = sessions.map(s => s.staff_id)
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, role')
+      .in('id', staffIds)
+      .eq('role', 'waitron')
+
+    setStaff(profiles || [])
   }
 
   const fetchAssignments = async () => {
@@ -50,7 +65,7 @@ export default function TableAssignment({ onClose }) {
       .from('zone_assignments')
       .select('*, profiles(id, full_name)')
       .eq('is_active', true)
-    
+
     if (data) {
       const map = {}
       data.forEach(a => {
@@ -65,7 +80,6 @@ export default function TableAssignment({ onClose }) {
     const staffId = selectedStaff[categoryId]
     if (!staffId) return
 
-    // Check if already assigned
     const existing = assignments[categoryId] || []
     if (existing.find(a => a.staff_id === staffId)) {
       alert('This staff member is already assigned to this zone!')
@@ -86,18 +100,17 @@ export default function TableAssignment({ onClose }) {
     }
   }
 
-  const removeStaffFromZone = async (assignmentId, categoryId) => {
-    const { error } = await supabase
+  const removeStaffFromZone = async (assignmentId) => {
+    await supabase
       .from('zone_assignments')
       .delete()
       .eq('id', assignmentId)
-
-    if (!error) fetchAssignments()
+    fetchAssignments()
   }
 
   const getAvailableStaff = (categoryId) => {
     const assigned = (assignments[categoryId] || []).map(a => a.staff_id)
-    return staff.filter(s => !assigned.includes(s.profiles?.id))
+    return staff.filter(s => !assigned.includes(s.id))
   }
 
   if (loading) return (
@@ -111,7 +124,7 @@ export default function TableAssignment({ onClose }) {
       <div className="flex items-center justify-between mb-5">
         <div>
           <h3 className="text-white font-bold text-lg">Zone Assignment</h3>
-          <p className="text-gray-400 text-xs mt-0.5">Assign multiple waitrons to sections</p>
+          <p className="text-gray-400 text-xs mt-0.5">Assign waitrons to zones</p>
         </div>
         {onClose && (
           <button onClick={onClose} className="text-gray-400 hover:text-white">
@@ -123,14 +136,18 @@ export default function TableAssignment({ onClose }) {
       {staff.length === 0 && (
         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 mb-4">
           <p className="text-amber-400 text-sm">
-            No staff on shift. Clock in staff first before assigning zones.
+            No waitrons on shift. Clock in staff first under Shifts tab.
           </p>
         </div>
       )}
 
       <div className="space-y-4">
         {categories.map(category => {
-          const colors = categoryColors[category.name] || { card: 'bg-gray-800 border-gray-700', text: 'text-gray-400', badge: 'bg-gray-700 text-gray-300' }
+          const colors = categoryColors[category.name] || {
+            card: 'bg-gray-800 border-gray-700',
+            text: 'text-gray-400',
+            badge: 'bg-gray-700 text-gray-300'
+          }
           const totalTables = category.tables?.length || 0
           const occupiedTables = category.tables?.filter(t => t.status === 'occupied').length || 0
           const zoneAssignments = assignments[category.id] || []
@@ -138,8 +155,7 @@ export default function TableAssignment({ onClose }) {
 
           return (
             <div key={category.id} className={`rounded-xl border p-4 ${colors.card}`}>
-              
-              {/* Zone Header */}
+
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <h4 className={`font-semibold ${colors.text}`}>{category.name}</h4>
@@ -155,7 +171,6 @@ export default function TableAssignment({ onClose }) {
                 </div>
               </div>
 
-              {/* Assigned Staff */}
               {zoneAssignments.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-3">
                   {zoneAssignments.map(assignment => (
@@ -166,7 +181,7 @@ export default function TableAssignment({ onClose }) {
                       <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                       {assignment.profiles?.full_name}
                       <button
-                        onClick={() => removeStaffFromZone(assignment.id, category.id)}
+                        onClick={() => removeStaffFromZone(assignment.id)}
                         className="ml-1 opacity-60 hover:opacity-100 transition-opacity"
                       >
                         <UserMinus size={12} />
@@ -176,21 +191,20 @@ export default function TableAssignment({ onClose }) {
                 </div>
               )}
 
-              {/* Add Staff */}
               {staff.length > 0 && available.length > 0 && (
                 <div className="flex gap-2">
                   <select
                     value={selectedStaff[category.id] || ''}
-                    onChange={(e) => setSelectedStaff(prev => ({ 
-                      ...prev, 
-                      [category.id]: e.target.value 
+                    onChange={(e) => setSelectedStaff(prev => ({
+                      ...prev,
+                      [category.id]: e.target.value
                     }))}
                     className="flex-1 bg-black/20 text-white text-sm rounded-lg px-3 py-1.5 border border-white/10 focus:outline-none focus:border-white/30"
                   >
                     <option value="">-- Add waitron --</option>
                     {available.map(s => (
-                      <option key={s.profiles?.id} value={s.profiles?.id}>
-                        {s.profiles?.full_name}
+                      <option key={s.id} value={s.id}>
+                        {s.full_name}
                       </option>
                     ))}
                   </select>
@@ -206,7 +220,7 @@ export default function TableAssignment({ onClose }) {
               )}
 
               {staff.length > 0 && available.length === 0 && zoneAssignments.length > 0 && (
-                <p className="text-xs text-gray-500 mt-1">All on-shift staff assigned to this zone</p>
+                <p className="text-xs text-gray-500 mt-1">All on-shift waitrons assigned to this zone</p>
               )}
             </div>
           )
