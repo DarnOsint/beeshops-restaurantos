@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import VoidPinModal from '../../components/VoidPinModal'
-import { Plus, Minus, Trash2, Send, X } from 'lucide-react'
+import { Plus, Minus, Trash2, Send, X, StickyNote } from 'lucide-react'
 
 export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) {
   const [orderItems, setOrderItems] = useState([])
   const [activeCategory, setActiveCategory] = useState('All')
   const [notes, setNotes] = useState('')
   const [voidRequest, setVoidRequest] = useState(null) // { itemId, itemName, quantity, value }
+  const [modifierItem, setModifierItem] = useState(null) // item being edited
+  const [modifierNotes, setModifierNotes] = useState('')
+  const [modifierCharge, setModifierCharge] = useState('')
 
   const categories = ['All', ...new Set(menuItems.map(item => item.menu_categories?.name).filter(Boolean))]
 
@@ -64,6 +67,28 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) 
     setVoidRequest(null)
   }
 
+  const openModifier = (item) => {
+    setModifierItem(item)
+    setModifierNotes(item.modifier_notes || '')
+    setModifierCharge(item.extra_charge ? String(item.extra_charge) : '')
+  }
+
+  const saveModifier = () => {
+    const charge = parseFloat(modifierCharge) || 0
+    setOrderItems(prev => prev.map(i => i.id === modifierItem.id
+      ? {
+          ...i,
+          modifier_notes: modifierNotes,
+          extra_charge: charge,
+          total: (i.quantity * i.price) + charge
+        }
+      : i
+    ))
+    setModifierItem(null)
+    setModifierNotes('')
+    setModifierCharge('')
+  }
+
   const depleteInventory = async (items, action = 'deduct') => {
     for (const item of items) {
       if (!item.menu_item_id) continue
@@ -102,7 +127,7 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) 
     return "Send to Kitchen & Bar"
   }
 
-  const total = orderItems.reduce((sum, item) => sum + item.total, 0)
+  const total = orderItems.reduce((sum, item) => sum + (item.quantity * item.price) + (item.extra_charge || 0), 0)
 
   const handlePlaceOrder = async () => {
     if (orderItems.length === 0) return
@@ -185,7 +210,17 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) 
                   <Plus size={10} />
                 </button>
               </div>
-              <span className="text-gray-300 text-sm flex-1">{item.name}</span>
+              <div className="flex-1 min-w-0">
+                <button onClick={() => openModifier(item)} className="text-left w-full">
+                  <p className="text-gray-300 text-sm">{item.name}</p>
+                  {item.modifier_notes && (
+                    <p className="text-amber-400 text-xs truncate">{item.modifier_notes}</p>
+                  )}
+                  {item.extra_charge > 0 && (
+                    <p className="text-green-400 text-xs">+₦{item.extra_charge.toLocaleString()}</p>
+                  )}
+                </button>
+              </div>
               <span className="text-white text-sm">₦{item.total.toFixed(2)}</span>
               <button onClick={() => deleteItem(item)} className="text-red-400">
                 <Trash2 size={14} />
@@ -222,6 +257,51 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) 
         </button>
       </div>
     </div>
+    {modifierItem && (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end justify-center p-4">
+        <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-white font-bold">Modify Item</h3>
+            <button onClick={() => setModifierItem(null)} className="text-gray-400 hover:text-white">
+              <X size={18} />
+            </button>
+          </div>
+          <p className="text-amber-400 font-medium">{modifierItem.name}</p>
+          <div>
+            <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Special Instructions</label>
+            <textarea
+              value={modifierNotes}
+              onChange={e => setModifierNotes(e.target.value)}
+              placeholder="e.g. no onions, well done, extra spicy..."
+              rows={3}
+              className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-amber-500 resize-none"
+            />
+          </div>
+          <div>
+            <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Extra Charge (₦)</label>
+            <input
+              type="number"
+              value={modifierCharge}
+              onChange={e => setModifierCharge(e.target.value)}
+              placeholder="0"
+              className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-amber-500"
+            />
+            <p className="text-gray-500 text-xs mt-1">Leave blank if no extra charge</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => setModifierItem(null)}
+              className="py-3 rounded-xl bg-gray-800 text-gray-300 hover:bg-gray-700 font-medium text-sm">
+              Cancel
+            </button>
+            <button onClick={saveModifier}
+              className="py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm">
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {voidRequest && (
       <VoidPinModal
         voidDescription={`Void ${voidRequest.quantity}x ${voidRequest.itemName} (₦${voidRequest.value.toLocaleString()})`}

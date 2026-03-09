@@ -152,7 +152,9 @@ export default function POS() {
       unit_price: item.price,
       total_price: item.total,
       status: 'pending',
-      destination: item.menu_categories?.destination || 'bar'
+      destination: item.menu_categories?.destination || 'bar',
+      modifier_notes: item.modifier_notes || null,
+      extra_charge: item.extra_charge || 0
     }))
 
     const { error: itemsError } = await supabase.from('order_items').insert(orderItems)
