@@ -1,10 +1,13 @@
 import { useState } from 'react'
+import { supabase } from '../../lib/supabase'
+import VoidPinModal from '../../components/VoidPinModal'
 import { Plus, Minus, Trash2, Send, X } from 'lucide-react'
 
 export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) {
   const [orderItems, setOrderItems] = useState([])
   const [activeCategory, setActiveCategory] = useState('All')
   const [notes, setNotes] = useState('')
+  const [voidRequest, setVoidRequest] = useState(null) // { itemId, itemName, quantity, value }
 
   const categories = ['All', ...new Set(menuItems.map(item => item.menu_categories?.name).filter(Boolean))]
 
@@ -36,8 +39,29 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) 
     })
   }
 
-  const deleteItem = (itemId) => {
-    setOrderItems(prev => prev.filter(i => i.id !== itemId))
+  const deleteItem = (item) => {
+    setVoidRequest({
+      itemId: item.id,
+      itemName: item.name,
+      quantity: item.quantity,
+      value: item.total
+    })
+  }
+
+  const confirmVoid = async (approver) => {
+    const item = orderItems.find(i => i.id === voidRequest.itemId)
+    // Log the void
+    await supabase.from('void_log').insert({
+      menu_item_name: voidRequest.itemName,
+      quantity: voidRequest.quantity,
+      unit_price: item?.price || 0,
+      total_value: voidRequest.value,
+      void_type: 'item',
+      approved_by_name: approver.name,
+      approved_by: approver.id
+    })
+    setOrderItems(prev => prev.filter(i => i.id !== voidRequest.itemId))
+    setVoidRequest(null)
   }
 
   const depleteInventory = async (items, action = 'deduct') => {
@@ -87,6 +111,7 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) 
   }
 
   return (
+    <>
     <div className="flex flex-col h-full bg-gray-900">
 
       {/* Header */}
@@ -162,7 +187,7 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) 
               </div>
               <span className="text-gray-300 text-sm flex-1">{item.name}</span>
               <span className="text-white text-sm">₦{item.total.toFixed(2)}</span>
-              <button onClick={() => deleteItem(item.id)} className="text-red-400">
+              <button onClick={() => deleteItem(item)} className="text-red-400">
                 <Trash2 size={14} />
               </button>
             </div>
@@ -197,5 +222,13 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) 
         </button>
       </div>
     </div>
+    {voidRequest && (
+      <VoidPinModal
+        voidDescription={`Void ${voidRequest.quantity}x ${voidRequest.itemName} (₦${voidRequest.value.toLocaleString()})`}
+        onApproved={confirmVoid}
+        onCancel={() => setVoidRequest(null)}
+      />
+    )}
+    </>
   )
 }
