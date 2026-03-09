@@ -10,6 +10,7 @@ import GrillerKDS from './pages/kds/GrillerKDS'
 import BackOffice from './pages/backoffice/BackOffice'
 import Accounting from './pages/accounting/Accounting'
 import RoomManagement from './pages/rooms/RoomManagement'
+import Debtors from './pages/accounting/Debtors'
 import TableView from './pages/customer/TableView'
 
 function PrivateRoute({ children }) {
@@ -93,6 +94,10 @@ function AppRoutes() {
 
       <Route path="/rooms" element={
         <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><RoomManagement /></RoleGuard></PrivateRoute>
+      } />
+
+      <Route path="/debtors" element={
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'accountant', 'waitron']}><Debtors onBack={() => window.history.back()} /></RoleGuard></PrivateRoute>
       } />
 
       {/* Public route — no auth required */}

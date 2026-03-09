@@ -23,6 +23,9 @@ function getUrgency(createdAt) {
 
 export default function GrillerKDS() {
   const { profile, signOut } = useAuth()
+  // GEOFENCE: enabled on production only
+  // const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence("main")
+  // if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   const navigate = useNavigate()
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)

@@ -7,9 +7,14 @@ import OrderPanel from './OrderPanel'
 import PaymentModal from './PaymentModal'
 import CashSaleModal from './CashSaleModal'
 import WaiterCalls from '../management/WaiterCalls'
+import { useGeofence } from '../../hooks/useGeofence'
+import GeofenceBlock from '../../components/GeofenceBlock'
 
 export default function POS() {
   const { profile, signOut } = useAuth()
+  // GEOFENCE: enabled on production only
+  // const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence("main")
+  // if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   const [tables, setTables] = useState([])
   const [menuItems, setMenuItems] = useState([])
   const [zonePrices, setZonePrices] = useState([])

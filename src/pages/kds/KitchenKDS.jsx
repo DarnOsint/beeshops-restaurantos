@@ -5,6 +5,9 @@ import { ChefHat, Clock, LogOut, RefreshCw, CheckCircle } from 'lucide-react'
 
 export default function KitchenKDS() {
   const { profile, signOut } = useAuth()
+  // GEOFENCE: enabled on production only
+  // const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence("main")
+  // if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
 

@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
+import Debtors from './Debtors'
 import {
-  Beer, LogOut, ArrowLeft, TrendingUp, ShoppingBag,
+  Beer, LogOut, ArrowLeft, TrendingUp, ShoppingBag, AlertTriangle,
   Users, Banknote, CreditCard, Smartphone, Download,
   Plus, X, Save, Calendar, Filter, ChevronDown,
   DollarSign, Receipt, BarChart2, Clock
@@ -193,6 +194,7 @@ export default function Accounting() {
     { id: 'till', label: 'Till', icon: Clock },
     { id: 'payouts', label: 'Payouts', icon: DollarSign },
     { id: 'trends', label: 'Trends', icon: TrendingUp },
+    { id: 'debtors', label: 'Debtors', icon: AlertTriangle },
   ]
 
   return (
@@ -595,6 +597,11 @@ export default function Accounting() {
           </div>
         )}
       </div>
+
+      {/* DEBTORS TAB */}
+      {activeTab === 'debtors' && (
+        <Debtors onBack={() => setActiveTab('overview')} embedded={true} />
+      )}
 
       {/* Payout Modal */}
       {showPayoutModal && (
