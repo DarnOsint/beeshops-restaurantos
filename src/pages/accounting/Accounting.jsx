@@ -7,7 +7,7 @@ import {
   Beer, LogOut, ArrowLeft, TrendingUp, ShoppingBag, AlertTriangle,
   Users, Banknote, CreditCard, Smartphone, Download,
   Plus, X, Save, Calendar, Filter, ChevronDown,
-  DollarSign, Receipt, BarChart2, Clock, BookOpen
+  DollarSign, Receipt, BarChart2, Clock, BookOpen, Shield
 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -32,6 +32,7 @@ export default function Accounting() {
   const [trendData, setTrendData] = useState([])
   const [tillSessions, setTillSessions] = useState([])
   const [timesheet, setTimesheet] = useState([])
+  const [auditLog, setAuditLog] = useState([])
   const [payouts, setPayouts] = useState([])
   const [showPayoutModal, setShowPayoutModal] = useState(false)
   const [ledgerEntries, setLedgerEntries] = useState([])
@@ -73,7 +74,7 @@ export default function Accounting() {
     setLoading(true)
     const { start, end } = getDateBounds()
 
-    const [ordersRes, tillRes, payoutsRes, trendRes, timesheetRes] = await Promise.all([
+    const [ordersRes, tillRes, payoutsRes, trendRes, timesheetRes, auditRes] = await Promise.all([
       supabase.from('orders')
         .select('*, profiles(full_name), tables(name), order_items(*, menu_items(name))')
         .gte('created_at', start)
@@ -99,7 +100,13 @@ export default function Accounting() {
         .select('*')
         .gte('clock_in', start)
         .lte('clock_in', end)
-        .order('clock_in', { ascending: false })
+        .order('clock_in', { ascending: false }),
+      supabase.from('audit_log')
+        .select('*')
+        .gte('created_at', start)
+        .lte('created_at', end)
+        .order('created_at', { ascending: false })
+        .limit(200)
     ])
 
     const allOrders = ordersRes.data || []
@@ -141,6 +148,7 @@ export default function Accounting() {
 
     setTillSessions(tillRes.data || [])
     setTimesheet(timesheetRes.data || [])
+    setAuditLog(auditRes.data || [])
     setPayouts(payoutsRes.data || [])
 
     // Build ledger: combine orders + payouts + credit orders, sorted by time
@@ -233,6 +241,7 @@ export default function Accounting() {
     { id: 'trends', label: 'Trends', icon: TrendingUp },
     { id: 'debtors', label: 'Debtors', icon: AlertTriangle },
     { id: 'ledger', label: 'Ledger', icon: BookOpen },
+    { id: 'audit', label: 'Audit', icon: Shield },
   ]
 
   return (
@@ -767,6 +776,56 @@ export default function Accounting() {
               </table>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* AUDIT TAB */}
+      {activeTab === 'audit' && (
+        <div className="space-y-3">
+          {auditLog.length === 0 ? (
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center text-gray-500">
+              No audit records for this period
+            </div>
+          ) : auditLog.map(entry => {
+            const actionColors = {
+              ORDER_CREATED: 'text-green-400 bg-green-500/10 border-green-500/20',
+              ORDER_PAID: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+              ORDER_CANCELLED: 'text-red-400 bg-red-500/10 border-red-500/20',
+              STAFF_CREATED: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+              STAFF_UPDATED: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+              ITEM_VOIDED: 'text-red-400 bg-red-500/10 border-red-500/20',
+            }
+            const colorClass = actionColors[entry.action] || 'text-gray-400 bg-gray-500/10 border-gray-500/20'
+            return (
+              <div key={entry.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <span className={`text-xs px-2 py-1 rounded-lg border font-medium whitespace-nowrap ${colorClass}`}>
+                    {entry.action.replace(/_/g, ' ')}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-white text-sm font-medium truncate">{entry.entity_name || entry.entity}</p>
+                    <p className="text-gray-500 text-xs mt-0.5">
+                      by {entry.performed_by_name || 'System'} 
+                      {entry.performed_by_role && <span className="capitalize"> · {entry.performed_by_role}</span>}
+                    </p>
+                    {entry.new_value && (
+                      <p className="text-gray-600 text-xs mt-1 truncate">
+                        {JSON.stringify(entry.new_value)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-gray-400 text-xs">
+                    {new Date(entry.created_at).toLocaleDateString('en-NG')}
+                  </p>
+                  <p className="text-gray-500 text-xs">
+                    {new Date(entry.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
 

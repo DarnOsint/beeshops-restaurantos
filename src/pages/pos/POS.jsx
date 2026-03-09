@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
 import { LogOut, Beer, RefreshCw, ShoppingBag, Phone } from 'lucide-react'
 import TableGrid from './TableGrid'
@@ -162,6 +163,14 @@ export default function POS() {
     }
 
     await depleteInventory(items)
+    await audit({
+      action: 'ORDER_CREATED',
+      entity: 'order',
+      entityId: order.id,
+      entityName: 'Table ' + table.name,
+      newValue: { total, items: items.length, table: table.name },
+      performer: profile
+    })
     await supabase.from('tables').update({ status: 'occupied' }).eq('id', table.id)
     await fetchTables()
     setSelectedTable(null)

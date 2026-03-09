@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
 import {
   ArrowLeft, Plus, Search, Edit2, X, Save,

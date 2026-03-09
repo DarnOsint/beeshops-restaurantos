@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
 import { X, Banknote, CreditCard, Smartphone, CheckCircle, Clock, User, Phone } from 'lucide-react'
 import ReceiptModal from './ReceiptModal'
@@ -49,7 +50,15 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
           recorded_by: profile?.id, recorded_by_name: profile?.full_name,
         })
         setPaidOrder({ ...order, payment_method: 'credit' })
-        setSuccess(true)
+        await audit({
+        action: 'ORDER_PAID',
+        entity: 'order',
+        entityId: order.id,
+        entityName: 'Order #' + (order.id || '').slice(0,8),
+        newValue: { total: order.total_amount, payment_method: paymentMethod },
+        performer: profile
+      })
+      setSuccess(true)
         return
       }
 
