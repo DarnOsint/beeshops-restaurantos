@@ -22,6 +22,7 @@ export default function POS() {
   const [activeOrder, setActiveOrder] = useState(null)
   const [assignedTableIds, setAssignedTableIds] = useState(null) // null = no restriction
   const [isClockedIn, setIsClockedIn] = useState(null) // null = checking
+  const [isClockedIn, setIsClockedIn] = useState(null) // null = checking
   const [showPayment, setShowPayment] = useState(false)
   const [showCashSale, setShowCashSale] = useState(false)
   const [cashSaleType, setCashSaleType] = useState('cash_sale')
