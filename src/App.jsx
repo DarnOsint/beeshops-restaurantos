@@ -11,6 +11,7 @@ import BackOffice from './pages/backoffice/BackOffice'
 import Accounting from './pages/accounting/Accounting'
 import RoomManagement from './pages/rooms/RoomManagement'
 import Debtors from './pages/accounting/Debtors'
+import Reports from './pages/reports/Reports'
 import TableView from './pages/customer/TableView'
 
 function PrivateRoute({ children }) {
@@ -98,6 +99,18 @@ function AppRoutes() {
 
       <Route path="/debtors" element={
         <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'accountant', 'waitron']}><Debtors onBack={() => window.history.back()} /></RoleGuard></PrivateRoute>
+      } />
+
+      <Route path="/reports" element={
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><Reports /></RoleGuard></PrivateRoute>
+      } />
+
+      <Route path="/reports" element={
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><Reports /></RoleGuard></PrivateRoute>
+      } />
+
+      <Route path="/reports" element={
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><Reports /></RoleGuard></PrivateRoute>
       } />
 
       {/* Public route — no auth required */}

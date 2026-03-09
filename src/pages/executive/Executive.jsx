@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { 
   LayoutDashboard, ShoppingBag, Users, BedDouble,
   TrendingUp, Package, LogOut, Beer, RefreshCw, Settings,
-  BookOpen
+  BookOpen, BarChart2
 } from 'lucide-react'
 
 function getGreeting() {
@@ -29,7 +29,6 @@ export default function Executive() {
   useEffect(() => {
     fetchStats()
     const interval = setInterval(fetchStats, 30000)
-
     const channel = supabase
       .channel('executive-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchStats())
@@ -38,40 +37,25 @@ export default function Executive() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => fetchStats())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'room_stays' }, () => fetchStats())
       .subscribe()
-
-    return () => {
-      clearInterval(interval)
-      supabase.removeChannel(channel)
-    }
+    return () => { clearInterval(interval); supabase.removeChannel(channel) }
   }, [])
 
   const fetchStats = async () => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-
     const [ordersRes, tablesRes, roomsRes, shiftsRes, stockRes, recentRes, revenueRes, trendRes] = await Promise.all([
       supabase.from('orders').select('id').eq('status', 'open'),
       supabase.from('tables').select('status'),
       supabase.from('rooms').select('status'),
       supabase.from('till_sessions').select('id').eq('status', 'open'),
       supabase.from('inventory').select('id, current_stock, minimum_stock').eq('is_active', true),
-      supabase.from('orders')
-        .select('*, tables(name), profiles(full_name)')
-        .order('created_at', { ascending: false })
-        .limit(8),
-      supabase.from('orders')
-        .select('total_amount')
-        .eq('status', 'paid')
-        .gte('created_at', today.toISOString()),
-      supabase.from('orders')
-        .select('created_at, total_amount')
-        .eq('status', 'paid')
+      supabase.from('orders').select('*, tables(name), profiles(full_name)').order('created_at', { ascending: false }).limit(8),
+      supabase.from('orders').select('total_amount').eq('status', 'paid').gte('created_at', today.toISOString()),
+      supabase.from('orders').select('created_at, total_amount').eq('status', 'paid')
         .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
         .order('created_at', { ascending: true })
     ])
-
     const lowStockCount = stockRes.data?.filter(i => i.current_stock <= i.minimum_stock).length || 0
-
     setStats({
       revenue: revenueRes.data?.reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0,
       openOrders: ordersRes.data?.length || 0,
@@ -80,9 +64,7 @@ export default function Executive() {
       staffOnDuty: shiftsRes.data?.length || 0,
       lowStock: lowStockCount,
     })
-
     setRecentOrders(recentRes.data || [])
-
     const dayMap = {}
     ;(trendRes.data || []).forEach(o => {
       const day = new Date(o.created_at).toLocaleDateString('en-NG', { weekday: 'short', day: 'numeric' })
@@ -105,18 +87,15 @@ export default function Executive() {
 
   const quickActions = [
     { label: 'Accounting', icon: BookOpen, color: 'bg-green-600', path: '/accounting' },
+    { label: 'Reports', icon: BarChart2, color: 'bg-indigo-500', path: '/reports' },
     { label: 'Back Office', icon: Settings, color: 'bg-amber-500', path: '/backoffice' },
     { label: 'Management', icon: Users, color: 'bg-blue-500', path: '/management' },
     { label: 'View Rooms', icon: BedDouble, color: 'bg-purple-500', path: '/rooms' },
-    { label: 'Inventory', icon: Package, color: 'bg-red-500', path: '/backoffice' },
   ]
 
   const peakHour = (() => {
     const hourMap = {}
-    recentOrders.forEach(o => {
-      const h = new Date(o.created_at).getHours()
-      hourMap[h] = (hourMap[h] || 0) + 1
-    })
+    recentOrders.forEach(o => { const h = new Date(o.created_at).getHours(); hourMap[h] = (hourMap[h] || 0) + 1 })
     const peak = Object.entries(hourMap).sort((a, b) => b[1] - a[1])[0]
     if (!peak) return null
     const h = parseInt(peak[0])
@@ -143,6 +122,10 @@ export default function Executive() {
               className="flex items-center gap-1.5 text-gray-400 hover:text-amber-400 text-xs border border-gray-700 hover:border-amber-500/50 rounded-lg px-3 py-1.5 transition-colors">
               <BookOpen size={13} /> Accounting
             </button>
+            <button onClick={() => navigate('/reports')}
+              className="flex items-center gap-1.5 text-gray-400 hover:text-amber-400 text-xs border border-gray-700 hover:border-amber-500/50 rounded-lg px-3 py-1.5 transition-colors">
+              <BarChart2 size={13} /> Reports
+            </button>
             <button onClick={fetchStats} className="text-gray-400 hover:text-white">
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             </button>
@@ -160,9 +143,7 @@ export default function Executive() {
       <div className="p-6">
         <div className="mb-8 flex items-start justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-white">
-              Good {getGreeting()}, {profile?.full_name?.split(' ')[0]}!
-            </h2>
+            <h2 className="text-2xl font-bold text-white">Good {getGreeting()}, {profile?.full_name?.split(' ')[0]}!</h2>
             <p className="text-gray-400 mt-1">Here is what is happening at Beeshops Place today.</p>
           </div>
           <div className="flex items-center gap-3">
@@ -181,7 +162,6 @@ export default function Executive() {
           </div>
         </div>
 
-        {/* Stat Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
           {statCards.map((stat, i) => (
             <div key={i} className="bg-gray-900 rounded-2xl p-5 border border-gray-800">
@@ -194,11 +174,10 @@ export default function Executive() {
           ))}
         </div>
 
-        {/* 7-day Revenue Trend */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-8">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-white font-semibold">Revenue — Last 7 Days</h3>
-            <button onClick={() => navigate('/accounting')}
+            <button onClick={() => navigate('/reports')}
               className="text-amber-400 hover:text-amber-300 text-xs transition-colors">
               Full report →
             </button>
@@ -213,10 +192,7 @@ export default function Executive() {
                   <div key={i} className="flex-1 flex flex-col items-center gap-2">
                     <p className="text-gray-500 text-xs">₦{(d.revenue / 1000).toFixed(0)}k</p>
                     <div className="w-full flex flex-col justify-end" style={{ height: '80px' }}>
-                      <div
-                        className="w-full bg-amber-500 rounded-t-md transition-all"
-                        style={{ height: `${height}%` }}
-                      />
+                      <div className="w-full bg-amber-500 rounded-t-md transition-all" style={{ height: `${height}%` }} />
                     </div>
                     <p className="text-gray-600 text-xs whitespace-nowrap">{d.day}</p>
                   </div>
@@ -226,7 +202,6 @@ export default function Executive() {
           )}
         </div>
 
-        {/* Quick Actions */}
         <div className="mb-8">
           <h3 className="text-white font-semibold mb-4">Quick Actions</h3>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -242,7 +217,6 @@ export default function Executive() {
           </div>
         </div>
 
-        {/* Recent Orders */}
         <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-white font-semibold">Recent Orders</h3>
