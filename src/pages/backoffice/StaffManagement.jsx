@@ -62,7 +62,7 @@ export default function StaffManagement({ onBack }) {
     setEditingStaff(null)
     setForm({
       full_name: '', email: '', phone: '', role: 'waitron',
-      pin: '', password: '', hire_date: new Date().toISOString().split('T')[0],
+      pin: '', password: '', approval_pin: '', hire_date: new Date().toISOString().split('T')[0],
       emergency_contact: '', notes: '', is_active: true,
     })
     setActiveTab('info')
@@ -82,6 +82,7 @@ export default function StaffManagement({ onBack }) {
       emergency_contact: member.emergency_contact || '',
       notes: member.notes || '',
       is_active: member.is_active ?? true,
+      approval_pin: member.approval_pin || '',
     })
     setActiveTab('info')
     setShowModal(true)
@@ -120,6 +121,7 @@ export default function StaffManagement({ onBack }) {
           is_active: form.is_active,
         }
         if (form.pin) updates.pin = form.pin
+        if (['owner','manager'].includes(form.role) && form.approval_pin) updates.approval_pin = form.approval_pin
         const { error: updateError } = await supabase
           .from('profiles')
           .update(updates)
@@ -486,6 +488,24 @@ export default function StaffManagement({ onBack }) {
                     </div>
                     <p className="text-gray-500 text-xs mt-1">Used for quick POS login on the floor</p>
                   </div>
+
+                  {/* Approval PIN — manager/owner only */}
+                  {['owner', 'manager'].includes(form.role) && (
+                    <div>
+                      <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                        Void Approval PIN <span className="text-amber-500">(4 digits)</span>
+                      </label>
+                      <input
+                        type="password"
+                        maxLength={4}
+                        value={form.approval_pin}
+                        onChange={e => setForm({ ...form, approval_pin: e.target.value.replace(/D/g,'').slice(0,4) })}
+                        className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 tracking-widest text-center text-xl"
+                        placeholder="••••"
+                      />
+                      <p className="text-gray-500 text-xs mt-1">Used to approve voids & cancellations at the POS</p>
+                    </div>
+                  )}
 
                   {/* Info box */}
                   <div className={`rounded-xl p-4 text-sm ${isFloorRole(form.role) ? 'bg-blue-500/10 border border-blue-500/20 text-blue-300' : 'bg-purple-500/10 border border-purple-500/20 text-purple-300'}`}>
