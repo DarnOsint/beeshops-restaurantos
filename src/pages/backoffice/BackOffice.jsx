@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { Users, UtensilsCrossed, MapPin, LayoutGrid, LogOut, Beer, ArrowLeft, Package } from 'lucide-react'
+import { Users, UtensilsCrossed, MapPin, LayoutGrid, LogOut, Beer, ArrowLeft, Package, Truck } from 'lucide-react'
 import StaffManagement from './StaffManagement'
 import MenuManagement from './MenuManagement'
 import ZonePricing from './ZonePricing'
 import TableConfig from './TableConfig'
 import Inventory from './Inventory'
+import Suppliers from './Suppliers'
 import { useNavigate } from 'react-router-dom'
 
 export default function BackOffice() {
@@ -19,6 +20,7 @@ export default function BackOffice() {
     { id: 'zonepricing', label: 'Zone Pricing', desc: 'Set drink prices per zone', icon: MapPin, color: 'bg-purple-500', roles: ['owner', 'manager'] },
     { id: 'tables', label: 'Table Configuration', desc: 'Edit table names and capacity', icon: LayoutGrid, color: 'bg-amber-500', roles: ['owner', 'manager'] },
     { id: 'inventory', label: 'Drink Inventory', desc: 'Stock levels, restocking and supplier logs', icon: Package, color: 'bg-blue-600', roles: ['owner', 'manager'] },
+    { id: 'suppliers', label: 'Suppliers', desc: 'Manage suppliers and purchase orders', icon: Truck, color: 'bg-teal-600', roles: ['owner', 'manager'] },
   ]
 
   if (!profile) return (
@@ -34,6 +36,7 @@ export default function BackOffice() {
   if (activeSection === 'zonepricing') return <ZonePricing onBack={() => setActiveSection(null)} />
   if (activeSection === 'tables') return <TableConfig onBack={() => setActiveSection(null)} />
   if (activeSection === 'inventory') return <Inventory onBack={() => setActiveSection(null)} />
+  if (activeSection === 'suppliers') return <Suppliers onBack={() => setActiveSection(null)} />
 
   return (
     <div className="min-h-screen bg-gray-950">
