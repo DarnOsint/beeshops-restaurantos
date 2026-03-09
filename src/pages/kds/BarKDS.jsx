@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useGeofence } from '../../hooks/useGeofence'
+import GeofenceBlock from '../../components/GeofenceBlock'
 import { useAuth } from '../../context/AuthContext'
 import { Beer, Clock, LogOut, RefreshCw, CheckCircle } from 'lucide-react'
 
