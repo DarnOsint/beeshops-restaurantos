@@ -43,6 +43,12 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) 
   }
 
   const deleteItem = (item) => {
+    // If order not yet placed (still in cart), just remove directly — no PIN needed
+    if (!activeOrder) {
+      setOrderItems(prev => prev.filter(i => i.id !== item.id))
+      return
+    }
+    // Order already sent to kitchen/bar — require manager void PIN
     setVoidRequest({
       itemId: item.id,
       itemName: item.name,

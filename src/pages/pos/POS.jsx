@@ -21,6 +21,7 @@ export default function POS() {
   const [loading, setLoading] = useState(true)
   const [activeOrder, setActiveOrder] = useState(null)
   const [assignedTableIds, setAssignedTableIds] = useState(null) // null = no restriction
+  const [isClockedIn, setIsClockedIn] = useState(null) // null = checking
   const [showPayment, setShowPayment] = useState(false)
   const [showCashSale, setShowCashSale] = useState(false)
   const [cashSaleType, setCashSaleType] = useState('cash_sale')
@@ -47,11 +48,22 @@ export default function POS() {
   }, [profile?.id])
 
   const fetchAssignedTables = async (role, staffId) => {
-    // Owners and managers can access all tables
+    // Owners and managers — no restrictions
     if (['owner', 'manager', 'accountant'].includes(role)) {
       setAssignedTableIds(null)
+      setIsClockedIn(true)
       return
     }
+    // Check if waitron is clocked in today
+    const today = new Date().toISOString().split('T')[0]
+    const { data: attendance } = await supabase
+      .from('attendance')
+      .select('id')
+      .eq('staff_id', staffId)
+      .eq('date', today)
+      .is('clock_out', null)
+      .limit(1)
+    setIsClockedIn(attendance && attendance.length > 0)
     // Fetch zones assigned to this waitron
     const { data: zoneData } = await supabase
       .from('zone_assignments')
@@ -215,6 +227,25 @@ export default function POS() {
   }
 
   if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
+
+  if (isClockedIn === false) return (
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-6">
+      <div className="max-w-sm w-full bg-red-500/10 border border-red-500/20 rounded-2xl p-8 text-center">
+        <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-5">
+          <LogOut size={28} className="text-red-400" />
+        </div>
+        <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center mx-auto mb-4">
+          <span className="text-black font-bold text-lg">B</span>
+        </div>
+        <h2 className="text-lg font-bold text-red-400 mb-2">You are not clocked in</h2>
+        <p className="text-gray-400 text-sm mb-2">Please ask your manager to clock you in before you can access the POS.</p>
+        <button onClick={signOut}
+          className="mt-6 flex items-center gap-2 mx-auto bg-gray-800 hover:bg-gray-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
+          <LogOut size={14} /> Sign Out
+        </button>
+      </div>
+    </div>
+  )
 
   if (loading) return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
