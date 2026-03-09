@@ -1,78 +1,115 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { UserCheck, UserX, Clock, X } from 'lucide-react'
+import { useAuth } from '../../context/AuthContext'
+import { UserCheck, UserX, Clock, X, Calendar, Timer } from 'lucide-react'
 
 export default function ShiftManager({ onClose }) {
+  const { profile } = useAuth()
   const [staff, setStaff] = useState([])
-  const [activeSessions, setActiveSessions] = useState([])
+  const [activeShifts, setActiveShifts] = useState([])
+  const [todayLog, setTodayLog] = useState([])
   const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState('active')
 
   useEffect(() => {
-    fetchStaff()
-    fetchActiveSessions()
+    fetchAll()
   }, [])
 
-  const fetchStaff = async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('is_active', true)
-      .in('role', ['waitron', 'manager'])
-      .order('full_name')
-    if (!error) setStaff(data)
+  const fetchAll = async () => {
+    setLoading(true)
+    await Promise.all([fetchStaff(), fetchActiveShifts(), fetchTodayLog()])
     setLoading(false)
   }
 
-  const fetchActiveSessions = async () => {
-    const { data, error } = await supabase
-      .from('till_sessions')
-      .select('*, profiles(full_name, role)')
-      .eq('status', 'open')
-    if (!error) setActiveSessions(data)
+  const fetchStaff = async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, role, is_active')
+      .eq('is_active', true)
+      .in('role', ['waitron', 'kitchen', 'bar', 'griller', 'manager'])
+      .order('full_name')
+    if (data) setStaff(data)
   }
 
-  const clockIn = async (staffMember) => {
-    const already = activeSessions.find(s => s.staff_id === staffMember.id)
+  const fetchActiveShifts = async () => {
+    const { data } = await supabase
+      .from('attendance')
+      .select('*')
+      .is('clock_out', null)
+      .order('clock_in', { ascending: true })
+    if (data) setActiveShifts(data)
+  }
+
+  const fetchTodayLog = async () => {
+    const today = new Date().toISOString().split('T')[0]
+    const { data } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('date', today)
+      .order('clock_in', { ascending: false })
+    if (data) setTodayLog(data)
+  }
+
+  const clockIn = async (member) => {
+    const already = activeShifts.find(s => s.staff_id === member.id)
     if (already) {
-      alert(`${staffMember.full_name} is already clocked in!`)
+      alert(member.full_name + ' is already clocked in!')
       return
     }
-
-    const { error } = await supabase
-      .from('till_sessions')
-      .insert({
-        staff_id: staffMember.id,
-        opening_float: 0,
-        status: 'open'
-      })
-
-    if (!error) {
-      fetchActiveSessions()
-      alert(`${staffMember.full_name} clocked in successfully!`)
-    }
+    const { error } = await supabase.from('attendance').insert({
+      staff_id: member.id,
+      staff_name: member.full_name,
+      role: member.role,
+      clock_in: new Date().toISOString(),
+      date: new Date().toISOString().split('T')[0],
+      recorded_by: profile?.id,
+      recorded_by_name: profile?.full_name
+    })
+    if (error) { alert('Error: ' + error.message); return }
+    fetchAll()
   }
 
-  const clockOut = async (session) => {
-    const confirm = window.confirm(
-      `Clock out ${session.profiles?.full_name}? This will close their shift.`
-    )
-    if (!confirm) return
+  const clockOut = async (shift) => {
+    if (!window.confirm('Clock out ' + shift.staff_name + '?')) return
+    const clockOutTime = new Date()
+    const clockInTime = new Date(shift.clock_in)
+    const duration = Math.round((clockOutTime - clockInTime) / 60000)
 
     const { error } = await supabase
-      .from('till_sessions')
+      .from('attendance')
       .update({
-        status: 'closed',
-        closed_at: new Date().toISOString()
+        clock_out: clockOutTime.toISOString(),
+        duration_minutes: duration
       })
-      .eq('id', session.id)
+      .eq('id', shift.id)
 
-    if (!error) {
-      fetchActiveSessions()
-      alert(`${session.profiles?.full_name} clocked out successfully!`)
+    if (error) { alert('Error: ' + error.message); return }
+
+    // Deallocate waitron from tables if role is waitron
+    if (shift.role === 'waitron') {
+      await supabase
+        .from('tables')
+        .update({ assigned_staff: null })
+        .eq('assigned_staff', shift.staff_id)
+      await supabase
+        .from('zone_assignments')
+        .delete()
+        .eq('staff_id', shift.staff_id)
     }
+
+    fetchAll()
   }
 
-  const isActive = (staffId) => activeSessions.some(s => s.staff_id === staffId)
+  const isActive = (staffId) => activeShifts.some(s => s.staff_id === staffId)
+
+  const formatDuration = (minutes) => {
+    if (!minutes) return '—'
+    const h = Math.floor(minutes / 60)
+    const m = minutes % 60
+    return h > 0 ? h + 'h ' + m + 'm' : m + 'm'
+  }
+
+  const formatTime = (ts) => ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'
 
   if (loading) return (
     <div className="flex items-center justify-center p-8">
@@ -84,80 +121,105 @@ export default function ShiftManager({ onClose }) {
     <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
       <div className="flex items-center justify-between mb-5">
         <h3 className="text-white font-bold text-lg">Shift Manager</h3>
-        {onClose && (
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <X size={18} />
-          </button>
-        )}
-      </div>
-
-      {/* Active Staff */}
-      {activeSessions.length > 0 && (
-        <div className="mb-5">
-          <p className="text-green-400 text-sm font-medium mb-3 flex items-center gap-2">
-            <Clock size={14} />
-            Currently On Shift ({activeSessions.length})
-          </p>
-          <div className="space-y-2">
-            {activeSessions.map(session => (
-              <div key={session.id} className="flex items-center justify-between bg-green-500/10 border border-green-500/20 rounded-xl p-3">
-                <div>
-                  <p className="text-white font-medium">{session.profiles?.full_name}</p>
-                  <p className="text-gray-400 text-xs capitalize">{session.profiles?.role}</p>
-                  <p className="text-green-400 text-xs mt-0.5">
-                    Since {new Date(session.opened_at).toLocaleTimeString()}
-                  </p>
-                </div>
-                <button
-                  onClick={() => clockOut(session)}
-                  className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg px-3 py-1.5 text-sm transition-colors"
-                >
-                  <UserX size={14} />
-                  Clock Out
-                </button>
-              </div>
+        <div className="flex items-center gap-2">
+          <div className="flex bg-gray-800 rounded-lg p-1 gap-1">
+            {['active','all','log'].map(t => (
+              <button key={t} onClick={() => setTab(t)}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${tab === t ? 'bg-amber-500 text-black' : 'text-gray-400 hover:text-white'}`}>
+                {t === 'active' ? 'On Shift' : t === 'all' ? 'All Staff' : "Today's Log"}
+              </button>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* All Staff */}
-      <div>
-        <p className="text-gray-400 text-sm font-medium mb-3">All Staff</p>
-        <div className="space-y-2">
-          {staff.map(member => {
-            const active = isActive(member.id)
-            return (
-              <div key={member.id} className="flex items-center justify-between bg-gray-800 rounded-xl p-3">
-                <div>
-                  <p className="text-white font-medium">{member.full_name}</p>
-                  <p className="text-gray-400 text-xs capitalize">{member.role}</p>
-                </div>
-                {active ? (
-                  <span className="flex items-center gap-1 text-green-400 text-xs bg-green-500/10 px-2 py-1 rounded-lg">
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                    On Shift
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => clockIn(member)}
-                    className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg px-3 py-1.5 text-sm transition-colors"
-                  >
-                    <UserCheck size={14} />
-                    Clock In
-                  </button>
-                )}
-              </div>
-            )
-          })}
-          {staff.length === 0 && (
-            <div className="text-center py-6 text-gray-500">
-              <p>No staff found</p>
-              <p className="text-xs mt-1">Add staff in the Back Office</p>
-            </div>
+          {onClose && (
+            <button onClick={onClose} className="text-gray-400 hover:text-white">
+              <X size={18} />
+            </button>
           )}
         </div>
       </div>
+
+      {/* ON SHIFT TAB */}
+      {tab === 'active' && (
+        <div className="space-y-2">
+          {activeShifts.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Clock size={24} className="mx-auto mb-2 opacity-50" />
+              <p>No staff currently on shift</p>
+            </div>
+          ) : activeShifts.map(shift => (
+            <div key={shift.id} className="flex items-center justify-between bg-green-500/10 border border-green-500/20 rounded-xl p-3">
+              <div>
+                <p className="text-white font-medium">{shift.staff_name}</p>
+                <p className="text-gray-400 text-xs capitalize">{shift.role}</p>
+                <p className="text-green-400 text-xs mt-0.5 flex items-center gap-1">
+                  <Timer size={10} /> Since {formatTime(shift.clock_in)}
+                </p>
+              </div>
+              <button onClick={() => clockOut(shift)}
+                className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg px-3 py-1.5 text-sm transition-colors">
+                <UserX size={14} /> Clock Out
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ALL STAFF TAB */}
+      {tab === 'all' && (
+        <div className="space-y-2">
+          {staff.map(member => (
+            <div key={member.id} className="flex items-center justify-between bg-gray-800 rounded-xl p-3">
+              <div>
+                <p className="text-white font-medium">{member.full_name}</p>
+                <p className="text-gray-400 text-xs capitalize">{member.role}</p>
+              </div>
+              {isActive(member.id) ? (
+                <span className="flex items-center gap-1 text-green-400 text-xs font-medium">
+                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                  On Shift
+                </span>
+              ) : (
+                <button onClick={() => clockIn(member)}
+                  className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg px-3 py-1.5 text-sm transition-colors">
+                  <UserCheck size={14} /> Clock In
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* TODAY'S LOG TAB */}
+      {tab === 'log' && (
+        <div className="space-y-2">
+          {todayLog.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Calendar size={24} className="mx-auto mb-2 opacity-50" />
+              <p>No attendance records today</p>
+            </div>
+          ) : todayLog.map(entry => (
+            <div key={entry.id} className="flex items-center justify-between bg-gray-800 rounded-xl p-3">
+              <div>
+                <p className="text-white font-medium">{entry.staff_name}</p>
+                <p className="text-gray-400 text-xs capitalize">{entry.role}</p>
+                <p className="text-gray-500 text-xs mt-0.5">
+                  {formatTime(entry.clock_in)} → {entry.clock_out ? formatTime(entry.clock_out) : 'Still on shift'}
+                </p>
+              </div>
+              <div className="text-right">
+                {entry.clock_out ? (
+                  <span className="text-amber-400 text-sm font-medium">{formatDuration(entry.duration_minutes)}</span>
+                ) : (
+                  <span className="flex items-center gap-1 text-green-400 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                    Active
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
