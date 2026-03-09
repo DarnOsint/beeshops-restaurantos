@@ -19,6 +19,10 @@ export default function Executive() {
   const { profile, signOut } = useAuth()
   const [geofenceEnabled, setGeofenceEnabled] = useState(true)
   const [geoToggling, setGeoToggling] = useState(false)
+  const [radiusMain, setRadiusMain] = useState(400)
+  const [radiusApartment, setRadiusApartment] = useState(200)
+  const [radiusSaving, setRadiusSaving] = useState(false)
+  const [showRadiusEdit, setShowRadiusEdit] = useState(false)
   const navigate = useNavigate()
   const [stats, setStats] = useState({
     revenue: 0, openOrders: 0, occupiedTables: 0,
@@ -31,8 +35,15 @@ export default function Executive() {
   useEffect(() => {
     fetchStats()
     // Fetch geofence setting
-    supabase.from('settings').select('value').eq('id', 'geofence_enabled').single()
-      .then(({ data }) => { if (data) setGeofenceEnabled(data.value === 'true') })
+    supabase.from('settings').select('id, value')
+      .in('id', ['geofence_enabled', 'geofence_radius_main', 'geofence_radius_apartment'])
+      .then(({ data }) => {
+        if (!data) return
+        const map = Object.fromEntries(data.map(r => [r.id, r.value]))
+        if (map['geofence_enabled'] !== undefined) setGeofenceEnabled(map['geofence_enabled'] === 'true')
+        if (map['geofence_radius_main']) setRadiusMain(parseInt(map['geofence_radius_main']))
+        if (map['geofence_radius_apartment']) setRadiusApartment(parseInt(map['geofence_radius_apartment']))
+      })
     const interval = setInterval(fetchStats, 30000)
     const channel = supabase
       .channel('executive-realtime')
@@ -51,6 +62,16 @@ export default function Executive() {
     await supabase.from('settings').update({ value: newVal, updated_at: new Date().toISOString() }).eq('id', 'geofence_enabled')
     setGeofenceEnabled(!geofenceEnabled)
     setGeoToggling(false)
+  }
+
+  const saveRadius = async () => {
+    setRadiusSaving(true)
+    await Promise.all([
+      supabase.from('settings').update({ value: String(radiusMain), updated_at: new Date().toISOString() }).eq('id', 'geofence_radius_main'),
+      supabase.from('settings').update({ value: String(radiusApartment), updated_at: new Date().toISOString() }).eq('id', 'geofence_radius_apartment'),
+    ])
+    setRadiusSaving(false)
+    setShowRadiusEdit(false)
   }
 
   const fetchStats = async () => {
@@ -159,7 +180,7 @@ export default function Executive() {
             <h2 className="text-2xl font-bold text-white">Good {getGreeting()}, {profile?.full_name?.split(' ')[0]}!</h2>
             <p className="text-gray-400 mt-1">Here is what is happening at Beeshops Place today.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 relative">
             {/* Geofence Toggle */}
             <button onClick={toggleGeofence} disabled={geoToggling}
               className={`flex items-center gap-2 text-xs px-3 py-2 rounded-xl border transition-colors ${
@@ -171,6 +192,40 @@ export default function Executive() {
               {geoToggling ? 'Updating...' : geofenceEnabled ? 'Geofence ON' : 'Geofence OFF'}
               <span className={`w-2 h-2 rounded-full ${geofenceEnabled ? 'bg-green-400' : 'bg-red-400'}`} />
             </button>
+            {/* Radius Edit */}
+            <button onClick={() => setShowRadiusEdit(!showRadiusEdit)}
+              className="flex items-center gap-2 text-xs px-3 py-2 rounded-xl border bg-gray-800 border-gray-700 text-gray-400 hover:text-white transition-colors">
+              <MapPin size={13} /> Radius
+            </button>
+            {showRadiusEdit && (
+              <div className="absolute top-16 right-6 z-50 bg-gray-900 border border-gray-700 rounded-2xl p-4 shadow-xl w-72">
+                <p className="text-white font-semibold text-sm mb-3">Geofence Radius Settings</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-gray-400 text-xs mb-1 block">Main Venue (metres)</label>
+                    <input type="number" value={radiusMain}
+                      onChange={e => setRadiusMain(parseInt(e.target.value) || 0)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+                  </div>
+                  <div>
+                    <label className="text-gray-400 text-xs mb-1 block">Apartments (metres)</label>
+                    <input type="number" value={radiusApartment}
+                      onChange={e => setRadiusApartment(parseInt(e.target.value) || 0)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={saveRadius} disabled={radiusSaving}
+                      className="flex-1 bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold py-2 rounded-xl transition-colors">
+                      {radiusSaving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button onClick={() => setShowRadiusEdit(false)}
+                      className="flex-1 bg-gray-800 hover:bg-gray-700 text-white text-xs py-2 rounded-xl transition-colors">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             {stats.lowStock > 0 && (
               <button onClick={() => navigate('/backoffice')}
                 className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 hover:bg-red-500/20 transition-colors">

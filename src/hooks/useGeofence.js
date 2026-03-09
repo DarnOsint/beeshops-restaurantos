@@ -3,9 +3,11 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 const LOCATIONS = {
-  main:      { lat: 7.350834, lng: 3.840780, radius: 400 },
-  apartment: { lat: 7.349545, lng: 3.839690, radius: 200 },
+  main:      { lat: 7.350834, lng: 3.840780 },
+  apartment: { lat: 7.349545, lng: 3.839690 },
 }
+
+const DEFAULT_RADIUS = { main: 400, apartment: 200 }
 
 function getDistance(lat1, lng1, lat2, lng2) {
   const R = 6371000
@@ -21,21 +23,28 @@ export function useGeofence(locKey = 'main') {
   const [distance, setDistance] = useState(null)
   const [location, setLocation] = useState(null)
   const [enabled,  setEnabled]  = useState(null)
+  const [radius,   setRadius]   = useState(null)
 
+  // Fetch all geofence settings at once
   useEffect(() => {
     supabase
       .from('settings')
-      .select('value')
-      .eq('id', 'geofence_enabled')
-      .single()
+      .select('id, value')
+      .in('id', ['geofence_enabled', 'geofence_radius_main', 'geofence_radius_apartment'])
       .then(({ data }) => {
-        setEnabled(data ? data.value === 'true' : true)
+        if (!data) { setEnabled(true); setRadius(DEFAULT_RADIUS[locKey] || 400); return }
+        const map = Object.fromEntries(data.map(r => [r.id, r.value]))
+        setEnabled(map['geofence_enabled'] !== 'false')
+        const r = locKey === 'apartment'
+          ? parseInt(map['geofence_radius_apartment'] || DEFAULT_RADIUS.apartment)
+          : parseInt(map['geofence_radius_main'] || DEFAULT_RADIUS.main)
+        setRadius(r)
       })
-      .catch(() => setEnabled(true))
-  }, [])
+      .catch(() => { setEnabled(true); setRadius(DEFAULT_RADIUS[locKey] || 400) })
+  }, [locKey])
 
   useEffect(() => {
-    if (enabled === null) return
+    if (enabled === null || radius === null) return
 
     if (!enabled) {
       setStatus('inside')
@@ -50,7 +59,7 @@ export function useGeofence(locKey = 'main') {
       setLocation({ lat, lng })
       const dist = getDistance(lat, lng, loc.lat, loc.lng)
       setDistance(Math.round(dist))
-      setStatus(dist <= loc.radius ? 'inside' : 'outside')
+      setStatus(dist <= radius ? 'inside' : 'outside')
     }
 
     const error = () => setStatus('error')
@@ -63,7 +72,7 @@ export function useGeofence(locKey = 'main') {
     }, 60000)
 
     return () => clearInterval(interval)
-  }, [locKey, enabled])
+  }, [locKey, enabled, radius])
 
   return { status, distance, location }
 }
