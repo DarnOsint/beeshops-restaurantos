@@ -42,7 +42,7 @@ export default function Management() {
       supabase.from('orders').select('id').eq('status', 'open'),
       supabase.from('tables').select('id').eq('status', 'occupied'),
       supabase.from('rooms').select('status'),
-      supabase.from('till_sessions').select('id').eq('status', 'open'),
+      supabase.from('attendance').select('id').eq('date', new Date().toISOString().split('T')[0]).is('clock_out', null),
       supabase.from('orders').select('total_amount').eq('status', 'paid').gte('created_at', today.toISOString())
     ])
 

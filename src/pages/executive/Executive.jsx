@@ -60,7 +60,7 @@ export default function Executive() {
       supabase.from('orders').select('id').eq('status', 'open'),
       supabase.from('tables').select('status'),
       supabase.from('rooms').select('status'),
-      supabase.from('till_sessions').select('id').eq('status', 'open'),
+      supabase.from('attendance').select('id').eq('date', new Date().toISOString().split('T')[0]).is('clock_out', null),
       supabase.from('inventory').select('id, current_stock, minimum_stock').eq('is_active', true),
       supabase.from('orders').select('*, tables(name), profiles(full_name)').order('created_at', { ascending: false }).limit(8),
       supabase.from('orders').select('total_amount').eq('status', 'paid').gte('created_at', today.toISOString()),
