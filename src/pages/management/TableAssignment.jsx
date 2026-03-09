@@ -38,24 +38,27 @@ export default function TableAssignment({ onClose }) {
   }
 
   const fetchActiveStaff = async () => {
-    // Get open till sessions
-    const { data: sessions } = await supabase
-      .from('till_sessions')
+    // Get staff currently clocked in (attendance with no clock_out)
+    const today = new Date().toISOString().split('T')[0]
+    const { data: attendance } = await supabase
+      .from('attendance')
       .select('staff_id')
-      .eq('status', 'open')
+      .eq('date', today)
+      .is('clock_out', null)
 
-    if (!sessions || sessions.length === 0) {
+    if (!attendance || attendance.length === 0) {
       setStaff([])
       return
     }
 
-    // Get profiles for those staff IDs
-    const staffIds = sessions.map(s => s.staff_id)
+    // Get profiles for clocked-in waitrons only
+    const staffIds = attendance.map(a => a.staff_id)
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, full_name, role')
       .in('id', staffIds)
       .eq('role', 'waitron')
+      .eq('is_active', true)
 
     setStaff(profiles || [])
   }
