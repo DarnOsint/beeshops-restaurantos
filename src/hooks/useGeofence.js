@@ -20,9 +20,8 @@ export function useGeofence(locKey = 'main') {
   const [status,   setStatus]   = useState('checking')
   const [distance, setDistance] = useState(null)
   const [location, setLocation] = useState(null)
-  const [enabled,  setEnabled]  = useState(null) // null = not yet loaded
+  const [enabled,  setEnabled]  = useState(null)
 
-  // Step 1: fetch setting first
   useEffect(() => {
     supabase
       .from('settings')
@@ -30,29 +29,25 @@ export function useGeofence(locKey = 'main') {
       .eq('id', 'geofence_enabled')
       .single()
       .then(({ data }) => {
-        const isEnabled = data ? data.value === 'true' : true
-        setEnabled(isEnabled)
+        setEnabled(data ? data.value === 'true' : true)
       })
-      .catch(() => setEnabled(true)) // default to enabled on error
+      .catch(() => setEnabled(true))
   }, [])
 
-  // Step 2: only run GPS check AFTER setting is loaded
   useEffect(() => {
-    if (enabled === null) return // still loading setting — wait
+    if (enabled === null) return
 
-    // Geofence is OFF — immediately set inside
     if (!enabled) {
       setStatus('inside')
       setDistance(0)
       return
     }
 
-    // Geofence is ON — do GPS check
+    const loc = LOCATIONS[locKey] || LOCATIONS['main']
+
     const check = (pos) => {
       const { latitude: lat, longitude: lng } = pos.coords
       setLocation({ lat, lng })
-      const loc = LOCATIONS[locKey]
-      if (!loc) { setStatus('inside'); return }
       const dist = getDistance(lat, lng, loc.lat, loc.lng)
       setDistance(Math.round(dist))
       setStatus(dist <= loc.radius ? 'inside' : 'outside')
@@ -68,7 +63,7 @@ export function useGeofence(locKey = 'main') {
     }, 60000)
 
     return () => clearInterval(interval)
-  }, [locKey, enabled]) // runs when enabled changes from null to true/false
+  }, [locKey, enabled])
 
   return { status, distance, location }
 }
