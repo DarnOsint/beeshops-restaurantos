@@ -29,7 +29,6 @@ export default function POS() {
     fetchTables()
     fetchMenu()
     fetchZonePrices()
-    fetchAssignedTables(profile?.role, profile?.id)
 
     const channel = supabase
       .channel('tables-channel')
@@ -41,6 +40,11 @@ export default function POS() {
 
     return () => supabase.removeChannel(channel)
   }, [])
+
+  useEffect(() => {
+    if (!profile) return
+    fetchAssignedTables(profile.role, profile.id)
+  }, [profile?.id])
 
   const fetchAssignedTables = async (role, staffId) => {
     // Owners and managers can access all tables
