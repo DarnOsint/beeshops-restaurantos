@@ -139,7 +139,7 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <AppInner />
       </AuthProvider>
     </BrowserRouter>
   )
