@@ -29,7 +29,7 @@ export default function POS() {
     fetchTables()
     fetchMenu()
     fetchZonePrices()
-    fetchAssignedTables()
+    fetchAssignedTables(profile?.role, profile?.id)
 
     const channel = supabase
       .channel('tables-channel')
@@ -42,20 +42,20 @@ export default function POS() {
     return () => supabase.removeChannel(channel)
   }, [])
 
-  const fetchAssignedTables = async () => {
+  const fetchAssignedTables = async (role, staffId) => {
     // Owners and managers can access all tables
-    if (['owner', 'manager', 'accountant'].includes(profile?.role)) {
-      setAssignedTableIds(null) // null = no restriction
+    if (['owner', 'manager', 'accountant'].includes(role)) {
+      setAssignedTableIds(null)
       return
     }
     // Fetch zones assigned to this waitron
     const { data: zoneData } = await supabase
       .from('zone_assignments')
       .select('category_id')
-      .eq('staff_id', profile?.id)
+      .eq('staff_id', staffId)
       .eq('is_active', true)
     if (!zoneData || zoneData.length === 0) {
-      setAssignedTableIds([]) // no zones assigned — no tables
+      setAssignedTableIds(null) // no assignment yet — show all tables
       return
     }
     // Get all tables in those zones
