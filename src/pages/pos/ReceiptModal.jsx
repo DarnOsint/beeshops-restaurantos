@@ -1,9 +1,12 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useThermalPrinter } from '../../hooks/useThermalPrinter'
 import { X, Printer, Download } from 'lucide-react'
 
 export default function ReceiptModal({ order, table, items, staffName, onClose }) {
   const customerRef = useRef()
   const waiterRef = useRef()
+  const { isSupported, printReceipt } = useThermalPrinter()
+  const [printing, setPrinting] = useState(false)
 
   useEffect(() => {
     // Auto-trigger print dialog on mount
@@ -26,6 +29,15 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
   }
 
   const orderRef = `BSP-${String(order.id).slice(0, 8).toUpperCase()}`
+
+  const handleThermalPrint = async () => {
+    setPrinting(true)
+    await printReceipt(
+      { order, items, table, staffName, orderRef, subtotal, vatAmount, total },
+      () => handlePrint('customer') // fallback
+    )
+    setPrinting(false)
+  }
 
   const handlePrint = (type) => {
     const ref = type === 'customer' ? customerRef : waiterRef
@@ -128,9 +140,9 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
             <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between shrink-0">
               <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Customer Receipt</span>
               <div className="flex gap-2">
-                <button onClick={() => handlePrint('customer')}
-                  className="flex items-center gap-1 text-xs bg-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors">
-                  <Printer size={12} /> Print
+<button onClick={handleThermalPrint} disabled={printing}
+                  className="flex items-center gap-1 text-xs bg-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50">
+                  <Printer size={12} /> {printing ? 'Printing...' : isSupported ? 'Print (Thermal)' : 'Print'}
                 </button>
                 <button onClick={() => handleDownload('customer')}
                   className="flex items-center gap-1 text-xs bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-300 transition-colors">
