@@ -270,6 +270,7 @@ export default function POS() {
             tables={tables}
             onSelectTable={handleSelectTable}
             selectedTable={selectedTable}
+            assignedTableIds={assignedTableIds}
           />
         </div>
 
