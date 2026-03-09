@@ -20,7 +20,6 @@ export default function TableGrid({ tables, onSelectTable, selectedTable, assign
 
   const categories = ['All', 'Outdoor', 'Indoor', 'VIP Lounge', 'The Nook']
 
-  console.log('TABLES IN GRID:', tables?.length, tables?.[0])
   const filtered = activeCategory === 'All'
     ? tables
     : tables.filter(t => t.table_categories?.name === activeCategory)
