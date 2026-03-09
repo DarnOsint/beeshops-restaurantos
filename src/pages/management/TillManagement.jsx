@@ -18,7 +18,18 @@ export default function TillManagement({ onClose }) {
     openOrders: 0
   })
   const [activeTab, setActiveTab] = useState('overview')
-  const [payoutForm, setPayoutForm] = useState({ amount: '', reason: '' })
+  const [payoutForm, setPayoutForm] = useState({ amount: '', reason: '', category: 'general' })
+  const PETTY_CASH_LIMIT = 50000 // ₦50,000 daily limit
+  const PETTY_CATEGORIES = [
+    { value: 'general', label: 'General' },
+    { value: 'supplies', label: 'Supplies' },
+    { value: 'transport', label: 'Transport' },
+    { value: 'maintenance', label: 'Maintenance' },
+    { value: 'food', label: 'Food & Ingredients' },
+    { value: 'utilities', label: 'Utilities' },
+    { value: 'staff_welfare', label: 'Staff Welfare' },
+    { value: 'other', label: 'Other' },
+  ]
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -109,11 +120,12 @@ export default function TillManagement({ onClose }) {
         staff_id: profile.id,
         amount: parseFloat(payoutForm.amount),
         reason: payoutForm.reason,
+        category: payoutForm.category,
         approved_by: profile.id
       })
 
     if (!error) {
-      setPayoutForm({ amount: '', reason: '' })
+      setPayoutForm({ amount: '', reason: '', category: 'general' })
       fetchPayouts()
       fetchTodayStats()
       alert('Payout recorded successfully!')
@@ -273,60 +285,100 @@ export default function TillManagement({ onClose }) {
       )}
 
       {/* Payouts Tab */}
-      {activeTab === 'payouts' && (
+      {activeTab === 'payouts' && (() => {
+        const dailyTotal = payouts.reduce((s, p) => s + (p.amount || 0), 0)
+        const remaining = PETTY_CASH_LIMIT - dailyTotal
+        const pct = Math.min((dailyTotal / PETTY_CASH_LIMIT) * 100, 100)
+        const byCategory = PETTY_CATEGORIES.map(cat => ({
+          ...cat,
+          total: payouts.filter(p => (p.category || 'general') === cat.value).reduce((s, p) => s + (p.amount || 0), 0)
+        })).filter(c => c.total > 0)
+        return (
         <div className="space-y-4">
+          {/* Daily limit bar */}
+          <div className="bg-gray-800 rounded-xl p-4">
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-white text-sm font-medium">Daily Petty Cash</p>
+              <p className={`text-sm font-bold ${remaining < 10000 ? 'text-red-400' : 'text-amber-400'}`}>
+                ₦{dailyTotal.toLocaleString()} / ₦{PETTY_CASH_LIMIT.toLocaleString()}
+              </p>
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-2 mb-1">
+              <div className={`h-2 rounded-full transition-all ${pct > 80 ? 'bg-red-500' : pct > 50 ? 'bg-amber-500' : 'bg-green-500'}`}
+                style={{ width: pct + '%' }} />
+            </div>
+            <p className="text-gray-500 text-xs">₦{remaining.toLocaleString()} remaining today</p>
+          </div>
+
+          {/* Category breakdown */}
+          {byCategory.length > 0 && (
+            <div className="bg-gray-800 rounded-xl p-4">
+              <p className="text-gray-400 text-xs uppercase tracking-wide mb-3">By Category</p>
+              <div className="space-y-2">
+                {byCategory.map(cat => (
+                  <div key={cat.value} className="flex justify-between items-center">
+                    <span className="text-gray-300 text-sm">{cat.label}</span>
+                    <span className="text-red-400 text-sm font-medium">₦{cat.total.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Record Payout */}
           <div className="bg-gray-800 rounded-xl p-4">
-            <p className="text-white font-medium mb-3">Record Payout</p>
+            <p className="text-white font-medium mb-3">Record Expense</p>
             <div className="space-y-3">
               <div>
-                <label className="text-gray-400 text-xs mb-1 block">Amount (₦)</label>
-                <input
-                  type="number"
-                  placeholder="0.00"
-                  value={payoutForm.amount}
-                  onChange={(e) => setPayoutForm(prev => ({ ...prev, amount: e.target.value }))}
-                  className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
-                />
+                <label className="text-gray-400 text-xs mb-1 block">Category</label>
+                <select value={payoutForm.category}
+                  onChange={e => setPayoutForm(p => ({ ...p, category: e.target.value }))}
+                  className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
+                  {PETTY_CATEGORIES.map(cat => <option key={cat.value} value={cat.value}>{cat.label}</option>)}
+                </select>
               </div>
               <div>
-                <label className="text-gray-400 text-xs mb-1 block">Reason</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Supplier payment, petty cash..."
-                  value={payoutForm.reason}
-                  onChange={(e) => setPayoutForm(prev => ({ ...prev, reason: e.target.value }))}
-                  className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
-                />
+                <label className="text-gray-400 text-xs mb-1 block">Amount (₦)</label>
+                <input type="number" placeholder="0.00" value={payoutForm.amount}
+                  onChange={e => setPayoutForm(p => ({ ...p, amount: e.target.value }))}
+                  className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
               </div>
-              <button
-                onClick={recordPayout}
-                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-lg py-2 text-sm transition-colors"
-              >
-                Record Payout
+              <div>
+                <label className="text-gray-400 text-xs mb-1 block">Description</label>
+                <input type="text" placeholder="e.g. Bought cleaning supplies"
+                  value={payoutForm.reason}
+                  onChange={e => setPayoutForm(p => ({ ...p, reason: e.target.value }))}
+                  className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+              </div>
+              {remaining < parseFloat(payoutForm.amount || 0) && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 text-red-400 text-xs">
+                  ⚠️ This exceeds today's remaining petty cash limit
+                </div>
+              )}
+              <button onClick={recordPayout}
+                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-lg py-2 text-sm transition-colors">
+                Record Expense
               </button>
             </div>
           </div>
 
           {/* Payout History */}
           <div>
-            <p className="text-gray-400 text-sm font-medium mb-2">
-              Today's Payouts
-            </p>
+            <p className="text-gray-400 text-sm font-medium mb-2">Today's Expenses</p>
             {payouts.length === 0 ? (
-              <div className="text-center py-6 text-gray-500 text-sm">
-                No payouts recorded today
-              </div>
+              <div className="text-center py-6 text-gray-500 text-sm">No expenses recorded today</div>
             ) : payouts.map(payout => (
               <div key={payout.id} className="bg-gray-800 rounded-xl p-3 mb-2">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-white text-sm font-medium">{payout.reason}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-white text-sm font-medium">{payout.reason}</p>
+                      <span className="text-xs px-2 py-0.5 rounded-lg bg-gray-700 text-gray-400 capitalize">
+                        {payout.category || 'general'}
+                      </span>
+                    </div>
                     <p className="text-gray-400 text-xs">{payout.profiles?.full_name}</p>
-                    <p className="text-gray-500 text-xs">
-                      {new Date(payout.created_at).toLocaleTimeString()}
-                    </p>
+                    <p className="text-gray-500 text-xs">{new Date(payout.created_at).toLocaleTimeString()}</p>
                   </div>
                   <p className="text-red-400 font-bold">-₦{payout.amount?.toLocaleString()}</p>
                 </div>
@@ -334,7 +386,8 @@ export default function TillManagement({ onClose }) {
             ))}
           </div>
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
