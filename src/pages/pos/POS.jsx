@@ -72,7 +72,7 @@ export default function POS() {
       .eq('staff_id', staffId)
       .eq('is_active', true)
     if (!zoneData || zoneData.length === 0) {
-      setAssignedTableIds(null) // no assignment yet — show all tables
+      setAssignedTableIds([]) // no zones assigned — block all tables
       return
     }
     // Get all tables in those zones
