@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Users } from 'lucide-react'
+import { Users, Lock } from 'lucide-react'
 
 const categoryColors = {
   'Outdoor': { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', dot: 'bg-green-500' },
@@ -15,7 +15,7 @@ const occupiedColors = {
   'The Nook': 'bg-purple-500',
 }
 
-export default function TableGrid({ tables, onSelectTable, selectedTable }) {
+export default function TableGrid({ tables, onSelectTable, selectedTable, assignedTableIds }) {
   const [activeCategory, setActiveCategory] = useState('All')
 
   const categories = ['All', 'Outdoor', 'Indoor', 'VIP Lounge', 'The Nook']
@@ -70,13 +70,17 @@ export default function TableGrid({ tables, onSelectTable, selectedTable }) {
                   const isOccupied = table.status === 'occupied'
                   const isSelected = selectedTable?.id === table.id
                   const occupiedColor = occupiedColors[category]
+                  const isAssigned = assignedTableIds === null || assignedTableIds.includes(table.id)
 
                   return (
                     <button
                       key={table.id}
-                      onClick={() => onSelectTable(table)}
+                      onClick={() => isAssigned ? onSelectTable(table) : null}
+                      disabled={!isAssigned}
+                      title={!isAssigned ? 'Not assigned to you' : ''}
                       className={`
                         relative p-3 rounded-xl border-2 transition-all text-left
+                        ${!isAssigned ? 'opacity-30 cursor-not-allowed grayscale' : ''}
                         ${isSelected ? 'ring-2 ring-amber-500 ring-offset-2 ring-offset-gray-950' : ''}
                         ${isOccupied
                           ? `${occupiedColor} border-transparent text-white`
@@ -93,6 +97,11 @@ export default function TableGrid({ tables, onSelectTable, selectedTable }) {
                       </div>
                       {isOccupied && (
                         <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white/50" />
+                      )}
+                      {!isAssigned && (
+                        <div className="absolute top-1 right-1">
+                          <Lock size={8} className="text-gray-500" />
+                        </div>
                       )}
                     </button>
                   )

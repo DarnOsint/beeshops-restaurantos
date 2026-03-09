@@ -20,6 +20,7 @@ export default function POS() {
   const [selectedTable, setSelectedTable] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeOrder, setActiveOrder] = useState(null)
+  const [assignedTableIds, setAssignedTableIds] = useState(null) // null = no restriction
   const [showPayment, setShowPayment] = useState(false)
   const [showCashSale, setShowCashSale] = useState(false)
   const [cashSaleType, setCashSaleType] = useState('cash_sale')
@@ -28,6 +29,7 @@ export default function POS() {
     fetchTables()
     fetchMenu()
     fetchZonePrices()
+    fetchAssignedTables()
 
     const channel = supabase
       .channel('tables-channel')
@@ -39,6 +41,21 @@ export default function POS() {
 
     return () => supabase.removeChannel(channel)
   }, [])
+
+  const fetchAssignedTables = async () => {
+    // Owners and managers can access all tables
+    if (['owner', 'manager', 'accountant'].includes(profile?.role)) {
+      setAssignedTableIds(null) // null = no restriction
+      return
+    }
+    // Fetch tables assigned to this waitron
+    const { data } = await supabase
+      .from('zone_assignments')
+      .select('table_id')
+      .eq('staff_id', profile?.id)
+    if (data) setAssignedTableIds(data.map(r => r.table_id))
+    else setAssignedTableIds([])
+  }
 
   const fetchTables = async () => {
     const { data, error } = await supabase
@@ -283,6 +300,7 @@ export default function POS() {
           type={cashSaleType}
           menuItems={menuItems}
           staffId={profile.id}
+          assignedTableIds={assignedTableIds}
           onSuccess={() => setShowCashSale(false)}
           onClose={() => setShowCashSale(false)}
         />
