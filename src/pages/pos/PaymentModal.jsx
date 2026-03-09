@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
-import { X, Banknote, CreditCard, Smartphone, CheckCircle } from 'lucide-react'
+import { X, Banknote, CreditCard, Smartphone, CheckCircle, Clock, User, Phone } from 'lucide-react'
 import ReceiptModal from './ReceiptModal'
 
 export default function PaymentModal({ order, table, onSuccess, onClose }) {
@@ -12,6 +12,9 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
   const [success, setSuccess] = useState(false)
   const [showReceipt, setShowReceipt] = useState(false)
   const [paidOrder, setPaidOrder] = useState(null)
+  const [debtorName, setDebtorName] = useState(order?.customer_name || '')
+  const [debtorPhone, setDebtorPhone] = useState(order?.customer_phone || '')
+  const [dueDate, setDueDate] = useState('')
 
   const total = order?.total_amount || 0
   const change = paymentMethod === 'cash' && cashTendered
@@ -21,12 +24,35 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
   const canProcess = () => {
     if (processing) return false
     if (paymentMethod === 'cash') return parseFloat(cashTendered) >= total
+    if (paymentMethod === 'credit') return debtorName.trim().length > 0
     return true
   }
 
   const processPayment = async () => {
     setProcessing(true)
     try {
+      if (paymentMethod === 'credit') {
+        await supabase.from('orders').update({
+          status: 'paid', payment_method: 'credit',
+          customer_name: debtorName, customer_phone: debtorPhone,
+          closed_at: new Date().toISOString()
+        }).eq('id', order.id)
+        await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', order.id)
+        await supabase.from('tables').update({ status: 'available' }).eq('id', table.id)
+        await supabase.from('debtors').insert({
+          name: debtorName, phone: debtorPhone,
+          debt_type: 'table_order', order_id: order.id,
+          credit_limit: total, current_balance: total,
+          amount_paid: 0, status: 'outstanding', is_active: true,
+          due_date: dueDate || null,
+          notes: 'Auto-created from POS - ' + (table?.name || ''),
+          recorded_by: profile?.id, recorded_by_name: profile?.full_name,
+        })
+        setPaidOrder({ ...order, payment_method: 'credit' })
+        setSuccess(true)
+        return
+      }
+
       await supabase
         .from('orders')
         .update({
@@ -58,6 +84,7 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
     { id: 'cash', label: 'Cash', icon: Banknote, color: 'text-green-400' },
     { id: 'card', label: 'Bank POS', icon: CreditCard, color: 'text-blue-400' },
     { id: 'transfer', label: 'Bank Transfer', icon: Smartphone, color: 'text-amber-400' },
+    { id: 'credit', label: 'Pay Later', icon: Clock, color: 'text-red-400' },
   ]
 
   // Step 2 — Success screen with receipt trigger
@@ -70,7 +97,7 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
         <h3 className="text-white text-xl font-bold mb-1">Payment Successful!</h3>
         <p className="text-gray-400 text-sm mb-1">{table.name} is now free</p>
         <p className="text-gray-500 text-xs capitalize">
-          Paid via {paymentMethod === 'card' ? 'Bank POS' : paymentMethod === 'transfer' ? 'Bank Transfer' : 'Cash'}
+          {paymentMethod === 'credit' ? 'Recorded as debt' : `Paid via ${paymentMethod === 'card' ? 'Bank POS' : paymentMethod === 'transfer' ? 'Bank Transfer' : 'Cash'}`}
         </p>
         {paymentMethod === 'cash' && change > 0 && (
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mt-4">
@@ -147,7 +174,7 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
           {/* Payment Method */}
           <div>
             <p className="text-gray-400 text-xs uppercase tracking-wide mb-3">Payment Method</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               {paymentMethods.map(method => (
                 <button
                   key={method.id}
@@ -221,13 +248,41 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
             </div>
           )}
 
+          {/* Pay Later Form */}
+          {paymentMethod === 'credit' && (
+            <div className="space-y-3">
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center">
+                <Clock size={28} className="text-red-400 mx-auto mb-2" />
+                <p className="text-red-400 font-medium">Pay Later</p>
+                <p className="text-gray-400 text-sm mt-1">Order will be recorded as a debt. Enter customer details below.</p>
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs uppercase tracking-wide mb-2 block">Customer Name *</label>
+                <input value={debtorName} onChange={e => setDebtorName(e.target.value)}
+                  placeholder="Full name"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-red-500" />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs uppercase tracking-wide mb-2 block">Phone</label>
+                <input value={debtorPhone} onChange={e => setDebtorPhone(e.target.value)}
+                  placeholder="08xxxxxxxxx"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-red-500" />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs uppercase tracking-wide mb-2 block">Due Date (optional)</label>
+                <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-red-500" />
+              </div>
+            </div>
+          )}
+
           {/* Confirm Button */}
           <button
             onClick={processPayment}
             disabled={!canProcess()}
-            className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-gray-800 disabled:text-gray-600 text-black font-bold rounded-xl py-4 text-lg transition-colors"
+            className={`w-full ${paymentMethod === 'credit' ? 'bg-red-500 hover:bg-red-400' : 'bg-amber-500 hover:bg-amber-400'} disabled:bg-gray-800 disabled:text-gray-600 text-black font-bold rounded-xl py-4 text-lg transition-colors`}
           >
-            {processing ? 'Processing...' : `Confirm ₦${total.toLocaleString()} Payment`}
+            {processing ? 'Processing...' : paymentMethod === 'credit' ? `Record ₦${total.toLocaleString()} as Debt` : `Confirm ₦${total.toLocaleString()} Payment`}
           </button>
 
         </div>

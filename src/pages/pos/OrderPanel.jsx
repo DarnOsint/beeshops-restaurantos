@@ -40,6 +40,17 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) 
     setOrderItems(prev => prev.filter(i => i.id !== itemId))
   }
 
+  const getSendLabel = () => {
+    if (!orderItems.length) return "Send Order"
+    const destinations = [...new Set(orderItems.map(i => i.menu_categories?.destination || "kitchen"))]
+    if (destinations.length === 1) {
+      if (destinations[0] === "bar") return "Send to Bar"
+      if (destinations[0] === "griller") return "Send to Griller"
+      return "Send to Kitchen"
+    }
+    return "Send to Kitchen & Bar"
+  }
+
   const total = orderItems.reduce((sum, item) => sum + item.total, 0)
 
   const handlePlaceOrder = async () => {
@@ -155,7 +166,7 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) 
           className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold rounded-xl py-3 flex items-center justify-center gap-2 transition-colors"
         >
           <Send size={16} />
-          Send to Kitchen
+          {getSendLabel()}
         </button>
       </div>
     </div>
