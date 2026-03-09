@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
-import { X, Banknote, CreditCard, Smartphone, CheckCircle, Clock, User, Phone } from 'lucide-react'
+import { X, Banknote, CreditCard, Smartphone, CheckCircle, Clock, User, Phone, Users } from 'lucide-react'
 import ReceiptModal from './ReceiptModal'
 
 export default function PaymentModal({ order, table, onSuccess, onClose }) {
@@ -16,6 +16,13 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
   const [debtorName, setDebtorName] = useState(order?.customer_name || '')
   const [debtorPhone, setDebtorPhone] = useState(order?.customer_phone || '')
   const [dueDate, setDueDate] = useState('')
+  const [splitMode, setSplitMode] = useState(false)
+  const [numPeople, setNumPeople] = useState(2)
+  const [itemAssignments, setItemAssignments] = useState({}) // { order_item_id: personIndex }
+  const [splitPayments, setSplitPayments] = useState([]) // paid splits
+  const [currentSplitPerson, setCurrentSplitPerson] = useState(0)
+  const [splitPayMethod, setSplitPayMethod] = useState('cash')
+  const [splitCash, setSplitCash] = useState('')
 
   const total = order?.total_amount || 0
   const change = paymentMethod === 'cash' && cashTendered
@@ -27,6 +34,73 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
     if (paymentMethod === 'cash') return parseFloat(cashTendered) >= total
     if (paymentMethod === 'credit') return debtorName.trim().length > 0
     return true
+  }
+
+  const orderItems = order?.order_items || []
+
+  const getPersonItems = (personIdx) =>
+    orderItems.filter(item => itemAssignments[item.id] === personIdx)
+
+  const getPersonTotal = (personIdx) =>
+    getPersonItems(personIdx).reduce((s, i) => s + (i.total_price || 0) + (i.extra_charge || 0), 0)
+
+  const unassignedItems = orderItems.filter(item => itemAssignments[item.id] === undefined)
+
+  const allAssigned = unassignedItems.length === 0
+
+  const processSplitPayment = async () => {
+    const personTotal = getPersonTotal(currentSplitPerson)
+    if (personTotal === 0) {
+      alert('No items assigned to this person')
+      return
+    }
+    if (splitPayMethod === 'cash' && parseFloat(splitCash) < personTotal) {
+      alert('Cash tendered is less than amount due')
+      return
+    }
+    const newPayment = {
+      person: currentSplitPerson + 1,
+      total: personTotal,
+      method: splitPayMethod,
+      items: getPersonItems(currentSplitPerson).map(i => i.menu_items?.name || 'Item'),
+      change: splitPayMethod === 'cash' ? parseFloat(splitCash) - personTotal : 0
+    }
+    const updatedPayments = [...splitPayments, newPayment]
+    setSplitPayments(updatedPayments)
+    setSplitCash('')
+
+    // Check if all people have paid
+    const paidPeople = updatedPayments.map(p => p.person)
+    const allPeople = Array.from({ length: numPeople }, (_, i) => i + 1)
+    const allPaid = allPeople.every(p => paidPeople.includes(p))
+
+    if (allPaid) {
+      // Mark order as paid
+      const primaryMethod = updatedPayments[0].method
+      await supabase.from('orders').update({
+        status: 'paid',
+        payment_method: primaryMethod,
+        closed_at: new Date().toISOString(),
+        notes: (order.notes || '') + ' [Split: ' + updatedPayments.map(p => 'P' + p.person + '=' + p.method).join(', ') + ']'
+      }).eq('id', order.id)
+      await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', order.id)
+      await supabase.from('tables').update({ status: 'available' }).eq('id', table.id)
+      await audit({
+        action: 'ORDER_PAID',
+        entity: 'order',
+        entityId: order.id,
+        entityName: 'Order #' + (order.id || '').slice(0, 8),
+        newValue: { total: order.total_amount, payment_method: 'split', splits: updatedPayments.length },
+        performer: profile
+      })
+      setPaidOrder({ ...order, payment_method: 'split' })
+      setSuccess(true)
+    } else {
+      // Move to next unpaid person
+      const nextPerson = allPeople.find(p => !paidPeople.includes(p))
+      setCurrentSplitPerson(nextPerson - 1)
+      setSplitPayMethod('cash')
+    }
   }
 
   const processPayment = async () => {
@@ -89,12 +163,131 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
     }
   }
 
+  const splitColors = ['bg-blue-500/20 border-blue-500/30 text-blue-300', 'bg-purple-500/20 border-purple-500/30 text-purple-300', 'bg-green-500/20 border-green-500/30 text-green-300', 'bg-pink-500/20 border-pink-500/30 text-pink-300', 'bg-amber-500/20 border-amber-500/30 text-amber-300']
+
   const paymentMethods = [
     { id: 'cash', label: 'Cash', icon: Banknote, color: 'text-green-400' },
     { id: 'card', label: 'Bank POS', icon: CreditCard, color: 'text-blue-400' },
     { id: 'transfer', label: 'Bank Transfer', icon: Smartphone, color: 'text-amber-400' },
     { id: 'credit', label: 'Pay Later', icon: Clock, color: 'text-red-400' },
   ]
+
+  // Split Bill Mode
+  if (splitMode && !success) return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-2">
+      <div className="bg-gray-950 rounded-2xl w-full max-w-lg border border-gray-800 flex flex-col max-h-[95vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-800">
+          <div>
+            <h3 className="text-white font-bold">Split Bill — {table?.name}</h3>
+            <p className="text-gray-400 text-xs">Total: ₦{total.toLocaleString()}</p>
+          </div>
+          <button onClick={() => setSplitMode(false)} className="text-gray-400 hover:text-white"><X size={18} /></button>
+        </div>
+
+        {/* Number of people */}
+        <div className="p-4 border-b border-gray-800">
+          <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">Number of people</p>
+          <div className="flex gap-2">
+            {[2,3,4,5].map(n => (
+              <button key={n} onClick={() => { setNumPeople(n); setItemAssignments({}); setSplitPayments([]); setCurrentSplitPerson(0) }}
+                className={`w-10 h-10 rounded-xl font-bold text-sm transition-colors ${numPeople === n ? 'bg-amber-500 text-black' : 'bg-gray-800 text-white hover:bg-gray-700'}`}>
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Item assignment */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <p className="text-gray-400 text-xs uppercase tracking-wide mb-3">Assign items to each person</p>
+          {unassignedItems.length > 0 && (
+            <p className="text-amber-400 text-xs mb-3">{unassignedItems.length} unassigned item(s)</p>
+          )}
+          <div className="space-y-2">
+            {orderItems.map(item => (
+              <div key={item.id} className="bg-gray-900 border border-gray-800 rounded-xl p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-white text-sm font-medium">{item.menu_items?.name || 'Item'}</p>
+                    <p className="text-gray-500 text-xs">₦{((item.total_price || 0) + (item.extra_charge || 0)).toLocaleString()}</p>
+                  </div>
+                  {itemAssignments[item.id] !== undefined && (
+                    <span className={`text-xs px-2 py-1 rounded-lg border ${splitColors[itemAssignments[item.id] % splitColors.length]}`}>
+                      Person {itemAssignments[item.id] + 1}
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-1 flex-wrap">
+                  {Array.from({ length: numPeople }, (_, i) => (
+                    <button key={i} onClick={() => setItemAssignments(prev => ({ ...prev, [item.id]: i }))}
+                      className={`px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        itemAssignments[item.id] === i
+                          ? 'bg-amber-500 text-black'
+                          : 'bg-gray-800 text-gray-400 hover:text-white'
+                      }`}>
+                      P{i + 1}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Per-person totals */}
+          {allAssigned && (
+            <div className="mt-4 space-y-2">
+              <p className="text-gray-400 text-xs uppercase tracking-wide mb-2">Summary</p>
+              {Array.from({ length: numPeople }, (_, i) => {
+                const paid = splitPayments.find(p => p.person === i + 1)
+                return (
+                  <div key={i} className={`flex items-center justify-between rounded-xl p-3 border ${
+                    paid ? 'bg-green-500/10 border-green-500/20' :
+                    currentSplitPerson === i ? 'bg-amber-500/10 border-amber-500/30' :
+                    'bg-gray-900 border-gray-800'
+                  }`}>
+                    <span className="text-white text-sm font-medium">Person {i + 1}</span>
+                    <div className="text-right">
+                      <p className="text-white font-bold">₦{getPersonTotal(i).toLocaleString()}</p>
+                      {paid && <p className="text-green-400 text-xs">Paid · {paid.method}</p>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Payment for current person */}
+          {allAssigned && splitPayments.length < numPeople && (
+            <div className="mt-4 bg-gray-900 border border-amber-500/30 rounded-xl p-4 space-y-3">
+              <p className="text-amber-400 text-sm font-bold">
+                Collecting from Person {currentSplitPerson + 1} — ₦{getPersonTotal(currentSplitPerson).toLocaleString()}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {paymentMethods.filter(m => m.id !== 'credit').map(m => (
+                  <button key={m.id} onClick={() => setSplitPayMethod(m.id)}
+                    className={`py-2 rounded-xl text-sm font-medium border transition-colors ${
+                      splitPayMethod === m.id ? 'bg-amber-500 text-black border-amber-500' : 'bg-gray-800 text-gray-300 border-gray-700 hover:border-amber-500/50'
+                    }`}>
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              {splitPayMethod === 'cash' && (
+                <input type="number" value={splitCash} onChange={e => setSplitCash(e.target.value)}
+                  placeholder="Cash tendered"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500" />
+              )}
+              <button onClick={processSplitPayment}
+                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl py-3">
+                Confirm Payment
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
 
   // Step 2 — Success screen with receipt trigger
   if (success && !showReceipt) return (
