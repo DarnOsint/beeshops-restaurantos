@@ -7,7 +7,7 @@ import {
   Beer, LogOut, ArrowLeft, TrendingUp, ShoppingBag, AlertTriangle,
   Users, Banknote, CreditCard, Smartphone, Download,
   Plus, X, Save, Calendar, Filter, ChevronDown,
-  DollarSign, Receipt, BarChart2, Clock
+  DollarSign, Receipt, BarChart2, Clock, BookOpen
 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -33,6 +33,7 @@ export default function Accounting() {
   const [tillSessions, setTillSessions] = useState([])
   const [payouts, setPayouts] = useState([])
   const [showPayoutModal, setShowPayoutModal] = useState(false)
+  const [ledgerEntries, setLedgerEntries] = useState([])
   const [orderFilter, setOrderFilter] = useState({ status: 'all', type: 'all' })
 
   const [payoutForm, setPayoutForm] = useState({ amount: '', reason: '', category: 'expense', paid_to: '' })
@@ -134,6 +135,35 @@ export default function Accounting() {
 
     setTillSessions(tillRes.data || [])
     setPayouts(payoutsRes.data || [])
+
+    // Build ledger: combine orders + payouts + credit orders, sorted by time
+    const ledgerPaidOrders = (ordersRes.data || []).filter(o => o.status === 'paid')
+    const ledger = []
+    ledgerPaidOrders.forEach(o => {
+      ledger.push({
+        id: o.id, date: o.created_at,
+        type: 'credit',
+        description: (o.payment_method === 'credit' ? '[Pay Later] ' : '') + (o.tables?.name || o.order_type || 'Sale'),
+        ref: o.id.slice(0, 8).toUpperCase(),
+        debit: 0, credit: o.total_amount || 0,
+        method: o.payment_method, staff: o.profiles?.full_name,
+      })
+    })
+    ;(payoutsRes.data || []).forEach(p => {
+      ledger.push({
+        id: p.id, date: p.created_at,
+        type: 'debit',
+        description: p.reason || 'Expense',
+        ref: p.id.slice(0, 8).toUpperCase(),
+        debit: p.amount || 0, credit: 0,
+        method: p.category, staff: p.profiles?.full_name,
+      })
+    })
+    ledger.sort((a, b) => new Date(a.date) - new Date(b.date))
+    // Running balance
+    let balance = 0
+    ledger.forEach(e => { balance += e.credit - e.debit; e.balance = balance })
+    setLedgerEntries(ledger.reverse())
     setLoading(false)
   }
 
@@ -195,6 +225,7 @@ export default function Accounting() {
     { id: 'payouts', label: 'Payouts', icon: DollarSign },
     { id: 'trends', label: 'Trends', icon: TrendingUp },
     { id: 'debtors', label: 'Debtors', icon: AlertTriangle },
+    { id: 'ledger', label: 'Ledger', icon: BookOpen },
   ]
 
   return (
@@ -597,6 +628,76 @@ export default function Accounting() {
           </div>
         )}
       </div>
+
+      {/* LEDGER TAB */}
+      {activeTab === 'ledger' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm">General Ledger — {dateRange}</p>
+              <p className="text-white font-bold text-xl">{ledgerEntries.length} entries</p>
+            </div>
+            <div className="text-right">
+              <p className="text-gray-400 text-xs">Closing Balance</p>
+              <p className={`font-bold text-2xl ${ledgerEntries[0]?.balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                ₦{(ledgerEntries[0]?.balance || 0).toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-800 bg-gray-800/50">
+                    <th className="text-left text-gray-500 text-xs uppercase px-4 py-3">Date & Time</th>
+                    <th className="text-left text-gray-500 text-xs uppercase px-4 py-3">Ref</th>
+                    <th className="text-left text-gray-500 text-xs uppercase px-4 py-3">Description</th>
+                    <th className="text-left text-gray-500 text-xs uppercase px-4 py-3">Staff</th>
+                    <th className="text-left text-gray-500 text-xs uppercase px-4 py-3">Method</th>
+                    <th className="text-right text-gray-500 text-xs uppercase px-4 py-3 text-green-400">Credit (+)</th>
+                    <th className="text-right text-gray-500 text-xs uppercase px-4 py-3 text-red-400">Debit (-)</th>
+                    <th className="text-right text-gray-500 text-xs uppercase px-4 py-3">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ledgerEntries.length === 0 ? (
+                    <tr><td colSpan={8} className="text-center py-8 text-gray-600">No entries for this period</td></tr>
+                  ) : ledgerEntries.map((entry, i) => (
+                    <tr key={entry.id + i} className={`border-b border-gray-800 last:border-0 ${entry.type === 'debit' ? 'bg-red-500/5' : ''}`}>
+                      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                        <p>{new Date(entry.date).toLocaleDateString('en-NG')}</p>
+                        <p>{new Date(entry.date).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}</p>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs font-mono">{entry.ref}</td>
+                      <td className="px-4 py-3 text-white text-sm">{entry.description}</td>
+                      <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{entry.staff || '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-lg capitalize ${
+                          entry.method === 'cash' ? 'bg-emerald-500/20 text-emerald-400' :
+                          entry.method === 'card' ? 'bg-blue-500/20 text-blue-400' :
+                          entry.method === 'transfer' ? 'bg-purple-500/20 text-purple-400' :
+                          entry.method === 'credit' ? 'bg-red-500/20 text-red-400' :
+                          'bg-gray-700 text-gray-400'
+                        }`}>{entry.method || '—'}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-green-400 font-medium text-sm">
+                        {entry.credit > 0 ? '₦' + entry.credit.toLocaleString() : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right text-red-400 font-medium text-sm">
+                        {entry.debit > 0 ? '₦' + entry.debit.toLocaleString() : '—'}
+                      </td>
+                      <td className={`px-4 py-3 text-right font-bold text-sm ${entry.balance >= 0 ? 'text-white' : 'text-red-400'}`}>
+                        ₦{entry.balance.toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* DEBTORS TAB */}
       {activeTab === 'debtors' && (
