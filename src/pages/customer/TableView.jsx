@@ -15,9 +15,8 @@ const statusConfig = {
 
 export default function TableView() {
   const { tableId } = useParams()
-  // GEOFENCE: enabled on production only
-  // const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence("main")
-  // if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
+  const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence("main")
+  if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   const [table, setTable] = useState(null)
   const [order, setOrder] = useState(null)
   const [menu, setMenu] = useState([])
