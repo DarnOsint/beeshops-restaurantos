@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useGeofence } from '../../hooks/useGeofence'
+import GeofenceBlock from '../../components/GeofenceBlock'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import {
