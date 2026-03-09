@@ -31,6 +31,7 @@ export default function Accounting() {
   const [waitronStats, setWaitronStats] = useState([])
   const [trendData, setTrendData] = useState([])
   const [tillSessions, setTillSessions] = useState([])
+  const [timesheet, setTimesheet] = useState([])
   const [payouts, setPayouts] = useState([])
   const [showPayoutModal, setShowPayoutModal] = useState(false)
   const [ledgerEntries, setLedgerEntries] = useState([])
@@ -72,7 +73,7 @@ export default function Accounting() {
     setLoading(true)
     const { start, end } = getDateBounds()
 
-    const [ordersRes, tillRes, payoutsRes, trendRes] = await Promise.all([
+    const [ordersRes, tillRes, payoutsRes, trendRes, timesheetRes] = await Promise.all([
       supabase.from('orders')
         .select('*, profiles(full_name), tables(name), order_items(*, menu_items(name))')
         .gte('created_at', start)
@@ -93,7 +94,12 @@ export default function Accounting() {
         .select('created_at, total_amount')
         .eq('status', 'paid')
         .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: true }),
+      supabase.from('attendance')
+        .select('*')
+        .gte('clock_in', start)
+        .lte('clock_in', end)
+        .order('clock_in', { ascending: false })
     ])
 
     const allOrders = ordersRes.data || []
@@ -134,6 +140,7 @@ export default function Accounting() {
     setTrendData(Object.values(dayMap))
 
     setTillSessions(tillRes.data || [])
+    setTimesheet(timesheetRes.data || [])
     setPayouts(payoutsRes.data || [])
 
     // Build ledger: combine orders + payouts + credit orders, sorted by time
@@ -508,6 +515,70 @@ export default function Accounting() {
                 </ResponsiveContainer>
               </div>
             )}
+
+            {/* TIMESHEET */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                <Clock size={16} className="text-amber-400" />
+                Timesheet
+              </h3>
+              {timesheet.length === 0 ? (
+                <div className="text-center py-6 text-gray-500 text-sm">No attendance records for this period</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-800">
+                        <th className="text-left text-gray-400 text-xs uppercase py-2 pr-4">Staff</th>
+                        <th className="text-left text-gray-400 text-xs uppercase py-2 pr-4">Role</th>
+                        <th className="text-left text-gray-400 text-xs uppercase py-2 pr-4">Date</th>
+                        <th className="text-left text-gray-400 text-xs uppercase py-2 pr-4">Clock In</th>
+                        <th className="text-left text-gray-400 text-xs uppercase py-2 pr-4">Clock Out</th>
+                        <th className="text-right text-gray-400 text-xs uppercase py-2">Duration</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {timesheet.map(entry => {
+                        const h = entry.duration_minutes ? Math.floor(entry.duration_minutes / 60) : 0
+                        const m = entry.duration_minutes ? entry.duration_minutes % 60 : 0
+                        const duration = entry.duration_minutes
+                          ? (h > 0 ? h + 'h ' + m + 'm' : m + 'm')
+                          : '—'
+                        return (
+                          <tr key={entry.id} className="border-b border-gray-800/50">
+                            <td className="py-3 pr-4 text-white font-medium">{entry.staff_name}</td>
+                            <td className="py-3 pr-4 text-gray-400 capitalize">{entry.role}</td>
+                            <td className="py-3 pr-4 text-gray-400">{entry.date}</td>
+                            <td className="py-3 pr-4 text-gray-300">
+                              {new Date(entry.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                            <td className="py-3 pr-4 text-gray-300">
+                              {entry.clock_out
+                                ? new Date(entry.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                : <span className="text-green-400 text-xs">Still on shift</span>}
+                            </td>
+                            <td className="py-3 text-right text-amber-400 font-medium">{duration}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-gray-700">
+                        <td colSpan={5} className="py-3 text-gray-400 text-xs">Total hours</td>
+                        <td className="py-3 text-right text-white font-bold">
+                          {(() => {
+                            const total = timesheet.reduce((s, e) => s + (e.duration_minutes || 0), 0)
+                            const h = Math.floor(total / 60)
+                            const m = total % 60
+                            return h > 0 ? h + 'h ' + m + 'm' : m + 'm'
+                          })()}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
