@@ -15,6 +15,7 @@ import Accounting from './pages/accounting/Accounting'
 import RoomManagement from './pages/rooms/RoomManagement'
 import Debtors from './pages/accounting/Debtors'
 import Reports from './pages/reports/Reports'
+import Analytics from './pages/analytics/Analytics'
 import TableView from './pages/customer/TableView'
 
 function PrivateRoute({ children }) {
@@ -106,6 +107,9 @@ function AppRoutes() {
 
       <Route path="/reports" element={
         <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><Reports /></RoleGuard></PrivateRoute>
+      } />
+      <Route path="/analytics" element={
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><Analytics /></RoleGuard></PrivateRoute>
       } />
 
       <Route path="/reports" element={
