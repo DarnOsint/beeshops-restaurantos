@@ -15,6 +15,7 @@ export default function BarKDS() {
 
   useEffect(() => {
     fetchOrders()
+    const timer = setInterval(() => setTick(t => t + 1), 1000)
 
     const channel = supabase
       .channel('bar-channel')
@@ -22,6 +23,8 @@ export default function BarKDS() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
       .subscribe()
 
+    clearInterval(timer)
+    clearInterval(timer)
     clearInterval(timer)
     return () => supabase.removeChannel(channel)
   }, [])
