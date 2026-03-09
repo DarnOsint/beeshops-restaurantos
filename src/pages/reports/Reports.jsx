@@ -59,13 +59,15 @@ export default function Reports() {
     setLoading(true)
     const { start, end } = getDateBounds()
 
-    const [ordersRes, orderItemsRes, payoutsRes, tillRes, debtorsRes, roomStaysRes] = await Promise.all([
+    const [ordersRes, orderItemsRes, payoutsRes, tillRes, debtorsRes, roomStaysRes, voidsRes, attendanceRes] = await Promise.all([
       supabase.from('orders').select('*, profiles(full_name), tables(name, table_categories(name))').gte('created_at', start).lte('created_at', end),
       supabase.from('order_items').select('*, menu_items(name, price, menu_categories(name, destination)), orders(created_at, status)').gte('created_at', start).lte('created_at', end),
       supabase.from('payouts').select('*').gte('created_at', start).lte('created_at', end),
       supabase.from('till_sessions').select('*, profiles(full_name)').gte('created_at', start).lte('created_at', end),
       supabase.from('debtors').select('*').gte('created_at', start).lte('created_at', end),
       supabase.from('room_stays').select('*').gte('created_at', start).lte('created_at', end),
+      supabase.from('void_log').select('*').gte('created_at', start).lte('created_at', end),
+      supabase.from('attendance').select('*').gte('clock_in', start).lte('clock_in', end),
     ])
 
     const orders = ordersRes.data || []
@@ -77,6 +79,8 @@ export default function Reports() {
     const debtors = debtorsRes.data || []
     const roomStays = roomStaysRes.data || []
 
+    const voids = voidsRes.data || []
+    const attendance = attendanceRes.data || []
     const grossRevenue = paidOrders.reduce((s, o) => s + (o.total_amount || 0), 0)
     const totalExpenses = payouts.reduce((s, p) => s + (p.amount || 0), 0)
     const netRevenue = grossRevenue - totalExpenses
@@ -147,6 +151,8 @@ export default function Reports() {
     setReport({
       period: getPeriodLabel(),
       reportType,
+      voids,
+      attendance,
       generatedAt: new Date().toLocaleString('en-NG'),
       grossRevenue, netRevenue, totalExpenses, roomRevenue, totalRevenue,
       totalOrders: orders.length,
@@ -269,7 +275,7 @@ export default function Reports() {
             <div>
               <label className="text-gray-400 text-xs block mb-1">Report Type</label>
               <div className="flex gap-2">
-                {[['daily','Daily'], ['month','Monthly'], ['year','Annual']].map(([t, label]) => (
+                {[['daily','Daily'], ['month','Monthly'], ['year','Annual'], ['zreport','Z-Report']].map(([t, label]) => (
                   <button key={t} onClick={() => setReportType(t)}
                     className={'px-4 py-2 rounded-xl text-sm font-medium transition-colors ' + (reportType === t ? 'bg-amber-500 text-black' : 'bg-gray-800 border border-gray-700 text-gray-400')}>
                     {label}
@@ -639,7 +645,129 @@ export default function Reports() {
               </div>
             </div>
 
-            {/* Footer */}
+            {/* Z-REPORT */}
+        {report && report.reportType === 'zreport' && (() => {
+          const vat = report.grossRevenue * 0.075
+          const totalWithVat = report.grossRevenue + vat
+          const totalVoids = (report.voids || []).reduce((s, v) => s + (v.total_value || 0), 0)
+          const cashOrders = report.paidOrders?.filter(o => o.payment_method === 'cash') || []
+          const cashTotal = cashOrders.reduce((s, o) => s + (o.total_amount || 0), 0)
+          const posTotal = report.byPayment?.bank_pos || 0
+          const transferTotal = report.byPayment?.transfer || 0
+          const creditTotal = report.paidOrders?.filter(o => o.payment_method === 'credit').reduce((s, o) => s + (o.total_amount || 0), 0) || 0
+          const today = new Date().toLocaleString('en-NG')
+          return (
+            <div className="bg-white text-black rounded-2xl overflow-hidden border border-gray-200">
+              {/* Print button */}
+              <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+                <span className="font-bold text-gray-800">Z-Report — End of Day</span>
+                <button onClick={() => {
+                  const w = window.open('', '_blank', 'width=400,height=700')
+                  w.document.write('<html><head><style>body{font-family:monospace;font-size:12px;padding:16px;max-width:80mm}h2{text-align:center}.row{display:flex;justify-content:space-between;margin:3px 0}.divider{border-top:1px dashed #000;margin:8px 0}.bold{font-weight:bold}.center{text-align:center}</style></head><body>' + document.getElementById('zreport-content').innerHTML + '<script>window.onload=function(){window.print()}</script></body></html>')
+                  w.document.close()
+                }} className="flex items-center gap-1.5 bg-black text-white text-sm px-4 py-2 rounded-xl">
+                  <Printer size={14} /> Print Z-Report
+                </button>
+              </div>
+
+              <div id="zreport-content" className="p-6" style={{ fontFamily: 'monospace', fontSize: '13px' }}>
+                {/* Header */}
+                <div className="text-center mb-4">
+                  <div className="text-xl font-bold tracking-widest">BEESHOP'S PLACE</div>
+                  <div className="text-sm">Lounge & Restaurant</div>
+                  <div className="text-xs text-gray-500 mt-1">Z-REPORT — END OF DAY</div>
+                  <div className="text-xs text-gray-500">{getPeriodLabel()}</div>
+                  <div className="text-xs text-gray-400">Printed: {today}</div>
+                </div>
+
+                <div className="border-t border-dashed border-gray-400 my-3" />
+
+                {/* Sales Summary */}
+                <div className="font-bold text-xs uppercase mb-2">Sales Summary</div>
+                {[
+                  ['Total Orders', report.paidOrders?.length || 0],
+                  ['Cancelled Orders', report.cancelledOrders?.length || 0],
+                  ['Gross Revenue', '₦' + report.grossRevenue.toLocaleString()],
+                  ['VAT Collected (7.5%)', '₦' + vat.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})],
+                  ['Total incl. VAT', '₦' + totalWithVat.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex justify-between my-1 text-sm">
+                    <span>{label}</span><span className="font-bold">{value}</span>
+                  </div>
+                ))}
+
+                <div className="border-t border-dashed border-gray-400 my-3" />
+
+                {/* Payment Breakdown */}
+                <div className="font-bold text-xs uppercase mb-2">Payment Breakdown</div>
+                {[
+                  ['Cash', '₦' + cashTotal.toLocaleString()],
+                  ['Bank POS', '₦' + posTotal.toLocaleString()],
+                  ['Bank Transfer', '₦' + transferTotal.toLocaleString()],
+                  ['Credit (Pay Later)', '₦' + creditTotal.toLocaleString()],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex justify-between my-1 text-sm">
+                    <span>{label}</span><span>{value}</span>
+                  </div>
+                ))}
+
+                <div className="border-t border-dashed border-gray-400 my-3" />
+
+                {/* Voids */}
+                <div className="font-bold text-xs uppercase mb-2">Voids & Cancellations</div>
+                <div className="flex justify-between my-1 text-sm">
+                  <span>Total Voids</span><span>{(report.voids || []).length}</span>
+                </div>
+                <div className="flex justify-between my-1 text-sm">
+                  <span>Value Voided</span><span className="text-red-600 font-bold">₦{totalVoids.toLocaleString()}</span>
+                </div>
+
+                <div className="border-t border-dashed border-gray-400 my-3" />
+
+                {/* Cash Reconciliation */}
+                <div className="font-bold text-xs uppercase mb-2">Cash Reconciliation</div>
+                <div className="flex justify-between my-1 text-sm">
+                  <span>Expected in Drawer</span><span className="font-bold">₦{cashTotal.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between my-1 text-sm">
+                  <span>Expenses/Payouts</span><span>₦{report.totalExpenses?.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between my-1 text-sm font-bold border-t border-gray-300 pt-1 mt-1">
+                  <span>Net Cash</span><span>₦{(cashTotal - (report.totalExpenses || 0)).toLocaleString()}</span>
+                </div>
+
+                <div className="border-t border-dashed border-gray-400 my-3" />
+
+                {/* Staff on shift */}
+                <div className="font-bold text-xs uppercase mb-2">Staff on Shift</div>
+                {(report.attendance || []).length === 0 ? (
+                  <div className="text-xs text-gray-500">No attendance records</div>
+                ) : (report.attendance || []).map((a, i) => (
+                  <div key={i} className="flex justify-between my-1 text-xs">
+                    <span>{a.staff_name} ({a.role})</span>
+                    <span>{a.duration_minutes ? Math.floor(a.duration_minutes/60)+'h '+a.duration_minutes%60+'m' : 'Active'}</span>
+                  </div>
+                ))}
+
+                <div className="border-t border-dashed border-gray-400 my-3" />
+
+                {/* Signature */}
+                <div className="mt-6 grid grid-cols-2 gap-8 text-xs text-center">
+                  <div>
+                    <div className="border-t border-black pt-1 mt-8">Manager Signature</div>
+                  </div>
+                  <div>
+                    <div className="border-t border-black pt-1 mt-8">Cashier Signature</div>
+                  </div>
+                </div>
+
+                <div className="text-center text-xs text-gray-400 mt-4">*** END OF Z-REPORT ***</div>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Footer */}
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 text-center">
               <p className="text-gray-500 text-xs">Beeshop's Place · {report.period} Report · Generated {report.generatedAt}</p>
               <p className="text-gray-600 text-xs mt-1">Powered by RestaurantOS</p>
