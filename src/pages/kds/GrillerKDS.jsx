@@ -26,7 +26,6 @@ function getUrgency(createdAt) {
 export default function GrillerKDS() {
   const { profile, signOut } = useAuth()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence("main")
-  if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   const navigate = useNavigate()
   const [tickets, setTickets] = useState([])
   const [loading, setLoading] = useState(true)
@@ -126,6 +125,8 @@ export default function GrillerKDS() {
     warning:  { border: 'border-amber-500/50', header: 'bg-amber-500/10', flame: 'text-amber-400', time: 'text-amber-400' },
     critical: { border: 'border-red-500/50', header: 'bg-red-500/10', flame: 'text-red-400', time: 'text-red-400' },
   }
+
+  if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
 
   if (loading) return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">

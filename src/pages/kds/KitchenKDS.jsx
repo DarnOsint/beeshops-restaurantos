@@ -8,7 +8,6 @@ import { ChefHat, Clock, LogOut, RefreshCw, CheckCircle } from 'lucide-react'
 export default function KitchenKDS() {
   const { profile, signOut } = useAuth()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence("main")
-  if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [tick, setTick] = useState(0)
@@ -104,6 +103,8 @@ export default function KitchenKDS() {
     if (status === 'preparing') return 'bg-amber-500/20 text-amber-400'
     return 'bg-gray-700 text-gray-400'
   }
+
+  if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
 
   if (loading) return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">

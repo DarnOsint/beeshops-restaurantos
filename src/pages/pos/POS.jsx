@@ -14,7 +14,6 @@ import GeofenceBlock from '../../components/GeofenceBlock'
 export default function POS() {
   const { profile, signOut } = useAuth()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence("main")
-  if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   const [tables, setTables] = useState([])
   const [menuItems, setMenuItems] = useState([])
   const [zonePrices, setZonePrices] = useState([])
@@ -182,6 +181,8 @@ export default function POS() {
     setCashSaleType(type)
     setShowCashSale(true)
   }
+
+  if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
 
   if (loading) return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
