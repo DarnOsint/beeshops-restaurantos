@@ -40,6 +40,33 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) 
     setOrderItems(prev => prev.filter(i => i.id !== itemId))
   }
 
+  const depleteInventory = async (items, action = 'deduct') => {
+    for (const item of items) {
+      if (!item.menu_item_id) continue
+      const { data: inv } = await supabase
+        .from('inventory')
+        .select('id, current_stock')
+        .eq('menu_item_id', item.menu_item_id)
+        .single()
+      if (!inv) continue
+      const newStock = action === 'deduct'
+        ? Math.max(0, inv.current_stock - item.quantity)
+        : inv.current_stock + item.quantity
+      await supabase.from('inventory').update({
+        current_stock: newStock,
+        updated_at: new Date().toISOString()
+      }).eq('id', inv.id)
+      // Log to restock_log for audit trail
+      await supabase.from('restock_log').insert({
+        inventory_id: inv.id,
+        change_amount: action === 'deduct' ? -item.quantity : item.quantity,
+        reason: action === 'deduct' ? 'sold' : 'void_refund',
+        recorded_by: null,
+        notes: `Order item: ${item.menu_items?.name || item.menu_item_id}`
+      })
+    }
+  }
+
   const getSendLabel = () => {
     if (!orderItems.length) return "Send Order"
     const destinations = [...new Set(orderItems.map(i => i.menu_categories?.destination || "kitchen"))]

@@ -101,6 +101,29 @@ export default function POS() {
     setSelectedTable(table)
   }
 
+  const depleteInventory = async (items) => {
+    for (const item of items) {
+      if (!item.id) continue
+      const { data: inv } = await supabase
+        .from('inventory')
+        .select('id, current_stock')
+        .eq('menu_item_id', item.id)
+        .maybeSingle()
+      if (!inv) continue
+      const newStock = Math.max(0, inv.current_stock - item.quantity)
+      await supabase
+        .from('inventory')
+        .update({ current_stock: newStock, updated_at: new Date().toISOString() })
+        .eq('id', inv.id)
+      await supabase.from('restock_log').insert({
+        inventory_id: inv.id,
+        change_amount: -item.quantity,
+        reason: 'sold',
+        notes: 'Auto-deducted on order: ' + (item.name || item.id)
+      })
+    }
+  }
+
   const handlePlaceOrder = async ({ table, items, notes, total }) => {
     const { data: order, error: orderError } = await supabase
       .from('orders')
@@ -138,6 +161,7 @@ export default function POS() {
       return
     }
 
+    await depleteInventory(items)
     await supabase.from('tables').update({ status: 'occupied' }).eq('id', table.id)
     await fetchTables()
     setSelectedTable(null)
