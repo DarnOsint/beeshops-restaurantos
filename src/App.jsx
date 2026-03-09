@@ -15,6 +15,7 @@ import RoomManagement from './pages/rooms/RoomManagement'
 import Debtors from './pages/accounting/Debtors'
 import Reports from './pages/reports/Reports'
 import Analytics from './pages/analytics/Analytics'
+import ApartmentDashboard from './pages/apartment/ApartmentDashboard'
 import TableView from './pages/customer/TableView'
 
 function PrivateRoute({ children }) {
@@ -109,6 +110,9 @@ function AppRoutes() {
       } />
       <Route path="/analytics" element={
         <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><Analytics /></RoleGuard></PrivateRoute>
+      } />
+      <Route path="/apartment" element={
+        <PrivateRoute><RoleGuard allowed={['owner', 'apartment_manager']}><ApartmentDashboard /></RoleGuard></PrivateRoute>
       } />
 
       <Route path="/reports" element={
