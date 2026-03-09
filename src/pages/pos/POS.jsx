@@ -77,6 +77,7 @@ export default function POS() {
       .from('tables')
       .select('*, table_categories(id, name)')
       .order('name')
+    console.log('TABLES FETCH:', { count: data?.length, error, data })
     if (!error) setTables(data)
     setLoading(false)
   }
