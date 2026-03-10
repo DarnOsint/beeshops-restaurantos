@@ -264,43 +264,45 @@ export default function POS() {
       {/* Waiter call alerts — only shows calls for this waitron's tables */}
       <WaiterCalls />
 
-      <nav className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center">
-            <Beer size={18} className="text-black" />
+      <nav className="bg-gray-900 border-b border-gray-800 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0">
+              <Beer size={15} className="text-black" />
+            </div>
+            <div className="hidden sm:block">
+              <h1 className="text-white font-bold text-sm">Beeshops Place</h1>
+              <p className="text-gray-400 text-xs">Point of Sale</p>
+            </div>
+            <span className="sm:hidden text-white font-bold text-sm">POS</span>
           </div>
-          <div>
-            <h1 className="text-white font-bold text-sm">Beeshops Place</h1>
-            <p className="text-gray-400 text-xs">Point of Sale</p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => openCashSale('cash_sale')}
-            className="flex items-center gap-1.5 bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors"
-          >
-            <ShoppingBag size={14} />
-            Cash Sale
-          </button>
-          <button
-            onClick={() => openCashSale('takeaway')}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-2 rounded-xl transition-colors"
-          >
-            <Phone size={14} />
-            Takeaway
-          </button>
-
-          <button onClick={fetchTables} className="text-gray-400 hover:text-white ml-1">
-            <RefreshCw size={16} />
-          </button>
-          <div className="text-right">
-            <p className="text-white text-sm">{profile?.full_name}</p>
-            <p className="text-amber-500 text-xs capitalize">{profile?.role}</p>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => openCashSale('cash_sale')}
+              className="flex items-center gap-1 bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-2.5 py-2 rounded-xl transition-colors"
+            >
+              <ShoppingBag size={13} />
+              <span className="hidden sm:inline">Cash Sale</span>
+            </button>
+            <button
+              onClick={() => openCashSale('takeaway')}
+              className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-2.5 py-2 rounded-xl transition-colors"
+            >
+              <Phone size={13} />
+              <span className="hidden sm:inline">Takeaway</span>
+            </button>
+            <button onClick={fetchTables} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white">
+              <RefreshCw size={15} />
+            </button>
+            <div className="hidden sm:block text-right">
+              <p className="text-white text-xs">{profile?.full_name}</p>
+              <p className="text-amber-500 text-xs capitalize">{profile?.role}</p>
+            </div>
+            <button onClick={signOut} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white">
+              <LogOut size={16} />
+            </button>
           </div>
-          <button onClick={signOut} className="text-gray-400 hover:text-white">
-            <LogOut size={18} />
-          </button>
         </div>
       </nav>
 

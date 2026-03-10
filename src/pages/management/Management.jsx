@@ -69,49 +69,7 @@ export default function Management() {
       {/* Waiter call alerts — floats top right */}
       <WaiterCalls />
 
-      <nav className="bg-gray-900 border-b border-gray-800 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center">
-              <Beer size={18} className="text-black" />
-            </div>
-            <div>
-              <h1 className="text-white font-bold text-sm">Beeshops Place</h1>
-              <p className="text-gray-400 text-xs">Management</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/rooms')}
-              className="flex items-center gap-1.5 text-gray-400 hover:text-purple-400 text-xs transition-colors border border-gray-700 hover:border-purple-500/50 rounded-lg px-3 py-1.5"
-            >
-              <BedDouble size={13} />
-              Rooms
-            </button>
-            <button
-              onClick={() => navigate('/accounting')}
-              className="flex items-center gap-1.5 text-gray-400 hover:text-green-400 text-xs transition-colors border border-gray-700 hover:border-green-500/50 rounded-lg px-3 py-1.5"
-            >
-              <BookOpen size={13} />
-              Accounting
-            </button>
-            <button
-              onClick={() => navigate('/backoffice')}
-              className="flex items-center gap-1.5 text-gray-400 hover:text-amber-400 text-xs transition-colors border border-gray-700 hover:border-amber-500/50 rounded-lg px-3 py-1.5"
-            >
-              <Settings size={13} />
-              Back Office
-            </button>
-            <div className="text-right">
-              <p className="text-white text-sm">{profile?.full_name}</p>
-              <p className="text-amber-500 text-xs capitalize">{profile?.role}</p>
-            </div>
-            <button onClick={signOut} className="text-gray-400 hover:text-white">
-              <LogOut size={18} />
-            </button>
-          </div>
-        </div>
-      </nav>
+
 
       <div className="flex border-b border-gray-800 bg-gray-900 px-4 overflow-x-auto">
         {tabs.map(tab => (

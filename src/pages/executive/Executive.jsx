@@ -34,7 +34,6 @@ export default function Executive() {
 
   useEffect(() => {
     fetchStats()
-    // Fetch geofence setting
     supabase.from('settings').select('id, value')
       .in('id', ['geofence_enabled', 'geofence_radius_main', 'geofence_radius_apartment'])
       .then(({ data }) => {
@@ -53,7 +52,7 @@ export default function Executive() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => fetchStats())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'room_stays' }, () => fetchStats())
       .subscribe()
-  return () => { clearInterval(interval); supabase.removeChannel(channel) }
+    return () => { clearInterval(interval); supabase.removeChannel(channel) }
   }, [])
 
   const toggleGeofence = async () => {
@@ -140,122 +139,100 @@ export default function Executive() {
 
   return (
     <div className="min-h-screen bg-gray-950">
-      <nav className="bg-gray-900 border-b border-gray-800 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center">
-              <Beer size={20} className="text-black" />
-            </div>
-            <div>
-              <h1 className="text-white font-bold">Beeshops Place</h1>
-              <p className="text-gray-400 text-xs">Executive Dashboard</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/accounting')}
-              className="flex items-center gap-1.5 text-gray-400 hover:text-amber-400 text-xs border border-gray-700 hover:border-amber-500/50 rounded-lg px-3 py-1.5 transition-colors">
-              <BookOpen size={13} /> Accounting
-            </button>
-            <button onClick={() => navigate('/reports')}
-              className="flex items-center gap-1.5 text-gray-400 hover:text-amber-400 text-xs border border-gray-700 hover:border-amber-500/50 rounded-lg px-3 py-1.5 transition-colors">
-              <BarChart2 size={13} /> Reports
-            </button>
-            <button onClick={fetchStats} className="text-gray-400 hover:text-white">
-              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-            </button>
-            <div className="text-right">
-              <p className="text-white text-sm font-medium">{profile?.full_name}</p>
-              <p className="text-amber-500 text-xs capitalize">{profile?.role}</p>
-            </div>
-            <button onClick={signOut} className="text-gray-400 hover:text-white">
-              <LogOut size={18} />
-            </button>
-          </div>
-        </div>
-      </nav>
 
-      <div className="p-6">
-        <div className="mb-8 flex items-start justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-white">Good {getGreeting()}, {profile?.full_name?.split(' ')[0]}!</h2>
-            <p className="text-gray-400 mt-1">Here is what is happening at Beeshops Place today.</p>
-          </div>
-          <div className="flex items-center gap-3 relative">
-            {/* Geofence Toggle */}
-            <button onClick={toggleGeofence} disabled={geoToggling}
-              className={`flex items-center gap-2 text-xs px-3 py-2 rounded-xl border transition-colors ${
-                geofenceEnabled
-                  ? 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'
-                  : 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20'
-              }`}>
-              <MapPin size={13} />
-              {geoToggling ? 'Updating...' : geofenceEnabled ? 'Geofence ON' : 'Geofence OFF'}
-              <span className={`w-2 h-2 rounded-full ${geofenceEnabled ? 'bg-green-400' : 'bg-red-400'}`} />
+      {/* Sticky title bar */}
+      <div className="sticky top-0 z-20 bg-gray-950/95 backdrop-blur border-b border-gray-800 px-4 md:px-6 py-3 flex items-center justify-between">
+        <div>
+          <h1 className="text-white font-bold text-sm md:text-base">Executive Dashboard</h1>
+          <p className="text-gray-400 text-xs">Good {getGreeting()}, {profile?.full_name}</p>
+        </div>
+        <button onClick={fetchStats} className="text-gray-400 hover:text-white">
+          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+        </button>
+      </div>
+
+      <div className="p-4 md:p-6">
+
+        {/* Geofence + status controls */}
+        <div className="mb-6 flex flex-wrap items-center gap-2 relative">
+          <button onClick={toggleGeofence} disabled={geoToggling}
+            className={`flex items-center gap-2 text-xs px-3 py-2 rounded-xl border transition-colors ${
+              geofenceEnabled
+                ? 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'
+                : 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20'
+            }`}>
+            <MapPin size={13} />
+            {geoToggling ? 'Updating...' : geofenceEnabled ? 'Geofence ON' : 'Geofence OFF'}
+            <span className={`w-2 h-2 rounded-full ${geofenceEnabled ? 'bg-green-400' : 'bg-red-400'}`} />
+          </button>
+
+          <button onClick={() => setShowRadiusEdit(!showRadiusEdit)}
+            className="flex items-center gap-2 text-xs px-3 py-2 rounded-xl border bg-gray-800 border-gray-700 text-gray-400 hover:text-white transition-colors">
+            <MapPin size={13} /> Radius
+          </button>
+
+          {stats.lowStock > 0 && (
+            <button onClick={() => navigate('/backoffice')}
+              className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 hover:bg-red-500/20 transition-colors">
+              <Package size={13} /> {stats.lowStock} Low Stock
             </button>
-            {/* Radius Edit */}
-            <button onClick={() => setShowRadiusEdit(!showRadiusEdit)}
-              className="flex items-center gap-2 text-xs px-3 py-2 rounded-xl border bg-gray-800 border-gray-700 text-gray-400 hover:text-white transition-colors">
-              <MapPin size={13} /> Radius
-            </button>
-            {showRadiusEdit && (
-              <div className="absolute top-16 right-6 z-50 bg-gray-900 border border-gray-700 rounded-2xl p-4 shadow-xl w-72">
-                <p className="text-white font-semibold text-sm mb-3">Geofence Radius Settings</p>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Main Venue (metres)</label>
-                    <input type="number" value={radiusMain}
-                      onChange={e => setRadiusMain(parseInt(e.target.value) || 0)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
-                  </div>
-                  <div>
-                    <label className="text-gray-400 text-xs mb-1 block">Apartments (metres)</label>
-                    <input type="number" value={radiusApartment}
-                      onChange={e => setRadiusApartment(parseInt(e.target.value) || 0)}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
-                  </div>
-                  <div className="flex gap-2 pt-1">
-                    <button onClick={saveRadius} disabled={radiusSaving}
-                      className="flex-1 bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold py-2 rounded-xl transition-colors">
-                      {radiusSaving ? 'Saving...' : 'Save'}
-                    </button>
-                    <button onClick={() => setShowRadiusEdit(false)}
-                      className="flex-1 bg-gray-800 hover:bg-gray-700 text-white text-xs py-2 rounded-xl transition-colors">
-                      Cancel
-                    </button>
-                  </div>
+          )}
+
+          {peakHour && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-2">
+              <p className="text-amber-400 text-xs">Peak Hour</p>
+              <p className="text-white font-bold text-sm">{peakHour}</p>
+            </div>
+          )}
+
+          {showRadiusEdit && (
+            <div className="absolute top-12 left-0 z-50 bg-gray-900 border border-gray-700 rounded-2xl p-4 shadow-xl w-72">
+              <p className="text-white font-semibold text-sm mb-3">Geofence Radius Settings</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-gray-400 text-xs mb-1 block">Main Venue (metres)</label>
+                  <input type="number" value={radiusMain}
+                    onChange={e => setRadiusMain(parseInt(e.target.value) || 0)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs mb-1 block">Apartments (metres)</label>
+                  <input type="number" value={radiusApartment}
+                    onChange={e => setRadiusApartment(parseInt(e.target.value) || 0)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button onClick={saveRadius} disabled={radiusSaving}
+                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold py-2 rounded-xl transition-colors">
+                    {radiusSaving ? 'Saving...' : 'Save'}
+                  </button>
+                  <button onClick={() => setShowRadiusEdit(false)}
+                    className="flex-1 bg-gray-800 hover:bg-gray-700 text-white text-xs py-2 rounded-xl transition-colors">
+                    Cancel
+                  </button>
                 </div>
               </div>
-            )}
-            {stats.lowStock > 0 && (
-              <button onClick={() => navigate('/backoffice')}
-                className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 hover:bg-red-500/20 transition-colors">
-                <Package size={13} /> {stats.lowStock} Low Stock
-              </button>
-            )}
-            {peakHour && (
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-2 text-right">
-                <p className="text-amber-400 text-xs">Peak Hour</p>
-                <p className="text-white font-bold">{peakHour}</p>
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
+        {/* Stat cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
           {statCards.map((stat, i) => (
-            <div key={i} className="bg-gray-900 rounded-2xl p-5 border border-gray-800">
+            <div key={i} className="bg-gray-900 rounded-2xl p-4 md:p-5 border border-gray-800">
               <div className={`inline-flex p-2 rounded-lg ${stat.bg} mb-3`}>
-                <stat.icon size={20} className={stat.color} />
+                <stat.icon size={18} className={stat.color} />
               </div>
-              <p className="text-gray-400 text-sm">{stat.label}</p>
-              <p className="text-white text-2xl font-bold mt-1">{stat.value}</p>
+              <p className="text-gray-400 text-xs md:text-sm">{stat.label}</p>
+              <p className="text-white text-xl md:text-2xl font-bold mt-1">{stat.value}</p>
             </div>
           ))}
         </div>
 
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-8">
+        {/* Revenue chart */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 md:p-5 mb-8">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-white font-semibold">Revenue — Last 7 Days</h3>
+            <h3 className="text-white font-semibold text-sm md:text-base">Revenue — Last 7 Days</h3>
             <button onClick={() => navigate('/reports')}
               className="text-amber-400 hover:text-amber-300 text-xs transition-colors">
               Full report →
@@ -264,16 +241,16 @@ export default function Executive() {
           {trendData.length === 0 ? (
             <div className="text-center py-8 text-gray-600 text-sm">No revenue data yet</div>
           ) : (
-            <div className="flex items-end gap-3 h-32">
+            <div className="flex items-end gap-2 md:gap-3 h-32">
               {trendData.map((d, i) => {
                 const height = Math.max((d.revenue / maxRevenue) * 100, 2)
                 return (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-2">
-                    <p className="text-gray-500 text-xs">₦{(d.revenue / 1000).toFixed(0)}k</p>
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                    <p className="text-gray-500 text-[10px]">₦{(d.revenue / 1000).toFixed(0)}k</p>
                     <div className="w-full flex flex-col justify-end" style={{ height: '80px' }}>
                       <div className="w-full bg-amber-500 rounded-t-md transition-all" style={{ height: `${height}%` }} />
                     </div>
-                    <p className="text-gray-600 text-xs whitespace-nowrap">{d.day}</p>
+                    <p className="text-gray-600 text-[10px] whitespace-nowrap">{d.day}</p>
                   </div>
                 )
               })}
@@ -281,24 +258,26 @@ export default function Executive() {
           )}
         </div>
 
+        {/* Quick actions */}
         <div className="mb-8">
-          <h3 className="text-white font-semibold mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <h3 className="text-white font-semibold text-sm md:text-base mb-4">Quick Actions</h3>
+          <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
             {quickActions.map((action, i) => (
               <button key={i} onClick={() => navigate(action.path)}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col items-center gap-2 hover:border-gray-600 transition-colors">
-                <div className={`w-10 h-10 ${action.color} rounded-lg flex items-center justify-center`}>
-                  <action.icon size={18} className="text-white" />
+                className="bg-gray-900 border border-gray-800 rounded-xl p-3 md:p-4 flex flex-col items-center gap-2 hover:border-gray-600 transition-colors">
+                <div className={`w-9 h-9 md:w-10 md:h-10 ${action.color} rounded-lg flex items-center justify-center`}>
+                  <action.icon size={16} className="text-white" />
                 </div>
-                <span className="text-gray-300 text-sm text-center">{action.label}</span>
+                <span className="text-gray-300 text-xs md:text-sm text-center">{action.label}</span>
               </button>
             ))}
           </div>
         </div>
 
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
+        {/* Recent orders */}
+        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4 md:p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-white font-semibold">Recent Orders</h3>
+            <h3 className="text-white font-semibold text-sm md:text-base">Recent Orders</h3>
             <span className="text-gray-500 text-xs">{recentOrders.length} latest</span>
           </div>
           {recentOrders.length === 0 ? (
@@ -312,11 +291,11 @@ export default function Executive() {
             <div className="space-y-3">
               {recentOrders.map(order => (
                 <div key={order.id} className="flex items-center justify-between py-2 border-b border-gray-800 last:border-0">
-                  <div>
-                    <p className="text-white text-sm font-medium">{order.tables?.name || order.order_type || 'Unknown'}</p>
-                    <p className="text-gray-500 text-xs">{order.profiles?.full_name} · {new Date(order.created_at).toLocaleTimeString()}</p>
+                  <div className="min-w-0 flex-1 mr-3">
+                    <p className="text-white text-sm font-medium truncate">{order.tables?.name || order.order_type || 'Unknown'}</p>
+                    <p className="text-gray-500 text-xs truncate">{order.profiles?.full_name} · {new Date(order.created_at).toLocaleTimeString()}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex-shrink-0">
                     <p className="text-white text-sm font-bold">₦{order.total_amount?.toLocaleString()}</p>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
                       order.status === 'open' ? 'bg-amber-500/20 text-amber-400' :
@@ -329,6 +308,7 @@ export default function Executive() {
             </div>
           )}
         </div>
+
       </div>
     </div>
   )

@@ -150,23 +150,14 @@ export default function StaffManagement({ onBack }) {
 
       } else {
         // Office staff — create Supabase Auth account + profile
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: form.email,
           password: form.password,
-          email_confirm: true,
-          user_metadata: { full_name: form.full_name }
+          options: { data: { full_name: form.full_name } }
         })
+        if (signUpError) throw signUpError
 
-        if (authError) {
-          // Fallback: use signUp if admin API not available on client
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email: form.email,
-            password: form.password,
-            options: { data: { full_name: form.full_name } }
-          })
-          if (signUpError) throw signUpError
-
-          await supabase.from('profiles').upsert({
+        await supabase.from('profiles').upsert({
             id: signUpData.user.id,
             full_name: form.full_name,
             email: form.email,
@@ -178,20 +169,6 @@ export default function StaffManagement({ onBack }) {
             notes: form.notes,
             is_active: true,
           })
-        } else {
-          await supabase.from('profiles').upsert({
-            id: authData.user.id,
-            full_name: form.full_name,
-            email: form.email,
-            phone: form.phone,
-            role: form.role,
-            pin: form.pin,
-            hire_date: form.hire_date,
-            emergency_contact: form.emergency_contact,
-            notes: form.notes,
-            is_active: true,
-          })
-        }
       }
 
       await fetchStaff()
