@@ -42,9 +42,7 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
 
   const handlePrint = (type) => {
     const ref = type === 'customer' ? customerRef : waiterRef
-    const printWindow = window.open('', '_blank', 'width=340,height=600')
-    if (!printWindow) { alert('Please allow popups to print receipts'); return }
-    printWindow.document.write(`
+    const html = `
       <html>
         <head>
           <title>${type === 'customer' ? 'Customer Receipt' : 'Waiter Copy'} - ${orderRef}</title>
@@ -74,11 +72,19 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
         </head>
         <body>
           ${ref.current.innerHTML}
-          <script>window.onload = function() { window.print(); }</script>
         </body>
       </html>
-    `)
-    printWindow.document.close()
+    `
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:0'
+    document.body.appendChild(iframe)
+    iframe.contentDocument.write(html)
+    iframe.contentDocument.close()
+    iframe.contentWindow.focus()
+    setTimeout(() => {
+      iframe.contentWindow.print()
+      setTimeout(() => document.body.removeChild(iframe), 1000)
+    }, 300)
   }
 
   const handleDownload = (type) => {
