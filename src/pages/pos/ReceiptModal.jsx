@@ -7,6 +7,7 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
   const waiterRef = useRef()
   const { isSupported, printReceipt } = useThermalPrinter()
   const [printing, setPrinting] = useState(false)
+  const [activeTab, setActiveTab] = useState('customer')
 
   useEffect(() => {
     // Auto-trigger print dialog on mount
@@ -134,10 +135,22 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={20} /></button>
         </div>
 
+        {/* Tab switcher — mobile only */}
+        <div className="flex md:hidden border-b border-gray-200 bg-gray-50 shrink-0">
+          <button onClick={() => setActiveTab('customer')}
+            className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${activeTab === 'customer' ? 'text-gray-900 border-b-2 border-gray-900' : 'text-gray-400'}`}>
+            Customer Copy
+          </button>
+          <button onClick={() => setActiveTab('waiter')}
+            className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${activeTab === 'waiter' ? 'text-gray-900 border-b-2 border-gray-900' : 'text-gray-400'}`}>
+            Waiter Copy
+          </button>
+        </div>
+
         <div className="flex flex-1 overflow-hidden">
 
           {/* Customer Receipt */}
-          <div className="flex-1 flex flex-col border-r border-gray-200">
+          <div className={`${activeTab === 'customer' ? 'flex' : 'hidden'} md:flex flex-1 flex-col border-r border-gray-200`}>
             <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between shrink-0">
               <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Customer Receipt</span>
               <div className="flex gap-2">
@@ -257,7 +270,7 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
           </div>
 
           {/* Waiter Copy */}
-          <div className="flex-1 flex flex-col">
+          <div className={`${activeTab === 'waiter' ? 'flex' : 'hidden'} md:flex flex-1 flex-col`}>
             <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between shrink-0">
               <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Waiter Copy</span>
               <div className="flex gap-2">

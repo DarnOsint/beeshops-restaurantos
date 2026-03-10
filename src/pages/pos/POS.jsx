@@ -160,12 +160,7 @@ export default function POS() {
         .from('inventory')
         .update({ current_stock: newStock, updated_at: new Date().toISOString() })
         .eq('id', inv.id)
-      await supabase.from('restock_log').insert({
-        inventory_id: inv.id,
-        change_amount: -item.quantity,
-        reason: 'sold',
-        notes: 'Auto-deducted on order: ' + (item.name || item.id)
-      })
+// restock_log is for supplier restocks only — sales deductions tracked via inventory.current_stock
     }
   }
 
