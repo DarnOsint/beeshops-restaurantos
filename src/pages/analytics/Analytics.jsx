@@ -84,7 +84,7 @@ export default function Analytics() {
 
     const { data: orders } = await supabase
       .from('orders')
-      .select('id, status, total_amount, payment_method, created_at, order_type, customer_phone, table_id')
+      .select('id, status, total_amount, payment_method, created_at, order_type, customer_phone, table_id, staff_id')
       .gte('created_at', from).lte('created_at', to)
 
     const orderIds = (orders || []).map(o => o.id)
@@ -191,8 +191,8 @@ export default function Analytics() {
     const waitrons = staff.filter(s=>s.role==='waitron')
     const staffPerf = waitrons.map(w => ({
       name: w.full_name?.split(' ')[0]||'Staff',
-      orders: paid.filter(o=>o.assigned_staff===w.id).length,
-      revenue: paid.filter(o=>o.assigned_staff===w.id).reduce((s,o)=>s+(o.total_amount||0),0)
+      orders: paid.filter(o=>o.staff_id===w.id).length,
+      revenue: paid.filter(o=>o.staff_id===w.id).reduce((s,o)=>s+(o.total_amount||0),0)
     })).sort((a,b)=>b.revenue-a.revenue)
 
     setData({ kpis:{totalRevenue,totalOrders,avgOrder,cancelRate,debtExposure,repeatRate}, heatmap, hours, bestSellers, categorySplit, paymentBreakdown, staffPerf, revenueByZone, revenueTrend })
@@ -203,7 +203,7 @@ export default function Analytics() {
     setAiLoading(true); setAiInsight(''); setAiError(false)
     try {
       const d = data
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      const response = await fetch('/api/insights', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
