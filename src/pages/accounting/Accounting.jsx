@@ -33,6 +33,8 @@ export default function Accounting() {
   const [tillSessions, setTillSessions] = useState([])
   const [timesheet, setTimesheet] = useState([])
   const [auditLog, setAuditLog] = useState([])
+  const [selectedLedger, setSelectedLedger] = useState(null)
+  const [selectedAudit, setSelectedAudit] = useState(null)
   const [payouts, setPayouts] = useState([])
   const [showPayoutModal, setShowPayoutModal] = useState(false)
   const [ledgerEntries, setLedgerEntries] = useState([])
@@ -82,9 +84,9 @@ export default function Accounting() {
         .order('created_at', { ascending: false }),
       supabase.from('till_sessions')
         .select('*, profiles(full_name)')
-        .gte('created_at', start)
-        .lte('created_at', end)
-        .order('created_at', { ascending: false }),
+        .gte('opened_at', start)
+        .lte('opened_at', end)
+        .order('opened_at', { ascending: false }),
       supabase.from('payouts')
         .select('*, profiles(full_name)')
         .gte('created_at', start)
@@ -252,10 +254,10 @@ export default function Accounting() {
 
       {/* Date Range Picker */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center gap-3 flex-wrap">
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 flex-wrap">
           {DATE_RANGES.map(r => (
             <button key={r} onClick={() => setDateRange(r)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${dateRange === r ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'}`}>
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${dateRange === r ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'}`}>
               {r}
             </button>
           ))}
@@ -278,7 +280,7 @@ export default function Accounting() {
       <div className="flex border-b border-gray-800 bg-gray-900 px-4 overflow-x-auto">
         {tabs.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.id ? 'border-amber-500 text-amber-500' : 'border-transparent text-gray-400 hover:text-white'}`}>
+            className={`flex items-center gap-1.5 px-3 py-3 text-xs md:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.id ? 'border-amber-500 text-amber-500' : 'border-transparent text-gray-400 hover:text-white'}`}>
             <tab.icon size={15} />{tab.label}
           </button>
         ))}
@@ -571,7 +573,7 @@ export default function Accounting() {
                 <div className="flex items-center justify-between mb-2">
                   <div>
                     <p className="text-white font-semibold">{session.profiles?.full_name || 'Unknown'}</p>
-                    <p className="text-gray-500 text-xs">{new Date(session.created_at).toLocaleString('en-NG')}</p>
+                    <p className="text-gray-500 text-xs">{new Date(session.opened_at).toLocaleString('en-NG')}</p>
                   </div>
                   <span className={`text-xs px-2 py-1 rounded-lg ${session.status === 'open' ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-400'}`}>
                     {session.status}
@@ -682,70 +684,85 @@ export default function Accounting() {
       {/* LEDGER TAB */}
       {activeTab === 'ledger' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex items-center justify-between">
             <div>
-              <p className="text-gray-400 text-sm">General Ledger — {dateRange}</p>
-              <p className="text-white font-bold text-xl">{ledgerEntries.length} entries</p>
+              <p className="text-gray-400 text-xs">General Ledger — {dateRange}</p>
+              <p className="text-white font-bold text-lg">{ledgerEntries.length} entries</p>
             </div>
-            <div className="text-right">
-              <p className="text-gray-400 text-xs">Closing Balance</p>
-              <p className={`font-bold text-2xl ${ledgerEntries[0]?.balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                ₦{(ledgerEntries[0]?.balance || 0).toLocaleString()}
-              </p>
+            <div className="flex items-center gap-2">
+              <div className="text-right">
+                <p className="text-gray-400 text-xs">Closing Balance</p>
+                <p className={`font-bold text-lg ${ledgerEntries[0]?.balance >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  ₦{(ledgerEntries[0]?.balance || 0).toLocaleString()}
+                </p>
+              </div>
+              <button onClick={() => {
+                const rows = [['Date','Time','Ref','Description','Staff','Method','Credit','Debit','Balance']]
+                ledgerEntries.forEach(e => rows.push([
+                  new Date(e.date).toLocaleDateString('en-NG'),
+                  new Date(e.date).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' }),
+                  e.ref, e.description, e.staff || '', e.method || '',
+                  e.credit || 0, e.debit || 0, e.balance
+                ]))
+                const csv = rows.map(r => r.join(',')).join('\n')
+                const a = document.createElement('a')
+                a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv)
+                a.download = 'ledger-' + dateRange + '-' + new Date().toISOString().split('T')[0] + '.csv'
+                a.click()
+              }} className="flex items-center gap-1.5 text-xs bg-gray-800 border border-gray-700 text-gray-300 hover:text-white px-3 py-2 rounded-xl transition-colors">
+                Export CSV
+              </button>
             </div>
           </div>
-
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-800 bg-gray-800/50">
-                    <th className="text-left text-gray-500 text-xs uppercase px-4 py-3">Date & Time</th>
-                    <th className="text-left text-gray-500 text-xs uppercase px-4 py-3">Ref</th>
-                    <th className="text-left text-gray-500 text-xs uppercase px-4 py-3">Description</th>
-                    <th className="text-left text-gray-500 text-xs uppercase px-4 py-3">Staff</th>
-                    <th className="text-left text-gray-500 text-xs uppercase px-4 py-3">Method</th>
-                    <th className="text-right text-gray-500 text-xs uppercase px-4 py-3 text-green-400">Credit (+)</th>
-                    <th className="text-right text-gray-500 text-xs uppercase px-4 py-3 text-red-400">Debit (-)</th>
-                    <th className="text-right text-gray-500 text-xs uppercase px-4 py-3">Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ledgerEntries.length === 0 ? (
-                    <tr><td colSpan={8} className="text-center py-8 text-gray-600">No entries for this period</td></tr>
-                  ) : ledgerEntries.map((entry, i) => (
-                    <tr key={entry.id + i} className={`border-b border-gray-800 last:border-0 ${entry.type === 'debit' ? 'bg-red-500/5' : ''}`}>
-                      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                        <p>{new Date(entry.date).toLocaleDateString('en-NG')}</p>
-                        <p>{new Date(entry.date).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}</p>
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs font-mono">{entry.ref}</td>
-                      <td className="px-4 py-3 text-white text-sm">{entry.description}</td>
-                      <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">{entry.staff || '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-0.5 rounded-lg capitalize ${
-                          entry.method === 'cash' ? 'bg-emerald-500/20 text-emerald-400' :
-                          entry.method === 'card' ? 'bg-blue-500/20 text-blue-400' :
-                          entry.method === 'transfer' ? 'bg-purple-500/20 text-purple-400' :
-                          entry.method === 'credit' ? 'bg-red-500/20 text-red-400' :
-                          'bg-gray-700 text-gray-400'
-                        }`}>{entry.method || '—'}</span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-green-400 font-medium text-sm">
-                        {entry.credit > 0 ? '₦' + entry.credit.toLocaleString() : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right text-red-400 font-medium text-sm">
-                        {entry.debit > 0 ? '₦' + entry.debit.toLocaleString() : '—'}
-                      </td>
-                      <td className={`px-4 py-3 text-right font-bold text-sm ${entry.balance >= 0 ? 'text-white' : 'text-red-400'}`}>
-                        ₦{entry.balance.toLocaleString()}
-                      </td>
-                    </tr>
+          <div className="space-y-2">
+            {ledgerEntries.length === 0 ? (
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center text-gray-600">No entries for this period</div>
+            ) : ledgerEntries.map((entry, i) => (
+              <button key={entry.id + i} onClick={() => setSelectedLedger(entry)}
+                className={`w-full bg-gray-900 border rounded-xl px-4 py-3 flex items-center justify-between gap-3 hover:border-gray-600 transition-colors text-left ${entry.type === 'debit' ? 'border-red-500/20' : 'border-gray-800'}`}>
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${entry.type === 'debit' ? 'bg-red-400' : 'bg-green-400'}`} />
+                  <div className="min-w-0">
+                    <p className="text-white text-sm font-medium truncate">{entry.description}</p>
+                    <p className="text-gray-500 text-xs">{new Date(entry.date).toLocaleDateString('en-NG')} · {entry.staff || 'System'} · <span className="capitalize">{entry.method || '—'}</span></p>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  {entry.credit > 0 && <p className="text-green-400 font-bold text-sm">+₦{entry.credit.toLocaleString()}</p>}
+                  {entry.debit > 0 && <p className="text-red-400 font-bold text-sm">-₦{entry.debit.toLocaleString()}</p>}
+                  <p className={`text-xs ${entry.balance >= 0 ? 'text-gray-400' : 'text-red-400'}`}>Bal: ₦{entry.balance.toLocaleString()}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+          {selectedLedger && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-sm">
+                <div className="flex items-center justify-between p-4 border-b border-gray-800">
+                  <h3 className="text-white font-bold">Entry Details</h3>
+                  <button onClick={() => setSelectedLedger(null)} className="text-gray-400 hover:text-white"><X size={18} /></button>
+                </div>
+                <div className="p-4 space-y-3">
+                  {[
+                    { label: 'Reference', value: selectedLedger.ref },
+                    { label: 'Description', value: selectedLedger.description },
+                    { label: 'Date', value: new Date(selectedLedger.date).toLocaleDateString('en-NG') },
+                    { label: 'Time', value: new Date(selectedLedger.date).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' }) },
+                    { label: 'Staff', value: selectedLedger.staff || 'System' },
+                    { label: 'Method', value: selectedLedger.method || '—' },
+                    { label: 'Credit', value: selectedLedger.credit > 0 ? '₦' + selectedLedger.credit.toLocaleString() : '—', color: 'text-green-400' },
+                    { label: 'Debit', value: selectedLedger.debit > 0 ? '₦' + selectedLedger.debit.toLocaleString() : '—', color: 'text-red-400' },
+                    { label: 'Balance', value: '₦' + selectedLedger.balance.toLocaleString(), color: selectedLedger.balance >= 0 ? 'text-white' : 'text-red-400' },
+                  ].map(row => (
+                    <div key={row.label} className="flex justify-between items-start gap-4">
+                      <span className="text-gray-500 text-xs">{row.label}</span>
+                      <span className={`text-sm font-medium text-right ${row.color || 'text-white'}`}>{row.value}</span>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -767,7 +784,7 @@ export default function Accounting() {
             }
             const colorClass = actionColors[entry.action] || 'text-gray-400 bg-gray-500/10 border-gray-500/20'
             return (
-              <div key={entry.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-start justify-between gap-4">
+              <button key={entry.id} onClick={() => setSelectedAudit(entry)} className="w-full bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-start justify-between gap-4 hover:border-gray-600 transition-colors text-left">
                 <div className="flex items-start gap-3 flex-1 min-w-0">
                   <span className={`text-xs px-2 py-1 rounded-lg border font-medium whitespace-nowrap ${colorClass}`}>
                     {entry.action.replace(/_/g, ' ')}
@@ -780,7 +797,7 @@ export default function Accounting() {
                     </p>
                     {entry.new_value && (
                       <p className="text-gray-600 text-xs mt-1 truncate">
-                        {JSON.stringify(entry.new_value)}
+                        {Object.entries(entry.new_value).map(([k,v]) => k + ': ' + v).join(' · ')}
                       </p>
                     )}
                   </div>
@@ -793,9 +810,59 @@ export default function Accounting() {
                     {new Date(entry.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>
-              </div>
+              </button>
             )
           })}
+
+          <button onClick={() => {
+            const rows = [['Date','Time','Action','Entity','Staff','Role','Details']]
+            auditLog.forEach(e => rows.push([
+              new Date(e.created_at).toLocaleDateString('en-NG'),
+              new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              e.action, e.entity_name || e.entity,
+              e.performed_by_name || 'System', e.performed_by_role || '',
+              JSON.stringify(e.new_value || {}).replace(/,/g, ';')
+            ]))
+            const csv = rows.map(r => r.join(',')).join('\n')
+            const a = document.createElement('a')
+            a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv)
+            a.download = 'audit-log-' + dateRange + '-' + new Date().toISOString().split('T')[0] + '.csv'
+            a.click()
+          }} className="w-full flex items-center justify-center gap-2 text-xs bg-gray-800 border border-gray-700 text-gray-300 hover:text-white px-3 py-2.5 rounded-xl transition-colors">
+            Export Audit Log as CSV
+          </button>
+
+          {selectedAudit && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-sm">
+                <div className="flex items-center justify-between p-4 border-b border-gray-800">
+                  <h3 className="text-white font-bold">Audit Entry</h3>
+                  <button onClick={() => setSelectedAudit(null)} className="text-gray-400 hover:text-white"><X size={18} /></button>
+                </div>
+                <div className="p-4 space-y-3">
+                  {[
+                    { label: 'Action', value: selectedAudit.action.replace(/_/g, ' ') },
+                    { label: 'Entity', value: selectedAudit.entity_name || selectedAudit.entity },
+                    { label: 'Performed by', value: selectedAudit.performed_by_name || 'System' },
+                    { label: 'Role', value: selectedAudit.performed_by_role || '—' },
+                    { label: 'Date', value: new Date(selectedAudit.created_at).toLocaleDateString('en-NG') },
+                    { label: 'Time', value: new Date(selectedAudit.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
+                  ].map(row => (
+                    <div key={row.label} className="flex justify-between items-start gap-4">
+                      <span className="text-gray-500 text-xs">{row.label}</span>
+                      <span className="text-white text-sm font-medium text-right capitalize">{row.value}</span>
+                    </div>
+                  ))}
+                  {selectedAudit.new_value && Object.entries(selectedAudit.new_value).map(([k, v]) => (
+                    <div key={k} className="flex justify-between items-start gap-4">
+                      <span className="text-gray-500 text-xs capitalize">{k.replace(/_/g, ' ')}</span>
+                      <span className="text-white text-sm font-medium text-right">{String(v)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
