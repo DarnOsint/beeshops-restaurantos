@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { offlineInsert } from '../../lib/offlineWrite'
 import { useAuth } from '../../context/AuthContext'
 import { audit } from '../../lib/audit'
-import { X, Plus, Minus, Trash2, Search, CheckCircle, Banknote, CreditCard, Smartphone, ShoppingBag, Phone } from 'lucide-react'
+import { X, Plus, Minus, Trash2, Search, CheckCircle, Banknote, CreditCard, Smartphone, ShoppingBag, Phone, Printer } from 'lucide-react'
 
 export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onClose }) {
   const { profile } = useAuth()
@@ -17,6 +17,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
   const [step, setStep] = useState('order') // 'order' | 'payment'
   const [processing, setProcessing] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [completedOrder, setCompletedOrder] = useState(null)
   const [notes, setNotes] = useState('')
 
   const isTakeaway = type === 'takeaway'
@@ -123,29 +124,73 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         performer: profile
       })
 
+      setCompletedOrder({ order, items: orderItems, total, change, customerName, paymentMethod })
       setSuccess(true)
-      setTimeout(() => { onSuccess() }, 2500)
     } catch (err) {
       alert('Error processing order: ' + err.message)
       setProcessing(false)
     }
   }
 
+  const printCashReceipt = () => {
+    if (!completedOrder) return
+    const o = completedOrder
+    const now = new Date().toLocaleString('en-NG')
+    const html = `<html><head><style>
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family:'Courier New',monospace; font-size:12px; color:#000; width:80mm; padding:4mm; }
+      .center { text-align:center; }
+      .bold { font-weight:bold; }
+      .row { display:flex; justify-content:space-between; margin:3px 0; }
+      .divider { border-top:1px dashed #000; margin:6px 0; }
+      @media print { body{width:80mm;} @page{margin:0;size:80mm auto;} }
+    </style></head><body>
+      <div class="center bold" style="font-size:15px">Beeshop's Place</div>
+      <div class="center" style="font-size:10px">Restaurant & Bar</div>
+      <div class="divider"></div>
+      <div class="center" style="font-size:10px">${now}</div>
+      <div class="center" style="font-size:10px">${isTakeaway ? 'TAKEAWAY — ' + o.customerName : 'CASH SALE'}</div>
+      <div class="divider"></div>
+      ${o.items.map(i => `<div class="row"><span>${i.quantity}x ${i.name}</span><span>₦${(i.total||i.price*i.quantity).toLocaleString()}</span></div>`).join('')}
+      <div class="divider"></div>
+      <div class="row bold"><span>TOTAL</span><span>₦${o.total.toLocaleString()}</span></div>
+      ${o.paymentMethod === 'cash' && o.change > 0 ? `<div class="row"><span>Change</span><span>₦${o.change.toLocaleString()}</span></div>` : ''}
+      <div class="divider"></div>
+      <div class="center" style="font-size:10px">Thank you!</div>
+    </body></html>`
+    const iframe = document.createElement('iframe')
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:0'
+    document.body.appendChild(iframe)
+    iframe.contentDocument.write(html)
+    iframe.contentDocument.close()
+    iframe.contentWindow.focus()
+    setTimeout(() => { iframe.contentWindow.print(); setTimeout(() => document.body.removeChild(iframe), 1000) }, 300)
+  }
+
   if (success) return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-2xl p-8 text-center max-w-sm w-full border border-gray-800">
-        <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+      <div className="bg-gray-900 rounded-2xl p-6 text-center max-w-sm w-full border border-gray-800 space-y-4">
+        <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto">
           <CheckCircle size={32} className="text-green-400" />
         </div>
-        <h3 className="text-white text-xl font-bold mb-1">Order Complete!</h3>
-        <p className="text-gray-400 text-sm">{isTakeaway ? `Takeaway for ${customerName}` : 'Cash sale processed'}</p>
-        <p className="text-gray-500 text-xs mt-1">Sent to {orderItems.some(i => i.menu_categories?.destination === 'kitchen') ? 'Kitchen' : ''}{orderItems.some(i => i.menu_categories?.destination === 'kitchen') && orderItems.some(i => i.menu_categories?.destination === 'bar') ? ' & ' : ''}{orderItems.some(i => i.menu_categories?.destination === 'bar') ? 'Bar' : ''}</p>
+        <div>
+          <h3 className="text-white text-xl font-bold mb-1">Order Complete!</h3>
+          <p className="text-gray-400 text-sm">{isTakeaway ? `Takeaway for ${customerName}` : 'Cash sale processed'}</p>
+        </div>
         {paymentMethod === 'cash' && change > 0 && (
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mt-4">
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
             <p className="text-amber-400 text-xs mb-1">Change to return</p>
             <p className="text-white text-3xl font-bold">₦{change.toLocaleString()}</p>
           </div>
         )}
+        <div className="flex gap-2">
+          <button onClick={printCashReceipt} className="flex-1 flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold px-4 py-2.5 rounded-xl text-sm">
+            <Printer size={15} /> Print Receipt
+          </button>
+          <button onClick={onSuccess} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium">
+            Done
+          </button>
+        </div>
       </div>
     </div>
   )
