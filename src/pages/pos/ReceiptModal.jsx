@@ -9,10 +9,7 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
   const [printing, setPrinting] = useState(false)
   const [activeTab, setActiveTab] = useState('customer')
 
-  useEffect(() => {
-    // Auto-trigger print dialog on mount
-    setTimeout(() => handlePrint('customer'), 500)
-  }, [])
+  useEffect(() => {}, [])
 
   const formatDate = (date) => {
     const d = new Date(date)
@@ -367,8 +364,8 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
 
         {/* Footer actions */}
         <div className="px-6 py-3 border-t border-gray-200 bg-gray-50 flex justify-end shrink-0">
-          <button onClick={onClose} className="bg-gray-900 text-white px-6 py-2 rounded-xl text-sm font-medium hover:bg-gray-700 transition-colors">
-            Done
+          <button onClick={() => { handlePrint('customer'); setTimeout(onClose, 1500) }} className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-6 py-2 rounded-xl text-sm transition-colors">
+            Print & Done
           </button>
         </div>
       </div>
