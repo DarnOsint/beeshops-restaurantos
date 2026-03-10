@@ -90,7 +90,7 @@ export default function Analytics() {
     const orderIds = (orders || []).map(o => o.id)
     const { data: items } = orderIds.length ? await supabase
       .from('order_items')
-      .select('id, quantity, price, order_id, menu_items(name, menu_categories(name))')
+      .select('id, quantity, unit_price, order_id, menu_items(name, menu_categories(name))')
       .in('order_id', orderIds) : { data: [] }
 
     const { data: staff } = await supabase
@@ -100,7 +100,7 @@ export default function Analytics() {
       .from('debtors').select('current_balance, status').eq('is_active', true)
 
     const { data: tables } = await supabase
-      .from('tables').select('id, zone')
+      .from('tables').select('id, category_id, table_categories(name)')
 
     processData(orders||[], items||[], staff||[], debtors||[], tables||[])
     setLoading(false)
@@ -147,7 +147,7 @@ export default function Analytics() {
       const cat = i.menu_items?.menu_categories?.name||'Other'
       if(!itemMap[name]) itemMap[name]={name,category:cat,qty:0,revenue:0}
       itemMap[name].qty += i.quantity
-      itemMap[name].revenue += (i.price||0)*i.quantity
+      itemMap[name].revenue += (i.unit_price||0)*i.quantity
     })
     const bestSellers = Object.values(itemMap).sort((a,b)=>b.revenue-a.revenue).slice(0,10)
 
@@ -155,7 +155,7 @@ export default function Analytics() {
     const catMap = {}
     items.forEach(i => {
       const cat = i.menu_items?.menu_categories?.name||'Other'
-      catMap[cat] = (catMap[cat]||0)+(i.price||0)*i.quantity
+      catMap[cat] = (catMap[cat]||0)+(i.unit_price||0)*i.quantity
     })
     const categorySplit = Object.entries(catMap).map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value)
 
@@ -171,7 +171,7 @@ export default function Analytics() {
 
     // Revenue by zone
     const tableZoneMap = {}
-    tables.forEach(t => { tableZoneMap[t.id]=t.zone })
+    tables.forEach(t => { tableZoneMap[t.id]=t.table_categories?.name||'Unknown' })
     const zoneMap = {}
     paid.forEach(o => {
       const zone = tableZoneMap[o.table_id]||'Takeaway/Cash'
@@ -363,7 +363,7 @@ Categories: ${d.categorySplit.slice(0,3).map(c=>c.name+' '+fmt(c.value)).join(',
               {data.bestSellers.length===0 ? <p className="text-gray-500 text-sm">No data</p> : (
                 <div className="space-y-3">
                   {data.bestSellers.slice(0,8).map((item,i)=>(
-                    <div key={item.name} className="flex items-center gap-3">
+                    <div key={item.name + item.revenue} className="flex items-center gap-3">
                       <span className="text-gray-600 text-xs w-4">{i+1}</span>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between mb-1">
@@ -395,7 +395,7 @@ Categories: ${d.categorySplit.slice(0,3).map(c=>c.name+' '+fmt(c.value)).join(',
                   </ResponsiveContainer>
                   <div className="flex-1 space-y-2">
                     {data.categorySplit.map((cat,i)=>(
-                      <div key={cat.name} className="flex items-center gap-2">
+                      <div key={cat.name + cat.value} className="flex items-center gap-2">
                         <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{background:PIE_COLORS[i%PIE_COLORS.length]}}/>
                         <span className="text-gray-300 text-xs flex-1 truncate">{cat.name}</span>
                         <span className="text-white text-xs font-medium">{fmt(cat.value)}</span>
@@ -440,7 +440,7 @@ Categories: ${d.categorySplit.slice(0,3).map(c=>c.name+' '+fmt(c.value)).join(',
                       const total=data.paymentBreakdown.reduce((s,x)=>s+x.value,0)
                       const pct=total?((p.value/total)*100).toFixed(1):0
                       return (
-                        <div key={p.name}>
+                        <div key={p.name + p.value}>
                           <div className="flex justify-between mb-1">
                             <span className="text-gray-300 text-xs">{p.name}</span>
                             <span className="text-white text-xs font-medium">{pct}%</span>
@@ -475,7 +475,7 @@ Categories: ${d.categorySplit.slice(0,3).map(c=>c.name+' '+fmt(c.value)).join(',
                   </thead>
                   <tbody>
                     {data.staffPerf.map((s,i)=>(
-                      <tr key={s.name} className="border-b border-gray-800/50">
+                      <tr key={s.id || s.name + i} className="border-b border-gray-800/50">
                         <td className="py-3 flex items-center gap-2">
                           <span>{i===0?'🥇':i===1?'🥈':i===2?'🥉':'  '}</span>
                           <span className="text-white">{s.name}</span>
