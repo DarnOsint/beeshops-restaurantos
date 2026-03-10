@@ -95,12 +95,15 @@ export default function POS() {
   }
 
   const fetchMenu = async () => {
-    const { data, error } = await supabase
-      .from('menu_items')
-      .select('*, menu_categories(name, destination)')
-      .eq('is_available', true)
-      .order('name')
-    if (!error) setMenuItems(data)
+    const [menuRes, invRes] = await Promise.all([
+      supabase.from('menu_items').select('*, menu_categories(name, destination)').eq('is_available', true).order('name'),
+      supabase.from('inventory').select('menu_item_id, current_stock').eq('is_active', true)
+    ])
+    if (!menuRes.error) {
+      const invMap = {}
+      if (invRes.data) invRes.data.forEach(i => { invMap[i.menu_item_id] = i.current_stock })
+      setMenuItems(menuRes.data.map(item => ({ ...item, current_stock: invMap[item.id] ?? null })))
+    }
   }
 
   const fetchZonePrices = async () => {

@@ -32,6 +32,10 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, ac
     : menuItems.filter(item => item.menu_categories?.name === activeCategory)
 
   const addItem = (item) => {
+    if (item.current_stock !== null && item.current_stock !== undefined && item.current_stock <= 0) {
+      alert(item.name + ' is out of stock')
+      return
+    }
     setOrderItems(prev => {
       // Only merge into a new (non-existing) entry — never touch locked _existing items
       const newEntry = prev.find(i => i.id === item.id && !i._existing)
@@ -207,10 +211,14 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, ac
               <button
                 key={item.id}
                 onClick={() => addItem(item)}
-                className="bg-gray-800 hover:bg-gray-700 rounded-xl p-3 text-left transition-colors border border-gray-700 hover:border-amber-500/50"
+                disabled={item.current_stock !== null && item.current_stock !== undefined && item.current_stock <= 0}
+                className={`rounded-xl p-3 text-left transition-colors border ${item.current_stock !== null && item.current_stock !== undefined && item.current_stock <= 0 ? 'bg-gray-900 border-gray-800 opacity-50 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-700 border-gray-700 hover:border-amber-500/50'}`}
               >
                 <p className="text-white text-sm font-medium">{item.name}</p>
                 <p className="text-amber-400 text-sm font-bold mt-1">₦{item.price.toFixed(2)}</p>
+                {item.current_stock !== null && item.current_stock !== undefined && item.current_stock <= 0 && (
+                  <p className="text-red-400 text-xs mt-1 font-bold">Out of Stock</p>
+                )}
               </button>
             ))}
           </div>
