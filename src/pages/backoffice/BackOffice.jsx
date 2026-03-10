@@ -40,32 +40,7 @@ export default function BackOffice() {
 
   return (
     <div className="min-h-screen bg-gray-950">
-      <nav className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center">
-            <Beer size={20} className="text-black" />
-          </div>
-          <div>
-            <h1 className="text-white font-bold">Back Office</h1>
-            <p className="text-gray-400 text-xs">Beeshops Place</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate(profile?.role === 'owner' ? '/executive' : '/management')}
-            className="flex items-center gap-2 text-gray-400 hover:text-white text-sm transition-colors"
-          >
-            <ArrowLeft size={16} /> Dashboard
-          </button>
-          <div className="text-right">
-            <p className="text-white text-sm">{profile?.full_name}</p>
-            <p className="text-amber-500 text-xs capitalize">{profile?.role}</p>
-          </div>
-          <button onClick={signOut} className="text-gray-400 hover:text-white">
-            <LogOut size={18} />
-          </button>
-        </div>
-      </nav>
+      
 
       <div className="p-6">
         <div className="mb-8">

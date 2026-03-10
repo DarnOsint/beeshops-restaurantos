@@ -225,44 +225,7 @@ export default function Reports() {
   return (
     <div className="min-h-screen bg-gray-950">
 
-      <nav className="bg-gray-900 border-b border-gray-800 px-4 py-3 print:hidden">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center">
-              <Beer size={18} className="text-black" />
-            </div>
-            <div>
-              <h1 className="text-white font-bold text-sm">Beeshop's Place</h1>
-              <p className="text-gray-400 text-xs">Reports</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {report && (
-              <>
-                <button onClick={exportCSV}
-                  className="flex items-center gap-1.5 text-gray-400 hover:text-amber-400 text-xs border border-gray-700 hover:border-amber-500/50 rounded-lg px-3 py-1.5 transition-colors">
-                  <Download size={13} /> CSV
-                </button>
-                <button onClick={() => window.print()}
-                  className="flex items-center gap-1.5 text-gray-400 hover:text-amber-400 text-xs border border-gray-700 hover:border-amber-500/50 rounded-lg px-3 py-1.5 transition-colors">
-                  <Printer size={13} /> Print / PDF
-                </button>
-              </>
-            )}
-            <button onClick={() => navigate(profile?.role === 'owner' ? '/executive' : '/management')}
-              className="flex items-center gap-1.5 text-gray-400 hover:text-white text-xs transition-colors">
-              <ArrowLeft size={14} /> Dashboard
-            </button>
-            <div className="text-right">
-              <p className="text-white text-sm">{profile?.full_name}</p>
-              <p className="text-amber-500 text-xs capitalize">{profile?.role}</p>
-            </div>
-            <button onClick={signOut} className="text-gray-400 hover:text-white">
-              <LogOut size={18} />
-            </button>
-          </div>
-        </div>
-      </nav>
+      
 
       <div className="p-4 md:p-6 max-w-6xl mx-auto">
 

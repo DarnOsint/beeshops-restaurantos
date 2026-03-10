@@ -236,31 +236,7 @@ export default function RoomManagement() {
   return (
     <div className="min-h-screen bg-gray-950">
       {/* Header */}
-      <nav className="bg-gray-900 border-b border-gray-800 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center">
-              <Beer size={18} className="text-black" />
-            </div>
-            <div>
-              <h1 className="text-white font-bold text-sm">Beeshops Place</h1>
-              <p className="text-gray-400 text-xs">Room Management</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={fetchAll} className="text-gray-400 hover:text-white"><RefreshCw size={16} /></button>
-            <button onClick={() => navigate(profile?.role === 'owner' ? '/executive' : '/management')}
-              className="flex items-center gap-1.5 text-gray-400 hover:text-white text-xs border border-gray-700 rounded-lg px-3 py-1.5 transition-colors">
-              <ArrowLeft size={13} /> Dashboard
-            </button>
-            <div className="text-right">
-              <p className="text-white text-sm">{profile?.full_name}</p>
-              <p className="text-amber-500 text-xs capitalize">{profile?.role}</p>
-            </div>
-            <button onClick={signOut} className="text-gray-400 hover:text-white"><LogOut size={18} /></button>
-          </div>
-        </div>
-      </nav>
+      
 
       {/* Tabs */}
       <div className="flex border-b border-gray-800 bg-gray-900 px-4 overflow-x-auto">
