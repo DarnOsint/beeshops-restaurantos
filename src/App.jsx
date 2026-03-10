@@ -1,5 +1,6 @@
 import { useNotifications } from './hooks/useNotifications'
 import OfflineBanner from './components/OfflineBanner'
+import AppShell from './components/AppShell'
 import NotificationToast from './components/NotificationToast'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
@@ -139,7 +140,7 @@ function AppInner() {
   return (
     <>
       <NotificationToast toasts={toasts} onDismiss={dismiss} />
-      <AppRoutes />
+      <AppShell><AppRoutes /></AppShell>
     </>
   )
 }
