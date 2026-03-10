@@ -1,20 +1,24 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { 
   Beer, LogOut, Users, LayoutDashboard, 
-  ShoppingBag, TrendingUp, Clock, ChevronRight, DollarSign, Settings, BookOpen, BedDouble
+  ShoppingBag, TrendingUp, Clock, ChevronRight, DollarSign, Settings, BookOpen, BedDouble, AlertTriangle, Save
 } from 'lucide-react'
 import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
 import TillManagement from './TillManagement'
 import WaiterCalls from './WaiterCalls'
+import { useLateOrders } from '../../hooks/useLateOrders'
 
 export default function Management() {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('overview')
+  const { lateOrders, threshold, setThreshold } = useLateOrders()
+  const [editThreshold, setEditThreshold] = useState('')
+  const [savingThreshold, setSavingThreshold] = useState(false)
   const [stats, setStats] = useState({
     openOrders: 0,
     occupiedTables: 0,
@@ -33,6 +37,16 @@ export default function Management() {
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [])
+
+  const saveThreshold = async () => {
+    const val = parseInt(editThreshold)
+    if (!val || val < 1) return
+    setSavingThreshold(true)
+    await supabase.from('settings').upsert({ id: 'order_alert_threshold', value: String(val), updated_at: new Date().toISOString() })
+    setThreshold(val)
+    setEditThreshold('')
+    setSavingThreshold(false)
+  }
 
   const fetchStats = async () => {
     const today = new Date()
@@ -68,6 +82,32 @@ export default function Management() {
 
       {/* Waiter call alerts — floats top right */}
       <WaiterCalls />
+
+      {/* Late Orders Alert Banner */}
+      {lateOrders.length > 0 && (
+        <div className="bg-red-500/10 border-b border-red-500/30 px-4 py-3">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle size={16} className="text-red-400 animate-pulse" />
+            <span className="text-red-400 font-bold text-sm">{lateOrders.length} overdue order item{lateOrders.length > 1 ? 's' : ''} — over {threshold} mins</span>
+          </div>
+          <div className="space-y-1">
+            {lateOrders.map(item => (
+              <div key={item.id} className="flex items-center justify-between bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
+                <div>
+                  <span className="text-white text-xs font-medium">
+                    {item.orders?.order_type === 'takeaway' ? 'Takeaway' : item.orders?.tables?.name || 'Table ?'} 
+                    {' — '}{item.destination?.toUpperCase()}
+                  </span>
+                  <span className="text-red-300 text-xs ml-2">
+                    {Math.floor((Date.now() - new Date(item.created_at)) / 60000)} mins ago
+                  </span>
+                </div>
+                <span className="text-red-400 text-xs font-bold">LATE</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
 
 
@@ -148,6 +188,36 @@ export default function Management() {
         {activeTab === 'orders' && <OpenOrders />}
         {activeTab === 'till' && <TillManagement />}
       </div>
+      {activeTab === 'settings' && (
+        <div className="p-4 space-y-4 max-w-md">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+            <h3 className="text-white font-bold mb-1 flex items-center gap-2"><Clock size={16} className="text-amber-400"/> Order Alert Threshold</h3>
+            <p className="text-gray-400 text-xs mb-4">Alert management when an order item has been pending longer than this many minutes.</p>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 flex items-center justify-between">
+                <span className="text-gray-400 text-sm">Current threshold</span>
+                <span className="text-amber-400 font-bold">{threshold} mins</span>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-3">
+              <input
+                type="number"
+                min="1"
+                max="120"
+                value={editThreshold}
+                onChange={e => setEditThreshold(e.target.value)}
+                placeholder="New threshold (mins)"
+                className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+              />
+              <button onClick={saveThreshold} disabled={savingThreshold || !editThreshold}
+                className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black font-bold px-4 py-2.5 rounded-xl text-sm transition-colors">
+                <Save size={14} /> Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
