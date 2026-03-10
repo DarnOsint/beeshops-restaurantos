@@ -250,14 +250,19 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
               ))}
             </div>
 
-            {/* Items grid */}
-            <div className="flex-1 overflow-y-auto p-3">
-              {orderItems.length > 0 && (
+            {/* Sticky View Order button */}
+            {orderItems.length > 0 && (
+              <div className="md:hidden shrink-0 p-2 border-t border-gray-800 bg-gray-900">
                 <button onClick={() => setActiveTab('order')}
-                  className="md:hidden w-full mb-3 bg-amber-500 text-black font-bold rounded-xl py-2.5 text-sm">
+                  className="w-full bg-amber-500 text-black font-bold rounded-xl py-2.5 text-sm">
                   View Order ({orderItems.length} items) — ₦{total.toLocaleString()} →
                 </button>
-              )}
+              </div>
+            )}
+
+            {/* Items grid */}
+            <div className="flex-1 overflow-y-auto p-3">
+
               <div className="grid grid-cols-2 gap-2">
                 {filtered.map(item => (
                   <button key={item.id} onClick={() => addItem(item)}
