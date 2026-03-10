@@ -6,7 +6,6 @@ export function useLateOrders() {
   const [threshold, setThreshold] = useState(15)
 
   useEffect(() => {
-    // Fetch threshold setting
     supabase.from('settings').select('value').eq('id', 'order_alert_threshold').single()
       .then(({ data }) => { if (data) setThreshold(parseInt(data.value) || 15) })
   }, [])
@@ -15,16 +14,29 @@ export function useLateOrders() {
     const check = async () => {
       const cutoff = new Date(Date.now() - threshold * 60 * 1000).toISOString()
       const { data } = await supabase
-        .from('order_items')
-        .select('id, destination, created_at, status, orders(id, order_number, tables(name), customer_name, order_type)')
-        .eq('status', 'pending')
+        .from('orders')
+        .select('id, order_number, order_type, customer_name, created_at, tables(name), order_items(id, status, destination)')
+        .eq('status', 'open')
         .lte('created_at', cutoff)
-      setLateOrders(data || [])
+      
+      if (!data) return
+
+      // Only include orders that still have pending items
+      const late = data.filter(o => o.order_items?.some(i => i.status === 'pending'))
+      setLateOrders(late)
     }
     check()
     const interval = setInterval(check, 30000)
     return () => clearInterval(interval)
   }, [threshold])
 
-  return { lateOrders, threshold, setThreshold }
+  const markDelivered = async (orderId) => {
+    await supabase.from('order_items')
+      .update({ status: 'delivered' })
+      .eq('order_id', orderId)
+      .eq('status', 'pending')
+    setLateOrders(prev => prev.filter(o => o.id !== orderId))
+  }
+
+  return { lateOrders, threshold, setThreshold, markDelivered }
 }

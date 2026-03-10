@@ -16,7 +16,7 @@ export default function Management() {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('overview')
-  const { lateOrders, threshold, setThreshold } = useLateOrders()
+  const { lateOrders, threshold, setThreshold, markDelivered } = useLateOrders()
   const [editThreshold, setEditThreshold] = useState('')
   const [savingThreshold, setSavingThreshold] = useState(false)
   const [stats, setStats] = useState({
@@ -88,23 +88,32 @@ export default function Management() {
         <div className="bg-red-500/10 border-b border-red-500/30 px-4 py-3">
           <div className="flex items-center gap-2 mb-2">
             <AlertTriangle size={16} className="text-red-400 animate-pulse" />
-            <span className="text-red-400 font-bold text-sm">{lateOrders.length} overdue order item{lateOrders.length > 1 ? 's' : ''} — over {threshold} mins</span>
+            <span className="text-red-400 font-bold text-sm">{lateOrders.length} overdue table{lateOrders.length > 1 ? 's' : ''} — pending over {threshold} mins</span>
           </div>
-          <div className="space-y-1">
-            {lateOrders.map(item => (
-              <div key={item.id} className="flex items-center justify-between bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
-                <div>
-                  <span className="text-white text-xs font-medium">
-                    {item.orders?.order_type === 'takeaway' ? 'Takeaway' : item.orders?.tables?.name || 'Table ?'} 
-                    {' — '}{item.destination?.toUpperCase()}
-                  </span>
-                  <span className="text-red-300 text-xs ml-2">
-                    {Math.floor((Date.now() - new Date(item.created_at)) / 60000)} mins ago
-                  </span>
+          <div className="space-y-2">
+            {lateOrders.map(order => {
+              const pendingItems = order.order_items?.filter(i => i.status === 'pending') || []
+              const destinations = [...new Set(pendingItems.map(i => i.destination?.toUpperCase()).filter(Boolean))]
+              const mins = Math.floor((Date.now() - new Date(order.created_at)) / 60000)
+              return (
+                <div key={order.id} className="bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-white text-sm font-bold">
+                        {order.order_type === 'takeaway' ? `Takeaway — ${order.customer_name || 'Guest'}` : order.tables?.name || 'Table ?'}
+                      </p>
+                      <p className="text-red-300 text-xs mt-0.5">
+                        {pendingItems.length} pending item{pendingItems.length > 1 ? 's' : ''} · {destinations.join(', ')} · {mins} mins ago
+                      </p>
+                    </div>
+                    <button onClick={() => markDelivered(order.id)}
+                      className="shrink-0 bg-green-500 hover:bg-green-400 text-black text-xs font-bold px-3 py-1.5 rounded-xl transition-colors">
+                      Delivered
+                    </button>
+                  </div>
                 </div>
-                <span className="text-red-400 text-xs font-bold">LATE</span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
