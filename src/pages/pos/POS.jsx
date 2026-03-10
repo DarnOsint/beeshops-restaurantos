@@ -314,7 +314,7 @@ export default function POS() {
       {/* Waiter call alerts — only shows calls for this waitron's tables */}
       <WaiterCalls />
 
-      <nav className="bg-gray-900 border-b border-gray-800 px-4 py-3">
+      <nav className="bg-gray-900 border-b border-gray-800 px-4 py-3 sticky top-0 z-40">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0">
