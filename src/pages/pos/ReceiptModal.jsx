@@ -42,6 +42,7 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
   const handlePrint = (type) => {
     const ref = type === 'customer' ? customerRef : waiterRef
     const printWindow = window.open('', '_blank', 'width=340,height=600')
+    if (!printWindow) { alert('Please allow popups to print receipts'); return }
     printWindow.document.write(`
       <html>
         <head>

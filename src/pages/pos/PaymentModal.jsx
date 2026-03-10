@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { offlineUpdate, offlineInsert } from '../../lib/offlineWrite'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
 import { X, Banknote, CreditCard, Smartphone, CheckCircle, Clock, User, Phone, Users } from 'lucide-react'
@@ -109,14 +110,16 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
     setProcessing(true)
     try {
       if (paymentMethod === 'credit') {
-        await supabase.from('orders').update({
+        await offlineUpdate('orders', order.id, {
           status: 'paid', payment_method: 'credit',
           customer_name: debtorName, customer_phone: debtorPhone,
           closed_at: new Date().toISOString()
-        }).eq('id', order.id)
+        })
         await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', order.id)
-        await supabase.from('tables').update({ status: 'available' }).eq('id', table.id)
-        await supabase.from('debtors').insert({
+        await offlineUpdate('tables', table.id, { status: 'available' })
+        await offlineInsert('debtors', {
+          id: crypto.randomUUID(),
+          created_at: new Date().toISOString(),
           name: debtorName, phone: debtorPhone,
           debt_type: 'table_order', order_id: order.id,
           credit_limit: total, current_balance: total,
@@ -138,24 +141,13 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
         return
       }
 
-      await supabase
-        .from('orders')
-        .update({
+      await offlineUpdate('orders', order.id, {
           status: 'paid',
           payment_method: paymentMethod,
           closed_at: new Date().toISOString()
         })
-        .eq('id', order.id)
-
-      await supabase
-        .from('order_items')
-        .update({ status: 'delivered' })
-        .eq('order_id', order.id)
-
-      await supabase
-        .from('tables')
-        .update({ status: 'available' })
-        .eq('id', table.id)
+      await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', order.id)
+      await offlineUpdate('tables', table.id, { status: 'available' })
 
       setPaidOrder({ ...order, payment_method: paymentMethod })
       setSuccess(true)
