@@ -199,7 +199,7 @@ export default function StaffManagement({ onBack }) {
   return (
     <div className="min-h-screen bg-gray-950">
       {/* Header */}
-      <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+      <div className="lg:hidden bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="text-gray-400 hover:text-white"><ArrowLeft size={20} /></button>
           <div>
@@ -208,12 +208,12 @@ export default function StaffManagement({ onBack }) {
           </div>
         </div>
         <button onClick={openAdd}
-          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-xl text-sm transition-colors">
-          <Plus size={16} /> Add Staff
+          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold px-3 py-1.5 rounded-xl text-xs transition-colors">
+          <Plus size={14} /> Add Staff
         </button>
       </div>
 
-      <div className="p-6">
+      <div className="p-4">
         {/* Filters */}
         <div className="flex flex-col md:flex-row gap-3 mb-6">
           <div className="relative flex-1">

@@ -177,7 +177,7 @@ export default function Inventory({ onBack }) {
   return (
     <div className="min-h-screen bg-gray-950">
       {/* Header */}
-      <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+      <div className="lg:hidden bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="text-gray-400 hover:text-white"><ArrowLeft size={20} /></button>
           <div>
@@ -195,7 +195,7 @@ export default function Inventory({ onBack }) {
       </div>
 
       {/* View Toggle */}
-      <div className="bg-gray-900 border-b border-gray-800 px-6 flex gap-1 py-2">
+      <div className="bg-gray-900 border-b border-gray-800 px-4 flex gap-1 py-2">
         <button onClick={() => setView('stock')}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${view === 'stock' ? 'bg-amber-500 text-black' : 'text-gray-400 hover:text-white'}`}>
           <Package size={14} /> Stock Levels
