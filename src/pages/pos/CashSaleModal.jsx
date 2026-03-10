@@ -1,8 +1,12 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { offlineInsert } from '../../lib/offlineWrite'
+import { useAuth } from '../../context/AuthContext'
+import { audit } from '../../lib/audit'
 import { X, Plus, Minus, Trash2, Search, CheckCircle, Banknote, CreditCard, Smartphone, ShoppingBag, Phone } from 'lucide-react'
 
 export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onClose }) {
+  const { profile } = useAuth()
   const [orderItems, setOrderItems] = useState([])
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('All')
@@ -16,6 +20,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
   const [notes, setNotes] = useState('')
 
   const isTakeaway = type === 'takeaway'
+  const [activeTab, setActiveTab] = useState('menu') // mobile only
 
   const categories = ['All', ...new Set(menuItems.map(i => i.menu_categories?.name).filter(Boolean))]
 
@@ -51,42 +56,72 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
     return true
   }
 
+  const depleteInventory = async (items) => {
+    for (const item of items) {
+      if (!item.id) continue
+      const { data: inv } = await supabase
+        .from('inventory')
+        .select('id, current_stock')
+        .eq('menu_item_id', item.id)
+        .eq('is_active', true)
+        .maybeSingle()
+      if (!inv) continue
+      const newStock = Math.max(0, inv.current_stock - item.quantity)
+      await supabase.from('inventory')
+        .update({ current_stock: newStock, updated_at: new Date().toISOString() })
+        .eq('id', inv.id)
+    }
+  }
+
   const processOrder = async () => {
     if (orderItems.length === 0) return alert('Add at least one item')
     if (isTakeaway && !customerName) return alert('Customer name is required for takeaway')
     setProcessing(true)
 
     try {
-      const { data: order, error: orderError } = await supabase
-        .from('orders')
-        .insert({
-          staff_id: staffId,
-          order_type: type,
-          status: 'paid',
-          payment_method: paymentMethod,
-          total_amount: total,
-          customer_name: customerName || null,
-          customer_phone: customerPhone || null,
-          notes,
-          closed_at: new Date().toISOString()
-        })
-        .select()
-        .single()
+      const orderId = crypto.randomUUID()
+      const { data: order, error: orderError } = await offlineInsert('orders', {
+        id: orderId,
+        staff_id: staffId,
+        order_type: type,
+        status: 'paid',
+        payment_method: paymentMethod,
+        total_amount: total,
+        customer_name: customerName || null,
+        customer_phone: customerPhone || null,
+        notes,
+        closed_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
+      })
 
       if (orderError) throw orderError
 
-      const items = orderItems.map(item => ({
+      const itemsWithIds = orderItems.map(item => ({
+        id: crypto.randomUUID(),
         order_id: order.id,
         menu_item_id: item.id,
         quantity: item.quantity,
         unit_price: item.price,
         total_price: item.total,
         status: 'pending',
-        destination: item.menu_categories?.destination || 'bar'
+        destination: item.menu_categories?.destination || 'bar',
+        created_at: new Date().toISOString()
       }))
 
-      const { error: itemsError } = await supabase.from('order_items').insert(items)
-      if (itemsError) throw itemsError
+      for (const item of itemsWithIds) {
+        const { error } = await offlineInsert('order_items', item)
+        if (error) throw error
+      }
+
+      await depleteInventory(orderItems)
+      await audit({
+        action: 'ORDER_CREATED',
+        entity: 'order',
+        entityId: order.id,
+        entityName: type === 'takeaway' ? `Takeaway — ${customerName}` : 'Cash Sale',
+        newValue: { total, items: orderItems.length, type },
+        performer: profile
+      })
 
       setSuccess(true)
       setTimeout(() => { onSuccess() }, 2500)
@@ -133,10 +168,22 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
           <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={20} /></button>
         </div>
 
+        {/* Mobile tab switcher */}
+        <div className="flex md:hidden border-b border-gray-800 bg-gray-900 shrink-0">
+          <button onClick={() => setActiveTab('menu')}
+            className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${activeTab === 'menu' ? 'text-white border-b-2 border-amber-500' : 'text-gray-500'}`}>
+            Menu
+          </button>
+          <button onClick={() => setActiveTab('order')}
+            className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${activeTab === 'order' ? 'text-white border-b-2 border-amber-500' : 'text-gray-500'}`}>
+            Order {orderItems.length > 0 && `(${orderItems.length})`}
+          </button>
+        </div>
+
         <div className="flex flex-1 overflow-hidden">
 
           {/* Left — Menu */}
-          <div className="flex-1 flex flex-col overflow-hidden border-r border-gray-800">
+          <div className={`${activeTab === 'menu' ? 'flex' : 'hidden'} md:flex flex-1 flex-col overflow-hidden border-r border-gray-800`}>
 
             {/* Search */}
             <div className="p-3 border-b border-gray-800 shrink-0">
@@ -160,6 +207,12 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
 
             {/* Items grid */}
             <div className="flex-1 overflow-y-auto p-3">
+              {orderItems.length > 0 && (
+                <button onClick={() => setActiveTab('order')}
+                  className="md:hidden w-full mb-3 bg-amber-500 text-black font-bold rounded-xl py-2.5 text-sm">
+                  View Order ({orderItems.length} items) — ₦{total.toLocaleString()} →
+                </button>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 {filtered.map(item => (
                   <button key={item.id} onClick={() => addItem(item)}
@@ -174,7 +227,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
           </div>
 
           {/* Right — Order + Payment */}
-          <div className="w-72 flex flex-col overflow-hidden shrink-0">
+          <div className={`${activeTab === 'order' ? 'flex' : 'hidden'} md:flex w-full md:w-72 flex-col overflow-hidden shrink-0`}>
 
             {/* Takeaway customer info */}
             {isTakeaway && (
