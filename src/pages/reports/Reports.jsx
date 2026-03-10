@@ -56,6 +56,21 @@ export default function Reports() {
   }
 
   const generateReport = async () => {
+    // Z-Report: enforce all staff clocked out
+    if (reportType === 'zreport') {
+      const { start, end } = getDateBounds()
+      const { data: openShifts } = await supabase
+        .from('attendance')
+        .select('*, profiles(full_name)')
+        .gte('clock_in', start)
+        .lte('clock_in', end)
+        .is('clock_out', null)
+      if (openShifts && openShifts.length > 0) {
+        const names = openShifts.map(s => s.profiles?.full_name || 'Unknown').join(', ')
+        alert('Z-Report blocked. The following staff are still clocked in:\n\n' + names + '\n\nAll staff must be clocked out before running the Z-Report.')
+        return
+      }
+    }
     setLoading(true)
     const { start, end } = getDateBounds()
 
