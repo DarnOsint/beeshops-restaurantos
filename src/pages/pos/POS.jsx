@@ -137,7 +137,7 @@ export default function POS() {
       if (data && data.length > 0) {
         setActiveOrder(data[0])
         setSelectedTable(table)
-        setShowPayment(true)
+        setShowPayment(false) // open order panel — waiter can add items or proceed to pay
         return
       }
     }
@@ -165,8 +165,61 @@ export default function POS() {
   }
 
   const handlePlaceOrder = async ({ table, items, notes, total }) => {
+    let order
+
+    if (activeOrder) {
+      // --- ADD TO EXISTING ORDER ---
+      const newTotal = (activeOrder.total_amount || 0) + total
+      await offlineUpdate('orders', activeOrder.id, {
+        total_amount: newTotal,
+        notes: notes || activeOrder.notes,
+        updated_at: new Date().toISOString()
+      })
+      const newItems = items.map(item => ({
+        id: crypto.randomUUID(),
+        order_id: activeOrder.id,
+        menu_item_id: item.id,
+        quantity: item.quantity,
+        unit_price: item.price,
+        total_price: item.total,
+        status: 'pending',
+        destination: item.menu_categories?.destination || 'bar',
+        modifier_notes: item.modifier_notes || null,
+        extra_charge: item.extra_charge || 0,
+        created_at: new Date().toISOString()
+      }))
+      let itemsError = null
+      for (const item of newItems) {
+        const { error } = await offlineInsert('order_items', item)
+        if (error) { itemsError = error; break }
+      }
+      if (itemsError) {
+        alert('Error adding items: ' + itemsError.message)
+        return
+      }
+      await depleteInventory(items)
+      await audit({
+        action: 'ORDER_UPDATED',
+        entity: 'order',
+        entityId: activeOrder.id,
+        entityName: 'Table ' + table.name,
+        newValue: { addedItems: items.length, newTotal },
+        performer: profile
+      })
+      // Reload the updated order then show payment
+      const { data: refreshed } = await supabase
+        .from('orders')
+        .select('*, order_items(*, menu_items(name))')
+        .eq('id', activeOrder.id)
+        .single()
+      setActiveOrder(refreshed)
+      setShowPayment(true)
+      return
+    }
+
+    // --- CREATE NEW ORDER ---
     const orderId = crypto.randomUUID()
-    const { data: order, error: orderError } = await offlineInsert('orders', {
+    const { data: newOrder, error: orderError } = await offlineInsert('orders', {
       id: orderId,
       table_id: table.id,
       staff_id: profile.id,
@@ -183,7 +236,10 @@ export default function POS() {
       return
     }
 
+    order = newOrder
+
     const orderItems = items.map(item => ({
+      id: crypto.randomUUID(),
       order_id: order.id,
       menu_item_id: item.id,
       quantity: item.quantity,
@@ -192,17 +248,16 @@ export default function POS() {
       status: 'pending',
       destination: item.menu_categories?.destination || 'bar',
       modifier_notes: item.modifier_notes || null,
-      extra_charge: item.extra_charge || 0
+      extra_charge: item.extra_charge || 0,
+      created_at: new Date().toISOString()
     }))
 
-    const itemsWithIds = orderItems.map(i => ({ ...i, id: crypto.randomUUID(), created_at: new Date().toISOString() }))
     let itemsError = null
-    for (const item of itemsWithIds) {
+    for (const item of orderItems) {
       const { error } = await offlineInsert('order_items', item)
       if (error) { itemsError = error; break }
     }
     if (itemsError) {
-      console.error('Order items error:', itemsError)
       alert('Error adding items: ' + itemsError.message)
       return
     }

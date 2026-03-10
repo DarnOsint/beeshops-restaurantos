@@ -4,7 +4,20 @@ import VoidPinModal from '../../components/VoidPinModal'
 import { Plus, Minus, Trash2, Send, X, StickyNote } from 'lucide-react'
 
 export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, activeOrder }) {
-  const [orderItems, setOrderItems] = useState([])
+  const [orderItems, setOrderItems] = useState(() => {
+    if (!activeOrder?.order_items) return []
+    return activeOrder.order_items.map(i => ({
+      id: i.menu_item_id,
+      name: i.menu_items?.name || i.menu_item_id,
+      quantity: i.quantity,
+      price: i.unit_price,
+      total: i.total_price,
+      menu_categories: i.menu_items?.menu_categories || null,
+      modifier_notes: i.modifier_notes || '',
+      extra_charge: i.extra_charge || 0,
+      _existing: true // flag so we know it's already in DB
+    }))
+  })
   const [activeCategory, setActiveCategory] = useState('All')
   const [notes, setNotes] = useState('')
   const [voidRequest, setVoidRequest] = useState(null) // { itemId, itemName, quantity, value }
@@ -20,22 +33,24 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, ac
 
   const addItem = (item) => {
     setOrderItems(prev => {
-      const existing = prev.find(i => i.id === item.id)
-      if (existing) {
-        return prev.map(i => i.id === item.id
+      // Only merge into a new (non-existing) entry — never touch locked _existing items
+      const newEntry = prev.find(i => i.id === item.id && !i._existing)
+      if (newEntry) {
+        return prev.map(i => (i.id === item.id && !i._existing)
           ? { ...i, quantity: i.quantity + 1, total: (i.quantity + 1) * i.price }
           : i
         )
       }
-      return [...prev, { ...item, quantity: 1, total: item.price }]
+      return [...prev, { ...item, quantity: 1, total: item.price, _existing: false, _newId: crypto.randomUUID() }]
     })
   }
 
-  const removeItem = (itemId) => {
+  const removeItem = (itemKey) => {
     setOrderItems(prev => {
-      const existing = prev.find(i => i.id === itemId)
-      if (existing.quantity === 1) return prev.filter(i => i.id !== itemId)
-      return prev.map(i => i.id === itemId
+      const existing = prev.find(i => (i._newId || i.id) === itemKey)
+      if (!existing) return prev
+      if (existing.quantity === 1) return prev.filter(i => (i._newId || i.id) !== itemKey)
+      return prev.map(i => (i._newId || i.id) === itemKey
         ? { ...i, quantity: i.quantity - 1, total: (i.quantity - 1) * i.price }
         : i
       )
@@ -44,8 +59,8 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, ac
 
   const deleteItem = (item) => {
     // If order not yet placed (still in cart), just remove directly — no PIN needed
-    if (!activeOrder) {
-      setOrderItems(prev => prev.filter(i => i.id !== item.id))
+    if (!activeOrder || !item._existing) {
+      setOrderItems(prev => prev.filter(i => (i._newId || i.id) !== (item._newId || item.id)))
       return
     }
     // Order already sent to kitchen/bar — require manager void PIN
@@ -137,8 +152,14 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, ac
 
   const handlePlaceOrder = async () => {
     if (orderItems.length === 0) return
-    console.log('Placing order:', { table, items: orderItems, notes, total })
-    await onPlaceOrder({ table, items: orderItems, notes, total })
+    const newItems = orderItems.filter(i => !i._existing)
+    if (newItems.length === 0 && activeOrder) {
+      // no new items added — just go to payment
+      await onPlaceOrder({ table, items: [], notes, total: 0 })
+      return
+    }
+    const newTotal = newItems.reduce((sum, i) => sum + (i.total || 0), 0)
+    await onPlaceOrder({ table, items: newItems, notes, total: newTotal })
   }
 
   return (
@@ -200,25 +221,27 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, ac
       {orderItems.length > 0 && (
         <div className="border-t border-gray-800 p-3 space-y-2 max-h-48 overflow-y-auto">
           {orderItems.map(item => (
-            <div key={item.id} className="flex items-center gap-2">
+            <div key={item._newId || item.id} className={`flex items-center gap-2 ${item._existing ? 'opacity-60' : ''}`}>
               <div className="flex items-center gap-1">
                 <button
-                  onClick={() => removeItem(item.id)}
-                  className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-white"
+                  onClick={() => !item._existing && removeItem(item._newId || item.id)}
+                  disabled={item._existing}
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${item._existing ? 'bg-gray-800 cursor-not-allowed' : 'bg-gray-700'}`}
                 >
                   <Minus size={10} />
                 </button>
                 <span className="text-white text-sm w-5 text-center">{item.quantity}</span>
                 <button
-                  onClick={() => addItem(item)}
-                  className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-white"
+                  onClick={() => !item._existing && addItem(item)}
+                  disabled={item._existing}
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${item._existing ? 'bg-gray-800 cursor-not-allowed' : 'bg-gray-700'}`}
                 >
                   <Plus size={10} />
                 </button>
               </div>
               <div className="flex-1 min-w-0">
-                <button onClick={() => openModifier(item)} className="text-left w-full">
-                  <p className="text-gray-300 text-sm">{item.name}</p>
+                <button onClick={() => !item._existing && openModifier(item)} className="text-left w-full" disabled={item._existing}>
+                  <p className={`text-sm ${item._existing ? 'text-gray-500' : 'text-gray-300'}`}>{item.name}</p>
                   {item.modifier_notes && (
                     <p className="text-amber-400 text-xs truncate">{item.modifier_notes}</p>
                   )}
@@ -227,10 +250,13 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, ac
                   )}
                 </button>
               </div>
-              <span className="text-white text-sm">₦{item.total.toFixed(2)}</span>
-              <button onClick={() => deleteItem(item)} className="text-red-400">
-                <Trash2 size={14} />
-              </button>
+              <span className={`text-sm ${item._existing ? 'text-gray-500' : 'text-white'}`}>₦{item.total.toFixed(2)}</span>
+              {!item._existing && (
+                <button onClick={() => deleteItem(item)} className="text-red-400">
+                  <Trash2 size={14} />
+                </button>
+              )}
+              {item._existing && <div className="w-[14px]" />}
             </div>
           ))}
         </div>
