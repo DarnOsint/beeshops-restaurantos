@@ -135,14 +135,14 @@ export default function ApartmentDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      {/* Header */}
-      <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+      {/* Header — mobile only */}
+      <div className="lg:hidden bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
             <BedDouble size={16} className="text-black" />
           </div>
           <div>
-            <h1 className="text-white font-bold">Apartments</h1>
+            <h1 className="text-white font-bold text-sm">Apartments</h1>
             <p className="text-gray-500 text-xs">{profile?.full_name} · Apartment Manager</p>
           </div>
         </div>
@@ -155,25 +155,25 @@ export default function ApartmentDashboard() {
       </div>
 
       {/* KPI Strip */}
-      <div className="grid grid-cols-4 border-b border-gray-800">
+      <div className="grid grid-cols-2 md:grid-cols-4 border-b border-gray-800">
         {[
           { label: 'Available', value: available, color: 'text-green-400' },
           { label: 'Occupied', value: occupied, color: 'text-amber-400' },
           { label: 'Occupancy', value: `${occupancyRate}%`, color: 'text-blue-400' },
           { label: 'Month Revenue', value: fmt(monthRevenue), color: 'text-amber-400' },
         ].map(k => (
-          <div key={k.label} className="px-6 py-4 border-r border-gray-800 last:border-r-0">
-            <p className="text-gray-500 text-xs uppercase tracking-wide">{k.label}</p>
-            <p className={`text-xl font-bold mt-1 ${k.color}`}>{k.value}</p>
+          <div key={k.label} className="px-3 py-3 border-r border-b md:border-b-0 border-gray-800">
+            <p className="text-gray-500 text-xs truncate">{k.label}</p>
+            <p className={`text-sm md:text-xl font-bold mt-0.5 truncate ${k.color}`}>{k.value}</p>
           </div>
         ))}
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-800 px-6">
+      <div className="flex border-b border-gray-800 px-2 md:px-6 overflow-x-auto">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? 'border-amber-500 text-amber-400' : 'border-transparent text-gray-500 hover:text-white'}`}>
+            className={`flex items-center gap-1.5 px-3 py-3 text-xs md:text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${tab === t.id ? 'border-amber-500 text-amber-400' : 'border-transparent text-gray-500 hover:text-white'}`}>
             <t.icon size={14} /> {t.label}
             {t.id === 'roomservice' && pendingServiceOrders > 0 && (
               <span className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{pendingServiceOrders}</span>
@@ -235,10 +235,10 @@ export default function ApartmentDashboard() {
                 <h2 className="text-white font-semibold mb-3 flex items-center gap-2"><BedDouble size={16} className="text-amber-400" /> All Rooms ({rooms.length})</h2>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
                   {rooms.map(room => (
-                    <div key={room.id} className={`bg-gray-900 border rounded-2xl p-4 ${STATUS_COLORS[room.status] || 'border-gray-700'}`}>
+                    <div key={room.id} className={`bg-gray-900 border rounded-xl p-3 ${STATUS_COLORS[room.status] || 'border-gray-700'}`}>
                       <div className="flex justify-between items-start mb-2">
-                        <p className="text-white font-bold text-lg">#{room.room_number}</p>
-                        <span className={`text-xs px-2 py-0.5 rounded-full border capitalize ${STATUS_COLORS[room.status]}`}>{room.status}</span>
+                        <p className="text-white font-bold text-base">#{room.room_number}</p>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border capitalize truncate max-w-[72px] inline-block ${STATUS_COLORS[room.status]}`}>{room.status}</span>
                       </div>
                       <p className="text-gray-400 text-xs capitalize mb-1">{room.room_type}</p>
                       <p className="text-amber-400 text-xs font-medium mb-3">{fmt(room.rate_per_night)}/night</p>

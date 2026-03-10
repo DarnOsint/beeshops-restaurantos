@@ -264,8 +264,8 @@ export default function RoomManagement() {
                 { label: 'Revenue Active', value: `₦${(nightRevenue/1000).toFixed(0)}k`, color: 'text-purple-400' },
               ].map((s, i) => (
                 <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
-                  <p className="text-gray-500 text-xs">{s.label}</p>
-                  <p className={`font-bold text-xl ${s.color}`}>{s.value}</p>
+                  <p className="text-gray-500 text-[10px] truncate">{s.label}</p>
+                  <p className={`font-bold text-base md:text-xl ${s.color}`}>{s.value}</p>
                 </div>
               ))}
             </div>
@@ -278,10 +278,10 @@ export default function RoomManagement() {
                   placeholder="Search rooms..."
                   className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl pl-9 pr-4 py-2 focus:outline-none focus:border-amber-500 text-sm" />
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 {['all', ...ROOM_STATUSES].map(s => (
                   <button key={s} onClick={() => setFilterStatus(s)}
-                    className={`px-3 py-2 rounded-xl text-xs font-medium capitalize transition-colors ${filterStatus === s ? 'bg-amber-500 text-black' : 'bg-gray-900 border border-gray-800 text-gray-400 hover:text-white'}`}>
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-medium capitalize transition-colors ${filterStatus === s ? 'bg-amber-500 text-black' : 'bg-gray-900 border border-gray-800 text-gray-400 hover:text-white'}`}>
                     {s}
                   </button>
                 ))}
