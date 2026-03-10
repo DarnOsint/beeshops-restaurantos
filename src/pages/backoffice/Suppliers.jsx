@@ -160,11 +160,11 @@ export default function Suppliers({ onBack }) {
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       {/* Header */}
-      <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+      <div className="lg:hidden bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {onBack && <button onClick={onBack} className="text-gray-400 hover:text-white"><ArrowLeft size={20} /></button>}
           <div>
-            <h1 className="text-white font-bold text-lg">Supplier Management</h1>
+            <h1 className="text-white font-bold text-sm">Supplier Management</h1>
             <p className="text-gray-400 text-xs">Purchase orders & supplier records</p>
           </div>
         </div>
@@ -181,7 +181,7 @@ export default function Suppliers({ onBack }) {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-4 p-6">
+      <div className="grid grid-cols-3 gap-2 p-4">
         {[
           { label: 'Total Spend', value: '₦' + poTotal.toLocaleString(), color: 'text-white' },
           { label: 'Unpaid Orders', value: '₦' + poUnpaid.toLocaleString(), color: 'text-red-400' },
@@ -189,14 +189,14 @@ export default function Suppliers({ onBack }) {
         ].map(card => (
           <div key={card.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
             <p className="text-gray-400 text-xs mb-1">{card.label}</p>
-            <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
+            <p className={`text-lg md:text-2xl font-bold ${card.color}`}>{card.value}</p>
           </div>
         ))}
       </div>
 
       {/* Tabs */}
-      <div className="px-6">
-        <div className="flex bg-gray-900 rounded-xl p-1 gap-1 w-fit border border-gray-800">
+      <div className="px-4">
+        <div className="flex bg-gray-900 rounded-xl p-1 gap-1 w-full md:w-fit border border-gray-800">
           {['suppliers', 'orders'].map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize ${tab === t ? 'bg-amber-500 text-black' : 'text-gray-400 hover:text-white'}`}>
@@ -206,7 +206,7 @@ export default function Suppliers({ onBack }) {
         </div>
       </div>
 
-      <div className="p-6 space-y-3">
+      <div className="p-4 space-y-3">
         {/* SUPPLIERS TAB */}
         {tab === 'suppliers' && (
           suppliers.length === 0 ? (
