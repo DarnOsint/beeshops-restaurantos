@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import SyncIndicator from './SyncIndicator'
 import OfflineBanner from './OfflineBanner'
+import { supabase } from '../lib/supabase'
 import {
   LayoutDashboard, ShoppingBag, TrendingUp, Package,
   BedDouble, Settings, LogOut, Beer, Users, BookOpen,
@@ -36,22 +37,36 @@ const BARE_ROLES = ['kitchen', 'bar', 'griller', 'waitron']
 
 export default function AppShell({ children }) {
   const { profile, signOut } = useAuth()
+  const role = profile?.role || ''
   const navigate = useNavigate()
   const location = useLocation()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [tables, setTables] = useState([])
+
+  useEffect(() => {
+    if (!['owner', 'manager'].includes(role)) return
+    const fetchTables = async () => {
+      const { data } = await supabase.from('tables').select('id, name, status, category_id, table_categories(name)').order('name')
+      if (data) setTables(data)
+    }
+    fetchTables()
+    const channel = supabase.channel('shell-tables')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tables' }, fetchTables)
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [role])
 
   useEffect(() => { setDrawerOpen(false) }, [location.pathname])
 
   if (!profile) return <>{children}</>
 
-  const role = profile.role
   const navItems = NAV_ITEMS[role] || []
 
   if (BARE_ROLES.includes(role)) {
     return (
-      <div className="flex flex-col h-screen bg-gray-950 overflow-hidden">
+      <div className="flex flex-col min-h-screen bg-gray-950">
         <OfflineBanner />
-        <div className="flex-1 overflow-hidden">{children}</div>
+        <div className="flex-1">{children}</div>
       </div>
     )
   }
@@ -86,6 +101,46 @@ export default function AppShell({ children }) {
               )
             })}
           </nav>
+
+          {/* Table status widget — owner/manager only */}
+          {['owner', 'manager'].includes(role) && tables.length > 0 && (
+            <div className="px-3 py-3 border-b border-gray-800">
+              <p className="text-gray-500 text-xs font-medium uppercase tracking-wider px-1 mb-2">Tables</p>
+              {['Outdoor', 'Indoor', 'VIP Lounge', 'The Nook'].map(zone => {
+                const zoneTables = tables.filter(t => t.table_categories?.name === zone)
+                if (!zoneTables.length) return null
+                return (
+                  <div key={zone} className="mb-2">
+                    <p className="text-gray-600 text-[9px] uppercase tracking-wider px-0.5 mb-1">{zone}</p>
+                    <div className="flex flex-wrap gap-1">
+                      {zoneTables.map(t => (
+                        <div
+                          key={t.id}
+                          title={t.name + ' — ' + t.status}
+                          className={`w-5 h-5 rounded-sm flex items-center justify-center text-[9px] font-bold cursor-default
+                            ${t.status === 'occupied' ? 'bg-amber-500 text-black' :
+                              t.status === 'reserved' ? 'bg-red-500 text-white' :
+                              'bg-gray-700 text-gray-400'}`}
+                        >
+                          {t.name?.replace(/[^0-9]/g, '') || '·'}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+              <div className="flex items-center gap-3 mt-2 px-1">
+                <span className="flex items-center gap-1 text-[10px] text-gray-500">
+                  <span className="w-2 h-2 rounded-sm bg-amber-500 inline-block" />
+                  {tables.filter(t => t.status === 'occupied').length} occupied
+                </span>
+                <span className="flex items-center gap-1 text-[10px] text-gray-500">
+                  <span className="w-2 h-2 rounded-sm bg-gray-700 inline-block" />
+                  {tables.filter(t => t.status === 'available').length} free
+                </span>
+              </div>
+            </div>
+          )}
           <div className="px-3 py-3 border-t border-gray-800 space-y-2">
             <SyncIndicator />
             <div className="flex items-center gap-2 px-3 py-2">

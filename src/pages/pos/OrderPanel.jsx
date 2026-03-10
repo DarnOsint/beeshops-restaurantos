@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import VoidPinModal from '../../components/VoidPinModal'
 import { Plus, Minus, Trash2, Send, X, StickyNote } from 'lucide-react'
 
-export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose }) {
+export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, activeOrder }) {
   const [orderItems, setOrderItems] = useState([])
   const [activeCategory, setActiveCategory] = useState('All')
   const [notes, setNotes] = useState('')

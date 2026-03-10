@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { offlineInsert, offlineUpdate } from '../../lib/offlineWrite'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
 import { LogOut, Beer, RefreshCw, ShoppingBag, Phone } from 'lucide-react'
@@ -169,18 +170,17 @@ export default function POS() {
   }
 
   const handlePlaceOrder = async ({ table, items, notes, total }) => {
-    const { data: order, error: orderError } = await supabase
-      .from('orders')
-      .insert({
-        table_id: table.id,
-        staff_id: profile.id,
-        order_type: 'table',
-        status: 'open',
-        total_amount: total,
-        notes
-      })
-      .select()
-      .single()
+    const orderId = crypto.randomUUID()
+    const { data: order, error: orderError } = await offlineInsert('orders', {
+      id: orderId,
+      table_id: table.id,
+      staff_id: profile.id,
+      order_type: 'table',
+      status: 'open',
+      total_amount: total,
+      notes,
+      created_at: new Date().toISOString()
+    })
 
     if (orderError) {
       console.error('Order error:', orderError)
@@ -200,7 +200,12 @@ export default function POS() {
       extra_charge: item.extra_charge || 0
     }))
 
-    const { error: itemsError } = await supabase.from('order_items').insert(orderItems)
+    const itemsWithIds = orderItems.map(i => ({ ...i, id: crypto.randomUUID(), created_at: new Date().toISOString() }))
+    let itemsError = null
+    for (const item of itemsWithIds) {
+      const { error } = await offlineInsert('order_items', item)
+      if (error) { itemsError = error; break }
+    }
     if (itemsError) {
       console.error('Order items error:', itemsError)
       alert('Error adding items: ' + itemsError.message)
@@ -216,7 +221,7 @@ export default function POS() {
       newValue: { total, items: items.length, table: table.name },
       performer: profile
     })
-    await supabase.from('tables').update({ status: 'occupied' }).eq('id', table.id)
+    await offlineUpdate('tables', table.id, { status: 'occupied' })
     await fetchTables()
     setSelectedTable(null)
   }
@@ -315,6 +320,7 @@ export default function POS() {
               table={selectedTable}
               menuItems={getMenuItemsWithZonePrices(selectedTable)}
               onPlaceOrder={handlePlaceOrder}
+              activeOrder={activeOrder}
               onClose={() => {
                 setSelectedTable(null)
                 setActiveOrder(null)
