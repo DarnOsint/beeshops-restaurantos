@@ -138,14 +138,14 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, ac
   }
 
   const getSendLabel = () => {
-    if (!orderItems.length) return "Send Order"
+    if (!orderItems.length) return "Confirm Order"
     const destinations = [...new Set(orderItems.map(i => i.menu_categories?.destination || "kitchen"))]
     if (destinations.length === 1) {
-      if (destinations[0] === "bar") return "Send to Bar"
-      if (destinations[0] === "griller") return "Send to Griller"
-      return "Send to Kitchen"
+      if (destinations[0] === "bar") return "Confirm Order"
+      if (destinations[0] === "griller") return "Confirm Order"
+      return "Confirm Order"
     }
-    return "Send to Kitchen & Bar"
+    return "Confirm Order"
   }
 
   const total = orderItems.reduce((sum, item) => sum + (item.quantity * item.price) + (item.extra_charge || 0), 0)

@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { offlineUpdate, offlineInsert } from '../../lib/offlineWrite'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
-import { X, Banknote, CreditCard, Smartphone, CheckCircle, Clock, User, Phone, Users } from 'lucide-react'
+import { X, Banknote, CreditCard, Smartphone, CheckCircle, Clock, User, Phone, Users, Beer } from 'lucide-react'
 import ReceiptModal from './ReceiptModal'
 
 export default function PaymentModal({ order, table, onSuccess, onClose }) {
@@ -107,6 +107,11 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
   }
 
   const processPayment = async () => {
+    if (paymentMethod === 'run_tab') {
+      // Just close — order stays open, table stays occupied, no payment recorded
+      onClose()
+      return
+    }
     setProcessing(true)
     try {
       if (paymentMethod === 'credit') {
@@ -163,7 +168,8 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
     { id: 'cash', label: 'Cash', icon: Banknote, color: 'text-green-400' },
     { id: 'card', label: 'Bank POS', icon: CreditCard, color: 'text-blue-400' },
     { id: 'transfer', label: 'Bank Transfer', icon: Smartphone, color: 'text-amber-400' },
-    { id: 'credit', label: 'Pay Later', icon: Clock, color: 'text-red-400' },
+    { id: 'credit', label: 'Pay Later (Debt)', icon: Clock, color: 'text-red-400' },
+    { id: 'run_tab', label: 'Run Tab', icon: Beer, color: 'text-amber-400' },
   ]
 
   // Split Bill Mode
@@ -478,7 +484,7 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
             disabled={!canProcess()}
             className={`w-full ${paymentMethod === 'credit' ? 'bg-red-500 hover:bg-red-400' : 'bg-amber-500 hover:bg-amber-400'} disabled:bg-gray-800 disabled:text-gray-600 text-black font-bold rounded-xl py-4 text-lg transition-colors`}
           >
-            {processing ? 'Processing...' : paymentMethod === 'credit' ? `Record ₦${total.toLocaleString()} as Debt` : `Confirm ₦${total.toLocaleString()} Payment`}
+            {processing ? 'Processing...' : paymentMethod === 'run_tab' ? 'Run Tab — Continue Ordering' : paymentMethod === 'credit' ? `Record ₦${total.toLocaleString()} as Debt` : `Confirm ₦${total.toLocaleString()} Payment`}
           </button>
 
         </div>
