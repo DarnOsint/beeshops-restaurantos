@@ -34,7 +34,7 @@ export default function Reports() {
   const getDaysInMonth = (month, year) => new Date(year, month + 1, 0).getDate()
 
   const getDateBounds = () => {
-    if (reportType === 'daily') {
+    if (reportType === 'daily' || reportType === 'zreport') {
       const start = new Date(selectedYear, selectedMonth, selectedDay, 0, 0, 0, 0)
       const end = new Date(selectedYear, selectedMonth, selectedDay, 23, 59, 59, 999)
       return { start: start.toISOString(), end: end.toISOString() }
@@ -50,7 +50,7 @@ export default function Reports() {
   }
 
   const getPeriodLabel = () => {
-    if (reportType === 'daily') return `${selectedDay} ${MONTHS[selectedMonth]} ${selectedYear}`
+    if (reportType === 'daily' || reportType === 'zreport') return `${selectedDay} ${MONTHS[selectedMonth]} ${selectedYear}`
     if (reportType === 'month') return `${MONTHS[selectedMonth]} ${selectedYear}`
     return `Year ${selectedYear}`
   }
@@ -63,7 +63,7 @@ export default function Reports() {
       supabase.from('orders').select('*, profiles(full_name), tables(name, table_categories(name))').gte('created_at', start).lte('created_at', end),
       supabase.from('order_items').select('*, menu_items(name, price, menu_categories(name, destination)), orders(created_at, status)').gte('created_at', start).lte('created_at', end),
       supabase.from('payouts').select('*').gte('created_at', start).lte('created_at', end),
-      supabase.from('till_sessions').select('*, profiles(full_name)').gte('created_at', start).lte('created_at', end),
+      supabase.from('till_sessions').select('*, profiles(full_name)').gte('opened_at', start).lte('opened_at', end),
       supabase.from('debtors').select('*').gte('created_at', start).lte('created_at', end),
       supabase.from('room_stays').select('*').gte('created_at', start).lte('created_at', end),
       supabase.from('void_log').select('*').gte('created_at', start).lte('created_at', end),
@@ -156,7 +156,8 @@ export default function Reports() {
       generatedAt: new Date().toLocaleString('en-NG'),
       grossRevenue, netRevenue, totalExpenses, roomRevenue, totalRevenue,
       totalOrders: orders.length,
-      paidOrders: paidOrders.length,
+      paidOrders: paidOrders,
+      paidOrdersCount: paidOrders.length,
       cancelledOrders: cancelledOrders.length,
       avgOrderValue: paidOrders.length ? Math.round(grossRevenue / paidOrders.length) : 0,
       byPayment, byCategory, topItems, staffPerformance,
@@ -193,7 +194,7 @@ export default function Reports() {
       [],
       ['ORDERS'],
       ['Total Orders', report.totalOrders],
-      ['Paid Orders', report.paidOrders],
+      ['Paid Orders', report.paidOrdersCount],
       ['Cancelled Orders', report.cancelledOrders],
       ['Avg Order Value', 'NGN ' + report.avgOrderValue.toLocaleString()],
       [],
@@ -300,7 +301,7 @@ export default function Reports() {
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <h1 className="text-white font-bold text-2xl">
-                    {report.reportType === 'daily' ? 'Daily' : report.reportType === 'month' ? 'Monthly' : 'Annual'} Report
+                    {report.reportType === 'daily' ? 'Daily' : report.reportType === 'month' ? 'Monthly' : report.reportType === 'zreport' ? 'Z-Report (End of Day)' : 'Annual'} Report
                   </h1>
                   <p className="text-amber-400 text-lg font-semibold">{report.period}</p>
                   <p className="text-gray-500 text-xs mt-1">Generated: {report.generatedAt}</p>
@@ -308,6 +309,9 @@ export default function Reports() {
                 <div className="text-right">
                   <p className="text-white font-bold text-3xl">NGN {report.totalRevenue.toLocaleString()}</p>
                   <p className="text-gray-400 text-sm">Total Revenue</p>
+                  <button onClick={() => window.print()} className="mt-2 flex items-center gap-1.5 text-xs bg-amber-500 hover:bg-amber-400 text-black font-bold px-3 py-1.5 rounded-xl ml-auto">
+                    <Printer size={13} /> Export / Print
+                  </button>
                 </div>
               </div>
             </div>
@@ -320,7 +324,7 @@ export default function Reports() {
                 { label: 'Total Expenses', value: 'NGN ' + report.totalExpenses.toLocaleString(), color: 'text-red-400', icon: Banknote },
                 { label: 'Net Revenue', value: 'NGN ' + report.netRevenue.toLocaleString(), color: 'text-green-400', icon: TrendingUp },
                 { label: 'Total Orders', value: report.totalOrders, color: 'text-white', icon: ShoppingBag },
-                { label: 'Paid Orders', value: report.paidOrders, color: 'text-green-400', icon: ShoppingBag },
+                { label: 'Paid Orders', value: report.paidOrdersCount, color: 'text-green-400', icon: ShoppingBag },
                 { label: 'Cancelled Orders', value: report.cancelledOrders, color: 'text-red-400', icon: ShoppingBag },
                 { label: 'Avg Order Value', value: 'NGN ' + report.avgOrderValue.toLocaleString(), color: 'text-purple-400', icon: BarChart2 },
               ].map((m, i) => (
@@ -377,7 +381,7 @@ export default function Reports() {
                       </div>
                       <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                         <div className={'h-full ' + item.color + ' rounded-full'}
-                          style={{ width: (report.paidOrders ? item.value / report.paidOrders * 100 : 0) + '%' }} />
+                          style={{ width: (report.paidOrdersCount ? item.value / report.paidOrdersCount * 100 : 0) + '%' }} />
                       </div>
                     </div>
                   ))}
