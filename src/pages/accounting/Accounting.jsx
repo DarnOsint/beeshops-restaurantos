@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { HelpTooltip } from '../../components/HelpTooltip'
 import { createPDF, addTable, savePDF } from '../../lib/pdfExport'
 import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import Debtors from './Debtors'
 import {
-  Beer, LogOut, ArrowLeft, TrendingUp, ShoppingBag, AlertTriangle,
+  Beer, LogOut, ArrowLeft, TrendingUp, ShoppingBag, AlertTriangle, HelpCircle,
   Users, Banknote, CreditCard, Smartphone, Download,
   Plus, X, Save, Calendar, Filter, ChevronDown,
   DollarSign, Receipt, BarChart2, Clock, BookOpen, Shield

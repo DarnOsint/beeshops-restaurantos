@@ -11,6 +11,7 @@ import TableAssignment from './TableAssignment'
 import TillManagement from './TillManagement'
 import WaiterCalls from './WaiterCalls'
 import { useLateOrders } from '../../hooks/useLateOrders'
+import { HelpTooltip } from '../../components/HelpTooltip'
 
 export default function Management() {
   const { profile, signOut } = useAuth()
@@ -52,6 +53,17 @@ export default function Management() {
     setServiceLog(data || [])
     setServiceLogLoading(false)
   }
+
+  useEffect(() => {
+    if (activeTab !== 'service') return
+    fetchServiceLog()
+    const channel = supabase.channel('service-log-live')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'service_log' }, payload => {
+        setServiceLog(prev => [payload.new, ...prev])
+      })
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [activeTab])
 
   const saveThreshold = async () => {
     const val = parseInt(editThreshold)
@@ -135,7 +147,17 @@ export default function Management() {
 
 
 
-      <div className="flex border-b border-gray-800 bg-gray-900 px-4 overflow-x-auto">
+      <div className="flex border-b border-gray-800 bg-gray-900 px-4 overflow-x-auto items-center">
+        <div className="ml-auto pl-2 py-1 shrink-0">
+          <HelpTooltip tips={[
+            { id: 'mgmt-overview', title: 'Overview', description: 'Live KPIs — open orders, occupied tables, staff on shift, and today revenue. Updates in real time.' },
+            { id: 'mgmt-alerts', title: 'Late Order Alerts', description: 'Red banner appears when an order has been pending longer than the configured threshold. Tap Delivered to clear it.' },
+            { id: 'mgmt-shifts', title: 'Shifts', description: 'Clock staff in and out. Staff cannot access the POS unless they are clocked in.' },
+            { id: 'mgmt-tables', title: 'Tables', description: 'Assign waitrons to zones. A waitron can only serve tables in their assigned zones.' },
+            { id: 'mgmt-service', title: 'Service Log', description: 'Real-time log of every item marked as served by waitrons, including who served it and when.' },
+            { id: 'mgmt-settings', title: 'Settings', description: 'Set the order alert threshold — how many minutes before an open order triggers a late alert.' },
+          ]} />
+        </div>
         {tabs.map(tab => (
           <button
             key={tab.id}

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { HelpTooltip } from '../../components/HelpTooltip'
 import { offlineInsert, offlineUpdate } from '../../lib/offlineWrite'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
@@ -352,6 +353,14 @@ export default function POS() {
               <p className="text-white text-xs">{profile?.full_name}</p>
               <p className="text-amber-500 text-xs capitalize">{profile?.role}</p>
             </div>
+            <HelpTooltip tips={[
+              { id: 'pos-tables', title: 'Table Grid', description: 'Tap any table to open an order. Green = available, coloured = occupied. Tables outside your assigned zone are locked.' },
+              { id: 'pos-cashsale', title: 'Cash Sale', description: 'Use this for counter sales where the customer pays immediately without sitting at a table.' },
+              { id: 'pos-takeaway', title: 'Takeaway', description: 'For phone-in or walk-in orders to go. Enter the customer name and phone number.' },
+              { id: 'pos-order', title: 'Placing an Order', description: 'Select a table, pick items from the menu, then tap Confirm Order to send to Kitchen/Bar/Griller.' },
+              { id: 'pos-payment', title: 'Payment', description: 'Once items are ready, open the table and tap Pay. Choose Cash, Bank POS, or Transfer. Run Tab keeps the order open.' },
+              { id: 'pos-served', title: 'Mark as Served', description: 'After delivering items to the table, tap the circle icon next to each item to mark it as served. Management can see this in real time.' },
+            ]} />
             <button onClick={signOut} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white">
               <LogOut size={16} />
             </button>
