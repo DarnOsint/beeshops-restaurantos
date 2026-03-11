@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { 
   Beer, LogOut, Users, LayoutDashboard, 
-  ShoppingBag, TrendingUp, Clock, ChevronRight, DollarSign, Settings, BookOpen, BedDouble, AlertTriangle, Save
+  ShoppingBag, TrendingUp, Clock, ChevronRight, DollarSign, Settings, BookOpen, BedDouble, AlertTriangle, Save, ClipboardCheck
 } from 'lucide-react'
 import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
@@ -19,6 +19,8 @@ export default function Management() {
   const { lateOrders, threshold, setThreshold, markDelivered } = useLateOrders()
   const [editThreshold, setEditThreshold] = useState('')
   const [savingThreshold, setSavingThreshold] = useState(false)
+  const [serviceLog, setServiceLog] = useState([])
+  const [serviceLogLoading, setServiceLogLoading] = useState(false)
   const [stats, setStats] = useState({
     openOrders: 0,
     occupiedTables: 0,
@@ -37,6 +39,19 @@ export default function Management() {
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [])
+
+  const fetchServiceLog = async () => {
+    setServiceLogLoading(true)
+    const today = new Date(); today.setHours(0,0,0,0)
+    const { data } = await supabase
+      .from('service_log')
+      .select('*')
+      .gte('served_at', today.toISOString())
+      .order('served_at', { ascending: false })
+      .limit(100)
+    setServiceLog(data || [])
+    setServiceLogLoading(false)
+  }
 
   const saveThreshold = async () => {
     const val = parseInt(editThreshold)

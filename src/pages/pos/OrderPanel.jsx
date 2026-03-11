@@ -1,9 +1,26 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import VoidPinModal from '../../components/VoidPinModal'
-import { Plus, Minus, Trash2, Send, X, StickyNote } from 'lucide-react'
+import { Plus, Minus, Trash2, Send, X, StickyNote, CheckCircle2, Circle } from 'lucide-react'
 
-export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, activeOrder }) {
+export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, activeOrder, profile }) {
+  const [servedItems, setServedItems] = useState({}) // { itemId: true }
+
+  const markServed = async (item) => {
+    if (!activeOrder) return
+    setServedItems(prev => ({ ...prev, [item.id]: true }))
+    await supabase.from('service_log').insert({
+      order_id: activeOrder.id,
+      order_item_id: item.id,
+      table_id: activeOrder.table_id,
+      item_name: item.name,
+      table_name: table?.name || null,
+      served_by: profile?.id || null,
+      served_by_name: profile?.full_name || null,
+      served_at: new Date().toISOString()
+    })
+  }
+
   const [orderItems, setOrderItems] = useState(() => {
     if (!activeOrder?.order_items) return []
     return activeOrder.order_items.map(i => ({
@@ -259,6 +276,13 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, ac
                 </button>
               </div>
               <span className={`text-sm ${item._existing ? 'text-gray-500' : 'text-white'}`}>₦{item.total.toFixed(2)}</span>
+              {item._existing && (
+                <button onClick={() => !servedItems[item.id] && markServed(item)}
+                  className={`transition-colors ${servedItems[item.id] ? 'text-green-400' : 'text-gray-600 hover:text-green-400'}`}
+                  title={servedItems[item.id] ? 'Served' : 'Mark as served'}>
+                  {servedItems[item.id] ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                </button>
+              )}
               {!item._existing && (
                 <button onClick={() => deleteItem(item)} className="text-red-400">
                   <Trash2 size={14} />

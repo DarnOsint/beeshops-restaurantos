@@ -374,6 +374,7 @@ export default function POS() {
             <OrderPanel
               table={selectedTable}
               menuItems={getMenuItemsWithZonePrices(selectedTable)}
+                profile={profile}
               onPlaceOrder={handlePlaceOrder}
               activeOrder={activeOrder}
               onClose={() => {
