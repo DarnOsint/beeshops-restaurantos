@@ -102,6 +102,8 @@ export default function Management() {
     { id: 'tables', label: 'Tables', icon: Users },
     { id: 'orders', label: 'Orders', icon: ShoppingBag },
     { id: 'till', label: 'Till', icon: DollarSign },
+    { id: 'service', label: 'Service', icon: ClipboardCheck },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ]
 
   return (
