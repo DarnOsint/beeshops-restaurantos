@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { createPDF, addTable, savePDF } from '../../lib/pdfExport'
 import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import Debtors from './Debtors'
@@ -704,13 +705,21 @@ export default function Accounting() {
                   e.ref, e.description, e.staff || '', e.method || '',
                   e.credit || 0, e.debit || 0, e.balance
                 ]))
-                const csv = rows.map(r => r.join(',')).join('\n')
-                const a = document.createElement('a')
-                a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv)
-                a.download = 'ledger-' + dateRange + '-' + new Date().toISOString().split('T')[0] + '.csv'
-                a.click()
-              }} className="flex items-center gap-1.5 text-xs bg-gray-800 border border-gray-700 text-gray-300 hover:text-white px-3 py-2 rounded-xl transition-colors">
-                Export CSV
+                const doc = createPDF('General Ledger', dateRange)
+                const body = ledgerEntries.map(e => [
+                  new Date(e.date).toLocaleDateString('en-NG'),
+                  e.ref || '',
+                  e.description || '',
+                  e.staff || '',
+                  e.method || '',
+                  e.credit ? '₦' + Number(e.credit).toLocaleString() : '',
+                  e.debit ? '₦' + Number(e.debit).toLocaleString() : '',
+                  '₦' + Number(e.balance).toLocaleString()
+                ])
+                addTable(doc, ['Date','Ref','Description','Staff','Method','Credit','Debit','Balance'], body)
+                savePDF(doc, 'ledger-' + dateRange + '-' + new Date().toISOString().split('T')[0] + '.pdf')
+              }} className="flex items-center gap-1.5 text-xs bg-amber-500 hover:bg-amber-400 text-black font-bold px-3 py-2 rounded-xl transition-colors">
+                <Download size={12} /> Export PDF
               </button>
             </div>
           </div>
@@ -823,13 +832,19 @@ export default function Accounting() {
               e.performed_by_name || 'System', e.performed_by_role || '',
               JSON.stringify(e.new_value || {}).replace(/,/g, ';')
             ]))
-            const csv = rows.map(r => r.join(',')).join('\n')
-            const a = document.createElement('a')
-            a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv)
-            a.download = 'audit-log-' + dateRange + '-' + new Date().toISOString().split('T')[0] + '.csv'
-            a.click()
-          }} className="w-full flex items-center justify-center gap-2 text-xs bg-gray-800 border border-gray-700 text-gray-300 hover:text-white px-3 py-2.5 rounded-xl transition-colors">
-            Export Audit Log as CSV
+            const doc = createPDF('Audit Log', dateRange)
+            const body = auditLog.map(e => [
+              new Date(e.created_at).toLocaleDateString('en-NG'),
+              new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              (e.action || '').replace(/_/g, ' '),
+              e.entity_name || e.entity || '',
+              e.performed_by_name || 'System',
+              e.performed_by_role || ''
+            ])
+            addTable(doc, ['Date','Time','Action','Entity','Performed By','Role'], body)
+            savePDF(doc, 'audit-log-' + dateRange + '-' + new Date().toISOString().split('T')[0] + '.pdf')
+          }} className="w-full flex items-center justify-center gap-2 text-xs bg-amber-500 hover:bg-amber-400 text-black font-bold px-3 py-2.5 rounded-xl transition-colors">
+            <Download size={12} /> Export Audit PDF
           </button>
 
           {selectedAudit && (
