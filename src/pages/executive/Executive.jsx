@@ -2,6 +2,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { HelpTooltip } from '../../components/HelpTooltip'
 import { 
   LayoutDashboard, ShoppingBag, Users, BedDouble,
   TrendingUp, Package, LogOut, Beer, RefreshCw, Settings,
@@ -146,9 +147,18 @@ export default function Executive() {
           <h1 className="text-white font-bold text-sm md:text-base">Executive Dashboard</h1>
           <p className="text-gray-400 text-xs">Good {getGreeting()}, {profile?.full_name}</p>
         </div>
-        <button onClick={fetchStats} className="text-gray-400 hover:text-white">
-          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-        </button>
+        <div className="flex items-center gap-2">
+          <HelpTooltip tips={[
+            { id: 'exec-kpis', title: 'Live KPIs', description: 'Real-time revenue, open orders, occupied tables, rooms, staff on duty, and low stock alerts. Updates every 30 seconds.' },
+            { id: 'exec-geofence', title: 'Geofence', description: 'Toggle location restrictions. When ON, waitrons and floor staff can only access the app within the restaurant premises.' },
+            { id: 'exec-nav', title: 'Quick Navigation', description: 'Jump directly to BackOffice, Analytics, Reports, Management, Accounting, and Rooms from the action buttons below.' },
+            { id: 'exec-orders', title: 'Recent Orders', description: 'Live feed of the most recent orders across all tables and rooms.' },
+            { id: 'exec-trend', title: 'Revenue Trend', description: '7-day revenue chart showing daily performance at a glance.' },
+          ]} />
+          <button onClick={fetchStats} className="text-gray-400 hover:text-white">
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          </button>
+        </div>
       </div>
 
       <div className="p-4 md:p-6">
