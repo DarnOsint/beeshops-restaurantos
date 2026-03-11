@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { createPDF, addTable, addSummaryRow, savePDF } from '../../lib/pdfExport'
 import { supabase } from '../../lib/supabase'
+import { HelpTooltip } from '../../components/HelpTooltip'
 import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import {

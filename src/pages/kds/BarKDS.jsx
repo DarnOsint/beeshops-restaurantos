@@ -4,6 +4,7 @@ import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
 import { useAuth } from '../../context/AuthContext'
 import { Beer, Clock, LogOut, RefreshCw, CheckCircle } from 'lucide-react'
+import { HelpTooltip } from '../../components/HelpTooltip'
 
 export default function BarKDS() {
   const { profile, signOut } = useAuth()
@@ -121,6 +122,11 @@ export default function BarKDS() {
             <RefreshCw size={16} />
           </button>
           <p className="text-gray-400 text-sm">{profile?.full_name}</p>
+          <HelpTooltip tips={[
+            { id: 'bar-orders', title: 'Bar Orders', description: 'Drink orders from all tables appear here automatically. Prepare them in order of arrival.' },
+            { id: 'bar-ready', title: 'Mark Ready', description: 'Tap Mark Ready when drinks are prepared. The waitron will be notified to collect.' },
+            { id: 'bar-timer', title: 'Order Timer', description: 'Shows how long each order has been waiting. Act quickly on orders turning amber or red.' },
+          ]} />
           <button onClick={signOut} className="text-gray-400 hover:text-white">
             <LogOut size={16} />
           </button>

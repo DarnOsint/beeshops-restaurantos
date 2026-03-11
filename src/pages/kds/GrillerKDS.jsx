@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { HelpTooltip } from '../../components/HelpTooltip'
 import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
 import { useAuth } from '../../context/AuthContext'
@@ -167,6 +168,11 @@ export default function GrillerKDS() {
             <button onClick={signOut} className="text-gray-400 hover:text-white">
               <LogOut size={18} />
             </button>
+            <HelpTooltip tips={[
+              { id: 'grill-orders', title: 'Grill Orders', description: 'Orders routed to the griller appear here. These are items that require grilling.' },
+              { id: 'grill-ready', title: 'Mark Ready', description: 'Tap Mark Ready when the grilled item is done. The waitron will collect and serve it.' },
+              { id: 'grill-timer', title: 'Urgency Colours', description: 'Cards turn amber when waiting too long and red when critically overdue. Prioritise red orders.' },
+            ]} />
           </div>
         </div>
       </nav>

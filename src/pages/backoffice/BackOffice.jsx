@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { Users, UtensilsCrossed, MapPin, LayoutGrid, LogOut, Beer, ArrowLeft, Package, Truck } from 'lucide-react'
+import { HelpTooltip } from '../../components/HelpTooltip'
 import StaffManagement from './StaffManagement'
 import MenuManagement from './MenuManagement'
 import ZonePricing from './ZonePricing'
