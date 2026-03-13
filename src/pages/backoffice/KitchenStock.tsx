@@ -15,24 +15,89 @@ import {
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 
-const today = () => new Date().toISOString().slice(0, 10)
-const UNITS = ['portion', 'kg', 'g', 'litre', 'ml', 'piece', 'pack', 'tray', 'bowl', 'cup']
-const isManager = (role) => ['owner', 'manager'].includes(role)
+const todayStr = () => new Date().toISOString().slice(0, 10)
+const UNITS = ['portion', 'kg', 'g', 'litre', 'ml', 'piece', 'pack', 'tray', 'bowl', 'cup'] as const
+const isManager = (role?: string) => ['owner', 'manager'].includes(role || '')
 
-// ── Status engine ─────────────────────────────────────────────────────────────
-// variance = opening + received − sold − void − closing
-// yieldPct  = actual_sold / expected_sold × 100  (when benchmark set)
-function getStatus(entry, benchmark) {
+interface Benchmark {
+  item_name: string
+  expected_yield: number
+  tolerance_pct: number
+  raw_unit: string
+  cooked_unit: string
+  note?: string
+  set_by?: string
+  updated_at?: string
+  item_name_bm?: string
+}
+interface StockEntry {
+  id: string
+  date: string
+  item_name: string
+  unit: string
+  opening_qty: number
+  received_qty: number
+  sold_qty: number
+  void_qty: number
+  closing_qty: number
+  note?: string
+  recorded_by?: string
+  updated_at?: string
+}
+interface EnrichedEntry extends StockEntry {
+  effective_sold: number
+  auto_sold: number
+  computed_variance: number
+  status: StatusResult
+  benchmark: Benchmark | null
+}
+interface StatusResult {
+  key: 'ok' | 'commend' | 'warn' | 'alarm'
+  label: string
+  icon: string
+  color: string
+  bg: string
+  border: string
+  remark: string
+}
+interface EntryForm {
+  item_name: string
+  unit: string
+  opening_qty: string
+  received_qty: string
+  void_qty: string
+  closing_qty: string
+  note: string
+}
+interface BmForm {
+  expected_yield: string
+  tolerance_pct: string
+  raw_unit: string
+  cooked_unit: string
+  note: string
+  item_name?: string
+}
+interface EditVals {
+  opening_qty: number | string
+  received_qty: number | string
+  void_qty: number | string
+  closing_qty: number | string
+  note: string
+}
+interface Props {
+  onBack: () => void
+}
+
+function getStatus(
+  entry: { computed_variance: number; received_qty: number; effective_sold: number; unit: string },
+  benchmark: Benchmark | null
+): StatusResult {
   const v = entry.computed_variance
-
-  // If benchmark is set, use yield-based scoring
   if (benchmark && benchmark.expected_yield > 0 && entry.received_qty > 0) {
     const expectedSold = entry.received_qty * benchmark.expected_yield
-    const actualSold = entry.effective_sold
-    const yieldPct = expectedSold > 0 ? (actualSold / expectedSold) * 100 : 100
-    const tolerance = benchmark.tolerance_pct ?? 5
-
-    if (yieldPct >= 100 - tolerance && yieldPct <= 100 + tolerance) {
+    const yieldPct = expectedSold > 0 ? (entry.effective_sold / expectedSold) * 100 : 100
+    const tol = benchmark.tolerance_pct ?? 5
+    if (yieldPct >= 100 - tol && yieldPct <= 100 + tol)
       return {
         key: 'ok',
         label: 'On Target',
@@ -42,8 +107,7 @@ function getStatus(entry, benchmark) {
         border: 'border-green-500/30',
         remark: `Yield is ${yieldPct.toFixed(0)}% — right on target. Well done.`,
       }
-    }
-    if (yieldPct > 100 + tolerance) {
+    if (yieldPct > 100 + tol)
       return {
         key: 'commend',
         label: 'Commended',
@@ -53,8 +117,7 @@ function getStatus(entry, benchmark) {
         border: 'border-amber-400/30',
         remark: `Yield is ${yieldPct.toFixed(0)}% — above benchmark. Excellent kitchen efficiency!`,
       }
-    }
-    if (yieldPct >= 100 - tolerance * 3) {
+    if (yieldPct >= 100 - tol * 3)
       return {
         key: 'warn',
         label: 'Investigate',
@@ -64,7 +127,6 @@ function getStatus(entry, benchmark) {
         border: 'border-amber-500/40',
         remark: `Yield is ${yieldPct.toFixed(0)}% — below benchmark by ${(100 - yieldPct).toFixed(0)}%. Please investigate waste or portioning.`,
       }
-    }
     return {
       key: 'alarm',
       label: 'Alarm',
@@ -75,8 +137,6 @@ function getStatus(entry, benchmark) {
       remark: `Yield is only ${yieldPct.toFixed(0)}% — well below benchmark. Urgent investigation required.`,
     }
   }
-
-  // Fallback: variance-based scoring
   if (Math.abs(v) < 0.01)
     return {
       key: 'ok',
@@ -118,62 +178,70 @@ function getStatus(entry, benchmark) {
   }
 }
 
-export default function KitchenStock({ onBack }) {
+const blankForm: EntryForm = {
+  item_name: '',
+  unit: 'portion',
+  opening_qty: '',
+  received_qty: '',
+  void_qty: '',
+  closing_qty: '',
+  note: '',
+}
+const blankBm: BmForm = {
+  expected_yield: '',
+  tolerance_pct: '5',
+  raw_unit: 'kg',
+  cooked_unit: 'portion',
+  note: '',
+}
+
+export default function KitchenStock({ onBack }: Props) {
   const { profile } = useAuth()
   const canManage = isManager(profile?.role)
 
-  const [date, setDate] = useState(today())
-  const [entries, setEntries] = useState([])
-  const [benchmarks, setBenchmarks] = useState({}) // item_name → benchmark row
+  const [date, setDate] = useState(todayStr())
+  const [entries, setEntries] = useState<StockEntry[]>([])
+  const [benchmarks, setBenchmarks] = useState<Record<string, Benchmark>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
-  const [menuItems, setMenuItems] = useState([])
-  const [soldMap, setSoldMap] = useState({})
-  const [expandedId, setExpandedId] = useState(null)
-  const [editingId, setEditingId] = useState(null) // inline full-edit mode
-  const [editVals, setEditVals] = useState({})
-  const [showBenchmarkFor, setShowBenchmarkFor] = useState(null) // item_name
-  const [bmForm, setBmForm] = useState({
-    expected_yield: '',
-    tolerance_pct: '5',
-    raw_unit: 'kg',
-    cooked_unit: 'portion',
+  const [menuItems, setMenuItems] = useState<string[]>([])
+  const [soldMap, setSoldMap] = useState<Record<string, number>>({})
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editVals, setEditVals] = useState<EditVals>({
+    opening_qty: 0,
+    received_qty: 0,
+    void_qty: 0,
+    closing_qty: 0,
     note: '',
   })
-  const [tab, setTab] = useState('register') // 'register' | 'benchmarks'
-
-  const [form, setForm] = useState({
-    item_name: '',
-    unit: 'portion',
-    opening_qty: '',
-    received_qty: '',
-    void_qty: '',
-    closing_qty: '',
-    note: '',
-  })
-  const [formError, setFormError] = useState(null)
-
-  // ── Data loading ────────────────────────────────────────────────────────────
+  const [showBenchmarkFor, setShowBenchmarkFor] = useState<string | null>(null)
+  const [bmForm, setBmForm] = useState<BmForm>(blankBm)
+  const [tab, setTab] = useState<'register' | 'benchmarks'>('register')
+  const [form, setForm] = useState<EntryForm>(blankForm)
+  const [formError, setFormError] = useState<string | null>(null)
+  const ff = (v: Partial<EntryForm>) => setForm((p) => ({ ...p, ...v }))
+  const bf = (v: Partial<BmForm>) => setBmForm((p) => ({ ...p, ...v }))
 
   useEffect(() => {
     supabase
       .from('menu_items')
       .select('name')
       .eq('is_available', true)
-      .then(({ data }) => setMenuItems((data || []).map((i) => i.name)))
+      .then(({ data }) => setMenuItems((data || []).map((i: { name: string }) => i.name)))
   }, [])
 
   const loadBenchmarks = useCallback(async () => {
     const { data } = await supabase.from('kitchen_stock_benchmarks').select('*')
-    const map = {}
-    ;(data || []).forEach((b) => {
+    const map: Record<string, Benchmark> = {}
+    ;(data || []).forEach((b: Benchmark) => {
       map[b.item_name] = b
     })
     setBenchmarks(map)
   }, [])
 
-  const loadSoldQty = useCallback(async (d) => {
+  const loadSoldQty = useCallback(async (d: string) => {
     const { data: orders } = await supabase
       .from('orders')
       .select('id')
@@ -189,19 +257,19 @@ export default function KitchenStock({ onBack }) {
       .select('quantity, menu_items(name)')
       .in(
         'order_id',
-        orders.map((o) => o.id)
+        orders.map((o: { id: string }) => o.id)
       )
       .eq('destination', 'kitchen')
-    const map = {}
-    ;(items || []).forEach((i) => {
-      const name = i.menu_items?.name
-      if (name) map[name] = (map[name] || 0) + i.quantity
+    const map: Record<string, number> = {}
+    ;(items || []).forEach((i: { quantity: number; menu_items?: { name?: string } | null }) => {
+      const n = i.menu_items?.name
+      if (n) map[n] = (map[n] || 0) + i.quantity
     })
     setSoldMap(map)
   }, [])
 
   const loadEntries = useCallback(
-    async (d) => {
+    async (d: string) => {
       setLoading(true)
       await Promise.all([loadSoldQty(d), loadBenchmarks()])
       const { data } = await supabase
@@ -209,35 +277,31 @@ export default function KitchenStock({ onBack }) {
         .select('*')
         .eq('date', d)
         .order('item_name')
-      setEntries(data || [])
+      setEntries((data || []) as StockEntry[])
       setLoading(false)
     },
     [loadSoldQty, loadBenchmarks]
   )
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadEntries(date)
   }, [date, loadEntries])
 
-  // ── Enriched entries with status ────────────────────────────────────────────
-
-  const enriched = entries.map((e) => {
+  const enriched: EnrichedEntry[] = entries.map((e) => {
     const effective_sold = e.sold_qty > 0 ? e.sold_qty : soldMap[e.item_name] || 0
     const auto_sold = soldMap[e.item_name] || 0
     const computed_variance =
       e.opening_qty + e.received_qty - (effective_sold + e.void_qty + e.closing_qty)
     const bm = benchmarks[e.item_name] || null
-    const enriched = { ...e, effective_sold, auto_sold, computed_variance }
-    return { ...enriched, status: getStatus(enriched, bm), benchmark: bm }
+    const base = { ...e, effective_sold, auto_sold, computed_variance }
+    return { ...base, status: getStatus(base, bm), benchmark: bm }
   })
 
   const alarmCount = enriched.filter((e) => e.status.key === 'alarm').length
   const warnCount = enriched.filter((e) => e.status.key === 'warn').length
   const commendCount = enriched.filter((e) => e.status.key === 'commend').length
   const okCount = enriched.filter((e) => e.status.key === 'ok').length
-
-  // ── CRUD ────────────────────────────────────────────────────────────────────
 
   const handleAdd = async () => {
     setFormError(null)
@@ -246,37 +310,31 @@ export default function KitchenStock({ onBack }) {
       return
     }
     setSaving(true)
-    const { error } = await supabase.from('kitchen_stock').insert({
-      date,
-      item_name: form.item_name.trim(),
-      unit: form.unit,
-      opening_qty: parseFloat(form.opening_qty) || 0,
-      received_qty: parseFloat(form.received_qty) || 0,
-      sold_qty: soldMap[form.item_name] || 0,
-      void_qty: parseFloat(form.void_qty) || 0,
-      closing_qty: parseFloat(form.closing_qty) || 0,
-      note: form.note.trim() || null,
-      recorded_by: profile?.id,
-    })
+    const { error } = await supabase
+      .from('kitchen_stock')
+      .insert({
+        date,
+        item_name: form.item_name.trim(),
+        unit: form.unit,
+        opening_qty: parseFloat(form.opening_qty) || 0,
+        received_qty: parseFloat(form.received_qty) || 0,
+        sold_qty: soldMap[form.item_name] || 0,
+        void_qty: parseFloat(form.void_qty) || 0,
+        closing_qty: parseFloat(form.closing_qty) || 0,
+        note: form.note.trim() || null,
+        recorded_by: profile?.id,
+      })
     setSaving(false)
     if (error) {
       setFormError(error.message)
       return
     }
-    setForm({
-      item_name: '',
-      unit: 'portion',
-      opening_qty: '',
-      received_qty: '',
-      void_qty: '',
-      closing_qty: '',
-      note: '',
-    })
+    setForm(blankForm)
     setShowAdd(false)
     loadEntries(date)
   }
 
-  const startEdit = (entry) => {
+  const startEdit = (entry: StockEntry) => {
     setEditingId(entry.id)
     setEditVals({
       opening_qty: entry.opening_qty,
@@ -287,14 +345,14 @@ export default function KitchenStock({ onBack }) {
     })
   }
 
-  const saveEdit = async (id) => {
+  const saveEdit = async (id: string) => {
     await supabase
       .from('kitchen_stock')
       .update({
-        opening_qty: parseFloat(editVals.opening_qty) || 0,
-        received_qty: parseFloat(editVals.received_qty) || 0,
-        void_qty: parseFloat(editVals.void_qty) || 0,
-        closing_qty: parseFloat(editVals.closing_qty) || 0,
+        opening_qty: parseFloat(String(editVals.opening_qty)) || 0,
+        received_qty: parseFloat(String(editVals.received_qty)) || 0,
+        void_qty: parseFloat(String(editVals.void_qty)) || 0,
+        closing_qty: parseFloat(String(editVals.closing_qty)) || 0,
         note: editVals.note || null,
         updated_at: new Date().toISOString(),
       })
@@ -303,7 +361,7 @@ export default function KitchenStock({ onBack }) {
     loadEntries(date)
   }
 
-  const syncSold = async (entry) => {
+  const syncSold = async (entry: StockEntry) => {
     await supabase
       .from('kitchen_stock')
       .update({ sold_qty: soldMap[entry.item_name] || 0, updated_at: new Date().toISOString() })
@@ -311,22 +369,20 @@ export default function KitchenStock({ onBack }) {
     loadEntries(date)
   }
 
-  const deleteEntry = async (id) => {
+  const deleteEntry = async (id: string) => {
     if (!confirm('Delete this stock entry?')) return
     await supabase.from('kitchen_stock').delete().eq('id', id)
     loadEntries(date)
   }
 
-  // ── Benchmarks ──────────────────────────────────────────────────────────────
-
-  const openBenchmark = (itemName) => {
-    const existing = benchmarks[itemName]
+  const openBenchmark = (itemName: string) => {
+    const ex = benchmarks[itemName]
     setBmForm({
-      expected_yield: existing?.expected_yield ?? '',
-      tolerance_pct: existing?.tolerance_pct ?? '5',
-      raw_unit: existing?.raw_unit ?? 'kg',
-      cooked_unit: existing?.cooked_unit ?? 'portion',
-      note: existing?.note ?? '',
+      expected_yield: String(ex?.expected_yield ?? ''),
+      tolerance_pct: String(ex?.tolerance_pct ?? '5'),
+      raw_unit: ex?.raw_unit ?? 'kg',
+      cooked_unit: ex?.cooked_unit ?? 'portion',
+      note: ex?.note ?? '',
     })
     setShowBenchmarkFor(itemName)
   }
@@ -335,36 +391,35 @@ export default function KitchenStock({ onBack }) {
     if (!bmForm.expected_yield) return
     const itemName = showBenchmarkFor === '__new__' ? bmForm.item_name : showBenchmarkFor
     if (!itemName) return
-    await supabase.from('kitchen_stock_benchmarks').upsert(
-      {
-        item_name: itemName,
-        expected_yield: parseFloat(bmForm.expected_yield),
-        tolerance_pct: parseFloat(bmForm.tolerance_pct) || 5,
-        raw_unit: bmForm.raw_unit,
-        cooked_unit: bmForm.cooked_unit,
-        note: bmForm.note || null,
-        set_by: profile?.id,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'item_name' }
-    )
+    await supabase
+      .from('kitchen_stock_benchmarks')
+      .upsert(
+        {
+          item_name: itemName,
+          expected_yield: parseFloat(bmForm.expected_yield),
+          tolerance_pct: parseFloat(bmForm.tolerance_pct) || 5,
+          raw_unit: bmForm.raw_unit,
+          cooked_unit: bmForm.cooked_unit,
+          note: bmForm.note || null,
+          set_by: profile?.id,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'item_name' }
+      )
     setShowBenchmarkFor(null)
     loadBenchmarks()
     loadEntries(date)
   }
 
-  const deleteBenchmark = async (itemName) => {
+  const deleteBenchmark = async (itemName: string) => {
     if (!confirm(`Remove benchmark for ${itemName}?`)) return
     await supabase.from('kitchen_stock_benchmarks').delete().eq('item_name', itemName)
     loadBenchmarks()
     loadEntries(date)
   }
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-
   return (
     <div className="min-h-screen bg-gray-950 pb-24">
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-gray-900 border-b border-gray-800 px-4 py-3">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="p-2 rounded-xl hover:bg-gray-800">
@@ -378,13 +433,13 @@ export default function KitchenStock({ onBack }) {
             <RefreshCw size={16} className="text-gray-400" />
           </button>
         </div>
-
-        {/* Tabs */}
         <div className="flex gap-1 mt-3">
-          {[
-            ['register', 'Daily Register'],
-            ['benchmarks', 'Benchmarks'],
-          ].map(([id, label]) => (
+          {(
+            [
+              ['register', 'Daily Register'],
+              ['benchmarks', 'Benchmarks'],
+            ] as const
+          ).map(([id, label]) => (
             <button
               key={id}
               onClick={() => setTab(id)}
@@ -396,15 +451,13 @@ export default function KitchenStock({ onBack }) {
         </div>
       </div>
 
-      {/* ── REGISTER TAB ── */}
       {tab === 'register' && (
         <div className="px-4 pt-4 space-y-3">
-          {/* Date + status pills */}
           <div className="flex items-center gap-2 flex-wrap">
             <input
               type="date"
               value={date}
-              max={today()}
+              max={todayStr()}
               onChange={(e) => setDate(e.target.value)}
               className="bg-gray-900 border border-gray-800 text-white text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500 flex-1 min-w-[140px]"
             />
@@ -446,7 +499,6 @@ export default function KitchenStock({ onBack }) {
               ))}
           </div>
 
-          {/* Summary row */}
           {enriched.length > 0 && (
             <div className="grid grid-cols-4 gap-2">
               {[
@@ -481,7 +533,6 @@ export default function KitchenStock({ onBack }) {
             </div>
           )}
 
-          {/* Entries */}
           {loading ? (
             <div className="text-center py-12 text-gray-500 text-sm">Loading…</div>
           ) : enriched.length === 0 ? (
@@ -496,13 +547,11 @@ export default function KitchenStock({ onBack }) {
                 const st = entry.status
                 const expanded = expandedId === entry.id
                 const editing = editingId === entry.id
-
                 return (
                   <div
                     key={entry.id}
                     className={`bg-gray-900 border rounded-2xl overflow-hidden ${st.border}`}
                   >
-                    {/* Status banner */}
                     <div className={`px-4 py-1.5 flex items-center justify-between ${st.bg}`}>
                       <div className="flex items-center gap-2">
                         <span className="text-sm">{st.icon}</span>
@@ -515,8 +564,6 @@ export default function KitchenStock({ onBack }) {
                         </span>
                       )}
                     </div>
-
-                    {/* Row header */}
                     <button
                       className="w-full px-4 py-3 flex items-center gap-3 text-left"
                       onClick={() => setExpandedId(expanded ? null : entry.id)}
@@ -527,8 +574,8 @@ export default function KitchenStock({ onBack }) {
                         </p>
                         <p className="text-gray-500 text-xs mt-0.5">
                           In: {(entry.opening_qty + entry.received_qty).toFixed(1)} {entry.unit}
-                          &nbsp;·&nbsp;Sold: {entry.effective_sold.toFixed(1)}
-                          &nbsp;·&nbsp;Left: {entry.closing_qty.toFixed(1)}
+                          &nbsp;·&nbsp;Sold: {entry.effective_sold.toFixed(1)}&nbsp;·&nbsp;Left:{' '}
+                          {entry.closing_qty.toFixed(1)}
                         </p>
                       </div>
                       <div className="text-right shrink-0 mr-1">
@@ -544,30 +591,27 @@ export default function KitchenStock({ onBack }) {
                         <ChevronDown size={16} className="text-gray-500 shrink-0" />
                       )}
                     </button>
-
-                    {/* Expanded */}
                     {expanded && (
                       <div className="border-t border-gray-800 px-4 py-4 space-y-3">
-                        {/* Remark box */}
                         <div
                           className={`rounded-xl px-3 py-2.5 text-xs font-medium ${st.bg} ${st.color} ${st.border} border`}
                         >
                           {st.icon} {st.remark}
                         </div>
-
-                        {/* Editable fields (manager) or read-only (kitchen) */}
                         {editing && canManage ? (
                           <div className="space-y-2">
                             <p className="text-amber-400 text-xs font-semibold">
                               Editing entry — all fields unlocked
                             </p>
                             <div className="grid grid-cols-2 gap-2">
-                              {[
-                                ['Opening Stock', 'opening_qty'],
-                                ['Received Today', 'received_qty'],
-                                ['Void / Wastage', 'void_qty'],
-                                ['Closing Count', 'closing_qty'],
-                              ].map(([label, key]) => (
+                              {(
+                                [
+                                  ['Opening Stock', 'opening_qty'],
+                                  ['Received Today', 'received_qty'],
+                                  ['Void / Wastage', 'void_qty'],
+                                  ['Closing Count', 'closing_qty'],
+                                ] as const
+                              ).map(([label, key]) => (
                                 <div key={key}>
                                   <label className="text-gray-500 text-xs block mb-1">
                                     {label} ({entry.unit})
@@ -576,7 +620,7 @@ export default function KitchenStock({ onBack }) {
                                     type="number"
                                     min="0"
                                     step="0.5"
-                                    value={editVals[key]}
+                                    value={String(editVals[key])}
                                     onChange={(e) =>
                                       setEditVals((p) => ({ ...p, [key]: e.target.value }))
                                     }
@@ -614,7 +658,6 @@ export default function KitchenStock({ onBack }) {
                           </div>
                         ) : (
                           <>
-                            {/* Read-only grid */}
                             <div className="grid grid-cols-2 gap-2 text-xs">
                               {[
                                 ['Opening Stock', `${entry.opening_qty} ${entry.unit}`],
@@ -633,62 +676,55 @@ export default function KitchenStock({ onBack }) {
                                 </div>
                               ))}
                             </div>
-
-                            {/* Yield analysis (if benchmark set) */}
-                            {entry.benchmark && entry.received_qty > 0 && (
-                              <div className="bg-gray-800 rounded-xl px-3 py-3 space-y-1.5">
-                                <p className="text-gray-400 text-xs font-semibold mb-2">
-                                  Yield Analysis
-                                </p>
-                                {(() => {
-                                  const bm = entry.benchmark
-                                  const expectedSold = entry.received_qty * bm.expected_yield
-                                  const actualSold = entry.effective_sold
-                                  const yieldPct =
-                                    expectedSold > 0
-                                      ? ((actualSold / expectedSold) * 100).toFixed(1)
-                                      : '—'
-                                  return (
-                                    <>
-                                      {[
-                                        ['Raw Input', `${entry.received_qty} ${bm.raw_unit}`],
-                                        [
-                                          'Expected Output',
-                                          `${expectedSold.toFixed(1)} ${bm.cooked_unit}`,
-                                        ],
-                                        ['Actual Output', `${actualSold} ${bm.cooked_unit}`],
-                                        ['Yield %', `${yieldPct}%`],
-                                      ].map(([l, v]) => (
-                                        <div key={l} className="flex justify-between text-xs">
-                                          <span className="text-gray-500">{l}</span>
-                                          <span
-                                            className={`font-semibold ${l === 'Yield %' ? st.color : 'text-white'}`}
-                                          >
-                                            {v}
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </>
-                                  )
-                                })()}
-                              </div>
-                            )}
-
-                            {/* Formula */}
+                            {entry.benchmark &&
+                              entry.received_qty > 0 &&
+                              (() => {
+                                const bm = entry.benchmark
+                                const expectedSold = entry.received_qty * bm.expected_yield
+                                const yieldPct =
+                                  expectedSold > 0
+                                    ? ((entry.effective_sold / expectedSold) * 100).toFixed(1)
+                                    : '—'
+                                return (
+                                  <div className="bg-gray-800 rounded-xl px-3 py-3 space-y-1.5">
+                                    <p className="text-gray-400 text-xs font-semibold mb-2">
+                                      Yield Analysis
+                                    </p>
+                                    {[
+                                      ['Raw Input', `${entry.received_qty} ${bm.raw_unit}`],
+                                      [
+                                        'Expected Output',
+                                        `${expectedSold.toFixed(1)} ${bm.cooked_unit}`,
+                                      ],
+                                      [
+                                        'Actual Output',
+                                        `${entry.effective_sold} ${bm.cooked_unit}`,
+                                      ],
+                                      ['Yield %', `${yieldPct}%`],
+                                    ].map(([l, v]) => (
+                                      <div key={l} className="flex justify-between text-xs">
+                                        <span className="text-gray-500">{l}</span>
+                                        <span
+                                          className={`font-semibold ${l === 'Yield %' ? st.color : 'text-white'}`}
+                                        >
+                                          {v}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )
+                              })()}
                             <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-500 font-mono">
                               ({entry.opening_qty} + {entry.received_qty}) − {entry.effective_sold}{' '}
                               − {entry.void_qty} − {entry.closing_qty}
                               {' = '}
                               <span className={st.color}>{entry.computed_variance.toFixed(1)}</span>
                             </div>
-
                             {entry.note && (
                               <p className="text-gray-500 text-xs italic">Note: {entry.note}</p>
                             )}
                           </>
                         )}
-
-                        {/* Action row */}
                         {!editing && (
                           <div className="flex gap-2 pt-1">
                             <button
@@ -729,7 +765,6 @@ export default function KitchenStock({ onBack }) {
             </div>
           )}
 
-          {/* Add form */}
           {showAdd && (
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">
               <p className="text-white font-semibold text-sm">Add Stock Entry</p>
@@ -743,7 +778,7 @@ export default function KitchenStock({ onBack }) {
                 <input
                   list="kitchen-items"
                   value={form.item_name}
-                  onChange={(e) => setForm((f) => ({ ...f, item_name: e.target.value }))}
+                  onChange={(e) => ff({ item_name: e.target.value })}
                   placeholder="e.g. Jollof Rice, Beef Stew"
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
                 />
@@ -758,7 +793,7 @@ export default function KitchenStock({ onBack }) {
                   <label className="text-gray-500 text-xs block mb-1">Unit</label>
                   <select
                     value={form.unit}
-                    onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
+                    onChange={(e) => ff({ unit: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
                   >
                     {UNITS.map((u) => (
@@ -775,7 +810,7 @@ export default function KitchenStock({ onBack }) {
                     min="0"
                     step="0.5"
                     value={form.opening_qty}
-                    onChange={(e) => setForm((f) => ({ ...f, opening_qty: e.target.value }))}
+                    onChange={(e) => ff({ opening_qty: e.target.value })}
                     placeholder="0"
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
                   />
@@ -789,7 +824,7 @@ export default function KitchenStock({ onBack }) {
                     min="0"
                     step="0.5"
                     value={form.received_qty}
-                    onChange={(e) => setForm((f) => ({ ...f, received_qty: e.target.value }))}
+                    onChange={(e) => ff({ received_qty: e.target.value })}
                     placeholder="0"
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
                   />
@@ -801,7 +836,7 @@ export default function KitchenStock({ onBack }) {
                     min="0"
                     step="0.5"
                     value={form.void_qty}
-                    onChange={(e) => setForm((f) => ({ ...f, void_qty: e.target.value }))}
+                    onChange={(e) => ff({ void_qty: e.target.value })}
                     placeholder="0"
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
                   />
@@ -814,7 +849,7 @@ export default function KitchenStock({ onBack }) {
                   min="0"
                   step="0.5"
                   value={form.closing_qty}
-                  onChange={(e) => setForm((f) => ({ ...f, closing_qty: e.target.value }))}
+                  onChange={(e) => ff({ closing_qty: e.target.value })}
                   placeholder="0"
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
                 />
@@ -824,7 +859,7 @@ export default function KitchenStock({ onBack }) {
                 <input
                   type="text"
                   value={form.note}
-                  onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                  onChange={(e) => ff({ note: e.target.value })}
                   placeholder="e.g. half bag spoiled"
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
                 />
@@ -835,7 +870,7 @@ export default function KitchenStock({ onBack }) {
                   <span className="text-white font-medium">
                     {soldMap[form.item_name] || 0} {form.unit}
                   </span>
-                  {soldMap[form.item_name] > 0 && ' — auto-synced'}
+                  {(soldMap[form.item_name] || 0) > 0 && ' — auto-synced'}
                   {benchmarks[form.item_name] && (
                     <span className="ml-2 text-amber-400">· Benchmark set ✓</span>
                   )}
@@ -871,7 +906,6 @@ export default function KitchenStock({ onBack }) {
             </button>
           )}
 
-          {/* Status guide */}
           <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3 space-y-2">
             <p className="text-gray-400 text-xs font-semibold">Status Guide</p>
             {[
@@ -896,7 +930,6 @@ export default function KitchenStock({ onBack }) {
         </div>
       )}
 
-      {/* ── BENCHMARKS TAB ── */}
       {tab === 'benchmarks' && (
         <div className="px-4 pt-4 space-y-3">
           <div className="bg-gray-900 border border-amber-500/20 rounded-2xl px-4 py-3">
@@ -908,17 +941,10 @@ export default function KitchenStock({ onBack }) {
               will then calculate expected yield daily and flag deviations.
             </p>
           </div>
-
           {canManage && (
             <button
               onClick={() => {
-                setBmForm({
-                  expected_yield: '',
-                  tolerance_pct: '5',
-                  raw_unit: 'kg',
-                  cooked_unit: 'portion',
-                  note: '',
-                })
+                setBmForm(blankBm)
                 setShowBenchmarkFor('__new__')
               }}
               className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-2xl py-3 text-sm transition-colors"
@@ -926,7 +952,6 @@ export default function KitchenStock({ onBack }) {
               <Plus size={16} /> Add New Benchmark
             </button>
           )}
-
           {Object.keys(benchmarks).length === 0 ? (
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
               <Settings size={32} className="text-gray-700 mx-auto mb-3" />
@@ -979,7 +1004,6 @@ export default function KitchenStock({ onBack }) {
         </div>
       )}
 
-      {/* ── BENCHMARK MODAL ── */}
       {showBenchmarkFor && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0">
           <div className="bg-gray-900 border border-gray-700 rounded-3xl w-full max-w-sm overflow-hidden">
@@ -1004,7 +1028,7 @@ export default function KitchenStock({ onBack }) {
                   <input
                     list="kitchen-items-bm"
                     value={bmForm.item_name || ''}
-                    onChange={(e) => setBmForm((f) => ({ ...f, item_name: e.target.value }))}
+                    onChange={(e) => bf({ item_name: e.target.value })}
                     placeholder="e.g. Beef, Rice, Chicken"
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
                   />
@@ -1015,18 +1039,16 @@ export default function KitchenStock({ onBack }) {
                   </datalist>
                 </div>
               )}
-
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-xs text-amber-400">
                 How many <strong>cooked units</strong> do you expect from{' '}
                 <strong>1 raw unit</strong>?
               </div>
-
               <div className="grid grid-cols-3 gap-2 items-end">
                 <div>
                   <label className="text-gray-400 text-xs block mb-1">Raw unit</label>
                   <select
                     value={bmForm.raw_unit}
-                    onChange={(e) => setBmForm((f) => ({ ...f, raw_unit: e.target.value }))}
+                    onChange={(e) => bf({ raw_unit: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-2 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
                   >
                     {UNITS.map((u) => (
@@ -1041,7 +1063,7 @@ export default function KitchenStock({ onBack }) {
                   <label className="text-gray-400 text-xs block mb-1">Cooked unit</label>
                   <select
                     value={bmForm.cooked_unit}
-                    onChange={(e) => setBmForm((f) => ({ ...f, cooked_unit: e.target.value }))}
+                    onChange={(e) => bf({ cooked_unit: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-2 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
                   >
                     {UNITS.map((u) => (
@@ -1052,7 +1074,6 @@ export default function KitchenStock({ onBack }) {
                   </select>
                 </div>
               </div>
-
               <div>
                 <label className="text-gray-400 text-xs block mb-1">
                   Expected yield (cooked units per 1 raw unit)
@@ -1062,12 +1083,11 @@ export default function KitchenStock({ onBack }) {
                   min="0.1"
                   step="0.5"
                   value={bmForm.expected_yield}
-                  onChange={(e) => setBmForm((f) => ({ ...f, expected_yield: e.target.value }))}
+                  onChange={(e) => bf({ expected_yield: e.target.value })}
                   placeholder="e.g. 8 (1 kg beef = 8 portions)"
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
                 />
               </div>
-
               <div>
                 <label className="text-gray-400 text-xs block mb-1">Tolerance % (±)</label>
                 <div className="flex items-center gap-2">
@@ -1076,7 +1096,7 @@ export default function KitchenStock({ onBack }) {
                     min="1"
                     max="30"
                     value={bmForm.tolerance_pct}
-                    onChange={(e) => setBmForm((f) => ({ ...f, tolerance_pct: e.target.value }))}
+                    onChange={(e) => bf({ tolerance_pct: e.target.value })}
                     className="flex-1 accent-amber-500"
                   />
                   <span className="text-white font-bold text-sm w-10 text-right">
@@ -1084,23 +1104,21 @@ export default function KitchenStock({ onBack }) {
                   </span>
                 </div>
                 <p className="text-gray-600 text-xs mt-1">
-                  Within ±{bmForm.tolerance_pct}% = ✅ OK &nbsp;·&nbsp; Below{' '}
-                  {100 - bmForm.tolerance_pct}% = ⚠️ Investigate &nbsp;·&nbsp; Below{' '}
-                  {100 - bmForm.tolerance_pct * 3}% = 🚨 Alarm
+                  Within ±{bmForm.tolerance_pct}% = ✅ OK · Below{' '}
+                  {100 - Number(bmForm.tolerance_pct)}% = ⚠️ Investigate · Below{' '}
+                  {100 - Number(bmForm.tolerance_pct) * 3}% = 🚨 Alarm
                 </p>
               </div>
-
               <div>
                 <label className="text-gray-400 text-xs block mb-1">Note (optional)</label>
                 <input
                   type="text"
                   value={bmForm.note}
-                  onChange={(e) => setBmForm((f) => ({ ...f, note: e.target.value }))}
+                  onChange={(e) => bf({ note: e.target.value })}
                   placeholder="e.g. Based on supplier spec, 500g portions"
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
                 />
               </div>
-
               <button
                 onClick={saveBenchmark}
                 disabled={

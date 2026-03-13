@@ -6,10 +6,22 @@ import { ArrowLeft, Printer, RefreshCw } from 'lucide-react'
 
 const BASE_URL = 'https://beeshops-restaurantos.vercel.app'
 
+interface TableRow {
+  id: string
+  name: string
+  table_categories?: { name?: string } | null
+}
+
+declare global {
+  interface Window {
+    QRCode: new (el: HTMLElement, opts: object) => void & { CorrectLevel: { H: number } }
+  }
+}
+
 export default function QRTableCards() {
   const { profile } = useAuth()
   const navigate = useNavigate()
-  const [tables, setTables] = useState([])
+  const [tables, setTables] = useState<TableRow[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedZone, setSelectedZone] = useState('All')
   const [qrLoaded, setQrLoaded] = useState(false)
@@ -30,10 +42,19 @@ export default function QRTableCards() {
       .select('id, name, table_categories(name)')
       .order('name')
       .then(({ data }) => {
-        setTables(data || [])
+        setTables((data || []) as TableRow[])
         setLoading(false)
       })
   }, [])
+
+  const zones = [
+    'All',
+    ...new Set(tables.map((t) => t.table_categories?.name).filter(Boolean)),
+  ] as string[]
+  const filtered =
+    selectedZone === 'All'
+      ? tables
+      : tables.filter((t) => t.table_categories?.name === selectedZone)
 
   useEffect(() => {
     if (!qrLoaded || tables.length === 0) return
@@ -50,41 +71,24 @@ export default function QRTableCards() {
             colorLight: '#ffffff',
             correctLevel: window.QRCode.CorrectLevel.H,
           })
-        } catch (_e) {
+        } catch {
           /* intentional */
         }
       })
     }, 150)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qrLoaded, tables, selectedZone])
 
-  const zones = ['All', ...new Set(tables.map((t) => t.table_categories?.name).filter(Boolean))]
-  const filtered =
-    selectedZone === 'All'
-      ? tables
-      : tables.filter((t) => t.table_categories?.name === selectedZone)
-
-  if (!['owner', 'manager', 'executive'].includes(profile?.role)) {
+  if (!['owner', 'manager', 'executive'].includes(profile?.role || ''))
     return (
       <div className="min-h-full bg-gray-950 flex items-center justify-center text-gray-400">
         Access denied
       </div>
     )
-  }
 
   return (
     <>
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          .print-grid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 0 !important; padding: 0 !important; }
-          .card { break-inside: avoid; page-break-inside: avoid; border: 1.5px solid #ccc !important; margin: 6px !important; }
-          body { background: white !important; }
-        }
-        @media screen {
-          .print-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
-        }
-      `}</style>
-
+      <style>{`@media print{.no-print{display:none!important}.print-grid{display:grid!important;grid-template-columns:repeat(3,1fr)!important;gap:0!important;padding:0!important}.card{break-inside:avoid;page-break-inside:avoid;border:1.5px solid #ccc!important;margin:6px!important}body{background:white!important}}@media screen{.print-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}}`}</style>
       <div className="min-h-full bg-gray-950">
         <div className="no-print bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -105,7 +109,6 @@ export default function QRTableCards() {
             <Printer size={15} /> Print
           </button>
         </div>
-
         <div className="no-print px-4 py-3 flex gap-2 overflow-x-auto">
           {zones.map((z) => (
             <button
@@ -117,7 +120,6 @@ export default function QRTableCards() {
             </button>
           ))}
         </div>
-
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <RefreshCw size={24} className="text-amber-500 animate-spin" />
