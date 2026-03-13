@@ -218,7 +218,20 @@ interface Props {
 export default function CustomerOrderAlerts({ profile, assignedTableIds }: Props) {
   const [pendingOrders, setPendingOrders] = useState<CustomerOrder[]>([])
 
+  const expireOldOrders = async () => {
+    const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    await supabase
+      .from('customer_orders')
+      .update({
+        status: 'declined',
+        decline_reason: 'Order timed out — not attended to within 30 minutes',
+      })
+      .eq('status', 'pending')
+      .lt('created_at', cutoff)
+  }
+
   const fetchPending = async () => {
+    await expireOldOrders()
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const { data: directTables } = await supabase
@@ -241,6 +254,9 @@ export default function CustomerOrderAlerts({ profile, assignedTableIds }: Props
   useEffect(() => {
     if (!assignedTableIds?.length) return
     void fetchPending()
+    const expireInterval = setInterval(() => {
+      void expireOldOrders().then(fetchPending)
+    }, 30_000)
     const ch = supabase
       .channel('customer-order-alerts')
       .on(
@@ -250,6 +266,7 @@ export default function CustomerOrderAlerts({ profile, assignedTableIds }: Props
       )
       .subscribe()
     return () => {
+      clearInterval(expireInterval)
       supabase.removeChannel(ch)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

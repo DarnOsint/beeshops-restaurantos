@@ -199,17 +199,15 @@ export default function OrderPanel({
 
   const confirmVoid = async (approver: { name: string; id: string }) => {
     const item = orderItems.find((i) => i.id === voidRequest!.itemId)
-    await supabase
-      .from('void_log')
-      .insert({
-        menu_item_name: voidRequest!.itemName,
-        quantity: voidRequest!.quantity,
-        unit_price: item?.price || 0,
-        total_value: voidRequest!.value,
-        void_type: 'item',
-        approved_by_name: approver.name,
-        approved_by: approver.id,
-      })
+    await supabase.from('void_log').insert({
+      menu_item_name: voidRequest!.itemName,
+      quantity: voidRequest!.quantity,
+      unit_price: item?.price || 0,
+      total_value: voidRequest!.value,
+      void_type: 'item',
+      approved_by_name: approver.name,
+      approved_by: approver.id,
+    })
     setOrderItems((prev) => prev.filter((i) => i.id !== voidRequest!.itemId))
     setVoidRequest(null)
   }
@@ -405,7 +403,7 @@ export default function OrderPanel({
           />
         </div>
 
-        <div className="p-3 border-t border-gray-800">
+        <div className="p-3 border-t border-gray-800 sticky bottom-0 bg-gray-900 z-10">
           <div className="flex justify-between items-center mb-2">
             <span className="text-gray-400">Total</span>
             <span className="text-white font-bold text-lg">₦{total.toFixed(2)}</span>

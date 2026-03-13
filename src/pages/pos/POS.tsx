@@ -438,7 +438,14 @@ export default function POS() {
     })
     await offlineUpdate('tables', table.id, { status: 'occupied' })
     await fetchTables()
-    setSelectedTable(null)
+    // Reload the newly created order so PaymentModal has full order_items
+    const { data: freshOrder } = await supabase
+      .from('orders')
+      .select('*, order_items(*, menu_items(name))')
+      .eq('id', (newOrder as Order).id)
+      .single()
+    setActiveOrder(freshOrder)
+    setShowPayment(true)
   }
 
   const openCashSale = (type: 'cash' | 'takeaway') => {
