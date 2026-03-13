@@ -1,0 +1,315 @@
+import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import SyncIndicator from './SyncIndicator'
+import OfflineBanner from './OfflineBanner'
+import { supabase } from '../lib/supabase'
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  TrendingUp,
+  Package,
+  BedDouble,
+  Settings,
+  LogOut,
+  Beer,
+  Users,
+  BookOpen,
+  Menu,
+  X,
+  BarChart2,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+
+interface NavItem {
+  label: string
+  icon: LucideIcon
+  path: string
+}
+
+const NAV_ITEMS: Record<string, NavItem[]> = {
+  owner: [
+    { label: 'Dashboard', icon: LayoutDashboard, path: '/executive' },
+    { label: 'Reports', icon: TrendingUp, path: '/reports' },
+    { label: 'Analytics', icon: BarChart2, path: '/analytics' },
+    { label: 'Back Office', icon: Settings, path: '/backoffice' },
+    { label: 'Rooms', icon: BedDouble, path: '/apartment' },
+  ],
+  manager: [
+    { label: 'Dashboard', icon: LayoutDashboard, path: '/management' },
+    { label: 'POS', icon: ShoppingBag, path: '/pos' },
+    { label: 'Reports', icon: TrendingUp, path: '/reports' },
+    { label: 'Inventory', icon: Package, path: '/backoffice' },
+  ],
+  accountant: [
+    { label: 'Accounting', icon: BookOpen, path: '/accounting' },
+    { label: 'Reports', icon: TrendingUp, path: '/reports' },
+  ],
+  apartment_manager: [{ label: 'Rooms', icon: BedDouble, path: '/apartment' }],
+}
+
+const BARE_ROLES = ['kitchen', 'bar', 'griller', 'waitron']
+const ZONES = ['Outdoor', 'Indoor', 'VIP Lounge', 'The Nook']
+
+interface TableRow {
+  id: string
+  name: string
+  status: string
+  table_categories?: { name: string } | null
+}
+
+function NavButton({
+  item,
+  active,
+  onClick,
+}: {
+  item: NavItem
+  active: boolean
+  onClick: () => void
+}) {
+  const Icon = item.icon
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left
+        ${active ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+    >
+      <Icon size={16} className="flex-shrink-0" />
+      <span>{item.label}</span>
+    </button>
+  )
+}
+
+function TableWidget({ tables }: { tables: TableRow[] }) {
+  return (
+    <div className="px-3 py-3 border-b border-gray-800">
+      <p className="text-gray-500 text-xs font-medium uppercase tracking-wider px-1 mb-2">Tables</p>
+      {ZONES.map((zone) => {
+        const zone_tables = tables.filter((t) => t.table_categories?.name === zone)
+        if (!zone_tables.length) return null
+        return (
+          <div key={zone} className="mb-2">
+            <p className="text-gray-600 text-[9px] uppercase tracking-wider px-0.5 mb-1">{zone}</p>
+            <div className="flex flex-wrap gap-1">
+              {zone_tables.map((t) => (
+                <div
+                  key={t.id}
+                  title={`${t.name} — ${t.status}`}
+                  className={`w-5 h-5 rounded-sm flex items-center justify-center text-[9px] font-bold cursor-default
+                    ${t.status === 'occupied' ? 'bg-amber-500 text-black' : t.status === 'reserved' ? 'bg-red-500 text-white' : 'bg-gray-700 text-gray-400'}`}
+                >
+                  {t.name?.replace(/[^0-9]/g, '') || '·'}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+      <div className="flex items-center gap-3 mt-2 px-1">
+        <span className="flex items-center gap-1 text-[10px] text-gray-500">
+          <span className="w-2 h-2 rounded-sm bg-amber-500 inline-block" />{' '}
+          {tables.filter((t) => t.status === 'occupied').length} occupied
+        </span>
+        <span className="flex items-center gap-1 text-[10px] text-gray-500">
+          <span className="w-2 h-2 rounded-sm bg-gray-700 inline-block" />{' '}
+          {tables.filter((t) => t.status === 'available').length} free
+        </span>
+      </div>
+    </div>
+  )
+}
+
+export default function AppShell({ children }: { children: React.ReactNode }) {
+  const { profile, signOut } = useAuth()
+  const role = profile?.role || ''
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [tables, setTables] = useState<TableRow[]>([])
+
+  useEffect(() => {
+    if (!['owner', 'manager'].includes(role)) return
+    const fetchTables = async () => {
+      const { data } = await supabase
+        .from('tables')
+        .select('id, name, status, category_id, table_categories(name)')
+        .order('name')
+      if (data) setTables(data as TableRow[])
+    }
+    fetchTables()
+    const ch = supabase
+      .channel('shell-tables')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tables' }, fetchTables)
+      .subscribe()
+    return () => {
+      supabase.removeChannel(ch)
+    }
+  }, [role])
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    setDrawerOpen(false)
+  }, [location.pathname])
+
+  if (!profile) return <>{children}</>
+
+  const navItems = NAV_ITEMS[role] || []
+
+  if (BARE_ROLES.includes(role))
+    return (
+      <div className="flex flex-col min-h-screen bg-gray-950">
+        <div className="flex-1">{children}</div>
+      </div>
+    )
+
+  return (
+    <div className="flex flex-col h-screen bg-gray-950 overflow-hidden">
+      <OfflineBanner />
+      <div className="flex flex-1 overflow-hidden">
+        {/* Desktop sidebar */}
+        <aside className="hidden lg:flex flex-col w-56 xl:w-64 bg-gray-900 border-r border-gray-800 flex-shrink-0">
+          <div className="px-4 py-4 border-b border-gray-800 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0">
+              <Beer size={16} className="text-black" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-white font-bold text-sm truncate">Beeshop's Place</p>
+              <p className="text-gray-400 text-xs">RestaurantOS</p>
+            </div>
+          </div>
+          <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            {navItems.map((item) => (
+              <NavButton
+                key={item.path}
+                item={item}
+                active={location.pathname === item.path}
+                onClick={() => navigate(item.path)}
+              />
+            ))}
+          </nav>
+          {['owner', 'manager'].includes(role) && tables.length > 0 && (
+            <TableWidget tables={tables} />
+          )}
+          <div className="px-3 py-3 border-t border-gray-800 space-y-2">
+            <SyncIndicator />
+            <div className="flex items-center gap-2 px-3 py-2">
+              <div className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0">
+                <Users size={14} className="text-gray-300" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-xs font-medium truncate">{profile.full_name}</p>
+                <p className="text-amber-500 text-xs capitalize">{profile.role}</p>
+              </div>
+              <button onClick={signOut} className="text-gray-500 hover:text-white p-1">
+                <LogOut size={14} />
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        {/* Tablet icon sidebar */}
+        <aside className="hidden md:flex lg:hidden flex-col w-16 bg-gray-900 border-r border-gray-800 flex-shrink-0 items-center py-4 gap-2">
+          <div className="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center mb-2">
+            <Beer size={16} className="text-black" />
+          </div>
+          {navItems.map((item) => {
+            const Icon = item.icon
+            const active = location.pathname === item.path
+            return (
+              <button
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                title={item.label}
+                className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${active ? 'bg-amber-500/10 text-amber-400' : 'text-gray-500 hover:text-white hover:bg-gray-800'}`}
+              >
+                <Icon size={18} />
+              </button>
+            )
+          })}
+          <div className="flex-1" />
+          <SyncIndicator compact />
+          <button
+            onClick={signOut}
+            title="Sign out"
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-gray-500 hover:text-white hover:bg-gray-800"
+          >
+            <LogOut size={16} />
+          </button>
+        </aside>
+
+        {/* Main content */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="md:hidden flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 sticky top-0 z-30">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center">
+                <Beer size={13} className="text-black" />
+              </div>
+              <span className="text-white font-bold text-sm">Beeshop's Place</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <SyncIndicator compact />
+              {navItems.length > 1 && (
+                <button
+                  onClick={() => setDrawerOpen(true)}
+                  className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white"
+                >
+                  <Menu size={18} />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="h-full">{children}</div>
+        </main>
+      </div>
+
+      {/* Mobile drawer */}
+      {drawerOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} />
+          <div className="relative bg-gray-900 rounded-t-2xl border-t border-gray-800">
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-10 h-1 rounded-full bg-gray-700" />
+            </div>
+            <div className="flex items-center justify-between px-5 pb-3 border-b border-gray-800">
+              <div>
+                <p className="text-white font-semibold">{profile.full_name}</p>
+                <p className="text-amber-500 text-xs capitalize">{profile.role}</p>
+              </div>
+              <button
+                onClick={() => setDrawerOpen(false)}
+                className="w-8 h-8 flex items-center justify-center text-gray-400"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <nav className="px-3 py-3 space-y-1">
+              {navItems.map((item) => {
+                const Icon = item.icon
+                const active = location.pathname === item.path
+                return (
+                  <button
+                    key={item.path}
+                    onClick={() => navigate(item.path)}
+                    className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-base font-medium transition-colors text-left ${active ? 'bg-amber-500/10 text-amber-400' : 'text-gray-300 active:bg-gray-800'}`}
+                  >
+                    <Icon size={20} className="flex-shrink-0" />
+                    <span>{item.label}</span>
+                  </button>
+                )
+              })}
+            </nav>
+            <div className="px-3 pb-6">
+              <button
+                onClick={signOut}
+                className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-red-400 active:bg-red-950/30"
+              >
+                <LogOut size={20} />
+                <span className="font-medium">Sign out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

@@ -3,122 +3,135 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { Hash, Mail, Eye, EyeOff, Delete } from 'lucide-react'
 
-// Rate limit config
-const EMAIL_MAX_ATTEMPTS = 5
-const EMAIL_LOCKOUT_MS = 15 * 60 * 1000 // 15 minutes
-const PIN_MAX_ATTEMPTS = 5
-const PIN_LOCKOUT_MS = 5 * 60 * 1000 // 5 minutes
+const EMAIL_MAX = 5
+const EMAIL_LOCK_MS = 15 * 60 * 1000
+const PIN_MAX = 5
+const PIN_LOCK_MS = 5 * 60 * 1000
 
-function getRateState(key) {
+interface RateState {
+  attempts: number
+  max: number
+  lockedAt?: number
+}
+
+const getRateState = (key: string): RateState | null => {
   try {
     return JSON.parse(sessionStorage.getItem(key) || 'null')
   } catch {
     return null
   }
 }
-
-function setRateState(key, state) {
-  sessionStorage.setItem(key, JSON.stringify(state))
+const setRateState = (key: string, s: RateState) => sessionStorage.setItem(key, JSON.stringify(s))
+const isLockedOut = (s: RateState | null, ms: number) =>
+  !!(s && s.attempts >= (s.max || 5) && s.lockedAt && Date.now() - s.lockedAt < ms)
+const getRemaining = (s: RateState | null, ms: number) =>
+  s?.lockedAt ? Math.max(0, Math.ceil((ms - (Date.now() - s.lockedAt)) / 1000)) : 0
+const recordAttempt = (key: string, max: number): RateState => {
+  const s: RateState = getRateState(key) || { attempts: 0, max }
+  s.attempts += 1
+  if (s.attempts >= max) s.lockedAt = Date.now()
+  setRateState(key, s)
+  return s
+}
+const resetAttempts = (key: string) => sessionStorage.removeItem(key)
+const fmtTime = (secs: number) => {
+  const m = Math.floor(secs / 60)
+  return m > 0 ? `${m}m ${secs % 60}s` : `${secs}s`
 }
 
-function isLockedOut(state, lockoutMs) {
-  if (!state || state.attempts < (state.max || 5)) return false
-  return Date.now() - state.lockedAt < lockoutMs
-}
-
-function getLockoutRemaining(state, lockoutMs) {
-  if (!state?.lockedAt) return 0
-  return Math.max(0, Math.ceil((lockoutMs - (Date.now() - state.lockedAt)) / 1000))
-}
-
-function recordAttempt(key, max) {
-  const state = getRateState(key) || { attempts: 0, max }
-  state.attempts += 1
-  if (state.attempts >= max) state.lockedAt = Date.now()
-  setRateState(key, state)
-  return state
-}
-
-function resetAttempts(key) {
-  sessionStorage.removeItem(key)
-}
-
-function useLockoutTimer(lockedOut, remaining, setRemaining) {
-  const timer = useRef(null)
+function useLockoutTimer(
+  locked: boolean,
+  remaining: number,
+  setRemaining: React.Dispatch<React.SetStateAction<number>>
+) {
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null)
   useEffect(() => {
-    if (!lockedOut || remaining <= 0) return
-    timer.current = setInterval(() => {
-      setRemaining((r) => {
-        if (r <= 1) {
-          clearInterval(timer.current)
-          return 0
-        }
-        return r - 1
-      })
-    }, 1000)
-    return () => clearInterval(timer.current)
-  }, [lockedOut])
+    if (!locked || remaining <= 0) return
+    timer.current = setInterval(
+      () =>
+        setRemaining((r) => {
+          if (r <= 1) {
+            clearInterval(timer.current!)
+            return 0
+          }
+          return r - 1
+        }),
+      1000
+    )
+    return () => clearInterval(timer.current!)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locked])
+}
+
+const PIN_PAD = [
+  ['1', '2', '3'],
+  ['4', '5', '6'],
+  ['7', '8', '9'],
+  ['', '0', 'del'],
+]
+
+function LockedOut({ mode, time }: { mode: 'email' | 'pin'; time: number }) {
+  return (
+    <div className="text-center py-8">
+      <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+        <span className="text-2xl">🔒</span>
+      </div>
+      <p className="text-red-400 font-semibold mb-1">
+        {mode === 'email' ? 'Account' : 'PIN Entry'} Locked
+      </p>
+      <p className="text-gray-500 text-sm">
+        Try again in <span className="text-white font-mono">{fmtTime(time)}</span>
+      </p>
+    </div>
+  )
 }
 
 export default function Login() {
-  const [mode, setMode] = useState('email')
+  const [mode, setMode] = useState<'email' | 'pin'>('email')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [pin, setPin] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [showPassword, setShowPassword] = useState(false)
-
-  // Rate limit state
-  const [emailRemaining, setEmailRemaining] = useState(() => {
+  const [error, setError] = useState<string | null>(null)
+  const [showPw, setShowPw] = useState(false)
+  const [emailRem, setEmailRem] = useState(() => {
     const s = getRateState('rl_email')
-    return isLockedOut(s, EMAIL_LOCKOUT_MS) ? getLockoutRemaining(s, EMAIL_LOCKOUT_MS) : 0
+    return isLockedOut(s, EMAIL_LOCK_MS) ? getRemaining(s, EMAIL_LOCK_MS) : 0
   })
-  const [pinRemaining, setPinRemaining] = useState(() => {
+  const [pinRem, setPinRem] = useState(() => {
     const s = getRateState('rl_pin')
-    return isLockedOut(s, PIN_LOCKOUT_MS) ? getLockoutRemaining(s, PIN_LOCKOUT_MS) : 0
+    return isLockedOut(s, PIN_LOCK_MS) ? getRemaining(s, PIN_LOCK_MS) : 0
   })
-
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const sessionExpired = searchParams.get('reason') === 'timeout'
+  const emailLocked = emailRem > 0
+  const pinLocked = pinRem > 0
 
-  const emailLocked = emailRemaining > 0
-  const pinLocked = pinRemaining > 0
+  useLockoutTimer(emailLocked, emailRem, setEmailRem)
+  useLockoutTimer(pinLocked, pinRem, setPinRem)
 
-  useLockoutTimer(emailLocked, emailRemaining, setEmailRemaining)
-  useLockoutTimer(pinLocked, pinRemaining, setPinRemaining)
-
-  const formatTime = (secs) => {
-    const m = Math.floor(secs / 60)
-    const s = secs % 60
-    return m > 0 ? `${m}m ${s}s` : `${s}s`
-  }
-
-  const handleEmailLogin = async (e) => {
+  const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     if (emailLocked) return
-
-    const state = getRateState('rl_email')
-    if (isLockedOut(state, EMAIL_LOCKOUT_MS)) {
-      const rem = getLockoutRemaining(state, EMAIL_LOCKOUT_MS)
-      setEmailRemaining(rem)
-      setError(`Too many failed attempts. Try again in ${formatTime(rem)}.`)
+    const s = getRateState('rl_email')
+    if (isLockedOut(s, EMAIL_LOCK_MS)) {
+      setEmailRem(getRemaining(s, EMAIL_LOCK_MS))
+      setError(`Too many attempts. Try again in ${fmtTime(getRemaining(s, EMAIL_LOCK_MS))}.`)
       return
     }
-
     setLoading(true)
     setError(null)
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      const newState = recordAttempt('rl_email', EMAIL_MAX_ATTEMPTS)
-      if (newState.attempts >= EMAIL_MAX_ATTEMPTS) {
-        const rem = getLockoutRemaining(newState, EMAIL_LOCKOUT_MS)
-        setEmailRemaining(rem)
-        setError(`Too many failed attempts. Locked out for ${formatTime(rem)}.`)
+    const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+    if (err) {
+      const ns = recordAttempt('rl_email', EMAIL_MAX)
+      if (ns.attempts >= EMAIL_MAX) {
+        const rem = getRemaining(ns, EMAIL_LOCK_MS)
+        setEmailRem(rem)
+        setError(`Too many failed attempts. Locked out for ${fmtTime(rem)}.`)
       } else {
-        const left = EMAIL_MAX_ATTEMPTS - newState.attempts
-        setError(`${error.message} — ${left} attempt${left !== 1 ? 's' : ''} remaining.`)
+        const left = EMAIL_MAX - ns.attempts
+        setError(`${err.message} — ${left} attempt${left !== 1 ? 's' : ''} remaining.`)
       }
       setLoading(false)
     } else {
@@ -127,44 +140,37 @@ export default function Login() {
     }
   }
 
-  const handlePinLogin = async (enteredPin) => {
-    if (enteredPin.length !== 4) return
-    if (pinLocked) return
-
-    const state = getRateState('rl_pin')
-    if (isLockedOut(state, PIN_LOCKOUT_MS)) {
-      const rem = getLockoutRemaining(state, PIN_LOCKOUT_MS)
-      setPinRemaining(rem)
+  const handlePinLogin = async (entered: string) => {
+    if (entered.length !== 4 || pinLocked) return
+    const s = getRateState('rl_pin')
+    if (isLockedOut(s, PIN_LOCK_MS)) {
+      setPinRem(getRemaining(s, PIN_LOCK_MS))
       setPin('')
-      setError(`Too many failed attempts. Try again in ${formatTime(rem)}.`)
+      setError(`Try again in ${fmtTime(getRemaining(s, PIN_LOCK_MS))}.`)
       return
     }
-
     setLoading(true)
     setError(null)
-
-    const { data, error } = await supabase
+    const { data, error: err } = await supabase
       .from('profiles')
       .select('*')
-      .eq('pin', enteredPin)
+      .eq('pin', entered)
       .eq('is_active', true)
       .single()
-
-    if (error || !data) {
-      const newState = recordAttempt('rl_pin', PIN_MAX_ATTEMPTS)
-      if (newState.attempts >= PIN_MAX_ATTEMPTS) {
-        const rem = getLockoutRemaining(newState, PIN_LOCKOUT_MS)
-        setPinRemaining(rem)
-        setError(`Too many failed attempts. Locked out for ${formatTime(rem)}.`)
+    if (err || !data) {
+      const ns = recordAttempt('rl_pin', PIN_MAX)
+      if (ns.attempts >= PIN_MAX) {
+        const rem = getRemaining(ns, PIN_LOCK_MS)
+        setPinRem(rem)
+        setError(`Too many failed attempts. Locked out for ${fmtTime(rem)}.`)
       } else {
-        const left = PIN_MAX_ATTEMPTS - newState.attempts
+        const left = PIN_MAX - ns.attempts
         setError(`Invalid PIN. ${left} attempt${left !== 1 ? 's' : ''} remaining.`)
       }
       setPin('')
       setLoading(false)
       return
     }
-
     resetAttempts('rl_pin')
     localStorage.setItem(
       'pin_session',
@@ -180,25 +186,27 @@ export default function Login() {
     navigate('/dashboard')
   }
 
-  const handlePinPress = (digit) => {
+  const handlePinPress = (digit: string) => {
     if (pin.length >= 4 || loading || pinLocked) return
-    const newPin = pin + digit
-    setPin(newPin)
+    const np = pin + digit
+    setPin(np)
     setError(null)
-    if (newPin.length === 4) handlePinLogin(newPin)
+    if (np.length === 4) handlePinLogin(np)
   }
 
-  const handlePinDelete = () => {
-    setPin((prev) => prev.slice(0, -1))
-    setError(null)
-  }
-
-  const pinPad = [
-    ['1', '2', '3'],
-    ['4', '5', '6'],
-    ['7', '8', '9'],
-    ['', '0', 'del'],
-  ]
+  const _Locked = ({ time }: { time: number }) => (
+    <div className="text-center py-8">
+      <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+        <span className="text-2xl">🔒</span>
+      </div>
+      <p className="text-red-400 font-semibold mb-1">
+        {mode === 'email' ? 'Account' : 'PIN Entry'} Locked
+      </p>
+      <p className="text-gray-500 text-sm">
+        Try again in <span className="text-white font-mono">{fmtTime(time)}</span>
+      </p>
+    </div>
+  )
 
   return (
     <div className="min-h-full bg-gray-950 flex items-center justify-center p-4">
@@ -224,25 +232,27 @@ export default function Login() {
         )}
 
         <div className="flex bg-gray-900 border border-gray-800 rounded-2xl p-1 mb-6">
-          <button
-            onClick={() => {
-              setMode('email')
-              setError(null)
-              setPin('')
-            }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${mode === 'email' ? 'bg-amber-500 text-black' : 'text-gray-400 hover:text-white'}`}
-          >
-            <Mail size={15} /> Email Login
-          </button>
-          <button
-            onClick={() => {
-              setMode('pin')
-              setError(null)
-            }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${mode === 'pin' ? 'bg-amber-500 text-black' : 'text-gray-400 hover:text-white'}`}
-          >
-            <Hash size={15} /> PIN Login
-          </button>
+          {(['email', 'pin'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => {
+                setMode(m)
+                setError(null)
+                setPin('')
+              }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${mode === m ? 'bg-amber-500 text-black' : 'text-gray-400 hover:text-white'}`}
+            >
+              {m === 'email' ? (
+                <>
+                  <Mail size={15} /> Email Login
+                </>
+              ) : (
+                <>
+                  <Hash size={15} /> PIN Login
+                </>
+              )}
+            </button>
+          ))}
         </div>
 
         <div className="bg-gray-900 rounded-2xl p-8 shadow-2xl border border-gray-800">
@@ -256,18 +266,8 @@ export default function Login() {
             <>
               <h2 className="text-xl font-semibold text-white mb-2">Sign in</h2>
               <p className="text-gray-500 text-sm mb-6">For managers, owners and accountants</p>
-
               {emailLocked ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
-                    <span className="text-2xl">🔒</span>
-                  </div>
-                  <p className="text-red-400 font-semibold mb-1">Account Locked</p>
-                  <p className="text-gray-500 text-sm">
-                    Try again in{' '}
-                    <span className="text-white font-mono">{formatTime(emailRemaining)}</span>
-                  </p>
-                </div>
+                <LockedOut mode="email" time={emailRem} />
               ) : (
                 <form onSubmit={handleEmailLogin} className="space-y-5">
                   <div>
@@ -278,26 +278,26 @@ export default function Login() {
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@beeshops.com"
                       required
-                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 transition-colors"
+                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
                     />
                   </div>
                   <div>
                     <label className="block text-sm text-gray-400 mb-2">Password</label>
                     <div className="relative">
                       <input
-                        type={showPassword ? 'text' : 'password'}
+                        type={showPw ? 'text' : 'password'}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
                         required
-                        className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 pr-11 focus:outline-none focus:border-amber-500 transition-colors"
+                        className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 pr-11 focus:outline-none focus:border-amber-500"
                       />
                       <button
                         type="button"
-                        onClick={() => setShowPassword(!showPassword)}
+                        onClick={() => setShowPw(!showPw)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
                       >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
                   </div>
@@ -319,47 +319,32 @@ export default function Login() {
               <p className="text-gray-500 text-sm mb-6">
                 For waitrons, kitchen, bar and grill staff
               </p>
-
               {pinLocked ? (
-                <div className="text-center py-8">
-                  <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
-                    <span className="text-2xl">🔒</span>
-                  </div>
-                  <p className="text-red-400 font-semibold mb-1">PIN Entry Locked</p>
-                  <p className="text-gray-500 text-sm">
-                    Try again in{' '}
-                    <span className="text-white font-mono">{formatTime(pinRemaining)}</span>
-                  </p>
-                </div>
+                <LockedOut mode="pin" time={pinRem} />
               ) : (
                 <>
                   <div className="flex justify-center gap-4 mb-8">
                     {[0, 1, 2, 3].map((i) => (
                       <div
                         key={i}
-                        className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center transition-all ${
-                          pin.length > i
-                            ? 'border-amber-500 bg-amber-500/10'
-                            : 'border-gray-700 bg-gray-800'
-                        }`}
+                        className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center transition-all ${pin.length > i ? 'border-amber-500 bg-amber-500/10' : 'border-gray-700 bg-gray-800'}`}
                       >
                         {pin.length > i && <div className="w-4 h-4 rounded-full bg-amber-500" />}
                       </div>
                     ))}
                   </div>
-
                   <div className="space-y-3">
-                    {pinPad.map((row, ri) => (
+                    {PIN_PAD.map((row, ri) => (
                       <div key={ri} className="grid grid-cols-3 gap-3">
                         {row.map((digit, di) => (
                           <button
                             key={di}
                             onClick={() =>
                               digit === 'del'
-                                ? handlePinDelete()
+                                ? setPin((p) => p.slice(0, -1))
                                 : digit !== ''
                                   ? handlePinPress(digit)
-                                  : null
+                                  : undefined
                             }
                             disabled={loading || digit === ''}
                             className={`h-16 rounded-2xl text-xl font-bold transition-all ${
@@ -376,11 +361,9 @@ export default function Login() {
                       </div>
                     ))}
                   </div>
-
                   {loading && (
                     <div className="text-center mt-6 text-amber-500 text-sm">Verifying PIN...</div>
                   )}
-
                   <button
                     onClick={() => {
                       setPin('')
@@ -395,7 +378,6 @@ export default function Login() {
             </>
           )}
         </div>
-
         <p className="text-center text-gray-600 text-sm mt-6">
           RestaurantOS v1.0 — Beeshop's Place Lounge
         </p>

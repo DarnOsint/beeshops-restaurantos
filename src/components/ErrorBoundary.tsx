@@ -1,29 +1,36 @@
 import React from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 
-export default class ErrorBoundary extends React.Component {
-  constructor(props) {
+interface Props {
+  children: React.ReactNode
+  title?: string
+  fullscreen?: boolean
+  onReset?: () => void
+}
+
+interface State {
+  error: Error | null
+  errorInfo: React.ErrorInfo | null
+}
+
+export default class ErrorBoundary extends React.Component<Props, State> {
+  constructor(props: Props) {
     super(props)
     this.state = { error: null, errorInfo: null }
   }
-
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError(error: Error) {
     return { error }
   }
-
-  componentDidCatch(error, errorInfo) {
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     this.setState({ errorInfo })
-    // In production you'd send this to an error tracking service
     console.error('[ErrorBoundary]', error, errorInfo)
   }
-
   render() {
     if (this.state.error) {
       const { title = 'Something went wrong', fullscreen = true } = this.props
       const container = fullscreen
         ? 'min-h-full bg-gray-950 flex items-center justify-center p-6'
         : 'w-full flex items-center justify-center p-6'
-
       return (
         <div className={container}>
           <div className="max-w-sm w-full bg-red-500/10 border border-red-500/20 rounded-2xl p-8 text-center">
@@ -50,7 +57,6 @@ export default class ErrorBoundary extends React.Component {
         </div>
       )
     }
-
     return this.props.children
   }
 }
