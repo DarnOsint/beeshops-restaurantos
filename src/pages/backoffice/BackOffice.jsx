@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { Users, UtensilsCrossed, MapPin, LayoutGrid, LogOut, Beer, ArrowLeft, Package, Truck } from 'lucide-react'
+import { Users, UtensilsCrossed, MapPin, LayoutGrid, LogOut, Beer, ArrowLeft, Package, Truck, QrCode } from 'lucide-react'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import StaffManagement from './StaffManagement'
 import MenuManagement from './MenuManagement'
@@ -22,10 +22,11 @@ export default function BackOffice() {
     { id: 'tables', label: 'Table Configuration', desc: 'Edit table names and capacity', icon: LayoutGrid, color: 'bg-amber-500', roles: ['owner', 'manager'] },
     { id: 'inventory', label: 'Drink Inventory', desc: 'Stock levels, restocking and supplier logs', icon: Package, color: 'bg-blue-600', roles: ['owner', 'manager'] },
     { id: 'suppliers', label: 'Suppliers', desc: 'Manage suppliers and purchase orders', icon: Truck, color: 'bg-teal-600', roles: ['owner', 'manager'] },
+    { id: 'qrcards', label: 'QR Table Cards', desc: 'Print QR codes for all tables', icon: QrCode, color: 'bg-rose-500', roles: ['owner', 'manager'] },
   ]
 
   if (!profile) return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+    <div className="min-h-full bg-gray-950 flex items-center justify-center">
       <div className="text-amber-500">Loading...</div>
     </div>
   )
@@ -36,11 +37,12 @@ export default function BackOffice() {
   if (activeSection === 'menu') return <MenuManagement onBack={() => setActiveSection(null)} />
   if (activeSection === 'zonepricing') return <ZonePricing onBack={() => setActiveSection(null)} />
   if (activeSection === 'tables') return <TableConfig onBack={() => setActiveSection(null)} />
+  if (activeSection === 'qrcards') { window.location.href = '/backoffice/qr-cards'; return null }
   if (activeSection === 'inventory') return <Inventory onBack={() => setActiveSection(null)} />
   if (activeSection === 'suppliers') return <Suppliers onBack={() => setActiveSection(null)} />
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-full bg-gray-950">
       
 
       <div className="p-6">

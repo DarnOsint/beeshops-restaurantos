@@ -4,14 +4,31 @@ import VoidPinModal from '../../components/VoidPinModal'
 import { Plus, Minus, Trash2, Send, X, StickyNote, CheckCircle2, Circle } from 'lucide-react'
 
 export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, activeOrder, profile }) {
-  const [servedItems, setServedItems] = useState({}) // { itemId: true }
+  const [servedItems, setServedItems] = useState(() => {
+    if (!activeOrder?.order_items) return {}
+    return activeOrder.order_items.reduce((acc, i) => {
+      if (i.status === 'delivered') acc[i.id] = true
+      return acc
+    }, {})
+  })
+  // _dbId lookup map: menu_item_id -> order_item row id
+  const dbIdMap = (activeOrder?.order_items || []).reduce((acc, i) => {
+    acc[i.menu_item_id] = i.id
+    return acc
+  }, {})
 
   const markServed = async (item) => {
     if (!activeOrder) return
-    setServedItems(prev => ({ ...prev, [item.id]: true }))
+    const dbId = item._dbId || dbIdMap[item.id]
+    if (!dbId) return
+    setServedItems(prev => ({ ...prev, [dbId]: true }))
+    // Update order_items status to delivered so customer tracking reflects it
+    await supabase.from('order_items')
+      .update({ status: 'delivered' })
+      .eq('id', dbId)
     await supabase.from('service_log').insert({
       order_id: activeOrder.id,
-      order_item_id: item.id,
+      order_item_id: dbId,
       table_id: activeOrder.table_id,
       item_name: item.name,
       table_name: table?.name || null,
@@ -25,6 +42,8 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, ac
     if (!activeOrder?.order_items) return []
     return activeOrder.order_items.map(i => ({
       id: i.menu_item_id,
+      _dbId: i.id,
+      status: i.status,
       name: i.menu_items?.name || i.menu_item_id,
       quantity: i.quantity,
       price: i.unit_price,
@@ -277,10 +296,10 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, ac
               </div>
               <span className={`text-sm ${item._existing ? 'text-gray-500' : 'text-white'}`}>₦{item.total.toFixed(2)}</span>
               {item._existing && (
-                <button onClick={() => !servedItems[item.id] && markServed(item)}
-                  className={`transition-colors ${servedItems[item.id] ? 'text-green-400' : 'text-gray-600 hover:text-green-400'}`}
-                  title={servedItems[item.id] ? 'Served' : 'Mark as served'}>
-                  {servedItems[item.id] ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                <button onClick={() => { const dbId = item._dbId || dbIdMap[item.id]; if (!servedItems[dbId]) markServed(item) }}
+                  className={`transition-colors ${(item._dbId || dbIdMap[item.id]) && servedItems[item._dbId || dbIdMap[item.id]] ? 'text-green-400' : 'text-gray-600 hover:text-green-400'}`}
+                  title={(item._dbId || dbIdMap[item.id]) && servedItems[item._dbId || dbIdMap[item.id]] ? 'Served' : 'Mark as served'}>
+                  {(item._dbId || dbIdMap[item.id]) && servedItems[item._dbId || dbIdMap[item.id]] ? <CheckCircle2 size={16} /> : <Circle size={16} />}
                 </button>
               )}
               {!item._existing && (
@@ -288,7 +307,13 @@ export default function OrderPanel({ table, menuItems, onPlaceOrder, onClose, ac
                   <Trash2 size={14} />
                 </button>
               )}
-              {item._existing && <div className="w-[14px]" />}
+              {item._existing && (
+                <button onClick={() => deleteItem(item)}
+                  className="text-red-400 hover:text-red-300 transition-colors"
+                  title="Void item">
+                  <Trash2 size={14} />
+                </button>
+              )}
             </div>
           ))}
         </div>

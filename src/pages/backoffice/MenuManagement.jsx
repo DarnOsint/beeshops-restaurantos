@@ -119,7 +119,7 @@ export default function MenuManagement({ onBack }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-full bg-gray-950">
       {/* Header */}
       <div className="lg:hidden bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">

@@ -126,7 +126,7 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
   const total = subtotal + vatAmount
 
   // QR code URL — links to customer order view
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`${window.location.origin}/order/${order.id}`)}&color=000000&bgcolor=ffffff`
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`${window.location.origin}/receipt/${order.id}`)}&color=000000&bgcolor=ffffff`
 
   return (
     <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">

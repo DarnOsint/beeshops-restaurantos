@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { sendPushToStaff } from '../../hooks/usePushNotifications'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
@@ -33,7 +34,7 @@ export default function KitchenKDS() {
     const { data, error } = await supabase
       .from('orders')
       .select(`
-        id, created_at, notes,
+        id, created_at, notes, staff_id,
         tables(name),
         order_items(
           id, quantity, status, destination, notes,
@@ -60,11 +61,20 @@ export default function KitchenKDS() {
     setLoading(false)
   }
 
-  const updateItemStatus = async (itemId, newStatus) => {
+  const updateItemStatus = async (itemId, newStatus, orderId) => {
     await supabase
       .from('order_items')
       .update({ status: newStatus })
       .eq('id', itemId)
+    if (newStatus === 'ready' && orderId) {
+      const order = orders.find(o => o.id === orderId)
+      if (order?.staff_id) {
+        const item = order.order_items.find(i => i.id === itemId)
+        const itemName = item?.menu_items?.name || 'Item'
+        const tableName = order.tables?.name || 'a table'
+        await sendPushToStaff(order.staff_id, '✅ Item Ready', `${itemName} ready for ${tableName}`)
+      }
+    }
     fetchOrders()
   }
 
@@ -74,6 +84,11 @@ export default function KitchenKDS() {
       .update({ status: 'ready' })
       .eq('order_id', orderId)
       .eq('destination', 'kitchen')
+    const order = orders.find(o => o.id === orderId)
+    if (order?.staff_id) {
+      const tableName = order.tables?.name || 'a table'
+      await sendPushToStaff(order.staff_id, '✅ Order Ready', `Kitchen order for ${tableName} is ready to serve`)
+    }
     fetchOrders()
   }
 
@@ -105,16 +120,23 @@ export default function KitchenKDS() {
     return 'bg-gray-700 text-gray-400'
   }
 
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchOrders() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
   if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
 
   if (loading) return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+    <div className="min-h-full bg-gray-950 flex items-center justify-center">
       <div className="text-amber-500">Loading Kitchen Display...</div>
     </div>
   )
 
+
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col">
+    <div className="min-h-full bg-gray-950 flex flex-col">
 
       {/* Header */}
       <nav className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">

@@ -171,7 +171,7 @@ export default function Debtors({ onBack, embedded = false }) {
   )
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-full bg-gray-950">
 
       {!embedded && (
         <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">

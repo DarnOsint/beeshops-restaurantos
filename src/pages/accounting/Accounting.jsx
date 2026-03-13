@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import Debtors from './Debtors'
 import {
   Beer, LogOut, ArrowLeft, TrendingUp, ShoppingBag, AlertTriangle, HelpCircle,
-  Users, Banknote, CreditCard, Smartphone, Download,
+  Users, Banknote, CreditCard, Smartphone, Download, Trash2,
   Plus, X, Save, Calendar, Filter, ChevronDown,
   DollarSign, Receipt, BarChart2, Clock, BookOpen, Shield
 } from 'lucide-react'
@@ -22,6 +22,9 @@ export default function Accounting() {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState('overview')
+  const [voidLog, setVoidLog] = useState([])
+  const [voidLoading, setVoidLoading] = useState(false)
+  const [voidDateFilter, setVoidDateFilter] = useState(new Date().toISOString().split('T')[0])
   const [dateRange, setDateRange] = useState('Today')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
@@ -48,6 +51,19 @@ export default function Accounting() {
   useEffect(() => {
     fetchAll()
   }, [dateRange, customStart, customEnd])
+
+  useEffect(() => {
+    if (activeTab !== 'voids') return
+    setVoidLoading(true)
+    const start = new Date(voidDateFilter); start.setHours(0,0,0,0)
+    const end = new Date(voidDateFilter); end.setHours(23,59,59,999)
+    supabase.from('void_log')
+      .select('*')
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString())
+      .order('created_at', { ascending: false })
+      .then(({ data }) => { setVoidLog(data || []); setVoidLoading(false) })
+  }, [activeTab, voidDateFilter])
 
   const getDateBounds = () => {
     const now = new Date()
@@ -244,12 +260,13 @@ export default function Accounting() {
     { id: 'payouts', label: 'Payouts', icon: DollarSign },
     { id: 'trends', label: 'Trends', icon: TrendingUp },
     { id: 'debtors', label: 'Debtors', icon: AlertTriangle },
+    { id: 'voids', label: 'Voids', icon: Trash2 },
     { id: 'ledger', label: 'Ledger', icon: BookOpen },
     { id: 'audit', label: 'Audit', icon: Shield },
   ]
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-full bg-gray-950">
 
       {/* Header */}
       
@@ -684,6 +701,58 @@ export default function Accounting() {
       </div>
 
       {/* LEDGER TAB */}
+      {activeTab === 'voids' && (
+        <div className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-white font-bold">Void Log</p>
+            <input type="date" value={voidDateFilter} onChange={e => setVoidDateFilter(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-amber-500" />
+          </div>
+
+          {voidLoading && <p className="text-gray-500 text-sm text-center py-8">Loading...</p>}
+
+          {!voidLoading && voidLog.length === 0 && (
+            <div className="text-center py-12">
+              <Trash2 size={32} className="text-gray-700 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">No voids recorded for this date</p>
+            </div>
+          )}
+
+          {!voidLoading && voidLog.length > 0 && (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden mb-3">
+              <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+                <span className="text-gray-400 text-sm">{voidLog.length} void{voidLog.length !== 1 ? 's' : ''}</span>
+                <span className="text-red-400 font-bold">
+                  -₦{voidLog.reduce((s, v) => s + (v.total_value || 0), 0).toLocaleString()} total
+                </span>
+              </div>
+            </div>
+          )}
+
+          {voidLog.map(v => (
+            <div key={v.id} className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div>
+                  <p className="text-white font-bold text-sm">{v.menu_item_name}</p>
+                  <p className="text-gray-500 text-xs mt-0.5">
+                    {v.void_type === 'order' ? 'Full order void' : `Qty: ${v.quantity} · ₦${v.unit_price?.toLocaleString()} each`}
+                  </p>
+                </div>
+                <p className="text-red-400 font-bold shrink-0">-₦{v.total_value?.toLocaleString()}</p>
+              </div>
+              <div className="border-t border-gray-800 pt-2 mt-2 space-y-0.5">
+                {v.reason && <p className="text-gray-400 text-xs">Reason: {v.reason}</p>}
+                <p className="text-gray-500 text-xs">Approved by: {v.approved_by_name || 'N/A'}</p>
+                {v.voided_by_name && <p className="text-gray-500 text-xs">Voided by: {v.voided_by_name}</p>}
+                <p className="text-gray-600 text-xs">
+                  {new Date(v.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {activeTab === 'ledger' && (
         <div className="space-y-4">
           <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex items-center justify-between">
@@ -779,6 +848,30 @@ export default function Accounting() {
       {/* AUDIT TAB */}
       {activeTab === 'audit' && (
         <div className="space-y-3">
+          <button onClick={() => {
+            const rows = [['Date','Time','Action','Entity','Staff','Role','Details']]
+            auditLog.forEach(e => rows.push([
+              new Date(e.created_at).toLocaleDateString('en-NG'),
+              new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              e.action, e.entity_name || e.entity,
+              e.performed_by_name || 'System', e.performed_by_role || '',
+              JSON.stringify(e.new_value || {}).replace(/,/g, ';')
+            ]))
+            const doc = createPDF('Audit Log', dateRange)
+            const body = auditLog.map(e => [
+              new Date(e.created_at).toLocaleDateString('en-NG'),
+              new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              (e.action || '').replace(/_/g, ' '),
+              e.entity_name || e.entity || '',
+              e.performed_by_name || 'System',
+              e.performed_by_role || ''
+            ])
+            addTable(doc, ['Date','Time','Action','Entity','Performed By','Role'], body)
+            savePDF(doc, 'audit-log-' + dateRange + '-' + new Date().toISOString().split('T')[0] + '.pdf')
+          }} className="w-full flex items-center justify-center gap-2 text-xs bg-amber-500 hover:bg-amber-400 text-black font-bold px-3 py-2.5 rounded-xl transition-colors">
+            <Download size={12} /> Export Audit PDF
+          </button>
+
           {auditLog.length === 0 ? (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center text-gray-500">
               No audit records for this period
@@ -823,30 +916,6 @@ export default function Accounting() {
               </button>
             )
           })}
-
-          <button onClick={() => {
-            const rows = [['Date','Time','Action','Entity','Staff','Role','Details']]
-            auditLog.forEach(e => rows.push([
-              new Date(e.created_at).toLocaleDateString('en-NG'),
-              new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              e.action, e.entity_name || e.entity,
-              e.performed_by_name || 'System', e.performed_by_role || '',
-              JSON.stringify(e.new_value || {}).replace(/,/g, ';')
-            ]))
-            const doc = createPDF('Audit Log', dateRange)
-            const body = auditLog.map(e => [
-              new Date(e.created_at).toLocaleDateString('en-NG'),
-              new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              (e.action || '').replace(/_/g, ' '),
-              e.entity_name || e.entity || '',
-              e.performed_by_name || 'System',
-              e.performed_by_role || ''
-            ])
-            addTable(doc, ['Date','Time','Action','Entity','Performed By','Role'], body)
-            savePDF(doc, 'audit-log-' + dateRange + '-' + new Date().toISOString().split('T')[0] + '.pdf')
-          }} className="w-full flex items-center justify-center gap-2 text-xs bg-amber-500 hover:bg-amber-400 text-black font-bold px-3 py-2.5 rounded-xl transition-colors">
-            <Download size={12} /> Export Audit PDF
-          </button>
 
           {selectedAudit && (
             <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">

@@ -68,13 +68,13 @@ export default function ZonePricing({ onBack }) {
   const filtered = filterCat === 'All' ? items : items.filter(i => i.menu_categories?.name === filterCat)
 
   if (loading) return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+    <div className="min-h-full bg-gray-950 flex items-center justify-center">
       <div className="text-amber-500">Loading...</div>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-full bg-gray-950">
       <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="text-gray-400 hover:text-white"><ArrowLeft size={20} /></button>

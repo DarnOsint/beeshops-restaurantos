@@ -1,10 +1,25 @@
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { sendPushToStaff } from '../hooks/usePushNotifications'
 import { ShieldAlert, Delete } from 'lucide-react'
 
 export default function VoidPinModal({ onApproved, onCancel, voidDescription }) {
   const [pin, setPin] = useState('')
+
+  useEffect(() => {
+    // Notify all active managers and owners that a void needs approval
+    supabase.from('profiles')
+      .select('id')
+      .in('role', ['owner', 'manager'])
+      .eq('is_active', true)
+      .then(({ data }) => {
+        if (!data?.length) return
+        data.forEach(m => {
+          sendPushToStaff(m.id, '🚨 Void Approval Needed', voidDescription)
+        })
+      })
+  }, [])
   const [error, setError] = useState('')
   const [checking, setChecking] = useState(false)
 

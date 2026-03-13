@@ -3,8 +3,8 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { 
-  Beer, LogOut, Users, LayoutDashboard, 
-  ShoppingBag, TrendingUp, Clock, ChevronRight, DollarSign, Settings, BookOpen, BedDouble, AlertTriangle, Save, ClipboardCheck
+  Beer, LogOut, Users, LayoutDashboard, Camera, Activity, 
+  ShoppingBag, TrendingUp, Clock, ChevronRight, DollarSign, Settings, BookOpen, BedDouble, AlertTriangle, Save, ClipboardCheck, Trash2
 } from 'lucide-react'
 import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
@@ -12,6 +12,7 @@ import TillManagement from './TillManagement'
 import WaiterCalls from './WaiterCalls'
 import { useLateOrders } from '../../hooks/useLateOrders'
 import { HelpTooltip } from '../../components/HelpTooltip'
+import UnassignedCustomerOrders from '../../components/UnassignedCustomerOrders'
 
 export default function Management() {
   const { profile, signOut } = useAuth()
@@ -21,6 +22,8 @@ export default function Management() {
   const [editThreshold, setEditThreshold] = useState('')
   const [savingThreshold, setSavingThreshold] = useState(false)
   const [serviceLog, setServiceLog] = useState([])
+  const [voidLog, setVoidLog] = useState([])
+  const [voidLoading, setVoidLoading] = useState(false)
   const [serviceLogLoading, setServiceLogLoading] = useState(false)
   const [stats, setStats] = useState({
     openOrders: 0,
@@ -53,6 +56,17 @@ export default function Management() {
     setServiceLog(data || [])
     setServiceLogLoading(false)
   }
+
+  useEffect(() => {
+    if (activeTab !== 'voids') return
+    setVoidLoading(true)
+    const today = new Date(); today.setHours(0,0,0,0)
+    supabase.from('void_log')
+      .select('*')
+      .gte('created_at', today.toISOString())
+      .order('created_at', { ascending: false })
+      .then(({ data }) => { setVoidLog(data || []); setVoidLoading(false) })
+  }, [activeTab])
 
   useEffect(() => {
     if (activeTab !== 'service') return
@@ -96,6 +110,33 @@ export default function Management() {
     })
   }
 
+  const [cvData, setCvData] = useState({
+    alerts: [], shelfAlerts: [], exitEvents: [], occupancy: 0
+  })
+
+  useEffect(() => {
+    fetchCvData()
+    const cvCh = supabase.channel('mgmt-cv')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cv_alerts' }, () => fetchCvData())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cv_shelf_events' }, () => fetchCvData())
+      .subscribe()
+    return () => supabase.removeChannel(cvCh)
+  }, [])
+
+  const fetchCvData = async () => {
+    const today = new Date(); today.setHours(0,0,0,0)
+    const [alertsRes, shelfRes, occupancyRes] = await Promise.all([
+      supabase.from('cv_alerts').select('*').eq('resolved', false).gte('created_at', today.toISOString()).order('created_at', { ascending: false }).limit(15),
+      supabase.from('cv_shelf_events').select('*').neq('alert_level', 'normal').gte('created_at', today.toISOString()).order('created_at', { ascending: false }).limit(10),
+      supabase.from('cv_people_counts').select('occupancy').order('created_at', { ascending: false }).limit(1),
+    ])
+    setCvData({
+      alerts: alertsRes.data || [],
+      shelfAlerts: shelfRes.data || [],
+      occupancy: occupancyRes.data?.[0]?.occupancy || 0,
+    })
+  }
+
   const tabs = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'shifts', label: 'Shifts', icon: Clock },
@@ -103,11 +144,13 @@ export default function Management() {
     { id: 'orders', label: 'Orders', icon: ShoppingBag },
     { id: 'till', label: 'Till', icon: DollarSign },
     { id: 'service', label: 'Service', icon: ClipboardCheck },
+    { id: 'voids', label: 'Voids', icon: Trash2 },
     { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'cctv', label: 'CCTV', icon: Camera },
   ]
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-full bg-gray-950">
 
       {/* Waiter call alerts — floats top right */}
       <WaiterCalls />
@@ -179,6 +222,7 @@ export default function Management() {
       <div className="p-4">
         {activeTab === 'overview' && (
           <div className="space-y-4">
+            <UnassignedCustomerOrders />
             <div className="grid grid-cols-2 gap-4">
               {[
                 { label: 'Open Orders', value: stats.openOrders, icon: ShoppingBag, color: 'text-amber-400', bg: 'bg-amber-400/10' },
@@ -235,7 +279,117 @@ export default function Management() {
         {activeTab === 'tables' && <TableAssignment />}
         {activeTab === 'orders' && <OpenOrders />}
         {activeTab === 'till' && <TillManagement />}
+        {activeTab === 'cctv' && (
+          <div className="space-y-4">
+            {/* Occupancy */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+                <div className="inline-flex p-2 rounded-lg bg-purple-400/10 mb-2">
+                  <Activity size={16} className="text-purple-400" />
+                </div>
+                <p className="text-gray-400 text-xs">Live Occupancy</p>
+                <p className="text-white text-2xl font-bold mt-0.5">{cvData.occupancy}</p>
+              </div>
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+                <div className={`inline-flex p-2 rounded-lg mb-2 ${cvData.alerts.length > 0 ? 'bg-red-400/10' : 'bg-gray-400/10'}`}>
+                  <Camera size={16} className={cvData.alerts.length > 0 ? 'text-red-400' : 'text-gray-400'} />
+                </div>
+                <p className="text-gray-400 text-xs">Unresolved Alerts</p>
+                <p className={`text-2xl font-bold mt-0.5 ${cvData.alerts.length > 0 ? 'text-red-400' : 'text-white'}`}>{cvData.alerts.length}</p>
+              </div>
+            </div>
+
+            {/* Active alerts */}
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+              <p className="text-white font-semibold text-sm mb-3 flex items-center gap-2">
+                <Camera size={14} className="text-purple-400" /> Active Alerts
+              </p>
+              {cvData.alerts.length === 0 ? (
+                <p className="text-gray-500 text-sm text-center py-6">No active alerts</p>
+              ) : (
+                <div className="space-y-2">
+                  {cvData.alerts.map((alert, i) => (
+                    <div key={i} className="bg-gray-800 rounded-xl px-3 py-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-white text-xs font-medium">{alert.camera_id} — {alert.alert_type?.replace(/_/g,' ')}</p>
+                          <p className="text-gray-500 text-xs mt-0.5">{alert.description}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            alert.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
+                            alert.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
+                            'bg-yellow-500/20 text-yellow-400'
+                          }`}>{alert.severity}</span>
+                          <p className="text-gray-600 text-xs mt-1">{new Date(alert.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Shelf alerts */}
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+              <p className="text-white font-semibold text-sm mb-3">Bar Shelf Stock</p>
+              {cvData.shelfAlerts.length === 0 ? (
+                <p className="text-gray-500 text-sm text-center py-4">No shelf alerts today</p>
+              ) : (
+                <div className="space-y-2">
+                  {cvData.shelfAlerts.map((e, i) => (
+                    <div key={i} className="flex items-center justify-between bg-gray-800 rounded-xl px-3 py-2">
+                      <div>
+                        <p className="text-white text-xs capitalize">{e.drink_name?.replace(/_/g,' ')}</p>
+                        <p className="text-gray-500 text-xs">{e.detected_count} bottles detected</p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        e.alert_level === 'missing' ? 'bg-red-500/20 text-red-400' :
+                        e.alert_level === 'critical' ? 'bg-orange-500/20 text-orange-400' :
+                        'bg-yellow-500/20 text-yellow-400'
+                      }`}>{e.alert_level}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
+      {activeTab === 'voids' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-white font-bold">Void Log — Today</p>
+            <span className="text-gray-500 text-xs">{voidLog.length} record{voidLog.length !== 1 ? 's' : ''}</span>
+          </div>
+          {voidLoading && <p className="text-gray-500 text-sm text-center py-8">Loading...</p>}
+          {!voidLoading && voidLog.length === 0 && (
+            <div className="text-center py-12">
+              <Trash2 size={32} className="text-gray-700 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">No voids recorded today</p>
+            </div>
+          )}
+          {voidLog.map(v => (
+            <div key={v.id} className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-white font-bold text-sm leading-tight flex-1 min-w-0 truncate">{v.menu_item_name}</p>
+                <p className="text-red-400 font-bold text-sm shrink-0">-₦{v.total_value?.toLocaleString()}</p>
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="text-gray-500 text-xs">{v.void_type === 'order' ? 'Full order void' : `Qty: ${v.quantity}`}</p>
+                <p className="text-gray-600 text-xs">₦{v.unit_price?.toLocaleString()} each</p>
+              </div>
+              <div className="border-t border-gray-800 pt-2 space-y-0.5">
+                {v.reason && <p className="text-gray-400 text-xs">Reason: {v.reason}</p>}
+                <p className="text-gray-600 text-xs">Approved: {v.approved_by_name || 'N/A'}</p>
+                {v.voided_by_name && <p className="text-gray-600 text-xs">By: {v.voided_by_name}</p>}
+                <p className="text-gray-600 text-xs">{new Date(v.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {activeTab === 'settings' && (
         <div className="p-4 space-y-4 max-w-md">
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">

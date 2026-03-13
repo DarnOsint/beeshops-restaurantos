@@ -7,6 +7,26 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const getMfaVerified = () => {
+  try {
+    const stored = localStorage.getItem("mfa_verified")
+    if (!stored) return false
+    const { verified, expiry } = JSON.parse(stored)
+    return verified && Date.now() < expiry
+  } catch { return false }
+}
+const [mfaVerified, setMfaVerifiedState] = useState(getMfaVerified)
+
+const setMfaVerified = (value) => {
+  if (value) {
+    const expiry = new Date()
+    expiry.setHours(23, 59, 59, 999)
+    localStorage.setItem("mfa_verified", JSON.stringify({ verified: true, expiry: expiry.getTime() }))
+  } else {
+    localStorage.removeItem("mfa_verified")
+  }
+  setMfaVerifiedState(value)
+}
 
   useEffect(() => {
     // Check for PIN session first
@@ -65,6 +85,7 @@ export function AuthProvider({ children }) {
   }
 
   const signOut = async () => {
+    setMfaVerified(false)
     const pinSession = localStorage.getItem('pin_session')
     if (pinSession) {
       localStorage.removeItem('pin_session')
@@ -78,8 +99,11 @@ export function AuthProvider({ children }) {
     setProfile(null)
   }
 
+  const MFA_ROLES = ['owner', 'manager', 'executive', 'accountant']
+  const mfaRequired = !!(profile && MFA_ROLES.includes(profile.role) && !user?.pin_session && !mfaVerified)
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, signOut, mfaRequired, mfaVerified, setMfaVerified }}>
       {children}
     </AuthContext.Provider>
   )

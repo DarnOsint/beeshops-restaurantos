@@ -5,8 +5,8 @@ import { supabase } from '../../lib/supabase'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import { 
   LayoutDashboard, ShoppingBag, Users, BedDouble,
-  TrendingUp, Package, LogOut, Beer, RefreshCw, Settings,
-  BookOpen, BarChart2, MapPin
+  TrendingUp, Package, LogOut, Beer, RefreshCw, Settings, Smartphone,
+  BookOpen, BarChart2, MapPin, Camera, AlertTriangle, Activity, Eye
 } from 'lucide-react'
 
 function getGreeting() {
@@ -19,6 +19,11 @@ function getGreeting() {
 export default function Executive() {
   const { profile, signOut } = useAuth()
   const [geofenceEnabled, setGeofenceEnabled] = useState(true)
+  const [bankName, setBankName] = useState('')
+  const [bankAccountNumber, setBankAccountNumber] = useState('')
+  const [bankAccountName, setBankAccountName] = useState('')
+  const [savingBank, setSavingBank] = useState(false)
+  const [showBankEdit, setShowBankEdit] = useState(false)
   const [geoToggling, setGeoToggling] = useState(false)
   const [radiusMain, setRadiusMain] = useState(400)
   const [radiusApartment, setRadiusApartment] = useState(200)
@@ -32,17 +37,28 @@ export default function Executive() {
   const [recentOrders, setRecentOrders] = useState([])
   const [trendData, setTrendData] = useState([])
   const [loading, setLoading] = useState(true)
+  const [cvTab, setCvTab] = useState(false)
+  const [cvData, setCvData] = useState({
+    occupancy: 0,
+    todayAlerts: [],
+    zoneHeatmaps: [],
+    tillEvents: [],
+    shelfAlerts: [],
+  })
 
   useEffect(() => {
     fetchStats()
     supabase.from('settings').select('id, value')
-      .in('id', ['geofence_enabled', 'geofence_radius_main', 'geofence_radius_apartment'])
+      .in('id', ['geofence_enabled', 'geofence_radius_main', 'geofence_radius_apartment', 'bank_name', 'bank_account_number', 'bank_account_name'])
       .then(({ data }) => {
         if (!data) return
         const map = Object.fromEntries(data.map(r => [r.id, r.value]))
         if (map['geofence_enabled'] !== undefined) setGeofenceEnabled(map['geofence_enabled'] === 'true')
         if (map['geofence_radius_main']) setRadiusMain(parseInt(map['geofence_radius_main']))
         if (map['geofence_radius_apartment']) setRadiusApartment(parseInt(map['geofence_radius_apartment']))
+        if (map['bank_name'] !== undefined) setBankName(map['bank_name'])
+        if (map['bank_account_number'] !== undefined) setBankAccountNumber(map['bank_account_number'])
+        if (map['bank_account_name'] !== undefined) setBankAccountName(map['bank_account_name'])
       })
     const interval = setInterval(fetchStats, 30000)
     const channel = supabase
@@ -53,7 +69,15 @@ export default function Executive() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () => fetchStats())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'room_stays' }, () => fetchStats())
       .subscribe()
-    return () => { clearInterval(interval); supabase.removeChannel(channel) }
+    fetchCvData()
+    const cvChannel = supabase
+      .channel('cv-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cv_alerts' }, () => fetchCvData())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cv_people_counts' }, () => fetchCvData())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cv_till_events' }, () => fetchCvData())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'cv_shelf_events' }, () => fetchCvData())
+      .subscribe()
+    return () => { clearInterval(interval); supabase.removeChannel(channel); supabase.removeChannel(cvChannel) }
   }, [])
 
   const toggleGeofence = async () => {
@@ -72,6 +96,34 @@ export default function Executive() {
     ])
     setRadiusSaving(false)
     setShowRadiusEdit(false)
+  }
+
+  const saveBank = async () => {
+    setSavingBank(true)
+    await Promise.all([
+      supabase.from('settings').upsert({ id: 'bank_name', value: bankName, updated_at: new Date().toISOString() }),
+      supabase.from('settings').upsert({ id: 'bank_account_number', value: bankAccountNumber, updated_at: new Date().toISOString() }),
+      supabase.from('settings').upsert({ id: 'bank_account_name', value: bankAccountName, updated_at: new Date().toISOString() }),
+    ])
+    setSavingBank(false)
+  }
+
+  const fetchCvData = async () => {
+    const today = new Date(); today.setHours(0,0,0,0)
+    const [occupancyRes, alertsRes, heatmapRes, tillRes, shelfRes] = await Promise.all([
+      supabase.from('cv_people_counts').select('occupancy').order('created_at', { ascending: false }).limit(1),
+      supabase.from('cv_alerts').select('*').eq('resolved', false).gte('created_at', today.toISOString()).order('created_at', { ascending: false }).limit(20),
+      supabase.from('cv_zone_heatmaps').select('zone_label, person_count, avg_dwell_seconds').gte('created_at', today.toISOString()).order('person_count', { ascending: false }).limit(10),
+      supabase.from('cv_till_events').select('*').neq('alert_type', 'normal').gte('created_at', today.toISOString()).order('created_at', { ascending: false }).limit(10),
+      supabase.from('cv_shelf_events').select('*').neq('alert_level', 'normal').gte('created_at', today.toISOString()).order('created_at', { ascending: false }).limit(10),
+    ])
+    setCvData({
+      occupancy: occupancyRes.data?.[0]?.occupancy || 0,
+      todayAlerts: alertsRes.data || [],
+      zoneHeatmaps: heatmapRes.data || [],
+      tillEvents: tillRes.data || [],
+      shelfAlerts: shelfRes.data || [],
+    })
   }
 
   const fetchStats = async () => {
@@ -139,7 +191,7 @@ export default function Executive() {
   const maxRevenue = Math.max(...trendData.map(d => d.revenue), 1)
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-full bg-gray-950">
 
       {/* Sticky title bar */}
       <div className="sticky top-0 z-20 bg-gray-950/95 backdrop-blur border-b border-gray-800 px-4 md:px-6 py-3 flex items-center justify-between">
@@ -155,6 +207,10 @@ export default function Executive() {
             { id: 'exec-orders', title: 'Recent Orders', description: 'Live feed of the most recent orders across all tables and rooms.' },
             { id: 'exec-trend', title: 'Revenue Trend', description: '7-day revenue chart showing daily performance at a glance.' },
           ]} />
+          <button onClick={() => setCvTab(v => !v)}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border transition-colors ${cvTab ? 'bg-purple-500/20 border-purple-500/40 text-purple-400' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'}`}>
+            <Camera size={13} /> CCTV
+          </button>
           <button onClick={fetchStats} className="text-gray-400 hover:text-white">
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
           </button>
@@ -225,6 +281,172 @@ export default function Executive() {
             </div>
           )}
         </div>
+
+        {/* Bank Transfer Settings */}
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl mb-4 overflow-hidden">
+          <button onClick={() => setShowBankEdit(e => !e)}
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800 transition-colors">
+            <div className="flex items-center gap-2">
+              <Smartphone size={15} className="text-amber-400" />
+              <span className="text-white font-semibold text-sm">Bank Transfer Details</span>
+              {bankName && <span className="text-gray-500 text-xs">· {bankName}</span>}
+            </div>
+            <span className="text-gray-500 text-xs">{showBankEdit ? 'Close ▲' : 'Edit ▼'}</span>
+          </button>
+          {showBankEdit && (
+            <div className="px-4 pb-4 space-y-2 border-t border-gray-800 pt-3">
+              <p className="text-gray-500 text-xs mb-2">Shown to waitrons when processing bank transfer payments.</p>
+              <div>
+                <label className="text-gray-400 text-xs mb-1 block">Bank Name</label>
+                <input value={bankName} onChange={e => setBankName(e.target.value)}
+                  placeholder="e.g. Moniepoint"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs mb-1 block">Account Number</label>
+                <input value={bankAccountNumber} onChange={e => setBankAccountNumber(e.target.value)}
+                  placeholder="e.g. 1234567890"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs mb-1 block">Account Name</label>
+                <input value={bankAccountName} onChange={e => setBankAccountName(e.target.value)}
+                  placeholder="e.g. Beeshop's Place Lounge"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={saveBank} disabled={savingBank}
+                  className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black text-sm font-bold py-2.5 rounded-xl transition-colors">
+                  {savingBank ? 'Saving...' : 'Save'}
+                </button>
+                <button onClick={() => setShowBankEdit(false)}
+                  className="flex-1 bg-gray-800 hover:bg-gray-700 text-white text-sm py-2.5 rounded-xl transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+
+        {/* CV Dashboard Panel */}
+        {cvTab && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Camera size={16} className="text-purple-400" />
+              <h3 className="text-white font-semibold text-sm md:text-base">CCTV Intelligence</h3>
+              <span className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded-full border border-purple-500/30">Live</span>
+            </div>
+
+            {/* Occupancy + alert count */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+                <div className="inline-flex p-2 rounded-lg bg-purple-400/10 mb-2">
+                  <Activity size={16} className="text-purple-400" />
+                </div>
+                <p className="text-gray-400 text-xs">Live Occupancy</p>
+                <p className="text-white text-2xl font-bold mt-0.5">{cvData.occupancy}</p>
+              </div>
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+                <div className={`inline-flex p-2 rounded-lg mb-2 ${cvData.todayAlerts.length > 0 ? 'bg-red-400/10' : 'bg-gray-400/10'}`}>
+                  <AlertTriangle size={16} className={cvData.todayAlerts.length > 0 ? 'text-red-400' : 'text-gray-400'} />
+                </div>
+                <p className="text-gray-400 text-xs">Active Alerts</p>
+                <p className={`text-2xl font-bold mt-0.5 ${cvData.todayAlerts.length > 0 ? 'text-red-400' : 'text-white'}`}>{cvData.todayAlerts.length}</p>
+              </div>
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+                <div className="inline-flex p-2 rounded-lg bg-amber-400/10 mb-2">
+                  <Eye size={16} className="text-amber-400" />
+                </div>
+                <p className="text-gray-400 text-xs">Cameras</p>
+                <p className="text-white text-2xl font-bold mt-0.5">9</p>
+              </div>
+            </div>
+
+            {/* Active Alerts */}
+            {cvData.todayAlerts.length > 0 && (
+              <div className="bg-gray-900 border border-red-500/20 rounded-2xl p-4 mb-4">
+                <p className="text-red-400 font-semibold text-sm mb-3 flex items-center gap-2">
+                  <AlertTriangle size={14} /> Active Alerts
+                </p>
+                <div className="space-y-2">
+                  {cvData.todayAlerts.slice(0, 5).map((alert, i) => (
+                    <div key={i} className="flex items-start justify-between gap-3 bg-gray-800 rounded-xl px-3 py-2.5">
+                      <div>
+                        <p className="text-white text-xs font-medium">{alert.camera_id} — {alert.alert_type?.replace(/_/g, ' ')}</p>
+                        <p className="text-gray-500 text-xs mt-0.5">{alert.description}</p>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
+                        alert.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
+                        alert.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
+                        'bg-yellow-500/20 text-yellow-400'
+                      }`}>{alert.severity}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Zone Activity */}
+            {cvData.zoneHeatmaps.length > 0 && (
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4">
+                <p className="text-white font-semibold text-sm mb-3">Zone Activity Today</p>
+                <div className="space-y-2">
+                  {cvData.zoneHeatmaps.map((zone, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <span className="text-gray-400 text-xs">{zone.zone_label}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-white text-xs font-medium">{zone.person_count} visits</span>
+                        <span className="text-gray-500 text-xs">{Math.round((zone.avg_dwell_seconds||0)/60)}m avg</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Till Anomalies */}
+            {cvData.tillEvents.length > 0 && (
+              <div className="bg-gray-900 border border-orange-500/20 rounded-2xl p-4 mb-4">
+                <p className="text-orange-400 font-semibold text-sm mb-3">Till Anomalies</p>
+                <div className="space-y-2">
+                  {cvData.tillEvents.slice(0, 3).map((e, i) => (
+                    <div key={i} className="flex items-center justify-between bg-gray-800 rounded-xl px-3 py-2">
+                      <p className="text-white text-xs">{e.alert_type?.replace(/_/g, ' ')}</p>
+                      <p className="text-gray-500 text-xs">{new Date(e.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Shelf Alerts */}
+            {cvData.shelfAlerts.length > 0 && (
+              <div className="bg-gray-900 border border-amber-500/20 rounded-2xl p-4">
+                <p className="text-amber-400 font-semibold text-sm mb-3">Bar Shelf Alerts</p>
+                <div className="space-y-2">
+                  {cvData.shelfAlerts.slice(0, 5).map((e, i) => (
+                    <div key={i} className="flex items-center justify-between bg-gray-800 rounded-xl px-3 py-2">
+                      <p className="text-white text-xs capitalize">{e.drink_name?.replace(/_/g, ' ')}</p>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        e.alert_level === 'missing' ? 'bg-red-500/20 text-red-400' :
+                        e.alert_level === 'critical' ? 'bg-orange-500/20 text-orange-400' :
+                        'bg-yellow-500/20 text-yellow-400'
+                      }`}>{e.alert_level}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {cvData.todayAlerts.length === 0 && cvData.zoneHeatmaps.length === 0 && cvData.tillEvents.length === 0 && (
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
+                <Camera size={32} className="text-gray-700 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm">No CV data yet — start the CV modules on your server</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">

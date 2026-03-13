@@ -65,7 +65,6 @@ export default function AppShell({ children }) {
   if (BARE_ROLES.includes(role)) {
     return (
       <div className="flex flex-col min-h-screen bg-gray-950">
-        <OfflineBanner />
         <div className="flex-1">{children}</div>
       </div>
     )

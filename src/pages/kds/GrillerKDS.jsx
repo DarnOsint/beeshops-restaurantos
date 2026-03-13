@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { sendPushToStaff } from '../../hooks/usePushNotifications'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
@@ -59,7 +60,7 @@ export default function GrillerKDS() {
       .select(`
         *,
         menu_items(name, menu_categories(name, destination)),
-        orders(id, order_type, customer_name, tables(name))
+        orders(id, order_type, customer_name, staff_id, tables(name))
       `)
       .in('status', ['pending', 'preparing'])
       .order('created_at', { ascending: true })
@@ -107,6 +108,13 @@ export default function GrillerKDS() {
       .update({ status: 'ready' })
       .eq('id', itemId)
     setCompleting(prev => ({ ...prev, [itemId]: false }))
+    const ticket = tickets.find(t => t.items.some(i => i.id === itemId))
+    if (ticket?.orders?.staff_id) {
+      const item = ticket.items.find(i => i.id === itemId)
+      const itemName = item?.menu_items?.name || 'Item'
+      const tableName = ticket.orders?.tables?.name || 'a table'
+      await sendPushToStaff(ticket.orders.staff_id, '✅ Item Ready', `${itemName} ready for ${tableName}`)
+    }
   }
 
   const markAllReady = async (ticket) => {
@@ -119,6 +127,10 @@ export default function GrillerKDS() {
       .update({ status: 'ready' })
       .in('id', ids)
     ids.forEach(id => setCompleting(prev => ({ ...prev, [id]: false })))
+    if (ticket.orders?.staff_id) {
+      const tableName = ticket.orders?.tables?.name || 'a table'
+      await sendPushToStaff(ticket.orders.staff_id, '✅ Order Ready', `Grill order for ${tableName} is ready to collect`)
+    }
   }
 
   const urgencyStyles = {
@@ -127,16 +139,23 @@ export default function GrillerKDS() {
     critical: { border: 'border-red-500/50', header: 'bg-red-500/10', flame: 'text-red-400', time: 'text-red-400' },
   }
 
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchTickets() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
   if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
 
   if (loading) return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+    <div className="min-h-full bg-gray-950 flex items-center justify-center">
       <div className="text-orange-400 animate-pulse">Loading Grill Station...</div>
     </div>
   )
 
+
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col">
+    <div className="min-h-full bg-gray-950 flex flex-col">
 
       {/* Hidden audio for new order alert */}
       <audio ref={audioRef} preload="auto">

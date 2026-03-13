@@ -1,9 +1,9 @@
 import { useNotifications } from './hooks/useNotifications'
-import OfflineBanner from './components/OfflineBanner'
 import AppShell from './components/AppShell'
 import NotificationToast from './components/NotificationToast'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import MFAChallenge from './components/MFAChallenge'
 import Login from './pages/auth/Login'
 import Executive from './pages/executive/Executive'
 import POS from './pages/pos/POS'
@@ -12,6 +12,7 @@ import KitchenKDS from './pages/kds/KitchenKDS'
 import BarKDS from './pages/kds/BarKDS'
 import GrillerKDS from './pages/kds/GrillerKDS'
 import BackOffice from './pages/backoffice/BackOffice'
+import QRTableCards from './pages/backoffice/QRTableCards'
 import Accounting from './pages/accounting/Accounting'
 import RoomManagement from './pages/rooms/RoomManagement'
 import Debtors from './pages/accounting/Debtors'
@@ -19,9 +20,19 @@ import Reports from './pages/reports/Reports'
 import Analytics from './pages/analytics/Analytics'
 import ApartmentDashboard from './pages/apartment/ApartmentDashboard'
 import TableView from './pages/customer/TableView'
+import ReceiptView from './pages/customer/ReceiptView'
 
 function PrivateRoute({ children }) {
-  const { user, loading } = useAuth()
+  const { user, profile, loading, mfaRequired, setMfaVerified, signOut } = useAuth()
+  if (!loading && mfaRequired) return (
+    <MFAChallenge
+      user={user}
+      profile={profile}
+      onVerified={() => setMfaVerified(true)}
+      onSignOut={signOut}
+    />
+  )
+
   if (loading) return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
       <div className="text-amber-500">Loading...</div>
@@ -32,7 +43,16 @@ function PrivateRoute({ children }) {
 }
 
 function RoleGuard({ children, allowed }) {
-  const { profile, loading } = useAuth()
+  const { user, profile, loading, mfaRequired, setMfaVerified, signOut } = useAuth()
+  if (!loading && mfaRequired) return (
+    <MFAChallenge
+      user={user}
+      profile={profile}
+      onVerified={() => setMfaVerified(true)}
+      onSignOut={signOut}
+    />
+  )
+
   if (loading) return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
       <div className="text-amber-500">Loading...</div>
@@ -44,7 +64,16 @@ function RoleGuard({ children, allowed }) {
 }
 
 function RoleRoute() {
-  const { profile, loading } = useAuth()
+  const { user, profile, loading, mfaRequired, setMfaVerified, signOut } = useAuth()
+  if (!loading && mfaRequired) return (
+    <MFAChallenge
+      user={user}
+      profile={profile}
+      onVerified={() => setMfaVerified(true)}
+      onSignOut={signOut}
+    />
+  )
+
   if (loading) return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
       <div className="text-amber-500">Loading...</div>
@@ -82,6 +111,9 @@ function AppRoutes() {
 
       <Route path="/backoffice" element={
         <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><BackOffice /></RoleGuard></PrivateRoute>
+      } />
+      <Route path="/backoffice/qr-cards" element={
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'executive']}><QRTableCards /></RoleGuard></PrivateRoute>
       } />
 
       <Route path="/pos" element={
@@ -128,6 +160,7 @@ function AppRoutes() {
 
       {/* Public route — no auth required */}
       <Route path="/table/:tableId" element={<TableView />} />
+      <Route path="/receipt/:orderId" element={<ReceiptView />} />
 
       <Route path="/" element={<Navigate to="/dashboard" />} />
     </Routes>
@@ -148,7 +181,6 @@ function AppInner() {
 function App() {
   return (
     <>
-    <OfflineBanner />
     <BrowserRouter>
       <AuthProvider>
         <AppInner />

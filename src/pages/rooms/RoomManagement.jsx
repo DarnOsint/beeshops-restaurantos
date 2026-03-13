@@ -234,7 +234,7 @@ export default function RoomManagement() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-full bg-gray-950">
       {/* Header */}
       
 

@@ -286,7 +286,7 @@ export default function Reports() {
   const chartData = report?.reportType === 'daily' ? report?.hourlyData : report?.dailyBreakdown
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-full bg-gray-950">
 
       
 

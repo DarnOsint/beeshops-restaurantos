@@ -24,6 +24,22 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
   const [currentSplitPerson, setCurrentSplitPerson] = useState(0)
   const [splitPayMethod, setSplitPayMethod] = useState('cash')
   const [splitCash, setSplitCash] = useState('')
+  const [bankDetails, setBankDetails] = useState({ name: 'Moniepoint', account_number: '', account_name: '' })
+
+  useState(() => {
+    supabase.from('settings')
+      .select('id, value')
+      .in('id', ['bank_name', 'bank_account_number', 'bank_account_name'])
+      .then(({ data }) => {
+        if (!data) return
+        const map = Object.fromEntries(data.map(r => [r.id, r.value]))
+        setBankDetails({
+          name: map['bank_name'] || 'Moniepoint',
+          account_number: map['bank_account_number'] || '',
+          account_name: map['bank_account_name'] || '',
+        })
+      })
+  }, [])
 
   const subtotal = order?.total_amount || 0
   const vatAmount = subtotal * 0.075
@@ -87,7 +103,7 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
         notes: (order.notes || '') + ' [Split: ' + updatedPayments.map(p => 'P' + p.person + '=' + p.method).join(', ') + ']'
       }).eq('id', order.id)
       await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', order.id)
-      await supabase.from('tables').update({ status: 'available' }).eq('id', table.id)
+      await supabase.from('tables').update({ status: 'available', assigned_staff: null }).eq('id', table.id)
       await audit({
         action: 'ORDER_PAID',
         entity: 'order',
@@ -96,6 +112,7 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
         newValue: { total: order.total_amount, payment_method: 'split', splits: updatedPayments.length },
         performer: profile
       })
+      await depleteInventory(order.id)
       setPaidOrder({ ...order, payment_method: 'split' })
       setSuccess(true)
     } else {
@@ -103,6 +120,50 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
       const nextPerson = allPeople.find(p => !paidPeople.includes(p))
       setCurrentSplitPerson(nextPerson - 1)
       setSplitPayMethod('cash')
+    }
+  }
+
+  const depleteInventory = async (orderId) => {
+    try {
+      const { data: items } = await supabase
+        .from('order_items')
+        .select('menu_item_id, quantity')
+        .eq('order_id', orderId)
+      if (!items?.length) return
+
+      const menuItemIds = items.map(i => i.menu_item_id).filter(Boolean)
+      const { data: invRows } = await supabase
+        .from('inventory')
+        .select('id, menu_item_id, item_name, current_stock')
+        .in('menu_item_id', menuItemIds)
+        .eq('is_active', true)
+      if (!invRows?.length) return
+
+      for (const inv of invRows) {
+        const orderItem = items.find(i => i.menu_item_id === inv.menu_item_id)
+        if (!orderItem) continue
+        const qty = orderItem.quantity
+        const before = inv.current_stock
+        const after = Math.max(0, before - qty)
+        await supabase.from('inventory').update({
+          current_stock: after,
+          updated_at: new Date().toISOString()
+        }).eq('id', inv.id)
+        await supabase.from('inventory_log').insert({
+          inventory_id: inv.id,
+          menu_item_id: inv.menu_item_id,
+          item_name: inv.item_name,
+          order_id: orderId,
+          change_type: 'deduction',
+          quantity_change: -qty,
+          stock_before: before,
+          stock_after: after,
+          notes: 'Auto-deducted on payment',
+          created_by: profile?.id,
+        })
+      }
+    } catch (e) {
+      console.error('Inventory depletion error:', e)
     }
   }
 
@@ -121,7 +182,7 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
           closed_at: new Date().toISOString()
         })
         await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', order.id)
-        await offlineUpdate('tables', table.id, { status: 'available' })
+        await offlineUpdate('tables', table.id, { status: 'available', assigned_staff: null })
         await offlineInsert('debtors', {
           id: crypto.randomUUID(),
           created_at: new Date().toISOString(),
@@ -133,6 +194,7 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
           notes: 'Auto-created from POS - ' + (table?.name || ''),
           recorded_by: profile?.id, recorded_by_name: profile?.full_name,
         })
+        await depleteInventory(order.id)
         setPaidOrder({ ...order, payment_method: 'credit' })
         await audit({
         action: 'ORDER_PAID',
@@ -152,8 +214,9 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
           closed_at: new Date().toISOString()
         })
       await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', order.id)
-      await offlineUpdate('tables', table.id, { status: 'available' })
+      await offlineUpdate('tables', table.id, { status: 'available', assigned_staff: null })
 
+      await depleteInventory(order.id)
       setPaidOrder({ ...order, payment_method: paymentMethod })
       setSuccess(true)
     } catch (err) {
@@ -446,7 +509,13 @@ export default function PaymentModal({ order, table, onSuccess, onClose }) {
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-center">
               <Smartphone size={28} className="text-amber-400 mx-auto mb-2" />
               <p className="text-amber-400 font-medium">Bank Transfer</p>
-              <p className="text-gray-400 text-sm mt-1">Confirm customer has transferred ₦{total.toLocaleString()} to Moniepoint before proceeding.</p>
+              <div className="bg-gray-800 rounded-xl p-3 mt-2 space-y-1">
+                <p className="text-gray-400 text-xs">Transfer ₦{total.toLocaleString()} to:</p>
+                <p className="text-white font-bold text-sm">{bankDetails.name}</p>
+                {bankDetails.account_number && <p className="text-amber-400 font-mono font-bold">{bankDetails.account_number}</p>}
+                {bankDetails.account_name && <p className="text-gray-300 text-sm">{bankDetails.account_name}</p>}
+                <p className="text-gray-500 text-xs pt-1">Confirm transfer before proceeding.</p>
+              </div>
             </div>
           )}
 

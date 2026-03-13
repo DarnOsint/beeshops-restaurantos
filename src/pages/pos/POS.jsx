@@ -4,17 +4,21 @@ import { HelpTooltip } from '../../components/HelpTooltip'
 import { offlineInsert, offlineUpdate } from '../../lib/offlineWrite'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
-import { LogOut, Beer, RefreshCw, ShoppingBag, Phone } from 'lucide-react'
+import { usePushNotifications } from '../../hooks/usePushNotifications'
+import { LogOut, Beer, RefreshCw, ShoppingBag, Phone, History, Printer, TrendingUp, Clock } from 'lucide-react'
 import TableGrid from './TableGrid'
 import OrderPanel from './OrderPanel'
+import ReceiptModal from './ReceiptModal'
 import PaymentModal from './PaymentModal'
 import CashSaleModal from './CashSaleModal'
+import CustomerOrderAlerts from '../../components/CustomerOrderAlerts'
 import WaiterCalls from '../management/WaiterCalls'
 import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
 
 export default function POS() {
   const { profile, signOut } = useAuth()
+  usePushNotifications(profile?.id)
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence("main")
   const [tables, setTables] = useState([])
   const [menuItems, setMenuItems] = useState([])
@@ -23,6 +27,12 @@ export default function POS() {
   const [loading, setLoading] = useState(true)
   const [activeOrder, setActiveOrder] = useState(null)
   const [assignedTableIds, setAssignedTableIds] = useState(null) // null = no restriction
+  const [posTab, setPosTab] = useState('tables')
+  const [orderHistory, setOrderHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [reprintOrder, setReprintOrder] = useState(null)
+  const [shiftStats, setShiftStats] = useState(null)
+  const [shiftLoading, setShiftLoading] = useState(false)
   const [isClockedIn, setIsClockedIn] = useState(null) // null = checking
   const [showPayment, setShowPayment] = useState(false)
   const [showCashSale, setShowCashSale] = useState(false)
@@ -37,7 +47,7 @@ export default function POS() {
       .channel('tables-channel')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'tables' },
-        () => fetchTables()
+        () => { fetchTables(); if (profile) fetchAssignedTables(profile.role, profile.id) }
       )
       .subscribe()
 
@@ -72,18 +82,96 @@ export default function POS() {
       .select('category_id')
       .eq('staff_id', staffId)
       .eq('is_active', true)
+
+    // Fetch tables directly assigned to this waitron by manager
+    const { data: directTables } = await supabase
+      .from('tables')
+      .select('id')
+      .eq('assigned_staff', staffId)
+
+    const directIds = (directTables || []).map(t => t.id)
+
     if (!zoneData || zoneData.length === 0) {
-      setAssignedTableIds([]) // no zones assigned — block all tables
+      // No zone assigned — only show directly assigned tables
+      setAssignedTableIds(directIds.length > 0 ? directIds : [])
       return
     }
+
     // Get all tables in those zones
     const categoryIds = zoneData.map(z => z.category_id)
     const { data: tableData } = await supabase
       .from('tables')
       .select('id')
       .in('category_id', categoryIds)
-    if (tableData) setAssignedTableIds(tableData.map(t => t.id))
-    else setAssignedTableIds([])
+
+    const zoneIds = (tableData || []).map(t => t.id)
+    // Merge zone tables + directly assigned tables
+    const allIds = [...new Set([...zoneIds, ...directIds])]
+    setAssignedTableIds(allIds)
+  }
+
+  const fullRefresh = () => {
+    fetchTables()
+    if (profile) fetchAssignedTables(profile.role, profile.id)
+    if (activeOrder) {
+      supabase.from('orders')
+        .select('*, order_items(*, menu_items(name, price, menu_categories(name, destination)))')
+        .eq('id', activeOrder.id)
+        .single()
+        .then(({ data }) => { if (data) setActiveOrder(data) })
+    }
+  }
+
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') fullRefresh() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
+  const fetchShiftStats = async () => {
+    setShiftLoading(true)
+    const today = new Date().toISOString().split('T')[0]
+    const [attendanceRes, ordersRes] = await Promise.all([
+      supabase.from('attendance')
+        .select('clock_in, date')
+        .eq('staff_id', profile?.id)
+        .eq('date', today)
+        .is('clock_out', null)
+        .limit(1),
+      supabase.from('orders')
+        .select('id, total_amount, closed_at, tables(name), order_items(quantity, menu_items(name))')
+        .eq('staff_id', profile?.id)
+        .eq('status', 'paid')
+        .gte('closed_at', new Date(today).toISOString())
+    ])
+    const attendance = attendanceRes.data?.[0]
+    const orders = ordersRes.data || []
+    const totalSales = orders.reduce((s, o) => s + (o.total_amount || 0), 0)
+    const totalItems = orders.reduce((s, o) => s + o.order_items.reduce((ss, i) => ss + (i.quantity || 0), 0), 0)
+    const uniqueTables = new Set(orders.map(o => o.tables?.name).filter(Boolean)).size
+    setShiftStats({
+      clockIn: attendance?.clock_in,
+      ordersCount: orders.length,
+      totalSales,
+      totalItems,
+      uniqueTables,
+      recentOrders: orders.slice(0, 5)
+    })
+    setShiftLoading(false)
+  }
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true)
+    const today = new Date(); today.setHours(0,0,0,0)
+    const { data } = await supabase
+      .from('orders')
+      .select('*, tables(name), order_items(*, menu_items(name))')
+      .eq('status', 'paid')
+      .eq('staff_id', profile?.id)
+      .gte('closed_at', today.toISOString())
+      .order('closed_at', { ascending: false })
+    setOrderHistory(data || [])
+    setHistoryLoading(false)
   }
 
   const fetchTables = async () => {
@@ -288,7 +376,7 @@ export default function POS() {
   if (geoStatus !== "inside") return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
 
   if (isClockedIn === false) return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-6">
+    <div className="min-h-full bg-gray-950 flex items-center justify-center p-6">
       <div className="max-w-sm w-full bg-red-500/10 border border-red-500/20 rounded-2xl p-8 text-center">
         <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-5">
           <LogOut size={28} className="text-red-400" />
@@ -307,16 +395,17 @@ export default function POS() {
   )
 
   if (loading) return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+    <div className="min-h-full bg-gray-950 flex items-center justify-center">
       <div className="text-amber-500">Loading...</div>
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col">
+    <div className="min-h-full bg-gray-950 flex flex-col">
 
       {/* Waiter call alerts — only shows calls for this waitron's tables */}
       <WaiterCalls />
+      <CustomerOrderAlerts profile={profile} assignedTableIds={assignedTableIds || []} />
 
       <nav className="bg-gray-900 border-b border-gray-800 px-4 py-3 sticky top-0 z-40">
         <div className="flex items-center justify-between">
@@ -346,7 +435,7 @@ export default function POS() {
               <Phone size={13} />
               <span className="hidden sm:inline">Takeaway</span>
             </button>
-            <button onClick={fetchTables} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white">
+            <button onClick={fullRefresh} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white active:rotate-180 transition-transform duration-300">
               <RefreshCw size={15} />
             </button>
             <div className="hidden sm:block text-right">
@@ -368,15 +457,162 @@ export default function POS() {
         </div>
       </nav>
 
+      {/* Tab bar */}
+      <div className="flex border-b border-gray-800 bg-gray-900 px-4">
+        <button onClick={() => setPosTab('tables')}
+          className={"flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors " + (posTab === 'tables' ? 'border-amber-500 text-amber-400' : 'border-transparent text-gray-500 hover:text-white')}>
+          <Beer size={13} /> Tables
+        </button>
+        <button onClick={() => setPosTab('history')}
+          className={"flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors " + (posTab === 'history' ? 'border-amber-500 text-amber-400' : 'border-transparent text-gray-500 hover:text-white')}>
+          <History size={13} /> My Orders
+        </button>
+        <button onClick={() => setPosTab('shift')}
+          className={"flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors " + (posTab === 'shift' ? 'border-amber-500 text-amber-400' : 'border-transparent text-gray-500 hover:text-white')}>
+          <TrendingUp size={13} /> My Shift
+        </button>
+      </div>
+
       <div className="flex-1 flex overflow-hidden">
-        <div className={`${selectedTable && !showPayment ? 'hidden md:flex' : 'flex'} flex-1 flex-col overflow-hidden`}>
-          <TableGrid
-            tables={tables}
-            onSelectTable={handleSelectTable}
-            selectedTable={selectedTable}
-            assignedTableIds={assignedTableIds}
-          />
-        </div>
+        {posTab === 'tables' && (
+          <div className={`${selectedTable && !showPayment ? 'hidden md:flex' : 'flex'} flex-1 flex-col overflow-hidden`}>
+            <TableGrid
+              tables={tables}
+              onSelectTable={handleSelectTable}
+              selectedTable={selectedTable}
+              assignedTableIds={assignedTableIds}
+            />
+          </div>
+        )}
+
+        {posTab === 'shift' && (
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-gray-400 text-sm">Current shift summary</p>
+              <button onClick={fetchShiftStats} className="text-gray-500 hover:text-white">
+                <RefreshCw size={14} />
+              </button>
+            </div>
+            {shiftLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <RefreshCw size={20} className="animate-spin text-amber-500" />
+              </div>
+            ) : !shiftStats ? (
+              <div className="text-center py-16">
+                <Clock size={32} className="text-gray-700 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm">No shift data available</p>
+              </div>
+            ) : (
+              <>
+                {/* Clock in time */}
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center">
+                    <Clock size={18} className="text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-gray-500 text-xs">Clocked in at</p>
+                    <p className="text-white font-bold">
+                      {shiftStats.clockIn ? new Date(shiftStats.clockIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                    </p>
+                  </div>
+                  <div className="ml-auto text-right">
+                    <p className="text-gray-500 text-xs">Duration</p>
+                    <p className="text-white font-bold">
+                      {shiftStats.clockIn ? (() => {
+                        const mins = Math.floor((Date.now() - new Date(shiftStats.clockIn)) / 60000)
+                        return mins < 60 ? `${mins}m` : `${Math.floor(mins/60)}h ${mins%60}m`
+                      })() : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* KPI grid */}
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Orders Closed', value: shiftStats.ordersCount, color: 'text-blue-400' },
+                    { label: 'Tables Served', value: shiftStats.uniqueTables, color: 'text-green-400' },
+                    { label: 'Items Sold', value: shiftStats.totalItems, color: 'text-purple-400' },
+                  ].map(k => (
+                    <div key={k.label} className="bg-gray-900 border border-gray-800 rounded-2xl p-3 text-center">
+                      <p className={"text-2xl font-bold " + k.color}>{k.value}</p>
+                      <p className="text-gray-500 text-xs mt-0.5">{k.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Total sales */}
+                <div className="bg-gray-900 border border-amber-500/30 rounded-2xl p-4 text-center">
+                  <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">Total Sales</p>
+                  <p className="text-amber-400 text-3xl font-bold">₦{shiftStats.totalSales.toLocaleString()}</p>
+                </div>
+
+                {/* Recent orders */}
+                {shiftStats.recentOrders.length > 0 && (
+                  <div>
+                    <p className="text-gray-500 text-xs uppercase tracking-wide mb-2">Recent Orders</p>
+                    <div className="space-y-2">
+                      {shiftStats.recentOrders.map(order => (
+                        <div key={order.id} className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex items-center justify-between">
+                          <div>
+                            <p className="text-white text-sm">{order.tables?.name || 'Cash Sale'}</p>
+                            <p className="text-gray-500 text-xs">{new Date(order.closed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                          <p className="text-amber-400 font-bold text-sm">₦{(order.total_amount || 0).toLocaleString()}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {posTab === 'history' && (
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-gray-400 text-sm">Today's closed orders</p>
+              <button onClick={fetchHistory} className="text-gray-500 hover:text-white">
+                <RefreshCw size={14} />
+              </button>
+            </div>
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <RefreshCw size={20} className="animate-spin text-amber-500" />
+              </div>
+            ) : orderHistory.length === 0 ? (
+              <div className="text-center py-16">
+                <History size={32} className="text-gray-700 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm">No orders closed today</p>
+              </div>
+            ) : orderHistory.map(order => (
+              <div key={order.id} className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div>
+                    <p className="text-white font-semibold text-sm">{order.tables?.name || order.customer_name || 'Cash Sale'}</p>
+                    <p className="text-gray-500 text-xs mt-0.5">
+                      {new Date(order.closed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {order.payment_method?.replace('_', ' ')}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-amber-400 font-bold text-sm">₦{(order.total_amount || 0).toLocaleString()}</p>
+                    <button onClick={() => setReprintOrder(order)}
+                      className="flex items-center gap-1 text-gray-400 hover:text-white text-xs mt-1 transition-colors">
+                      <Printer size={12} /> Reprint
+                    </button>
+                  </div>
+                </div>
+                <div className="border-t border-gray-800 pt-2 space-y-0.5">
+                  {order.order_items?.map(item => (
+                    <p key={item.id} className="text-gray-500 text-xs">
+                      {item.quantity}x {item.menu_items?.name || 'Item'} — ₦{(item.total_price || 0).toLocaleString()}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {selectedTable && !showPayment && (
           <div className="w-full md:w-96 border-l border-gray-800 flex flex-col overflow-hidden">
@@ -421,6 +657,13 @@ export default function POS() {
           assignedTableIds={assignedTableIds}
           onSuccess={() => setShowCashSale(false)}
           onClose={() => setShowCashSale(false)}
+        />
+      )}
+      {reprintOrder && (
+        <ReceiptModal
+          order={reprintOrder}
+          table={reprintOrder.tables || { name: reprintOrder.customer_name || 'Cash Sale' }}
+          onClose={() => setReprintOrder(null)}
         />
       )}
     </div>
