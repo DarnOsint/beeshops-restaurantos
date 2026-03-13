@@ -23,16 +23,20 @@ import {
   Trash2,
   CheckCircle,
   RefreshCw,
+  UtensilsCrossed,
 } from 'lucide-react'
 import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
 import TillManagement from './TillManagement'
 import WaiterCalls from './WaiterCalls'
+import KitchenStock from '../backoffice/KitchenStock'
 import { useLateOrders } from '../../hooks/useLateOrders'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import { getPendingQueue } from '../../lib/db'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import UnassignedCustomerOrders from '../../components/UnassignedCustomerOrders'
+
+/* eslint-disable react-hooks/set-state-in-effect */
 
 export default function Management() {
   const { profile, signOut } = useAuth()
@@ -231,6 +235,7 @@ export default function Management() {
     { id: 'tables', label: 'Tables', icon: Users },
     { id: 'orders', label: 'Orders', icon: ShoppingBag },
     { id: 'till', label: 'Till', icon: DollarSign },
+    { id: 'kitchen', label: 'Kitchen', icon: UtensilsCrossed },
     { id: 'service', label: 'Service', icon: ClipboardCheck },
     { id: 'voids', label: 'Voids', icon: Trash2 },
     { id: 'settings', label: 'Settings', icon: Settings },
@@ -476,6 +481,12 @@ export default function Management() {
                     icon: DollarSign,
                   },
                   {
+                    label: 'Kitchen Stock',
+                    sub: 'Reconcile food input, yield & benchmarks',
+                    action: () => setActiveTab('kitchen'),
+                    icon: UtensilsCrossed,
+                  },
+                  {
                     label: 'Room Management',
                     sub: 'Check-in, check-out and room status',
                     action: () => navigate('/rooms'),
@@ -520,6 +531,7 @@ export default function Management() {
         {activeTab === 'tables' && <TableAssignment />}
         {activeTab === 'orders' && <OpenOrders />}
         {activeTab === 'till' && <TillManagement />}
+        {activeTab === 'kitchen' && <KitchenStock onBack={() => setActiveTab('overview')} />}
         {activeTab === 'cctv' && (
           <div className="space-y-4">
             {/* Occupancy */}
