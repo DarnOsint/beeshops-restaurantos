@@ -36,7 +36,7 @@ export async function offlineUpdate<T extends { id: string }>(
   updates: Partial<T>
 ): Promise<OfflineResult<T>> {
   const current = await localGet<T>(tableName, id)
-  const updated = { ...current, ...updates, synced: false } as T
+  const updated = { ...current, id, ...updates, synced: false } as T
   await localPut(tableName, updated)
 
   if (!navigator.onLine) {
