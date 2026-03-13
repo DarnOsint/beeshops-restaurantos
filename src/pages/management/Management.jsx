@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { 
   Beer, LogOut, Users, LayoutDashboard, Camera, Activity, 
-  ShoppingBag, TrendingUp, Clock, ChevronRight, DollarSign, Settings, BookOpen, BedDouble, AlertTriangle, Save, ClipboardCheck, Trash2
+  ShoppingBag, TrendingUp, Clock, ChevronRight, DollarSign, Settings, BookOpen, BedDouble, AlertTriangle, Save, ClipboardCheck, Trash2, CheckCircle
 } from 'lucide-react'
 import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
@@ -148,6 +148,11 @@ export default function Management() {
     { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'cctv', label: 'CCTV', icon: Camera },
   ]
+
+  const resolveAlert = async (alertId) => {
+    await supabase.from('cv_alerts').update({ resolved: true }).eq('id', alertId)
+    setCvData(prev => ({ ...prev, alerts: prev.alerts.filter(a => a.id !== alertId) }))
+  }
 
   return (
     <div className="min-h-full bg-gray-950">
@@ -315,17 +320,23 @@ export default function Management() {
                   {cvData.alerts.map((alert, i) => (
                     <div key={i} className="bg-gray-800 rounded-xl px-3 py-2.5">
                       <div className="flex items-start justify-between gap-2">
-                        <div>
+                        <div className="flex-1 min-w-0">
                           <p className="text-white text-xs font-medium">{alert.camera_id} — {alert.alert_type?.replace(/_/g,' ')}</p>
                           <p className="text-gray-500 text-xs mt-0.5">{alert.description}</p>
                         </div>
-                        <div className="text-right shrink-0">
+                        <div className="flex flex-col items-end gap-1 shrink-0">
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
                             alert.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
                             alert.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
                             'bg-yellow-500/20 text-yellow-400'
                           }`}>{alert.severity}</span>
-                          <p className="text-gray-600 text-xs mt-1">{new Date(alert.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p>
+                          <p className="text-gray-600 text-xs">{new Date(alert.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p>
+                          <button
+                            onClick={() => resolveAlert(alert.id)}
+                            className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 bg-green-500/10 hover:bg-green-500/20 px-2 py-0.5 rounded-full transition-colors"
+                          >
+                            <CheckCircle size={11} /> Resolve
+                          </button>
                         </div>
                       </div>
                     </div>

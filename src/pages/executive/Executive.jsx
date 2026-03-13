@@ -6,7 +6,7 @@ import { HelpTooltip } from '../../components/HelpTooltip'
 import { 
   LayoutDashboard, ShoppingBag, Users, BedDouble,
   TrendingUp, Package, LogOut, Beer, RefreshCw, Settings, Smartphone,
-  BookOpen, BarChart2, MapPin, Camera, AlertTriangle, Activity, Eye
+  BookOpen, BarChart2, MapPin, Camera, AlertTriangle, Activity, Eye, CheckCircle
 } from 'lucide-react'
 
 function getGreeting() {
@@ -197,6 +197,11 @@ export default function Executive() {
   })()
 
   const maxRevenue = Math.max(...trendData.map(d => d.revenue), 1)
+
+  const resolveAlert = async (alertId) => {
+    await supabase.from('cv_alerts').update({ resolved: true }).eq('id', alertId)
+    setCvData(prev => ({ ...prev, todayAlerts: prev.todayAlerts.filter(a => a.id !== alertId) }))
+  }
 
   return (
     <div className="min-h-full bg-gray-950">
@@ -413,15 +418,23 @@ export default function Executive() {
                 <div className="space-y-2">
                   {cvData.todayAlerts.slice(0, 5).map((alert, i) => (
                     <div key={i} className="flex items-start justify-between gap-3 bg-gray-800 rounded-xl px-3 py-2.5">
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <p className="text-white text-xs font-medium">{alert.camera_id} — {alert.alert_type?.replace(/_/g, ' ')}</p>
                         <p className="text-gray-500 text-xs mt-0.5">{alert.description}</p>
                       </div>
-                      <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
-                        alert.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
-                        alert.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
-                        'bg-yellow-500/20 text-yellow-400'
-                      }`}>{alert.severity}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          alert.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
+                          alert.severity === 'high' ? 'bg-orange-500/20 text-orange-400' :
+                          'bg-yellow-500/20 text-yellow-400'
+                        }`}>{alert.severity}</span>
+                        <button
+                          onClick={() => resolveAlert(alert.id)}
+                          className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 bg-green-500/10 hover:bg-green-500/20 px-2 py-0.5 rounded-full transition-colors"
+                        >
+                          <CheckCircle size={11} /> Resolve
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
