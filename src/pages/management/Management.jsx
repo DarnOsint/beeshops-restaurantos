@@ -84,6 +84,11 @@ export default function Management() {
     })
   }, [])
 
+  // Scroll to top on tab change
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' })
+  }, [activeTab])
+
   useEffect(() => {
     fetchStats()
     const channel = supabase
@@ -147,13 +152,11 @@ export default function Management() {
     const val = parseInt(editThreshold)
     if (!val || val < 1) return
     setSavingThreshold(true)
-    await supabase
-      .from('settings')
-      .upsert({
-        id: 'order_alert_threshold',
-        value: String(val),
-        updated_at: new Date().toISOString(),
-      })
+    await supabase.from('settings').upsert({
+      id: 'order_alert_threshold',
+      value: String(val),
+      updated_at: new Date().toISOString(),
+    })
     setThreshold(val)
     setEditThreshold('')
     setSavingThreshold(false)

@@ -1,6 +1,24 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { Users, UtensilsCrossed, MapPin, LayoutGrid, LogOut, Beer, ArrowLeft, Package, Truck, QrCode } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
+import {
+  Users,
+  UtensilsCrossed,
+  MapPin,
+  LayoutGrid,
+  LogOut,
+  Beer,
+  ArrowLeft,
+  Package,
+  Truck,
+  QrCode,
+  Lock,
+  Eye,
+  EyeOff,
+  CheckCircle,
+  XCircle,
+  ChefHat,
+} from 'lucide-react'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import StaffManagement from './StaffManagement'
 import MenuManagement from './MenuManagement'
@@ -8,6 +26,8 @@ import ZonePricing from './ZonePricing'
 import TableConfig from './TableConfig'
 import Inventory from './Inventory'
 import Suppliers from './Suppliers'
+import ChangePassword from './ChangePassword'
+import KitchenStock from './KitchenStock'
 import { useNavigate } from 'react-router-dom'
 
 export default function BackOffice() {
@@ -15,51 +35,165 @@ export default function BackOffice() {
   const [activeSection, setActiveSection] = useState(null)
   const navigate = useNavigate()
 
+  // Scroll to top whenever section changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' })
+  }, [activeSection])
+
   const sections = [
-    { id: 'staff', label: 'Staff Management', desc: 'Add, edit and manage staff roles and PINs', icon: Users, color: 'bg-blue-500', roles: ['owner', 'manager'] },
-    { id: 'menu', label: 'Menu Management', desc: 'Add and edit menu items, prices, availability', icon: UtensilsCrossed, color: 'bg-green-500', roles: ['owner', 'manager'] },
-    { id: 'zonepricing', label: 'Zone Pricing', desc: 'Set drink prices per zone', icon: MapPin, color: 'bg-purple-500', roles: ['owner', 'manager'] },
-    { id: 'tables', label: 'Table Configuration', desc: 'Edit table names and capacity', icon: LayoutGrid, color: 'bg-amber-500', roles: ['owner', 'manager'] },
-    { id: 'inventory', label: 'Drink Inventory', desc: 'Stock levels, restocking and supplier logs', icon: Package, color: 'bg-blue-600', roles: ['owner', 'manager'] },
-    { id: 'suppliers', label: 'Suppliers', desc: 'Manage suppliers and purchase orders', icon: Truck, color: 'bg-teal-600', roles: ['owner', 'manager'] },
-    { id: 'qrcards', label: 'QR Table Cards', desc: 'Print QR codes for all tables', icon: QrCode, color: 'bg-rose-500', roles: ['owner', 'manager'] },
+    {
+      id: 'staff',
+      label: 'Staff Management',
+      desc: 'Add, edit and manage staff roles and PINs',
+      icon: Users,
+      color: 'bg-blue-500',
+      roles: ['owner', 'manager'],
+    },
+    {
+      id: 'menu',
+      label: 'Menu Management',
+      desc: 'Add and edit menu items, prices, availability',
+      icon: UtensilsCrossed,
+      color: 'bg-green-500',
+      roles: ['owner', 'manager'],
+    },
+    {
+      id: 'zonepricing',
+      label: 'Zone Pricing',
+      desc: 'Set drink prices per zone',
+      icon: MapPin,
+      color: 'bg-purple-500',
+      roles: ['owner', 'manager'],
+    },
+    {
+      id: 'tables',
+      label: 'Table Configuration',
+      desc: 'Edit table names and capacity',
+      icon: LayoutGrid,
+      color: 'bg-amber-500',
+      roles: ['owner', 'manager'],
+    },
+    {
+      id: 'inventory',
+      label: 'Drink Inventory',
+      desc: 'Stock levels, restocking and supplier logs',
+      icon: Package,
+      color: 'bg-blue-600',
+      roles: ['owner', 'manager'],
+    },
+    {
+      id: 'kitchenstock',
+      label: 'Kitchen Stock Register',
+      desc: 'Daily food received vs sold vs remaining — variance tracking',
+      icon: ChefHat,
+      color: 'bg-orange-600',
+      roles: ['owner', 'manager', 'kitchen'],
+    },
+    {
+      id: 'suppliers',
+      label: 'Suppliers',
+      desc: 'Manage suppliers and purchase orders',
+      icon: Truck,
+      color: 'bg-teal-600',
+      roles: ['owner', 'manager'],
+    },
+    {
+      id: 'qrcards',
+      label: 'QR Table Cards',
+      desc: 'Print QR codes for all tables',
+      icon: QrCode,
+      color: 'bg-rose-500',
+      roles: ['owner', 'manager'],
+    },
+    {
+      id: 'changepassword',
+      label: 'Change Password',
+      desc: 'Update your account login password',
+      icon: Lock,
+      color: 'bg-gray-600',
+      roles: ['owner', 'manager', 'accountant', 'kitchen', 'bar', 'griller', 'apartment_manager'],
+    },
   ]
 
-  if (!profile) return (
-    <div className="min-h-full bg-gray-950 flex items-center justify-center">
-      <div className="text-amber-500">Loading...</div>
-    </div>
-  )
+  if (!profile)
+    return (
+      <div className="min-h-full bg-gray-950 flex items-center justify-center">
+        <div className="text-amber-500">Loading...</div>
+      </div>
+    )
 
-  const allowed = sections.filter(s => s.roles.includes(profile?.role))
+  const allowed = sections.filter((s) => s.roles.includes(profile?.role))
 
   if (activeSection === 'staff') return <StaffManagement onBack={() => setActiveSection(null)} />
   if (activeSection === 'menu') return <MenuManagement onBack={() => setActiveSection(null)} />
   if (activeSection === 'zonepricing') return <ZonePricing onBack={() => setActiveSection(null)} />
   if (activeSection === 'tables') return <TableConfig onBack={() => setActiveSection(null)} />
-  if (activeSection === 'qrcards') { navigate('/backoffice/qr-cards'); return null }
+  if (activeSection === 'qrcards') {
+    navigate('/backoffice/qr-cards')
+    return null
+  }
+  if (activeSection === 'changepassword')
+    return <ChangePassword onBack={() => setActiveSection(null)} />
+  if (activeSection === 'kitchenstock')
+    return <KitchenStock onBack={() => setActiveSection(null)} />
   if (activeSection === 'inventory') return <Inventory onBack={() => setActiveSection(null)} />
   if (activeSection === 'suppliers') return <Suppliers onBack={() => setActiveSection(null)} />
 
   return (
     <div className="min-h-full bg-gray-950">
-      
-
       <div className="p-6">
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-white text-2xl font-bold">Back Office</h2>
             <p className="text-gray-400 mt-1">Manage your restaurant settings</p>
           </div>
-          <HelpTooltip storageKey="backoffice" tips={[
-            { id: 'bo-staff', title: 'Staff Management', description: "Create and manage staff accounts. Set each person's role (owner, manager, waitron, kitchen, bar, griller) and assign a 4-digit PIN. A staff member cannot log into the system until they have an active account here." },
-            { id: 'bo-menu', title: 'Menu Management', description: 'Add, edit, disable, or delete menu items. Each item must be assigned a category and a destination — Kitchen, Bar, or Griller. The destination controls which KDS screen the order appears on when placed.' },
-            { id: 'bo-zone', title: 'Zone Pricing', description: 'Set separate drink prices for each table zone: Outdoor, Indoor, VIP Lounge, and The Nook. Food items always carry a fixed price regardless of zone. Zone prices are applied automatically when a waitron takes an order.' },
-            { id: 'bo-tables', title: 'Table Configuration', description: 'Edit table names and assign each table to a zone (table category). These changes are reflected immediately on the POS table grid. Physically label your tables to match the system.' },
-            { id: 'bo-inventory', title: 'Drink Inventory', description: 'Track current stock levels for all drinks. Set a minimum stock threshold for each item — when stock drops to or below the threshold, an alert appears on the Executive Dashboard. Log manual restocks here.' },
-            { id: 'bo-suppliers', title: 'Suppliers', description: 'Manage your supplier list and raise purchase orders. When a delivery is marked as received, the received quantity is added automatically to the relevant inventory items.' },
-            { id: 'bo-qr', title: 'QR Table Cards', description: 'Generate and print a QR code card for every table. Customers scan the code to view their current order, request a waiter, or see their bill — without needing to flag down staff.' },
-          ]} />
+          <HelpTooltip
+            storageKey="backoffice"
+            tips={[
+              {
+                id: 'bo-staff',
+                title: 'Staff Management',
+                description:
+                  "Create and manage staff accounts. Set each person's role (owner, manager, waitron, kitchen, bar, griller) and assign a 4-digit PIN. A staff member cannot log into the system until they have an active account here.",
+              },
+              {
+                id: 'bo-menu',
+                title: 'Menu Management',
+                description:
+                  'Add, edit, disable, or delete menu items. Each item must be assigned a category and a destination — Kitchen, Bar, or Griller. The destination controls which KDS screen the order appears on when placed.',
+              },
+              {
+                id: 'bo-zone',
+                title: 'Zone Pricing',
+                description:
+                  'Set separate drink prices for each table zone: Outdoor, Indoor, VIP Lounge, and The Nook. Food items always carry a fixed price regardless of zone. Zone prices are applied automatically when a waitron takes an order.',
+              },
+              {
+                id: 'bo-tables',
+                title: 'Table Configuration',
+                description:
+                  'Edit table names and assign each table to a zone (table category). These changes are reflected immediately on the POS table grid. Physically label your tables to match the system.',
+              },
+              {
+                id: 'bo-inventory',
+                title: 'Drink Inventory',
+                description:
+                  'Track current stock levels for all drinks. Set a minimum stock threshold for each item — when stock drops to or below the threshold, an alert appears on the Executive Dashboard. Log manual restocks here.',
+              },
+              {
+                id: 'bo-suppliers',
+                title: 'Suppliers',
+                description:
+                  'Manage your supplier list and raise purchase orders. When a delivery is marked as received, the received quantity is added automatically to the relevant inventory items.',
+              },
+              {
+                id: 'bo-qr',
+                title: 'QR Table Cards',
+                description:
+                  'Generate and print a QR code card for every table. Customers scan the code to view their current order, request a waiter, or see their bill — without needing to flag down staff.',
+              },
+            ]}
+          />
         </div>
 
         {allowed.length === 0 ? (
@@ -68,17 +202,21 @@ export default function BackOffice() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
-            {allowed.map(section => (
+            {allowed.map((section) => (
               <button
                 key={section.id}
                 onClick={() => setActiveSection(section.id)}
                 className="bg-gray-900 border border-gray-800 hover:border-amber-500/50 rounded-2xl p-6 text-left flex items-start gap-4 transition-all group"
               >
-                <div className={`w-12 h-12 ${section.color} rounded-xl flex items-center justify-center shrink-0`}>
+                <div
+                  className={`w-12 h-12 ${section.color} rounded-xl flex items-center justify-center shrink-0`}
+                >
                   <section.icon size={22} className="text-white" />
                 </div>
                 <div>
-                  <h3 className="text-white font-semibold group-hover:text-amber-400 transition-colors">{section.label}</h3>
+                  <h3 className="text-white font-semibold group-hover:text-amber-400 transition-colors">
+                    {section.label}
+                  </h3>
                   <p className="text-gray-500 text-sm mt-1">{section.desc}</p>
                 </div>
               </button>

@@ -1,8 +1,9 @@
+import { useEffect } from 'react'
 import { useNotifications } from './hooks/useNotifications'
 import AppShell from './components/AppShell'
 import NotificationToast from './components/NotificationToast'
 import ErrorBoundary from './components/ErrorBoundary'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import MFAChallenge from './components/MFAChallenge'
 import Login from './pages/auth/Login'
@@ -23,42 +24,54 @@ import ApartmentDashboard from './pages/apartment/ApartmentDashboard'
 import TableView from './pages/customer/TableView'
 import ReceiptView from './pages/customer/ReceiptView'
 
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' })
+  }, [pathname])
+  return null
+}
+
 function PrivateRoute({ children }) {
   const { user, profile, loading, mfaRequired, setMfaVerified, signOut } = useAuth()
-  if (!loading && mfaRequired) return (
-    <MFAChallenge
-      user={user}
-      profile={profile}
-      onVerified={() => setMfaVerified(true)}
-      onSignOut={signOut}
-    />
-  )
+  if (!loading && mfaRequired)
+    return (
+      <MFAChallenge
+        user={user}
+        profile={profile}
+        onVerified={() => setMfaVerified(true)}
+        onSignOut={signOut}
+      />
+    )
 
-  if (loading) return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-      <div className="text-amber-500">Loading...</div>
-    </div>
-  )
+  if (loading)
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-amber-500">Loading...</div>
+      </div>
+    )
   if (!user) return <Navigate to="/login" />
   return children
 }
 
 function RoleGuard({ children, allowed }) {
   const { user, profile, loading, mfaRequired, setMfaVerified, signOut } = useAuth()
-  if (!loading && mfaRequired) return (
-    <MFAChallenge
-      user={user}
-      profile={profile}
-      onVerified={() => setMfaVerified(true)}
-      onSignOut={signOut}
-    />
-  )
+  if (!loading && mfaRequired)
+    return (
+      <MFAChallenge
+        user={user}
+        profile={profile}
+        onVerified={() => setMfaVerified(true)}
+        onSignOut={signOut}
+      />
+    )
 
-  if (loading) return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-      <div className="text-amber-500">Loading...</div>
-    </div>
-  )
+  if (loading)
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-amber-500">Loading...</div>
+      </div>
+    )
   if (!profile) return <Navigate to="/login" />
   if (!allowed.includes(profile.role)) return <Navigate to="/dashboard" />
   return children
@@ -66,20 +79,22 @@ function RoleGuard({ children, allowed }) {
 
 function RoleRoute() {
   const { user, profile, loading, mfaRequired, setMfaVerified, signOut } = useAuth()
-  if (!loading && mfaRequired) return (
-    <MFAChallenge
-      user={user}
-      profile={profile}
-      onVerified={() => setMfaVerified(true)}
-      onSignOut={signOut}
-    />
-  )
+  if (!loading && mfaRequired)
+    return (
+      <MFAChallenge
+        user={user}
+        profile={profile}
+        onVerified={() => setMfaVerified(true)}
+        onSignOut={signOut}
+      />
+    )
 
-  if (loading) return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-      <div className="text-amber-500">Loading...</div>
-    </div>
-  )
+  if (loading)
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-amber-500">Loading...</div>
+      </div>
+    )
   if (!profile) return <Navigate to="/login" />
   if (profile.role === 'owner') return <Navigate to="/executive" />
   if (profile.role === 'manager') return <Navigate to="/management" />
@@ -97,98 +112,220 @@ const EB = ({ title, children }) => <ErrorBoundary title={title}>{children}</Err
 
 function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/dashboard" element={<PrivateRoute><RoleRoute /></PrivateRoute>} />
+    <>
+      <ScrollToTop />
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route
+          path="/dashboard"
+          element={
+            <PrivateRoute>
+              <RoleRoute />
+            </PrivateRoute>
+          }
+        />
 
-      <Route path="/executive" element={
-        <PrivateRoute><RoleGuard allowed={['owner']}>
-          <EB title="Dashboard error"><Executive /></EB>
-        </RoleGuard></PrivateRoute>
-      } />
+        <Route
+          path="/executive"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner']}>
+                <EB title="Dashboard error">
+                  <Executive />
+                </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
 
-      <Route path="/management" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}>
-          <EB title="Management error"><Management /></EB>
-        </RoleGuard></PrivateRoute>
-      } />
+        <Route
+          path="/management"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner', 'manager']}>
+                <EB title="Management error">
+                  <Management />
+                </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
 
-      <Route path="/accounting" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'accountant']}>
-          <EB title="Accounting error"><Accounting /></EB>
-        </RoleGuard></PrivateRoute>
-      } />
+        <Route
+          path="/accounting"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner', 'manager', 'accountant']}>
+                <EB title="Accounting error">
+                  <Accounting />
+                </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
 
-      <Route path="/backoffice" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}>
-          <EB title="Back office error"><BackOffice /></EB>
-        </RoleGuard></PrivateRoute>
-      } />
-      <Route path="/backoffice/qr-cards" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'executive']}>
-          <EB title="QR cards error"><QRTableCards /></EB>
-        </RoleGuard></PrivateRoute>
-      } />
+        <Route
+          path="/backoffice"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner', 'manager']}>
+                <EB title="Back office error">
+                  <BackOffice />
+                </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/backoffice/qr-cards"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner', 'manager', 'executive']}>
+                <EB title="QR cards error">
+                  <QRTableCards />
+                </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
 
-      <Route path="/pos" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'waitron']}>
-          <EB title="POS error"><POS /></EB>
-        </RoleGuard></PrivateRoute>
-      } />
+        <Route
+          path="/pos"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner', 'manager', 'waitron']}>
+                <EB title="POS error">
+                  <POS />
+                </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
 
-      {/* KDS screens have their own internal ErrorBoundary — wrapped here too for extra safety */}
-      <Route path="/kds/kitchen" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'kitchen']}>
-          <EB title="Kitchen display error"><KitchenKDS /></EB>
-        </RoleGuard></PrivateRoute>
-      } />
+        {/* KDS screens have their own internal ErrorBoundary — wrapped here too for extra safety */}
+        <Route
+          path="/kds/kitchen"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner', 'manager', 'kitchen']}>
+                <EB title="Kitchen display error">
+                  <KitchenKDS />
+                </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
 
-      <Route path="/kds/bar" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'bar']}>
-          <EB title="Bar display error"><BarKDS /></EB>
-        </RoleGuard></PrivateRoute>
-      } />
+        <Route
+          path="/kds/bar"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner', 'manager', 'bar']}>
+                <EB title="Bar display error">
+                  <BarKDS />
+                </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
 
-      <Route path="/kds/griller" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'griller']}>
-          <EB title="Grill display error"><GrillerKDS /></EB>
-        </RoleGuard></PrivateRoute>
-      } />
+        <Route
+          path="/kds/griller"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner', 'manager', 'griller']}>
+                <EB title="Grill display error">
+                  <GrillerKDS />
+                </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
 
-      <Route path="/rooms" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}>
-          <EB title="Room management error"><RoomManagement /></EB>
-        </RoleGuard></PrivateRoute>
-      } />
+        <Route
+          path="/rooms"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner', 'manager']}>
+                <EB title="Room management error">
+                  <RoomManagement />
+                </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
 
-      <Route path="/debtors" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'accountant']}>
-          <EB title="Debtors error"><Debtors onBack={() => window.history.back()} /></EB>
-        </RoleGuard></PrivateRoute>
-      } />
+        <Route
+          path="/debtors"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner', 'manager', 'accountant']}>
+                <EB title="Debtors error">
+                  <Debtors onBack={() => window.history.back()} />
+                </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
 
-      <Route path="/reports" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}>
-          <EB title="Reports error"><Reports /></EB>
-        </RoleGuard></PrivateRoute>
-      } />
-      <Route path="/analytics" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}>
-          <EB title="Analytics error"><Analytics /></EB>
-        </RoleGuard></PrivateRoute>
-      } />
-      <Route path="/apartment" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'apartment_manager']}>
-          <EB title="Apartment dashboard error"><ApartmentDashboard /></EB>
-        </RoleGuard></PrivateRoute>
-      } />
+        <Route
+          path="/reports"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner', 'manager']}>
+                <EB title="Reports error">
+                  <Reports />
+                </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/analytics"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner', 'manager']}>
+                <EB title="Analytics error">
+                  <Analytics />
+                </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/apartment"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner', 'apartment_manager']}>
+                <EB title="Apartment dashboard error">
+                  <ApartmentDashboard />
+                </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
 
-      {/* Public customer routes */}
-      <Route path="/table/:tableId" element={<EB title="Order page error"><TableView /></EB>} />
-      <Route path="/receipt/:orderId" element={<EB title="Receipt error"><ReceiptView /></EB>} />
+        {/* Public customer routes */}
+        <Route
+          path="/table/:tableId"
+          element={
+            <EB title="Order page error">
+              <TableView />
+            </EB>
+          }
+        />
+        <Route
+          path="/receipt/:orderId"
+          element={
+            <EB title="Receipt error">
+              <ReceiptView />
+            </EB>
+          }
+        />
 
-      <Route path="/" element={<Navigate to="/dashboard" />} />
-    </Routes>
+        <Route path="/" element={<Navigate to="/dashboard" />} />
+      </Routes>
+    </>
   )
 }
 
@@ -198,7 +335,9 @@ function AppInner() {
   return (
     <>
       <NotificationToast toasts={toasts} onDismiss={dismiss} />
-      <AppShell><AppRoutes /></AppShell>
+      <AppShell>
+        <AppRoutes />
+      </AppShell>
     </>
   )
 }
@@ -206,12 +345,12 @@ function AppInner() {
 function App() {
   return (
     <>
-    <BrowserRouter>
-      <AuthProvider>
-        <AppInner />
-      </AuthProvider>
-    </BrowserRouter>
-  </>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppInner />
+        </AuthProvider>
+      </BrowserRouter>
+    </>
   )
 }
 

@@ -29,34 +29,46 @@ export default function QRTableCards() {
       .from('tables')
       .select('id, name, table_categories(name)')
       .order('name')
-      .then(({ data }) => { setTables(data || []); setLoading(false) })
+      .then(({ data }) => {
+        setTables(data || [])
+        setLoading(false)
+      })
   }, [])
 
   useEffect(() => {
     if (!qrLoaded || tables.length === 0) return
     setTimeout(() => {
-      filtered.forEach(table => {
+      filtered.forEach((table) => {
         const el = document.getElementById(`qr-${table.id}`)
         if (!el || el.innerHTML !== '') return
         try {
           new window.QRCode(el, {
             text: `${BASE_URL}/table/${table.id}`,
-            width: 160, height: 160,
-            colorDark: '#000000', colorLight: '#ffffff',
+            width: 160,
+            height: 160,
+            colorDark: '#000000',
+            colorLight: '#ffffff',
             correctLevel: window.QRCode.CorrectLevel.H,
           })
-        } catch (e) {}
+        } catch (_e) {
+          /* intentional */
+        }
       })
     }, 150)
   }, [qrLoaded, tables, selectedZone])
 
-  const zones = ['All', ...new Set(tables.map(t => t.table_categories?.name).filter(Boolean))]
-  const filtered = selectedZone === 'All'
-    ? tables
-    : tables.filter(t => t.table_categories?.name === selectedZone)
+  const zones = ['All', ...new Set(tables.map((t) => t.table_categories?.name).filter(Boolean))]
+  const filtered =
+    selectedZone === 'All'
+      ? tables
+      : tables.filter((t) => t.table_categories?.name === selectedZone)
 
   if (!['owner', 'manager', 'executive'].includes(profile?.role)) {
-    return <div className="min-h-full bg-gray-950 flex items-center justify-center text-gray-400">Access denied</div>
+    return (
+      <div className="min-h-full bg-gray-950 flex items-center justify-center text-gray-400">
+        Access denied
+      </div>
+    )
   }
 
   return (
@@ -81,19 +93,26 @@ export default function QRTableCards() {
             </button>
             <div>
               <p className="text-white font-bold">QR Table Cards</p>
-              <p className="text-gray-500 text-xs">{filtered.length} tables · {selectedZone}</p>
+              <p className="text-gray-500 text-xs">
+                {filtered.length} tables · {selectedZone}
+              </p>
             </div>
           </div>
-          <button onClick={() => window.print()}
-            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-xl text-sm transition-colors">
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-xl text-sm transition-colors"
+          >
             <Printer size={15} /> Print
           </button>
         </div>
 
         <div className="no-print px-4 py-3 flex gap-2 overflow-x-auto">
-          {zones.map(z => (
-            <button key={z} onClick={() => setSelectedZone(z)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${selectedZone === z ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
+          {zones.map((z) => (
+            <button
+              key={z}
+              onClick={() => setSelectedZone(z)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${selectedZone === z ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+            >
               {z}
             </button>
           ))}
@@ -105,22 +124,69 @@ export default function QRTableCards() {
           </div>
         ) : (
           <div className="print-grid p-4">
-            {filtered.map(table => (
-              <div key={table.id} className="card bg-white rounded-2xl overflow-hidden shadow-lg" style={{ border: '2px solid #e5e7eb' }}>
+            {filtered.map((table) => (
+              <div
+                key={table.id}
+                className="card bg-white rounded-2xl overflow-hidden shadow-lg"
+                style={{ border: '2px solid #e5e7eb' }}
+              >
                 <div style={{ background: '#1a1a2e', padding: '12px 16px' }}>
-                  <p style={{ color: '#f59e0b', fontSize: '10px', fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase', margin: 0 }}>
+                  <p
+                    style={{
+                      color: '#f59e0b',
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      letterSpacing: '2px',
+                      textTransform: 'uppercase',
+                      margin: 0,
+                    }}
+                  >
                     {table.table_categories?.name || 'Table'}
                   </p>
-                  <p style={{ color: '#ffffff', fontSize: '22px', fontWeight: 800, margin: '2px 0 0 0' }}>
+                  <p
+                    style={{
+                      color: '#ffffff',
+                      fontSize: '22px',
+                      fontWeight: 800,
+                      margin: '2px 0 0 0',
+                    }}
+                  >
                     {table.name}
                   </p>
                 </div>
-                <div style={{ background: '#ffffff', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    background: '#ffffff',
+                    padding: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}
+                >
                   <div id={`qr-${table.id}`} style={{ width: 160, height: 160 }} />
-                  <p style={{ color: '#6b7280', fontSize: '9px', textAlign: 'center', margin: 0 }}>Scan to view menu & order</p>
+                  <p style={{ color: '#6b7280', fontSize: '9px', textAlign: 'center', margin: 0 }}>
+                    Scan to view menu & order
+                  </p>
                 </div>
-                <div style={{ background: '#f9fafb', padding: '8px 16px', borderTop: '1px solid #e5e7eb', textAlign: 'center' }}>
-                  <p style={{ color: '#9ca3af', fontSize: '9px', margin: 0, fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase' }}>
+                <div
+                  style={{
+                    background: '#f9fafb',
+                    padding: '8px 16px',
+                    borderTop: '1px solid #e5e7eb',
+                    textAlign: 'center',
+                  }}
+                >
+                  <p
+                    style={{
+                      color: '#9ca3af',
+                      fontSize: '9px',
+                      margin: 0,
+                      fontWeight: 600,
+                      letterSpacing: '1px',
+                      textTransform: 'uppercase',
+                    }}
+                  >
                     Beeshop's Place Lounge
                   </p>
                 </div>
