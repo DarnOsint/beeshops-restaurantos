@@ -1,5 +1,5 @@
 import { useAuth } from '../../context/AuthContext'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { HelpTooltip } from '../../components/HelpTooltip'
@@ -108,7 +108,7 @@ export default function Executive() {
     shelfAlerts: [],
   })
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const [ordersRes, tablesRes, roomsRes, shiftsRes, stockRes, recentRes, revenueRes, trendRes] =
@@ -160,9 +160,9 @@ export default function Executive() {
     })
     setTrendData(Object.values(dayMap))
     setLoading(false)
-  }
+  }, [])
 
-  const fetchCvData = async () => {
+  const fetchCvData = useCallback(async () => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const [occupancyRes, alertsRes, heatmapRes, tillRes, shelfRes] = await Promise.all([
@@ -206,7 +206,7 @@ export default function Executive() {
       tillEvents: (tillRes.data || []) as Record<string, unknown>[],
       shelfAlerts: (shelfRes.data || []) as Record<string, unknown>[],
     })
-  }
+  }, [])
 
   useEffect(() => {
     fetchStats()
@@ -280,7 +280,7 @@ export default function Executive() {
       supabase.removeChannel(ch)
       supabase.removeChannel(cvCh)
     }
-  }, [])
+  }, [fetchStats, fetchCvData])
 
   const peakHour = (() => {
     const hourMap: Record<number, number> = {}

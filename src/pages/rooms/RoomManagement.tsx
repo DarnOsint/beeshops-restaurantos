@@ -71,7 +71,6 @@ export default function RoomManagement() {
   }, [])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll()
     const channel = supabase
       .channel('rooms-realtime')
@@ -156,18 +155,32 @@ export default function RoomManagement() {
   const processCheckout = async () => {
     if (!selectedRoom || !selectedStay) return
     setSaving(true)
-    await supabase
-      .from('room_stays')
-      .update({ status: 'checked_out', actual_checkout_at: new Date().toISOString() })
-      .eq('id', selectedStay.id)
-    await supabase.from('rooms').update({ status: 'cleaning' }).eq('id', selectedRoom.id)
-    await fetchAll()
-    setSaving(false)
-    setShowCheckout(false)
+    try {
+      const { error: stayError } = await supabase
+        .from('room_stays')
+        .update({ status: 'checked_out', actual_checkout_at: new Date().toISOString() })
+        .eq('id', selectedStay.id)
+      if (stayError) throw stayError
+      const { error: roomError } = await supabase
+        .from('rooms')
+        .update({ status: 'cleaning' })
+        .eq('id', selectedRoom.id)
+      if (roomError) throw roomError
+      await fetchAll()
+      setShowCheckout(false)
+    } catch (err) {
+      alert('Checkout failed: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const updateRoomStatus = async (room: RoomRow, status: RoomStatus) => {
-    await supabase.from('rooms').update({ status }).eq('id', room.id)
+    const { error } = await supabase.from('rooms').update({ status }).eq('id', room.id)
+    if (error) {
+      alert('Error updating room: ' + error.message)
+      return
+    }
     fetchAll()
   }
 

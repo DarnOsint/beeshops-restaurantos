@@ -46,10 +46,14 @@ export default function RoomServiceTab({ serviceOrders, onRefresh }: Props) {
                 {order.status === 'pending' && (
                   <button
                     onClick={async () => {
-                      await supabase
+                      const { error } = await supabase
                         .from('room_service_orders')
                         .update({ status: 'delivered' })
                         .eq('id', order.id)
+                      if (error) {
+                        alert('Error: ' + error.message)
+                        return
+                      }
                       onRefresh()
                     }}
                     className="mt-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 text-xs px-3 py-1.5 rounded-xl transition-colors"

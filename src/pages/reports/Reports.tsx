@@ -213,191 +213,199 @@ export default function Reports() {
       }
     }
     setLoading(true)
-    const { start, end } = getDateBounds()
-    const [
-      ordersRes,
-      orderItemsRes,
-      payoutsRes,
-      tillRes,
-      debtorsRes,
-      roomStaysRes,
-      voidsRes,
-      attendanceRes,
-    ] = await Promise.all([
-      supabase
-        .from('orders')
-        .select('*, profiles(full_name), tables(name, table_categories(name))')
-        .gte('created_at', start)
-        .lte('created_at', end),
-      supabase
-        .from('order_items')
-        .select(
-          '*, menu_items(name, price, menu_categories(name, destination)), orders(created_at, status)'
-        )
-        .gte('created_at', start)
-        .lte('created_at', end),
-      supabase.from('payouts').select('*').gte('created_at', start).lte('created_at', end),
-      supabase
-        .from('till_sessions')
-        .select('*, profiles(full_name)')
-        .gte('opened_at', start)
-        .lte('opened_at', end),
-      supabase.from('debtors').select('*').gte('created_at', start).lte('created_at', end),
-      supabase.from('room_stays').select('*').gte('created_at', start).lte('created_at', end),
-      supabase.from('void_log').select('*').gte('created_at', start).lte('created_at', end),
-      supabase.from('attendance').select('*').gte('clock_in', start).lte('clock_in', end),
-    ])
+    try {
+      const { start, end } = getDateBounds()
+      const [
+        ordersRes,
+        orderItemsRes,
+        payoutsRes,
+        tillRes,
+        debtorsRes,
+        roomStaysRes,
+        voidsRes,
+        attendanceRes,
+      ] = await Promise.all([
+        supabase
+          .from('orders')
+          .select('*, profiles(full_name), tables(name, table_categories(name))')
+          .gte('created_at', start)
+          .lte('created_at', end),
+        supabase
+          .from('order_items')
+          .select(
+            '*, menu_items(name, price, menu_categories(name, destination)), orders(created_at, status)'
+          )
+          .gte('created_at', start)
+          .lte('created_at', end),
+        supabase.from('payouts').select('*').gte('created_at', start).lte('created_at', end),
+        supabase
+          .from('till_sessions')
+          .select('*, profiles(full_name)')
+          .gte('opened_at', start)
+          .lte('opened_at', end),
+        supabase.from('debtors').select('*').gte('created_at', start).lte('created_at', end),
+        supabase.from('room_stays').select('*').gte('created_at', start).lte('created_at', end),
+        supabase.from('void_log').select('*').gte('created_at', start).lte('created_at', end),
+        supabase.from('attendance').select('*').gte('clock_in', start).lte('clock_in', end),
+      ])
 
-    const orders = (ordersRes.data || []) as PaidOrder[]
-    const paidOrders = orders
-      .filter((o) => o as unknown as { status: string; status: string })
-      .filter((o) => (o as unknown as { status: string }).status === 'paid') as PaidOrder[]
-    const cancelledOrders = orders.filter(
-      (o) => (o as unknown as { status: string }).status === 'cancelled'
-    ).length
-    const allItems = (orderItemsRes.data || []) as {
-      quantity?: number
-      total_price?: number
-      unit_price?: number
-      orders?: { status?: string } | null
-      menu_items?: {
-        name?: string
-        price?: number
-        menu_categories?: { name?: string; destination?: string } | null
-      } | null
-    }[]
-    const payouts = (payoutsRes.data || []) as Payout[]
-    const tillSessions = (tillRes.data || []) as TillSession[]
-    const debtors = (debtorsRes.data || []) as { current_balance?: number; credit_limit?: number }[]
-    const roomStays = (roomStaysRes.data || []) as { status?: string; total_amount?: number }[]
-    const voids = (voidsRes.data || []) as VoidEntry[]
-    const attendance = (attendanceRes.data || []) as AttendanceEntry[]
+      const orders = (ordersRes.data || []) as PaidOrder[]
+      const paidOrders = orders
+        .filter((o) => o as unknown as { status: string; status: string })
+        .filter((o) => (o as unknown as { status: string }).status === 'paid') as PaidOrder[]
+      const cancelledOrders = orders.filter(
+        (o) => (o as unknown as { status: string }).status === 'cancelled'
+      ).length
+      const allItems = (orderItemsRes.data || []) as {
+        quantity?: number
+        total_price?: number
+        unit_price?: number
+        orders?: { status?: string } | null
+        menu_items?: {
+          name?: string
+          price?: number
+          menu_categories?: { name?: string; destination?: string } | null
+        } | null
+      }[]
+      const payouts = (payoutsRes.data || []) as Payout[]
+      const tillSessions = (tillRes.data || []) as TillSession[]
+      const debtors = (debtorsRes.data || []) as {
+        current_balance?: number
+        credit_limit?: number
+      }[]
+      const roomStays = (roomStaysRes.data || []) as { status?: string; total_amount?: number }[]
+      const voids = (voidsRes.data || []) as VoidEntry[]
+      const attendance = (attendanceRes.data || []) as AttendanceEntry[]
 
-    const grossRevenue = paidOrders.reduce((s, o) => s + (o.total_amount || 0), 0)
-    const totalExpenses = payouts.reduce((s, p) => s + (p.amount || 0), 0)
-    const roomRevenue = roomStays
-      .filter((r) => r.status === 'checked_out')
-      .reduce((s, r) => s + (r.total_amount || 0), 0)
-    const byPayment = {
-      cash: paidOrders
-        .filter((o) => o.payment_method === 'cash')
-        .reduce((s, o) => s + (o.total_amount || 0), 0),
-      bank_pos: paidOrders
-        .filter((o) => ['card', 'bank_pos'].includes(o.payment_method || ''))
-        .reduce((s, o) => s + (o.total_amount || 0), 0),
-      transfer: paidOrders
-        .filter((o) => ['transfer', 'bank_transfer'].includes(o.payment_method || ''))
-        .reduce((s, o) => s + (o.total_amount || 0), 0),
+      const grossRevenue = paidOrders.reduce((s, o) => s + (o.total_amount || 0), 0)
+      const totalExpenses = payouts.reduce((s, p) => s + (p.amount || 0), 0)
+      const roomRevenue = roomStays
+        .filter((r) => r.status === 'checked_out')
+        .reduce((s, r) => s + (r.total_amount || 0), 0)
+      const byPayment = {
+        cash: paidOrders
+          .filter((o) => o.payment_method === 'cash')
+          .reduce((s, o) => s + (o.total_amount || 0), 0),
+        bank_pos: paidOrders
+          .filter((o) => ['card', 'bank_pos'].includes(o.payment_method || ''))
+          .reduce((s, o) => s + (o.total_amount || 0), 0),
+        transfer: paidOrders
+          .filter((o) => ['transfer', 'bank_transfer'].includes(o.payment_method || ''))
+          .reduce((s, o) => s + (o.total_amount || 0), 0),
+      }
+
+      const categoryMap: Record<string, CategoryStat> = {}
+      allItems
+        .filter((i) => i.orders?.status === 'paid')
+        .forEach((item) => {
+          const cat = item.menu_items?.menu_categories?.name || 'Unknown'
+          if (!categoryMap[cat]) categoryMap[cat] = { name: cat, revenue: 0, quantity: 0 }
+          categoryMap[cat].revenue +=
+            item.total_price || (item.unit_price || 0) * (item.quantity || 0)
+          categoryMap[cat].quantity += item.quantity || 0
+        })
+
+      const itemMap: Record<string, ItemStat> = {}
+      allItems
+        .filter((i) => i.orders?.status === 'paid')
+        .forEach((item) => {
+          const n = item.menu_items?.name || 'Unknown'
+          if (!itemMap[n]) itemMap[n] = { name: n, quantity: 0, revenue: 0 }
+          itemMap[n].quantity += item.quantity || 0
+          itemMap[n].revenue += item.total_price || 0
+        })
+
+      const staffMap: Record<string, StaffStat> = {}
+      paidOrders.forEach((o) => {
+        const n = o.profiles?.full_name || 'Unknown'
+        if (!staffMap[n]) staffMap[n] = { name: n, orders: 0, revenue: 0 }
+        staffMap[n].orders++
+        staffMap[n].revenue += o.total_amount || 0
+      })
+
+      const hourMap: Record<number, ChartPoint> = {}
+      for (let i = 0; i < 24; i++) hourMap[i] = { label: `${i}:00`, orders: 0, revenue: 0 }
+      paidOrders.forEach((o) => {
+        const h = new Date(o.created_at).getHours()
+        hourMap[h].orders++
+        hourMap[h].revenue += o.total_amount || 0
+      })
+
+      const dayMap: Record<string, ChartPoint> = {}
+      paidOrders.forEach((o) => {
+        const d = new Date(o.created_at).toLocaleDateString('en-NG', {
+          month: 'short',
+          day: 'numeric',
+        })
+        if (!dayMap[d]) dayMap[d] = { label: d, revenue: 0, orders: 0 }
+        dayMap[d].revenue += o.total_amount || 0
+        dayMap[d].orders++
+      })
+
+      const tableMap: Record<string, TableStat> = {}
+      paidOrders
+        .filter((o) => o.tables?.name)
+        .forEach((o) => {
+          const t = o.tables!.name!
+          if (!tableMap[t]) tableMap[t] = { table: t, orders: 0, revenue: 0 }
+          tableMap[t].orders++
+          tableMap[t].revenue += o.total_amount || 0
+        })
+
+      setReport({
+        period: getPeriodLabel(),
+        reportType,
+        generatedAt: new Date().toLocaleString('en-NG'),
+        grossRevenue,
+        netRevenue: grossRevenue - totalExpenses,
+        totalExpenses,
+        roomRevenue,
+        totalRevenue: grossRevenue + roomRevenue,
+        totalOrders: orders.length,
+        paidOrders,
+        paidOrdersCount: paidOrders.length,
+        cancelledOrders,
+        avgOrderValue: paidOrders.length ? Math.round(grossRevenue / paidOrders.length) : 0,
+        byPayment,
+        byCategory: Object.values(categoryMap).sort((a, b) => b.revenue - a.revenue),
+        topItems: Object.values(itemMap)
+          .sort((a, b) => b.quantity - a.quantity)
+          .slice(0, 10),
+        staffPerformance: Object.values(staffMap).sort((a, b) => b.revenue - a.revenue),
+        hourlyData: Object.values(hourMap).filter((h) => h.orders > 0),
+        dailyBreakdown: Object.values(dayMap),
+        tableStats: Object.values(tableMap)
+          .sort((a, b) => b.revenue - a.revenue)
+          .slice(0, 10),
+        totalDebt: debtors.reduce((s, d) => s + (d.current_balance || 0), 0),
+        totalDebtCreated: debtors.reduce((s, d) => s + (d.credit_limit || 0), 0),
+        debtorCount: debtors.length,
+        roomStayCount: roomStays.length,
+        totalOpeningFloat: tillSessions.reduce((s, t) => s + (t.opening_float || 0), 0),
+        totalClosingFloat: tillSessions
+          .filter((t) => t.status === 'closed')
+          .reduce((s, t) => s + (t.closing_float || 0), 0),
+        byOrderType: {
+          table: paidOrders.filter(
+            (o) => (o as unknown as { order_type?: string }).order_type === 'table'
+          ).length,
+          cash_sale: paidOrders.filter(
+            (o) => (o as unknown as { order_type?: string }).order_type === 'cash_sale'
+          ).length,
+          takeaway: paidOrders.filter(
+            (o) => (o as unknown as { order_type?: string }).order_type === 'takeaway'
+          ).length,
+        },
+        payouts,
+        tillSessions,
+        voids,
+        attendance,
+      })
+    } catch (err) {
+      alert('Report generation failed: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setLoading(false)
     }
-
-    const categoryMap: Record<string, CategoryStat> = {}
-    allItems
-      .filter((i) => i.orders?.status === 'paid')
-      .forEach((item) => {
-        const cat = item.menu_items?.menu_categories?.name || 'Unknown'
-        if (!categoryMap[cat]) categoryMap[cat] = { name: cat, revenue: 0, quantity: 0 }
-        categoryMap[cat].revenue +=
-          item.total_price || (item.unit_price || 0) * (item.quantity || 0)
-        categoryMap[cat].quantity += item.quantity || 0
-      })
-
-    const itemMap: Record<string, ItemStat> = {}
-    allItems
-      .filter((i) => i.orders?.status === 'paid')
-      .forEach((item) => {
-        const n = item.menu_items?.name || 'Unknown'
-        if (!itemMap[n]) itemMap[n] = { name: n, quantity: 0, revenue: 0 }
-        itemMap[n].quantity += item.quantity || 0
-        itemMap[n].revenue += item.total_price || 0
-      })
-
-    const staffMap: Record<string, StaffStat> = {}
-    paidOrders.forEach((o) => {
-      const n = o.profiles?.full_name || 'Unknown'
-      if (!staffMap[n]) staffMap[n] = { name: n, orders: 0, revenue: 0 }
-      staffMap[n].orders++
-      staffMap[n].revenue += o.total_amount || 0
-    })
-
-    const hourMap: Record<number, ChartPoint> = {}
-    for (let i = 0; i < 24; i++) hourMap[i] = { label: `${i}:00`, orders: 0, revenue: 0 }
-    paidOrders.forEach((o) => {
-      const h = new Date(o.created_at).getHours()
-      hourMap[h].orders++
-      hourMap[h].revenue += o.total_amount || 0
-    })
-
-    const dayMap: Record<string, ChartPoint> = {}
-    paidOrders.forEach((o) => {
-      const d = new Date(o.created_at).toLocaleDateString('en-NG', {
-        month: 'short',
-        day: 'numeric',
-      })
-      if (!dayMap[d]) dayMap[d] = { label: d, revenue: 0, orders: 0 }
-      dayMap[d].revenue += o.total_amount || 0
-      dayMap[d].orders++
-    })
-
-    const tableMap: Record<string, TableStat> = {}
-    paidOrders
-      .filter((o) => o.tables?.name)
-      .forEach((o) => {
-        const t = o.tables!.name!
-        if (!tableMap[t]) tableMap[t] = { table: t, orders: 0, revenue: 0 }
-        tableMap[t].orders++
-        tableMap[t].revenue += o.total_amount || 0
-      })
-
-    setReport({
-      period: getPeriodLabel(),
-      reportType,
-      generatedAt: new Date().toLocaleString('en-NG'),
-      grossRevenue,
-      netRevenue: grossRevenue - totalExpenses,
-      totalExpenses,
-      roomRevenue,
-      totalRevenue: grossRevenue + roomRevenue,
-      totalOrders: orders.length,
-      paidOrders,
-      paidOrdersCount: paidOrders.length,
-      cancelledOrders,
-      avgOrderValue: paidOrders.length ? Math.round(grossRevenue / paidOrders.length) : 0,
-      byPayment,
-      byCategory: Object.values(categoryMap).sort((a, b) => b.revenue - a.revenue),
-      topItems: Object.values(itemMap)
-        .sort((a, b) => b.quantity - a.quantity)
-        .slice(0, 10),
-      staffPerformance: Object.values(staffMap).sort((a, b) => b.revenue - a.revenue),
-      hourlyData: Object.values(hourMap).filter((h) => h.orders > 0),
-      dailyBreakdown: Object.values(dayMap),
-      tableStats: Object.values(tableMap)
-        .sort((a, b) => b.revenue - a.revenue)
-        .slice(0, 10),
-      totalDebt: debtors.reduce((s, d) => s + (d.current_balance || 0), 0),
-      totalDebtCreated: debtors.reduce((s, d) => s + (d.credit_limit || 0), 0),
-      debtorCount: debtors.length,
-      roomStayCount: roomStays.length,
-      totalOpeningFloat: tillSessions.reduce((s, t) => s + (t.opening_float || 0), 0),
-      totalClosingFloat: tillSessions
-        .filter((t) => t.status === 'closed')
-        .reduce((s, t) => s + (t.closing_float || 0), 0),
-      byOrderType: {
-        table: paidOrders.filter(
-          (o) => (o as unknown as { order_type?: string }).order_type === 'table'
-        ).length,
-        cash_sale: paidOrders.filter(
-          (o) => (o as unknown as { order_type?: string }).order_type === 'cash_sale'
-        ).length,
-        takeaway: paidOrders.filter(
-          (o) => (o as unknown as { order_type?: string }).order_type === 'takeaway'
-        ).length,
-      },
-      payouts,
-      tillSessions,
-      voids,
-      attendance,
-    })
-    setLoading(false)
   }
 
   const exportCSV = () => {

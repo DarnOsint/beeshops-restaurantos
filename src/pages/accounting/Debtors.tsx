@@ -178,9 +178,8 @@ export default function Debtors({ onBack, embedded = false }: Props) {
   const saveDebtor = async () => {
     if (!form.name || !form.credit_limit) return alert('Name and amount are required')
     setSaving(true)
-    await supabase
-      .from('debtors')
-      .insert({
+    try {
+      const { error } = await supabase.from('debtors').insert({
         name: form.name,
         phone: form.phone,
         email: form.email,
@@ -195,17 +194,22 @@ export default function Debtors({ onBack, embedded = false }: Props) {
         recorded_by: profile?.id,
         recorded_by_name: profile?.full_name,
       })
-    const { data: newDebtor } = await supabase
-      .from('debtors')
-      .select('id')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
-    if (newDebtor?.id) sendStatement(newDebtor.id, 'credit_sale')
-    await fetchAll()
-    setSaving(false)
-    setShowAddModal(false)
-    setForm(blankForm)
+      if (error) throw error
+      const { data: newDebtor } = await supabase
+        .from('debtors')
+        .select('id')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+      if (newDebtor?.id) sendStatement(newDebtor.id, 'credit_sale')
+      await fetchAll()
+      setShowAddModal(false)
+      setForm(blankForm)
+    } catch (err) {
+      alert('Error saving debtor: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const recordPayment = async (debtor: Debtor) => {
@@ -217,9 +221,8 @@ export default function Debtors({ onBack, embedded = false }: Props) {
     const newAmountPaid = (debtor.amount_paid || 0) + amount
     const newBalance = debtor.current_balance - amount
     const newStatus = newBalance <= 0 ? 'paid' : 'partial'
-    await supabase
-      .from('debt_payments')
-      .insert({
+    try {
+      const { error: pmtError } = await supabase.from('debt_payments').insert({
         debtor_id: debtor.id,
         amount,
         payment_method: payForm.payment_method,
@@ -228,25 +231,31 @@ export default function Debtors({ onBack, embedded = false }: Props) {
         recorded_by: profile?.id,
         recorded_by_name: profile?.full_name,
       })
-    await supabase
-      .from('debtors')
-      .update({
-        amount_paid: newAmountPaid,
-        current_balance: newBalance,
-        status: newStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', debtor.id)
-    await fetchAll()
-    sendStatement(debtor.id, 'payment')
-    setSaving(false)
-    setShowPaymentModal(null)
-    setPayForm(blankPay)
+      if (pmtError) throw pmtError
+      const { error: updError } = await supabase
+        .from('debtors')
+        .update({
+          amount_paid: newAmountPaid,
+          current_balance: newBalance,
+          status: newStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', debtor.id)
+      if (updError) throw updError
+      await fetchAll()
+      sendStatement(debtor.id, 'payment')
+      setShowPaymentModal(null)
+      setPayForm(blankPay)
+    } catch (err) {
+      alert('Payment failed: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const markPaid = async (debtor: Debtor) => {
     if (!confirm('Mark ' + debtor.name + ' as fully paid?')) return
-    await supabase
+    const { error } = await supabase
       .from('debtors')
       .update({
         amount_paid: debtor.credit_limit,
@@ -255,6 +264,10 @@ export default function Debtors({ onBack, embedded = false }: Props) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', debtor.id)
+    if (error) {
+      alert('Error: ' + error.message)
+      return
+    }
     fetchAll()
   }
 
