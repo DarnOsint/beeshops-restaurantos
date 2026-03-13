@@ -200,7 +200,7 @@ export default function Management() {
       <div className="flex border-b border-gray-800 bg-gray-900 px-4 overflow-x-auto items-center">
         <div className="ml-auto pl-2 py-1 shrink-0">
           <HelpTooltip tips={[
-            { id: 'mgmt-overview', title: 'Overview', description: 'Live dashboard showing open orders, occupied tables, occupied rooms, staff on shift, and today's revenue. All figures update in real time via Supabase subscriptions.' },
+            { id: 'mgmt-overview', title: 'Overview', description: "Live dashboard showing open orders, occupied tables, occupied rooms, staff on shift, and today's revenue. All figures update in real time via Supabase subscriptions." },
             { id: 'mgmt-lateorders', title: 'Late Order Banner', description: 'A red alert banner appears at the top when any order has been pending longer than the configured threshold. It shows the table name, pending item count, which station (Kitchen/Bar/Grill) is holding it, and how long it has waited. Tap Delivered to dismiss.' },
             { id: 'mgmt-shifts', title: 'Shifts Tab', description: 'Clock staff in and out for the current shift. A waitron who is not clocked in cannot access the POS — they will see a blocked screen. You can also view who is currently on shift and their clock-in time.' },
             { id: 'mgmt-tables', title: 'Tables Tab', description: 'Assign waitrons to table zones (Outdoor, Indoor, VIP Lounge, The Nook). A waitron will only see and serve tables in their assigned zone. You can also assign individual tables directly to a specific waitron.' },
