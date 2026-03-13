@@ -1,17 +1,20 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { Hash, Mail, Eye, EyeOff, Delete } from 'lucide-react'
 
 // Rate limit config
 const EMAIL_MAX_ATTEMPTS = 5
-const EMAIL_LOCKOUT_MS = 15 * 60 * 1000   // 15 minutes
+const EMAIL_LOCKOUT_MS = 15 * 60 * 1000 // 15 minutes
 const PIN_MAX_ATTEMPTS = 5
-const PIN_LOCKOUT_MS = 5 * 60 * 1000       // 5 minutes
+const PIN_LOCKOUT_MS = 5 * 60 * 1000 // 5 minutes
 
 function getRateState(key) {
   try {
     return JSON.parse(sessionStorage.getItem(key) || 'null')
-  } catch { return null }
+  } catch {
+    return null
+  }
 }
 
 function setRateState(key, state) {
@@ -20,7 +23,7 @@ function setRateState(key, state) {
 
 function isLockedOut(state, lockoutMs) {
   if (!state || state.attempts < (state.max || 5)) return false
-  return (Date.now() - state.lockedAt) < lockoutMs
+  return Date.now() - state.lockedAt < lockoutMs
 }
 
 function getLockoutRemaining(state, lockoutMs) {
@@ -45,8 +48,11 @@ function useLockoutTimer(lockedOut, remaining, setRemaining) {
   useEffect(() => {
     if (!lockedOut || remaining <= 0) return
     timer.current = setInterval(() => {
-      setRemaining(r => {
-        if (r <= 1) { clearInterval(timer.current); return 0 }
+      setRemaining((r) => {
+        if (r <= 1) {
+          clearInterval(timer.current)
+          return 0
+        }
         return r - 1
       })
     }, 1000)
@@ -72,6 +78,10 @@ export default function Login() {
     const s = getRateState('rl_pin')
     return isLockedOut(s, PIN_LOCKOUT_MS) ? getLockoutRemaining(s, PIN_LOCKOUT_MS) : 0
   })
+
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const sessionExpired = searchParams.get('reason') === 'timeout'
 
   const emailLocked = emailRemaining > 0
   const pinLocked = pinRemaining > 0
@@ -113,7 +123,7 @@ export default function Login() {
       setLoading(false)
     } else {
       resetAttempts('rl_email')
-      window.location.href = '/dashboard'
+      navigate('/dashboard')
     }
   }
 
@@ -156,15 +166,18 @@ export default function Login() {
     }
 
     resetAttempts('rl_pin')
-    localStorage.setItem('pin_session', JSON.stringify({
-      id: data.id,
-      full_name: data.full_name,
-      role: data.role,
-      email: data.email,
-      pin: data.pin,
-      logged_in_at: new Date().toISOString()
-    }))
-    window.location.href = '/dashboard'
+    localStorage.setItem(
+      'pin_session',
+      JSON.stringify({
+        id: data.id,
+        full_name: data.full_name,
+        role: data.role,
+        email: data.email,
+        pin: data.pin,
+        logged_in_at: new Date().toISOString(),
+      })
+    )
+    navigate('/dashboard')
   }
 
   const handlePinPress = (digit) => {
@@ -176,7 +189,7 @@ export default function Login() {
   }
 
   const handlePinDelete = () => {
-    setPin(prev => prev.slice(0, -1))
+    setPin((prev) => prev.slice(0, -1))
     setError(null)
   }
 
@@ -190,7 +203,6 @@ export default function Login() {
   return (
     <div className="min-h-full bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-amber-500 mb-4">
             <span className="text-3xl">🍺</span>
@@ -199,15 +211,34 @@ export default function Login() {
           <p className="text-gray-400 mt-1">Restaurant Operating System</p>
         </div>
 
+        {sessionExpired && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3 mb-6 flex items-center gap-3">
+            <span className="text-amber-400 text-lg">⏱</span>
+            <div>
+              <p className="text-amber-400 text-sm font-medium">Session expired</p>
+              <p className="text-amber-400/70 text-xs">
+                You were signed out after 30 minutes of inactivity.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="flex bg-gray-900 border border-gray-800 rounded-2xl p-1 mb-6">
           <button
-            onClick={() => { setMode('email'); setError(null); setPin('') }}
+            onClick={() => {
+              setMode('email')
+              setError(null)
+              setPin('')
+            }}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${mode === 'email' ? 'bg-amber-500 text-black' : 'text-gray-400 hover:text-white'}`}
           >
             <Mail size={15} /> Email Login
           </button>
           <button
-            onClick={() => { setMode('pin'); setError(null) }}
+            onClick={() => {
+              setMode('pin')
+              setError(null)
+            }}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${mode === 'pin' ? 'bg-amber-500 text-black' : 'text-gray-400 hover:text-white'}`}
           >
             <Hash size={15} /> PIN Login
@@ -215,7 +246,6 @@ export default function Login() {
         </div>
 
         <div className="bg-gray-900 rounded-2xl p-8 shadow-2xl border border-gray-800">
-
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg p-3 mb-6 text-sm">
               {error}
@@ -233,7 +263,10 @@ export default function Login() {
                     <span className="text-2xl">🔒</span>
                   </div>
                   <p className="text-red-400 font-semibold mb-1">Account Locked</p>
-                  <p className="text-gray-500 text-sm">Try again in <span className="text-white font-mono">{formatTime(emailRemaining)}</span></p>
+                  <p className="text-gray-500 text-sm">
+                    Try again in{' '}
+                    <span className="text-white font-mono">{formatTime(emailRemaining)}</span>
+                  </p>
                 </div>
               ) : (
                 <form onSubmit={handleEmailLogin} className="space-y-5">
@@ -242,7 +275,7 @@ export default function Login() {
                     <input
                       type="email"
                       value={email}
-                      onChange={e => setEmail(e.target.value)}
+                      onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@beeshops.com"
                       required
                       className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 transition-colors"
@@ -254,13 +287,16 @@ export default function Login() {
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={password}
-                        onChange={e => setPassword(e.target.value)}
+                        onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
                         required
                         className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 pr-11 focus:outline-none focus:border-amber-500 transition-colors"
                       />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                      >
                         {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
@@ -280,7 +316,9 @@ export default function Login() {
           {mode === 'pin' && (
             <>
               <h2 className="text-xl font-semibold text-white mb-2">Enter PIN</h2>
-              <p className="text-gray-500 text-sm mb-6">For waitrons, kitchen, bar and grill staff</p>
+              <p className="text-gray-500 text-sm mb-6">
+                For waitrons, kitchen, bar and grill staff
+              </p>
 
               {pinLocked ? (
                 <div className="text-center py-8">
@@ -288,15 +326,23 @@ export default function Login() {
                     <span className="text-2xl">🔒</span>
                   </div>
                   <p className="text-red-400 font-semibold mb-1">PIN Entry Locked</p>
-                  <p className="text-gray-500 text-sm">Try again in <span className="text-white font-mono">{formatTime(pinRemaining)}</span></p>
+                  <p className="text-gray-500 text-sm">
+                    Try again in{' '}
+                    <span className="text-white font-mono">{formatTime(pinRemaining)}</span>
+                  </p>
                 </div>
               ) : (
                 <>
                   <div className="flex justify-center gap-4 mb-8">
-                    {[0, 1, 2, 3].map(i => (
-                      <div key={i} className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center transition-all ${
-                        pin.length > i ? 'border-amber-500 bg-amber-500/10' : 'border-gray-700 bg-gray-800'
-                      }`}>
+                    {[0, 1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center transition-all ${
+                          pin.length > i
+                            ? 'border-amber-500 bg-amber-500/10'
+                            : 'border-gray-700 bg-gray-800'
+                        }`}
+                      >
                         {pin.length > i && <div className="w-4 h-4 rounded-full bg-amber-500" />}
                       </div>
                     ))}
@@ -308,14 +354,20 @@ export default function Login() {
                         {row.map((digit, di) => (
                           <button
                             key={di}
-                            onClick={() => digit === 'del' ? handlePinDelete() : digit !== '' ? handlePinPress(digit) : null}
+                            onClick={() =>
+                              digit === 'del'
+                                ? handlePinDelete()
+                                : digit !== ''
+                                  ? handlePinPress(digit)
+                                  : null
+                            }
                             disabled={loading || digit === ''}
                             className={`h-16 rounded-2xl text-xl font-bold transition-all ${
                               digit === ''
                                 ? 'opacity-0 pointer-events-none'
                                 : digit === 'del'
-                                ? 'bg-gray-800 border border-gray-700 text-gray-400 hover:bg-gray-700 hover:text-white active:scale-95'
-                                : 'bg-gray-800 border border-gray-700 text-white hover:bg-gray-700 hover:border-amber-500/50 active:scale-95'
+                                  ? 'bg-gray-800 border border-gray-700 text-gray-400 hover:bg-gray-700 hover:text-white active:scale-95'
+                                  : 'bg-gray-800 border border-gray-700 text-white hover:bg-gray-700 hover:border-amber-500/50 active:scale-95'
                             }`}
                           >
                             {digit === 'del' ? <Delete size={20} className="mx-auto" /> : digit}
@@ -330,7 +382,10 @@ export default function Login() {
                   )}
 
                   <button
-                    onClick={() => { setPin(''); setError(null) }}
+                    onClick={() => {
+                      setPin('')
+                      setError(null)
+                    }}
                     className="w-full mt-4 text-gray-500 hover:text-gray-300 text-sm transition-colors"
                   >
                     Clear

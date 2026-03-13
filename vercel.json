@@ -1,8 +1,11 @@
 {
   "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "crons": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "path": "/api/cron/daily-report",
+      "schedule": "30 22 * * *"
     }
   ]
 }
