@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { sendPushToStaff } from '../../hooks/usePushNotifications'
 import { HelpTooltip } from '../../components/HelpTooltip'
@@ -8,8 +8,6 @@ import { useAuth } from '../../context/AuthContext'
 import ErrorBoundary from '../../components/ErrorBoundary'
 import { ChefHat, Clock, LogOut, RefreshCw, CheckCircle } from 'lucide-react'
 import type { KdsOrder } from './types'
-
-/* eslint-disable react-hooks/set-state-in-effect */
 
 const HELP_TIPS = [
   {
@@ -49,25 +47,27 @@ function getElapsed(createdAt: string): string {
   if (total < 60) return `${total}s`
   return `${Math.floor(total / 60)}m ${total % 60}s`
 }
-
 function getUrgencyColor(createdAt: string): string {
   const mins = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000)
   if (mins >= 20) return 'border-red-500 bg-red-500/10 shadow-red-500/20 shadow-lg'
   if (mins >= 10) return 'border-amber-500 bg-amber-500/5'
   return 'border-gray-700 bg-gray-900'
 }
-
 function getTimerColor(createdAt: string): string {
   const mins = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000)
   if (mins >= 20) return 'text-red-400 font-bold'
   if (mins >= 10) return 'text-amber-400 font-bold'
   return 'text-gray-400'
 }
-
 function getStatusColor(status: string): string {
-  if (status === 'ready') return 'bg-green-500/20 text-green-400'
+  if (status === 'ready') return 'bg-green-500/20 text-green-400 cursor-default'
   if (status === 'preparing') return 'bg-amber-500/20 text-amber-400'
   return 'bg-gray-700 text-gray-400'
+}
+function getNextStatus(status: string): string | null {
+  if (status === 'pending') return 'preparing'
+  if (status === 'preparing') return 'ready'
+  return null // ready items cannot be cycled back
 }
 
 function KitchenKDSInner() {
@@ -75,10 +75,9 @@ function KitchenKDSInner() {
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
   const [orders, setOrders] = useState<KdsOrder[]>([])
   const [loading, setLoading] = useState(true)
-  // tick forces re-render every second to update elapsed timers
   const [, setTick] = useState(0)
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
       .from('orders')
       .select(
@@ -103,11 +102,13 @@ function KitchenKDSInner() {
       setOrders(kitchen)
     }
     setLoading(false)
-  }
+  }, [])
 
-  const updateItemStatus = async (itemId: string, newStatus: string, orderId: string) => {
-    await supabase.from('order_items').update({ status: newStatus }).eq('id', itemId)
-    if (newStatus === 'ready') {
+  const updateItemStatus = async (itemId: string, currentStatus: string, orderId: string) => {
+    const nextStatus = getNextStatus(currentStatus)
+    if (!nextStatus) return // already ready — do nothing
+    await supabase.from('order_items').update({ status: nextStatus }).eq('id', itemId)
+    if (nextStatus === 'ready') {
       const order = orders.find((o) => o.id === orderId)
       if (order?.staff_id) {
         const item = order.order_items.find((i) => i.id === itemId)
@@ -122,11 +123,14 @@ function KitchenKDSInner() {
   }
 
   const markAllReady = async (order: KdsOrder) => {
-    await supabase
-      .from('order_items')
-      .update({ status: 'ready' })
-      .eq('order_id', order.id)
-      .eq('destination', 'kitchen')
+    // Only mark kitchen-destined items ready
+    const kitchenItemIds = order.order_items
+      .filter(
+        (i) => i.menu_items?.menu_categories?.destination === 'kitchen' && i.status !== 'ready'
+      )
+      .map((i) => i.id)
+    if (!kitchenItemIds.length) return
+    await supabase.from('order_items').update({ status: 'ready' }).in('id', kitchenItemIds)
     if (order.staff_id)
       await sendPushToStaff(
         order.staff_id,
@@ -137,6 +141,7 @@ function KitchenKDSInner() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchOrders()
     const timer = setInterval(() => setTick((t) => t + 1), 1000)
     const channel = supabase
@@ -153,7 +158,7 @@ function KitchenKDSInner() {
       supabase.removeChannel(channel)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [])
+  }, [fetchOrders])
 
   if (geoStatus !== 'inside')
     return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
@@ -233,17 +238,8 @@ function KitchenKDSInner() {
                         <span className="text-white text-sm">{item.menu_items?.name}</span>
                       </div>
                       <button
-                        onClick={() =>
-                          updateItemStatus(
-                            item.id,
-                            item.status === 'pending'
-                              ? 'preparing'
-                              : item.status === 'preparing'
-                                ? 'ready'
-                                : 'pending',
-                            order.id
-                          )
-                        }
+                        onClick={() => updateItemStatus(item.id, item.status, order.id)}
+                        disabled={item.status === 'ready'}
                         className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${getStatusColor(item.status)}`}
                       >
                         {item.status === 'pending'
@@ -255,12 +251,19 @@ function KitchenKDSInner() {
                     </div>
                   ))}
                 </div>
-                <button
-                  onClick={() => markAllReady(order)}
-                  className="w-full bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl py-2.5 flex items-center justify-center gap-2 transition-colors"
-                >
-                  <CheckCircle size={16} /> All Ready
-                </button>
+                {order.order_items.some((i) => i.status !== 'ready') && (
+                  <button
+                    onClick={() => markAllReady(order)}
+                    className="w-full bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl py-2.5 flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <CheckCircle size={16} /> All Ready
+                  </button>
+                )}
+                {order.order_items.every((i) => i.status === 'ready') && (
+                  <div className="text-center text-green-400 text-xs font-bold py-1">
+                    ✅ All items ready — waiter notified
+                  </div>
+                )}
               </div>
             ))}
           </div>

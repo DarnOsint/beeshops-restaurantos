@@ -152,6 +152,7 @@ function GrillerKDSInner() {
         '✅ Item Ready',
         `${item.menu_items?.name || 'Item'} ready for ${ticket.tableName}`
       )
+    fetchTickets()
   }
 
   const markAllReady = async (ticket: GrillerTicket) => {
@@ -165,6 +166,7 @@ function GrillerKDSInner() {
         '✅ Order Ready',
         `Grill order for ${ticket.tableName} is ready to collect`
       )
+    fetchTickets()
   }
 
   useEffect(() => {
