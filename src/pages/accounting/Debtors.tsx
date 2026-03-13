@@ -7,7 +7,6 @@ import {
   Search,
   AlertTriangle,
   CheckCircle,
-  Clock,
   ChevronDown,
   ChevronUp,
   X,
@@ -20,6 +19,54 @@ import {
   Send,
   Loader2,
 } from 'lucide-react'
+
+interface Debtor {
+  id: string
+  name: string
+  phone?: string
+  email?: string
+  debt_type?: string
+  credit_limit: number
+  current_balance: number
+  amount_paid: number
+  status: 'outstanding' | 'partial' | 'paid'
+  due_date?: string
+  notes?: string
+  recorded_by?: string
+  recorded_by_name?: string
+  is_active: boolean
+  created_at: string
+}
+interface DebtPayment {
+  id: string
+  debtor_id: string
+  amount: number
+  payment_method?: string
+  payment_reference?: string
+  notes?: string
+  recorded_by?: string
+  recorded_by_name?: string
+  created_at: string
+}
+interface DebtorForm {
+  name: string
+  phone: string
+  email: string
+  debt_type: string
+  credit_limit: string
+  due_date: string
+  notes: string
+}
+interface PayForm {
+  amount: string
+  payment_method: string
+  payment_reference: string
+  notes: string
+}
+interface Props {
+  onBack?: () => void
+  embedded?: boolean
+}
 
 const statusConfig = {
   outstanding: {
@@ -41,30 +88,29 @@ const statusConfig = {
     border: 'border-green-500/20',
   },
 }
-
-const debtTypeLabels = {
+const debtTypeLabels: Record<string, string> = {
   table_order: 'Table Order',
   room_stay: 'Room Stay',
   bar_tab: 'Bar Tab',
 }
 
-export default function Debtors({ onBack, embedded = false }) {
+export default function Debtors({ onBack, embedded = false }: Props) {
   const { profile } = useAuth()
-  const [debtors, setDebtors] = useState([])
-  const [payments, setPayments] = useState({})
+  const [debtors, setDebtors] = useState<Debtor[]>([])
+  const [payments, setPayments] = useState<Record<string, DebtPayment[]>>({})
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
-  const [expandedId, setExpandedId] = useState(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [showPaymentModal, setShowPaymentModal] = useState(null)
-  const [sendingStatement, setSendingStatement] = useState(null)
+  const [showPaymentModal, setShowPaymentModal] = useState<Debtor | null>(null)
+  const [sendingStatement, setSendingStatement] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const canEdit = ['owner', 'manager'].includes(profile?.role)
-  const canPay = ['owner', 'manager', 'accountant'].includes(profile?.role)
+  const canEdit = ['owner', 'manager'].includes(profile?.role || '')
+  const canPay = ['owner', 'manager', 'accountant'].includes(profile?.role || '')
 
-  const [form, setForm] = useState({
+  const blankForm: DebtorForm = {
     name: '',
     phone: '',
     email: '',
@@ -72,17 +118,16 @@ export default function Debtors({ onBack, embedded = false }) {
     credit_limit: '',
     due_date: '',
     notes: '',
-  })
-
-  const [payForm, setPayForm] = useState({
-    amount: '',
-    payment_method: 'cash',
-    payment_reference: '',
-    notes: '',
-  })
+  }
+  const blankPay: PayForm = { amount: '', payment_method: 'cash', payment_reference: '', notes: '' }
+  const [form, setForm] = useState<DebtorForm>(blankForm)
+  const [payForm, setPayForm] = useState<PayForm>(blankPay)
+  const f = (v: Partial<DebtorForm>) => setForm((p) => ({ ...p, ...v }))
+  const pf = (v: Partial<PayForm>) => setPayForm((p) => ({ ...p, ...v }))
 
   useEffect(() => {
     fetchAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fetchAll = async () => {
@@ -91,36 +136,29 @@ export default function Debtors({ onBack, embedded = false }) {
       .select('*')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
-
-    if (profile?.role === 'waitron') {
-      query = query.eq('recorded_by', profile.id)
-    }
-
+    if (profile?.role === 'waitron') query = query.eq('recorded_by', profile.id)
     const { data } = await query
-    setDebtors(data || [])
-
+    setDebtors((data || []) as Debtor[])
     if (data?.length) {
       const { data: pmts } = await supabase
         .from('debt_payments')
         .select('*')
         .in(
           'debtor_id',
-          data.map((d) => d.id)
+          data.map((d: { id: string }) => d.id)
         )
         .order('created_at', { ascending: false })
-
-      const map = {}
-      pmts?.forEach((p) => {
+      const map: Record<string, DebtPayment[]> = {}
+      ;(pmts || []).forEach((p: DebtPayment) => {
         if (!map[p.debtor_id]) map[p.debtor_id] = []
         map[p.debtor_id].push(p)
       })
       setPayments(map)
     }
-
     setLoading(false)
   }
 
-  const sendStatement = async (debtorId, trigger = 'manual') => {
+  const sendStatement = async (debtorId: string, trigger = 'manual') => {
     if (trigger === 'manual') setSendingStatement(debtorId)
     try {
       await fetch('/api/send-statement', {
@@ -131,8 +169,8 @@ export default function Debtors({ onBack, embedded = false }) {
         },
         body: JSON.stringify({ debtor_id: debtorId, trigger }),
       })
-    } catch (_e) {
-      /* silent — don't block UI */
+    } catch {
+      /* silent */
     }
     if (trigger === 'manual') setSendingStatement(null)
   }
@@ -140,21 +178,23 @@ export default function Debtors({ onBack, embedded = false }) {
   const saveDebtor = async () => {
     if (!form.name || !form.credit_limit) return alert('Name and amount are required')
     setSaving(true)
-    await supabase.from('debtors').insert({
-      name: form.name,
-      phone: form.phone,
-      email: form.email,
-      debt_type: form.debt_type,
-      credit_limit: parseFloat(form.credit_limit),
-      current_balance: parseFloat(form.credit_limit),
-      amount_paid: 0,
-      due_date: form.due_date || null,
-      notes: form.notes,
-      status: 'outstanding',
-      is_active: true,
-      recorded_by: profile?.id,
-      recorded_by_name: profile?.full_name,
-    })
+    await supabase
+      .from('debtors')
+      .insert({
+        name: form.name,
+        phone: form.phone,
+        email: form.email,
+        debt_type: form.debt_type,
+        credit_limit: parseFloat(form.credit_limit),
+        current_balance: parseFloat(form.credit_limit),
+        amount_paid: 0,
+        due_date: form.due_date || null,
+        notes: form.notes,
+        status: 'outstanding',
+        is_active: true,
+        recorded_by: profile?.id,
+        recorded_by_name: profile?.full_name,
+      })
     const { data: newDebtor } = await supabase
       .from('debtors')
       .select('id')
@@ -165,38 +205,29 @@ export default function Debtors({ onBack, embedded = false }) {
     await fetchAll()
     setSaving(false)
     setShowAddModal(false)
-    setForm({
-      name: '',
-      phone: '',
-      email: '',
-      debt_type: 'table_order',
-      credit_limit: '',
-      due_date: '',
-      notes: '',
-    })
+    setForm(blankForm)
   }
 
-  const recordPayment = async (debtor) => {
+  const recordPayment = async (debtor: Debtor) => {
     if (!payForm.amount || parseFloat(payForm.amount) <= 0) return alert('Enter a valid amount')
     const amount = parseFloat(payForm.amount)
     if (amount > debtor.current_balance)
       return alert('Amount exceeds balance of ' + debtor.current_balance.toLocaleString())
     setSaving(true)
-
     const newAmountPaid = (debtor.amount_paid || 0) + amount
     const newBalance = debtor.current_balance - amount
     const newStatus = newBalance <= 0 ? 'paid' : 'partial'
-
-    await supabase.from('debt_payments').insert({
-      debtor_id: debtor.id,
-      amount,
-      payment_method: payForm.payment_method,
-      payment_reference: payForm.payment_reference,
-      notes: payForm.notes,
-      recorded_by: profile?.id,
-      recorded_by_name: profile?.full_name,
-    })
-
+    await supabase
+      .from('debt_payments')
+      .insert({
+        debtor_id: debtor.id,
+        amount,
+        payment_method: payForm.payment_method,
+        payment_reference: payForm.payment_reference,
+        notes: payForm.notes,
+        recorded_by: profile?.id,
+        recorded_by_name: profile?.full_name,
+      })
     await supabase
       .from('debtors')
       .update({
@@ -206,16 +237,14 @@ export default function Debtors({ onBack, embedded = false }) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', debtor.id)
-
     await fetchAll()
-    // Send statement email automatically after payment recorded
     sendStatement(debtor.id, 'payment')
     setSaving(false)
     setShowPaymentModal(null)
-    setPayForm({ amount: '', payment_method: 'cash', payment_reference: '', notes: '' })
+    setPayForm(blankPay)
   }
 
-  const markPaid = async (debtor) => {
+  const markPaid = async (debtor: Debtor) => {
     if (!confirm('Mark ' + debtor.name + ' as fully paid?')) return
     await supabase
       .from('debtors')
@@ -229,7 +258,7 @@ export default function Debtors({ onBack, embedded = false }) {
     fetchAll()
   }
 
-  const isOverdue = (debtor) => {
+  const isOverdue = (debtor: Debtor) => {
     if (!debtor.due_date || debtor.status === 'paid') return false
     return new Date(debtor.due_date) < new Date()
   }
@@ -240,10 +269,9 @@ export default function Debtors({ onBack, embedded = false }) {
     const matchStatus = filterStatus === 'all' || d.status === filterStatus
     return matchSearch && matchStatus
   })
-
   const totalOutstanding = debtors
     .filter((d) => d.status !== 'paid')
-    .reduce((sum, d) => sum + (d.current_balance || 0), 0)
+    .reduce((s, d) => s + (d.current_balance || 0), 0)
 
   if (loading)
     return (
@@ -279,24 +307,14 @@ export default function Debtors({ onBack, embedded = false }) {
       )}
 
       <div className="grid grid-cols-3 gap-3 p-4">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
-          <p className="text-2xl font-bold text-red-400">
-            {debtors.filter((d) => d.status === 'outstanding').length}
-          </p>
-          <p className="text-gray-500 text-xs mt-0.5">Outstanding</p>
-        </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
-          <p className="text-2xl font-bold text-amber-400">
-            {debtors.filter((d) => d.status === 'partial').length}
-          </p>
-          <p className="text-gray-500 text-xs mt-0.5">Partial</p>
-        </div>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
-          <p className="text-2xl font-bold text-green-400">
-            {debtors.filter((d) => d.status === 'paid').length}
-          </p>
-          <p className="text-gray-500 text-xs mt-0.5">Paid</p>
-        </div>
+        {(['outstanding', 'partial', 'paid'] as const).map((s) => (
+          <div key={s} className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
+            <p className={`text-2xl font-bold ${statusConfig[s].color}`}>
+              {debtors.filter((d) => d.status === s).length}
+            </p>
+            <p className="text-gray-500 text-xs mt-0.5 capitalize">{s}</p>
+          </div>
+        ))}
       </div>
 
       <div className="px-4 pb-3 flex flex-col gap-2">
@@ -328,12 +346,7 @@ export default function Debtors({ onBack, embedded = false }) {
             <button
               key={s}
               onClick={() => setFilterStatus(s)}
-              className={
-                'px-3 py-1.5 rounded-xl text-xs font-medium capitalize transition-colors ' +
-                (filterStatus === s
-                  ? 'bg-amber-500 text-black'
-                  : 'bg-gray-900 border border-gray-800 text-gray-400')
-              }
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium capitalize transition-colors ${filterStatus === s ? 'bg-amber-500 text-black' : 'bg-gray-900 border border-gray-800 text-gray-400'}`}
             >
               {s}
             </button>
@@ -354,14 +367,10 @@ export default function Debtors({ onBack, embedded = false }) {
               debtor.credit_limit > 0
                 ? Math.round((debtor.amount_paid / debtor.credit_limit) * 100)
                 : 0
-
             return (
               <div
                 key={debtor.id}
-                className={
-                  'bg-gray-900 border rounded-2xl overflow-hidden ' +
-                  (overdue ? 'border-red-500/40' : 'border-gray-800')
-                }
+                className={`bg-gray-900 border rounded-2xl overflow-hidden ${overdue ? 'border-red-500/40' : 'border-gray-800'}`}
               >
                 <div
                   className="p-4 cursor-pointer"
@@ -371,9 +380,7 @@ export default function Debtors({ onBack, embedded = false }) {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="text-white font-semibold">{debtor.name}</h3>
-                        <span
-                          className={'text-xs px-2 py-0.5 rounded-lg ' + cfg.bg + ' ' + cfg.color}
-                        >
+                        <span className={`text-xs px-2 py-0.5 rounded-lg ${cfg.bg} ${cfg.color}`}>
                           {cfg.label}
                         </span>
                         {overdue && (
@@ -394,10 +401,7 @@ export default function Debtors({ onBack, embedded = false }) {
                       )}
                       {debtor.due_date && (
                         <p
-                          className={
-                            'text-xs mt-1 flex items-center gap-1 ' +
-                            (overdue ? 'text-red-400' : 'text-gray-500')
-                          }
+                          className={`text-xs mt-1 flex items-center gap-1 ${overdue ? 'text-red-400' : 'text-gray-500'}`}
                         >
                           <Calendar size={10} /> Due:{' '}
                           {new Date(debtor.due_date).toLocaleDateString()}
@@ -413,7 +417,6 @@ export default function Debtors({ onBack, embedded = false }) {
                       </p>
                     </div>
                   </div>
-
                   {debtor.credit_limit > 0 && (
                     <div className="mt-3">
                       <div className="flex justify-between text-xs text-gray-500 mb-1">
@@ -422,16 +425,12 @@ export default function Debtors({ onBack, embedded = false }) {
                       </div>
                       <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
                         <div
-                          className={
-                            'h-full rounded-full transition-all ' +
-                            (pct === 100 ? 'bg-green-500' : pct > 0 ? 'bg-amber-500' : 'bg-red-500')
-                          }
+                          className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-green-500' : pct > 0 ? 'bg-amber-500' : 'bg-red-500'}`}
                           style={{ width: pct + '%' }}
                         />
                       </div>
                     </div>
                   )}
-
                   <div className="flex items-center justify-between mt-2">
                     <p className="text-gray-600 text-xs">
                       Recorded by {debtor.recorded_by_name || 'system'}
@@ -443,7 +442,6 @@ export default function Debtors({ onBack, embedded = false }) {
                     )}
                   </div>
                 </div>
-
                 {isExpanded && (
                   <div className="border-t border-gray-800">
                     {debtor.status !== 'paid' && canPay && (
@@ -451,12 +449,7 @@ export default function Debtors({ onBack, embedded = false }) {
                         <button
                           onClick={() => {
                             setShowPaymentModal(debtor)
-                            setPayForm({
-                              amount: '',
-                              payment_method: 'cash',
-                              payment_reference: '',
-                              notes: '',
-                            })
+                            setPayForm(blankPay)
                           }}
                           className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-bold py-2 rounded-xl text-sm flex items-center justify-center gap-2 min-w-[120px]"
                         >
@@ -487,7 +480,6 @@ export default function Debtors({ onBack, embedded = false }) {
                         )}
                       </div>
                     )}
-
                     {debtor.notes && (
                       <div className="px-4 py-3 border-b border-gray-800">
                         <p className="text-gray-500 text-xs flex items-start gap-2">
@@ -496,7 +488,6 @@ export default function Debtors({ onBack, embedded = false }) {
                         </p>
                       </div>
                     )}
-
                     <div className="px-4 py-3">
                       <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">
                         Payment History ({debtorPayments.length})
@@ -553,7 +544,7 @@ export default function Debtors({ onBack, embedded = false }) {
                 </label>
                 <input
                   value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onChange={(e) => f({ name: e.target.value })}
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
                   placeholder="Full name"
                 />
@@ -564,7 +555,7 @@ export default function Debtors({ onBack, embedded = false }) {
                 </label>
                 <input
                   value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  onChange={(e) => f({ phone: e.target.value })}
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
                   placeholder="08xxxxxxxxx"
                 />
@@ -577,13 +568,8 @@ export default function Debtors({ onBack, embedded = false }) {
                   {Object.entries(debtTypeLabels).map(([val, label]) => (
                     <button
                       key={val}
-                      onClick={() => setForm({ ...form, debt_type: val })}
-                      className={
-                        'py-2.5 rounded-xl text-xs font-medium border-2 transition-all ' +
-                        (form.debt_type === val
-                          ? 'border-amber-500 bg-amber-500/10 text-amber-400'
-                          : 'border-gray-700 bg-gray-800 text-gray-400')
-                      }
+                      onClick={() => f({ debt_type: val })}
+                      className={`py-2.5 rounded-xl text-xs font-medium border-2 transition-all ${form.debt_type === val ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-gray-700 bg-gray-800 text-gray-400'}`}
                     >
                       {label}
                     </button>
@@ -597,7 +583,7 @@ export default function Debtors({ onBack, embedded = false }) {
                 <input
                   type="number"
                   value={form.credit_limit}
-                  onChange={(e) => setForm({ ...form, credit_limit: e.target.value })}
+                  onChange={(e) => f({ credit_limit: e.target.value })}
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
                   placeholder="0"
                 />
@@ -609,7 +595,7 @@ export default function Debtors({ onBack, embedded = false }) {
                 <input
                   type="date"
                   value={form.due_date}
-                  onChange={(e) => setForm({ ...form, due_date: e.target.value })}
+                  onChange={(e) => f({ due_date: e.target.value })}
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
                 />
               </div>
@@ -619,7 +605,7 @@ export default function Debtors({ onBack, embedded = false }) {
                 </label>
                 <textarea
                   value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  onChange={(e) => f({ notes: e.target.value })}
                   rows={2}
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 resize-none text-sm"
                   placeholder="Any additional notes..."
@@ -664,7 +650,7 @@ export default function Debtors({ onBack, embedded = false }) {
                 <input
                   type="number"
                   value={payForm.amount}
-                  onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })}
+                  onChange={(e) => pf({ amount: e.target.value })}
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
                   placeholder="0"
                 />
@@ -674,20 +660,17 @@ export default function Debtors({ onBack, embedded = false }) {
                   Payment Method
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {[
-                    ['cash', 'Cash'],
-                    ['bank_pos', 'Bank POS'],
-                    ['bank_transfer', 'Transfer'],
-                  ].map(([val, label]) => (
+                  {(
+                    [
+                      ['cash', 'Cash'],
+                      ['bank_pos', 'Bank POS'],
+                      ['bank_transfer', 'Transfer'],
+                    ] as const
+                  ).map(([val, label]) => (
                     <button
                       key={val}
-                      onClick={() => setPayForm({ ...payForm, payment_method: val })}
-                      className={
-                        'py-2.5 rounded-xl text-xs font-medium border-2 transition-all ' +
-                        (payForm.payment_method === val
-                          ? 'border-amber-500 bg-amber-500/10 text-amber-400'
-                          : 'border-gray-700 bg-gray-800 text-gray-400')
-                      }
+                      onClick={() => pf({ payment_method: val })}
+                      className={`py-2.5 rounded-xl text-xs font-medium border-2 transition-all ${payForm.payment_method === val ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-gray-700 bg-gray-800 text-gray-400'}`}
                     >
                       {label}
                     </button>
@@ -701,7 +684,7 @@ export default function Debtors({ onBack, embedded = false }) {
                   </label>
                   <input
                     value={payForm.payment_reference}
-                    onChange={(e) => setPayForm({ ...payForm, payment_reference: e.target.value })}
+                    onChange={(e) => pf({ payment_reference: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
                     placeholder="Transaction reference"
                   />
@@ -713,7 +696,7 @@ export default function Debtors({ onBack, embedded = false }) {
                 </label>
                 <input
                   value={payForm.notes}
-                  onChange={(e) => setPayForm({ ...payForm, notes: e.target.value })}
+                  onChange={(e) => pf({ notes: e.target.value })}
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
                   placeholder="Optional"
                 />
