@@ -55,7 +55,7 @@ export function useGeofence(locKey: LocKey = 'main') {
           return
         }
         const map = Object.fromEntries(data.map((r) => [r.id, r.value]))
-        setEnabled(map['geofence_enabled'] !== 'false')
+        setEnabled(map['geofence_enabled'] === 'true')
 
         const r =
           locKey === 'apartment'
@@ -76,7 +76,7 @@ export function useGeofence(locKey: LocKey = 'main') {
         setTarget({ lat, lng })
       })
       .catch(() => {
-        setEnabled(true)
+        setEnabled(false)
         setRadius(DEFAULT_RADIUS[locKey])
         setTarget(FALLBACK[locKey])
       })
