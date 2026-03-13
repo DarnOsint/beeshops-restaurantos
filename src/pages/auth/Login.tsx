@@ -183,7 +183,7 @@ export default function Login() {
         logged_in_at: new Date().toISOString(),
       })
     )
-    navigate('/dashboard')
+    window.location.replace('/dashboard')
   }
 
   const handlePinPress = (digit: string) => {
