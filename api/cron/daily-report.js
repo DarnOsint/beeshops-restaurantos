@@ -186,7 +186,7 @@ export default async function handler(req, res) {
 </html>`
 
     const { data, error } = await resend.emails.send({
-      from: 'RestaurantOS <info@beeshop.place>',
+      from: 'RestaurantOS <reports@beeshop.place>',
       to: [process.env.REPORT_EMAIL],
       subject: `Daily Report — Beeshop's Place · ${fmt(totalRevenue)} · ${dateStr}`,
       html,
