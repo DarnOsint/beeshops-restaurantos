@@ -4,29 +4,145 @@ import {
   Plus,
   ChevronDown,
   ChevronUp,
-  AlertTriangle,
-  CheckCircle,
   Package,
   RefreshCw,
   Trash2,
+  Settings,
+  Edit3,
+  Save,
+  X,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 
 const today = () => new Date().toISOString().slice(0, 10)
-
 const UNITS = ['portion', 'kg', 'g', 'litre', 'ml', 'piece', 'pack', 'tray', 'bowl', 'cup']
+const isManager = (role) => ['owner', 'manager'].includes(role)
+
+// ── Status engine ─────────────────────────────────────────────────────────────
+// variance = opening + received − sold − void − closing
+// yieldPct  = actual_sold / expected_sold × 100  (when benchmark set)
+function getStatus(entry, benchmark) {
+  const v = entry.computed_variance
+
+  // If benchmark is set, use yield-based scoring
+  if (benchmark && benchmark.expected_yield > 0 && entry.received_qty > 0) {
+    const expectedSold = entry.received_qty * benchmark.expected_yield
+    const actualSold = entry.effective_sold
+    const yieldPct = expectedSold > 0 ? (actualSold / expectedSold) * 100 : 100
+    const tolerance = benchmark.tolerance_pct ?? 5
+
+    if (yieldPct >= 100 - tolerance && yieldPct <= 100 + tolerance) {
+      return {
+        key: 'ok',
+        label: 'On Target',
+        icon: '✅',
+        color: 'text-green-400',
+        bg: 'bg-green-500/10',
+        border: 'border-green-500/30',
+        remark: `Yield is ${yieldPct.toFixed(0)}% — right on target. Well done.`,
+      }
+    }
+    if (yieldPct > 100 + tolerance) {
+      return {
+        key: 'commend',
+        label: 'Commended',
+        icon: '🌟',
+        color: 'text-amber-300',
+        bg: 'bg-amber-400/10',
+        border: 'border-amber-400/30',
+        remark: `Yield is ${yieldPct.toFixed(0)}% — above benchmark. Excellent kitchen efficiency!`,
+      }
+    }
+    if (yieldPct >= 100 - tolerance * 3) {
+      return {
+        key: 'warn',
+        label: 'Investigate',
+        icon: '⚠️',
+        color: 'text-amber-400',
+        bg: 'bg-amber-500/10',
+        border: 'border-amber-500/40',
+        remark: `Yield is ${yieldPct.toFixed(0)}% — below benchmark by ${(100 - yieldPct).toFixed(0)}%. Please investigate waste or portioning.`,
+      }
+    }
+    return {
+      key: 'alarm',
+      label: 'Alarm',
+      icon: '🚨',
+      color: 'text-red-400',
+      bg: 'bg-red-500/10',
+      border: 'border-red-500/40',
+      remark: `Yield is only ${yieldPct.toFixed(0)}% — well below benchmark. Urgent investigation required.`,
+    }
+  }
+
+  // Fallback: variance-based scoring
+  if (Math.abs(v) < 0.01)
+    return {
+      key: 'ok',
+      label: 'Balanced',
+      icon: '✅',
+      color: 'text-green-400',
+      bg: 'bg-green-500/10',
+      border: 'border-green-500/30',
+      remark: 'Stock fully accounted for.',
+    }
+  if (v > 0.5)
+    return {
+      key: 'commend',
+      label: 'Surplus',
+      icon: '🌟',
+      color: 'text-amber-300',
+      bg: 'bg-amber-400/10',
+      border: 'border-amber-400/30',
+      remark: `${v.toFixed(1)} ${entry.unit} surplus — stock is being used judiciously. Verify counts.`,
+    }
+  if (v < -0.01 && v > -2)
+    return {
+      key: 'warn',
+      label: 'Investigate',
+      icon: '⚠️',
+      color: 'text-amber-400',
+      bg: 'bg-amber-500/10',
+      border: 'border-amber-500/40',
+      remark: `${Math.abs(v).toFixed(1)} ${entry.unit} unaccounted. Check wastage logs.`,
+    }
+  return {
+    key: 'alarm',
+    label: 'Alarm',
+    icon: '🚨',
+    color: 'text-red-400',
+    bg: 'bg-red-500/10',
+    border: 'border-red-500/40',
+    remark: `${Math.abs(v).toFixed(1)} ${entry.unit} missing. Urgent: possible theft or significant waste.`,
+  }
+}
 
 export default function KitchenStock({ onBack }) {
   const { profile } = useAuth()
+  const canManage = isManager(profile?.role)
+
   const [date, setDate] = useState(today())
   const [entries, setEntries] = useState([])
+  const [benchmarks, setBenchmarks] = useState({}) // item_name → benchmark row
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [menuItems, setMenuItems] = useState([])
-  const [soldMap, setSoldMap] = useState({}) // item_name → qty sold from orders
+  const [soldMap, setSoldMap] = useState({})
   const [expandedId, setExpandedId] = useState(null)
+  const [editingId, setEditingId] = useState(null) // inline full-edit mode
+  const [editVals, setEditVals] = useState({})
+  const [showBenchmarkFor, setShowBenchmarkFor] = useState(null) // item_name
+  const [bmForm, setBmForm] = useState({
+    expected_yield: '',
+    tolerance_pct: '5',
+    raw_unit: 'kg',
+    cooked_unit: 'portion',
+    note: '',
+  })
+  const [tab, setTab] = useState('register') // 'register' | 'benchmarks'
+
   const [form, setForm] = useState({
     item_name: '',
     unit: 'portion',
@@ -38,40 +154,44 @@ export default function KitchenStock({ onBack }) {
   })
   const [formError, setFormError] = useState(null)
 
-  // Load kitchen food items from menu for autocomplete
+  // ── Data loading ────────────────────────────────────────────────────────────
+
   useEffect(() => {
     supabase
       .from('menu_items')
-      .select('name, menu_categories(name)')
+      .select('name')
       .eq('is_available', true)
       .then(({ data }) => setMenuItems((data || []).map((i) => i.name)))
   }, [])
 
-  // Auto-calculate sold qty from paid orders for selected date
+  const loadBenchmarks = useCallback(async () => {
+    const { data } = await supabase.from('kitchen_stock_benchmarks').select('*')
+    const map = {}
+    ;(data || []).forEach((b) => {
+      map[b.item_name] = b
+    })
+    setBenchmarks(map)
+  }, [])
+
   const loadSoldQty = useCallback(async (d) => {
-    const from = `${d}T00:00:00`
-    const to = `${d}T23:59:59`
     const { data: orders } = await supabase
       .from('orders')
       .select('id')
       .eq('status', 'paid')
-      .gte('created_at', from)
-      .lte('created_at', to)
-
+      .gte('created_at', `${d}T00:00:00`)
+      .lte('created_at', `${d}T23:59:59`)
     if (!orders?.length) {
       setSoldMap({})
       return
     }
-
     const { data: items } = await supabase
       .from('order_items')
-      .select('quantity, menu_items(name), destination')
+      .select('quantity, menu_items(name)')
       .in(
         'order_id',
         orders.map((o) => o.id)
       )
       .eq('destination', 'kitchen')
-
     const map = {}
     ;(items || []).forEach((i) => {
       const name = i.menu_items?.name
@@ -80,11 +200,10 @@ export default function KitchenStock({ onBack }) {
     setSoldMap(map)
   }, [])
 
-  // Load stock entries for selected date
   const loadEntries = useCallback(
     async (d) => {
       setLoading(true)
-      await loadSoldQty(d)
+      await Promise.all([loadSoldQty(d), loadBenchmarks()])
       const { data } = await supabase
         .from('kitchen_stock')
         .select('*')
@@ -93,52 +212,49 @@ export default function KitchenStock({ onBack }) {
       setEntries(data || [])
       setLoading(false)
     },
-    [loadSoldQty]
+    [loadSoldQty, loadBenchmarks]
   )
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     loadEntries(date)
   }, [date, loadEntries])
 
-  // Merge sold_qty from orders into entries view
-  const enriched = entries
-    .map((e) => ({
-      ...e,
-      auto_sold: soldMap[e.item_name] || 0,
-      effective_sold: e.sold_qty > 0 ? e.sold_qty : soldMap[e.item_name] || 0,
-    }))
-    .map((e) => ({
-      ...e,
-      computed_variance:
-        e.opening_qty + e.received_qty - (e.effective_sold + e.void_qty + e.closing_qty),
-    }))
+  // ── Enriched entries with status ────────────────────────────────────────────
 
-  const totalVariance = enriched.reduce((s, e) => s + (e.computed_variance || 0), 0)
-  const hasIssues = enriched.some((e) => Math.abs(e.computed_variance) > 0.01)
+  const enriched = entries.map((e) => {
+    const effective_sold = e.sold_qty > 0 ? e.sold_qty : soldMap[e.item_name] || 0
+    const auto_sold = soldMap[e.item_name] || 0
+    const computed_variance =
+      e.opening_qty + e.received_qty - (effective_sold + e.void_qty + e.closing_qty)
+    const bm = benchmarks[e.item_name] || null
+    const enriched = { ...e, effective_sold, auto_sold, computed_variance }
+    return { ...enriched, status: getStatus(enriched, bm), benchmark: bm }
+  })
 
-  // Save a new entry
+  const alarmCount = enriched.filter((e) => e.status.key === 'alarm').length
+  const warnCount = enriched.filter((e) => e.status.key === 'warn').length
+  const commendCount = enriched.filter((e) => e.status.key === 'commend').length
+  const okCount = enriched.filter((e) => e.status.key === 'ok').length
+
+  // ── CRUD ────────────────────────────────────────────────────────────────────
+
   const handleAdd = async () => {
     setFormError(null)
     if (!form.item_name.trim()) {
       setFormError('Item name is required.')
       return
     }
-    const opening = parseFloat(form.opening_qty) || 0
-    const received = parseFloat(form.received_qty) || 0
-    const voids = parseFloat(form.void_qty) || 0
-    const closing = parseFloat(form.closing_qty) || 0
-    const sold = soldMap[form.item_name] || 0
-
     setSaving(true)
     const { error } = await supabase.from('kitchen_stock').insert({
       date,
       item_name: form.item_name.trim(),
       unit: form.unit,
-      opening_qty: opening,
-      received_qty: received,
-      sold_qty: sold,
-      void_qty: voids,
-      closing_qty: closing,
+      opening_qty: parseFloat(form.opening_qty) || 0,
+      received_qty: parseFloat(form.received_qty) || 0,
+      sold_qty: soldMap[form.item_name] || 0,
+      void_qty: parseFloat(form.void_qty) || 0,
+      closing_qty: parseFloat(form.closing_qty) || 0,
       note: form.note.trim() || null,
       recorded_by: profile?.id,
     })
@@ -160,448 +276,844 @@ export default function KitchenStock({ onBack }) {
     loadEntries(date)
   }
 
-  // Update closing qty inline
-  const updateClosing = async (id, val) => {
+  const startEdit = (entry) => {
+    setEditingId(entry.id)
+    setEditVals({
+      opening_qty: entry.opening_qty,
+      received_qty: entry.received_qty,
+      void_qty: entry.void_qty,
+      closing_qty: entry.closing_qty,
+      note: entry.note || '',
+    })
+  }
+
+  const saveEdit = async (id) => {
     await supabase
       .from('kitchen_stock')
       .update({
-        closing_qty: parseFloat(val) || 0,
+        opening_qty: parseFloat(editVals.opening_qty) || 0,
+        received_qty: parseFloat(editVals.received_qty) || 0,
+        void_qty: parseFloat(editVals.void_qty) || 0,
+        closing_qty: parseFloat(editVals.closing_qty) || 0,
+        note: editVals.note || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
+    setEditingId(null)
     loadEntries(date)
   }
 
-  // Update void qty inline
-  const updateVoid = async (id, val) => {
-    await supabase
-      .from('kitchen_stock')
-      .update({
-        void_qty: parseFloat(val) || 0,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-    loadEntries(date)
-  }
-
-  // Sync sold qty from orders
   const syncSold = async (entry) => {
-    const sold = soldMap[entry.item_name] || 0
     await supabase
       .from('kitchen_stock')
-      .update({
-        sold_qty: sold,
-        updated_at: new Date().toISOString(),
-      })
+      .update({ sold_qty: soldMap[entry.item_name] || 0, updated_at: new Date().toISOString() })
       .eq('id', entry.id)
     loadEntries(date)
   }
 
-  // Delete entry
   const deleteEntry = async (id) => {
     if (!confirm('Delete this stock entry?')) return
     await supabase.from('kitchen_stock').delete().eq('id', id)
     loadEntries(date)
   }
 
-  const varianceColor = (v) => {
-    if (Math.abs(v) < 0.01) return 'text-green-400'
-    if (v > 0) return 'text-amber-400' // surplus — unusual
-    return 'text-red-400' // deficit — potential theft/waste
+  // ── Benchmarks ──────────────────────────────────────────────────────────────
+
+  const openBenchmark = (itemName) => {
+    const existing = benchmarks[itemName]
+    setBmForm({
+      expected_yield: existing?.expected_yield ?? '',
+      tolerance_pct: existing?.tolerance_pct ?? '5',
+      raw_unit: existing?.raw_unit ?? 'kg',
+      cooked_unit: existing?.cooked_unit ?? 'portion',
+      note: existing?.note ?? '',
+    })
+    setShowBenchmarkFor(itemName)
   }
 
-  const varianceBg = (v) => {
-    if (Math.abs(v) < 0.01) return 'border-gray-800'
-    if (v > 0) return 'border-amber-500/40'
-    return 'border-red-500/40'
+  const saveBenchmark = async () => {
+    if (!bmForm.expected_yield) return
+    const itemName = showBenchmarkFor === '__new__' ? bmForm.item_name : showBenchmarkFor
+    if (!itemName) return
+    await supabase.from('kitchen_stock_benchmarks').upsert(
+      {
+        item_name: itemName,
+        expected_yield: parseFloat(bmForm.expected_yield),
+        tolerance_pct: parseFloat(bmForm.tolerance_pct) || 5,
+        raw_unit: bmForm.raw_unit,
+        cooked_unit: bmForm.cooked_unit,
+        note: bmForm.note || null,
+        set_by: profile?.id,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'item_name' }
+    )
+    setShowBenchmarkFor(null)
+    loadBenchmarks()
+    loadEntries(date)
   }
+
+  const deleteBenchmark = async (itemName) => {
+    if (!confirm(`Remove benchmark for ${itemName}?`)) return
+    await supabase.from('kitchen_stock_benchmarks').delete().eq('item_name', itemName)
+    loadBenchmarks()
+    loadEntries(date)
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-gray-950 pb-24">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-gray-900 border-b border-gray-800 px-4 py-3">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="p-2 rounded-xl hover:bg-gray-800 transition-colors">
+          <button onClick={onBack} className="p-2 rounded-xl hover:bg-gray-800">
             <ArrowLeft size={20} className="text-gray-400" />
           </button>
           <div className="flex-1">
-            <h1 className="text-white font-bold text-base leading-tight">Kitchen Stock Register</h1>
-            <p className="text-gray-500 text-xs">Received · Sold · Remaining · Variance</p>
+            <h1 className="text-white font-bold text-base">Kitchen Stock Register</h1>
+            <p className="text-gray-500 text-xs">Reconciliation · Benchmarks · Yield Analysis</p>
           </div>
           <button onClick={() => loadEntries(date)} className="p-2 rounded-xl hover:bg-gray-800">
             <RefreshCw size={16} className="text-gray-400" />
           </button>
         </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mt-3">
+          {[
+            ['register', 'Daily Register'],
+            ['benchmarks', 'Benchmarks'],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setTab(id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${tab === id ? 'bg-amber-500 text-black' : 'text-gray-400 hover:text-white'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="px-4 pt-4 space-y-3">
-        {/* Date picker + summary bar */}
-        <div className="flex items-center gap-3">
-          <input
-            type="date"
-            value={date}
-            max={today()}
-            onChange={(e) => setDate(e.target.value)}
-            className="bg-gray-900 border border-gray-800 text-white text-sm rounded-xl px-3 py-2 flex-1 focus:outline-none focus:border-amber-500"
-          />
-          <div
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${hasIssues ? 'bg-red-500/10 border-red-500/30' : 'bg-green-500/10 border-green-500/30'}`}
-          >
-            {hasIssues ? (
-              <AlertTriangle size={14} className="text-red-400" />
-            ) : (
-              <CheckCircle size={14} className="text-green-400" />
-            )}
-            <span
-              className={`text-xs font-medium ${hasIssues ? 'text-red-400' : 'text-green-400'}`}
-            >
-              {hasIssues ? 'Variance detected' : 'All balanced'}
-            </span>
-          </div>
-        </div>
-
-        {/* Summary row */}
-        {enriched.length > 0 && (
-          <div className="grid grid-cols-3 gap-2">
+      {/* ── REGISTER TAB ── */}
+      {tab === 'register' && (
+        <div className="px-4 pt-4 space-y-3">
+          {/* Date + status pills */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="date"
+              value={date}
+              max={today()}
+              onChange={(e) => setDate(e.target.value)}
+              className="bg-gray-900 border border-gray-800 text-white text-sm rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500 flex-1 min-w-[140px]"
+            />
             {[
-              { label: 'Items tracked', value: enriched.length },
               {
-                label: 'Total received',
-                value: enriched.reduce((s, e) => s + e.received_qty, 0).toFixed(1),
+                count: alarmCount,
+                icon: '🚨',
+                label: 'Alarm',
+                color: 'bg-red-500/10 border-red-500/30 text-red-400',
               },
               {
-                label: 'Total variance',
-                value: totalVariance.toFixed(1),
-                color:
-                  Math.abs(totalVariance) < 0.01
-                    ? 'text-green-400'
-                    : totalVariance < 0
+                count: warnCount,
+                icon: '⚠️',
+                label: 'Investigate',
+                color: 'bg-amber-500/10 border-amber-500/30 text-amber-400',
+              },
+              {
+                count: okCount,
+                icon: '✅',
+                label: 'OK',
+                color: 'bg-green-500/10 border-green-500/30 text-green-400',
+              },
+              {
+                count: commendCount,
+                icon: '🌟',
+                label: 'Commend',
+                color: 'bg-amber-300/10 border-amber-300/30 text-amber-300',
+              },
+            ]
+              .filter((p) => p.count > 0)
+              .map((p) => (
+                <div
+                  key={p.label}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold ${p.color}`}
+                >
+                  <span>{p.icon}</span>
+                  {p.count} {p.label}
+                </div>
+              ))}
+          </div>
+
+          {/* Summary row */}
+          {enriched.length > 0 && (
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { label: 'Items', value: enriched.length, color: 'text-white' },
+                {
+                  label: 'Received',
+                  value: enriched.reduce((s, e) => s + e.received_qty, 0).toFixed(1),
+                  color: 'text-blue-400',
+                },
+                {
+                  label: 'Sold',
+                  value: enriched.reduce((s, e) => s + e.effective_sold, 0).toFixed(1),
+                  color: 'text-amber-400',
+                },
+                {
+                  label: 'Variance',
+                  value: enriched.reduce((s, e) => s + e.computed_variance, 0).toFixed(1),
+                  color:
+                    enriched.reduce((s, e) => s + e.computed_variance, 0) < -0.01
                       ? 'text-red-400'
-                      : 'text-amber-400',
+                      : 'text-green-400',
+                },
+              ].map((c) => (
+                <div
+                  key={c.label}
+                  className="bg-gray-900 border border-gray-800 rounded-2xl p-3 text-center"
+                >
+                  <p className={`text-base font-black ${c.color}`}>{c.value}</p>
+                  <p className="text-gray-600 text-[10px] mt-0.5">{c.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Entries */}
+          {loading ? (
+            <div className="text-center py-12 text-gray-500 text-sm">Loading…</div>
+          ) : enriched.length === 0 ? (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
+              <Package size={32} className="text-gray-700 mx-auto mb-3" />
+              <p className="text-gray-400 text-sm font-medium">No entries for this date</p>
+              <p className="text-gray-600 text-xs mt-1">Add items received in the kitchen today</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {enriched.map((entry) => {
+                const st = entry.status
+                const expanded = expandedId === entry.id
+                const editing = editingId === entry.id
+
+                return (
+                  <div
+                    key={entry.id}
+                    className={`bg-gray-900 border rounded-2xl overflow-hidden ${st.border}`}
+                  >
+                    {/* Status banner */}
+                    <div className={`px-4 py-1.5 flex items-center justify-between ${st.bg}`}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{st.icon}</span>
+                        <span className={`text-xs font-bold ${st.color}`}>{st.label}</span>
+                      </div>
+                      {entry.benchmark && (
+                        <span className="text-gray-500 text-[10px]">
+                          Benchmark: {entry.benchmark.expected_yield} {entry.benchmark.cooked_unit}/
+                          {entry.benchmark.raw_unit} ±{entry.benchmark.tolerance_pct}%
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Row header */}
+                    <button
+                      className="w-full px-4 py-3 flex items-center gap-3 text-left"
+                      onClick={() => setExpandedId(expanded ? null : entry.id)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm font-semibold truncate">
+                          {entry.item_name}
+                        </p>
+                        <p className="text-gray-500 text-xs mt-0.5">
+                          In: {(entry.opening_qty + entry.received_qty).toFixed(1)} {entry.unit}
+                          &nbsp;·&nbsp;Sold: {entry.effective_sold.toFixed(1)}
+                          &nbsp;·&nbsp;Left: {entry.closing_qty.toFixed(1)}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0 mr-1">
+                        <p className={`text-sm font-bold ${st.color}`}>
+                          {entry.computed_variance > 0 ? '+' : ''}
+                          {entry.computed_variance.toFixed(1)}
+                        </p>
+                        <p className="text-gray-600 text-xs">variance</p>
+                      </div>
+                      {expanded ? (
+                        <ChevronUp size={16} className="text-gray-500 shrink-0" />
+                      ) : (
+                        <ChevronDown size={16} className="text-gray-500 shrink-0" />
+                      )}
+                    </button>
+
+                    {/* Expanded */}
+                    {expanded && (
+                      <div className="border-t border-gray-800 px-4 py-4 space-y-3">
+                        {/* Remark box */}
+                        <div
+                          className={`rounded-xl px-3 py-2.5 text-xs font-medium ${st.bg} ${st.color} ${st.border} border`}
+                        >
+                          {st.icon} {st.remark}
+                        </div>
+
+                        {/* Editable fields (manager) or read-only (kitchen) */}
+                        {editing && canManage ? (
+                          <div className="space-y-2">
+                            <p className="text-amber-400 text-xs font-semibold">
+                              Editing entry — all fields unlocked
+                            </p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[
+                                ['Opening Stock', 'opening_qty'],
+                                ['Received Today', 'received_qty'],
+                                ['Void / Wastage', 'void_qty'],
+                                ['Closing Count', 'closing_qty'],
+                              ].map(([label, key]) => (
+                                <div key={key}>
+                                  <label className="text-gray-500 text-xs block mb-1">
+                                    {label} ({entry.unit})
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    value={editVals[key]}
+                                    onChange={(e) =>
+                                      setEditVals((p) => ({ ...p, [key]: e.target.value }))
+                                    }
+                                    className="w-full bg-gray-800 border border-amber-500/50 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                            <div>
+                              <label className="text-gray-500 text-xs block mb-1">Note</label>
+                              <input
+                                type="text"
+                                value={editVals.note}
+                                onChange={(e) =>
+                                  setEditVals((p) => ({ ...p, note: e.target.value }))
+                                }
+                                placeholder="Reason for edit…"
+                                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => saveEdit(entry.id)}
+                                className="flex-1 flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl py-2 text-xs transition-colors"
+                              >
+                                <Save size={13} /> Save Changes
+                              </button>
+                              <button
+                                onClick={() => setEditingId(null)}
+                                className="px-4 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl py-2 text-xs transition-colors"
+                              >
+                                <X size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Read-only grid */}
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              {[
+                                ['Opening Stock', `${entry.opening_qty} ${entry.unit}`],
+                                ['Received Today', `${entry.received_qty} ${entry.unit}`],
+                                ['Sold (from POS)', `${entry.auto_sold} ${entry.unit}`],
+                                ['Void / Wastage', `${entry.void_qty} ${entry.unit}`],
+                                ['Closing Count', `${entry.closing_qty} ${entry.unit}`],
+                                [
+                                  'Total Available',
+                                  `${(entry.opening_qty + entry.received_qty).toFixed(1)} ${entry.unit}`,
+                                ],
+                              ].map(([label, val]) => (
+                                <div key={label} className="bg-gray-800 rounded-xl px-3 py-2">
+                                  <p className="text-gray-500 text-xs">{label}</p>
+                                  <p className="text-white font-semibold mt-0.5">{val}</p>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Yield analysis (if benchmark set) */}
+                            {entry.benchmark && entry.received_qty > 0 && (
+                              <div className="bg-gray-800 rounded-xl px-3 py-3 space-y-1.5">
+                                <p className="text-gray-400 text-xs font-semibold mb-2">
+                                  Yield Analysis
+                                </p>
+                                {(() => {
+                                  const bm = entry.benchmark
+                                  const expectedSold = entry.received_qty * bm.expected_yield
+                                  const actualSold = entry.effective_sold
+                                  const yieldPct =
+                                    expectedSold > 0
+                                      ? ((actualSold / expectedSold) * 100).toFixed(1)
+                                      : '—'
+                                  return (
+                                    <>
+                                      {[
+                                        ['Raw Input', `${entry.received_qty} ${bm.raw_unit}`],
+                                        [
+                                          'Expected Output',
+                                          `${expectedSold.toFixed(1)} ${bm.cooked_unit}`,
+                                        ],
+                                        ['Actual Output', `${actualSold} ${bm.cooked_unit}`],
+                                        ['Yield %', `${yieldPct}%`],
+                                      ].map(([l, v]) => (
+                                        <div key={l} className="flex justify-between text-xs">
+                                          <span className="text-gray-500">{l}</span>
+                                          <span
+                                            className={`font-semibold ${l === 'Yield %' ? st.color : 'text-white'}`}
+                                          >
+                                            {v}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </>
+                                  )
+                                })()}
+                              </div>
+                            )}
+
+                            {/* Formula */}
+                            <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-500 font-mono">
+                              ({entry.opening_qty} + {entry.received_qty}) − {entry.effective_sold}{' '}
+                              − {entry.void_qty} − {entry.closing_qty}
+                              {' = '}
+                              <span className={st.color}>{entry.computed_variance.toFixed(1)}</span>
+                            </div>
+
+                            {entry.note && (
+                              <p className="text-gray-500 text-xs italic">Note: {entry.note}</p>
+                            )}
+                          </>
+                        )}
+
+                        {/* Action row */}
+                        {!editing && (
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              onClick={() => syncSold(entry)}
+                              className="flex-1 text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-xl py-2 font-medium"
+                            >
+                              Sync POS Sales
+                            </button>
+                            {canManage && (
+                              <>
+                                <button
+                                  onClick={() => openBenchmark(entry.item_name)}
+                                  className="flex items-center gap-1 text-xs bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl px-3 py-2 font-medium"
+                                >
+                                  <Settings size={12} /> Benchmark
+                                </button>
+                                <button
+                                  onClick={() => startEdit(entry)}
+                                  className="flex items-center gap-1 text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded-xl px-3 py-2"
+                                >
+                                  <Edit3 size={12} /> Edit
+                                </button>
+                                <button
+                                  onClick={() => deleteEntry(entry.id)}
+                                  className="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Add form */}
+          {showAdd && (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">
+              <p className="text-white font-semibold text-sm">Add Stock Entry</p>
+              {formError && (
+                <p className="text-red-400 text-xs bg-red-500/10 rounded-xl px-3 py-2">
+                  {formError}
+                </p>
+              )}
+              <div>
+                <label className="text-gray-500 text-xs block mb-1">Item Name</label>
+                <input
+                  list="kitchen-items"
+                  value={form.item_name}
+                  onChange={(e) => setForm((f) => ({ ...f, item_name: e.target.value }))}
+                  placeholder="e.g. Jollof Rice, Beef Stew"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+                />
+                <datalist id="kitchen-items">
+                  {menuItems.map((n) => (
+                    <option key={n} value={n} />
+                  ))}
+                </datalist>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-gray-500 text-xs block mb-1">Unit</label>
+                  <select
+                    value={form.unit}
+                    onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+                  >
+                    {UNITS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-gray-500 text-xs block mb-1">Opening Stock</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={form.opening_qty}
+                    onChange={(e) => setForm((f) => ({ ...f, opening_qty: e.target.value }))}
+                    placeholder="0"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-gray-500 text-xs block mb-1">Received Today</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={form.received_qty}
+                    onChange={(e) => setForm((f) => ({ ...f, received_qty: e.target.value }))}
+                    placeholder="0"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-500 text-xs block mb-1">Void / Wastage</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={form.void_qty}
+                    onChange={(e) => setForm((f) => ({ ...f, void_qty: e.target.value }))}
+                    placeholder="0"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-gray-500 text-xs block mb-1">Physical Closing Count</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={form.closing_qty}
+                  onChange={(e) => setForm((f) => ({ ...f, closing_qty: e.target.value }))}
+                  placeholder="0"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-500 text-xs block mb-1">Note (optional)</label>
+                <input
+                  type="text"
+                  value={form.note}
+                  onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                  placeholder="e.g. half bag spoiled"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              {form.item_name && (
+                <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-400">
+                  POS sold today:{' '}
+                  <span className="text-white font-medium">
+                    {soldMap[form.item_name] || 0} {form.unit}
+                  </span>
+                  {soldMap[form.item_name] > 0 && ' — auto-synced'}
+                  {benchmarks[form.item_name] && (
+                    <span className="ml-2 text-amber-400">· Benchmark set ✓</span>
+                  )}
+                </div>
+              )}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => {
+                    setShowAdd(false)
+                    setFormError(null)
+                  }}
+                  className="flex-1 bg-gray-800 text-gray-300 rounded-2xl py-3 text-sm font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAdd}
+                  disabled={saving}
+                  className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-bold rounded-2xl py-3 text-sm transition-colors"
+                >
+                  {saving ? 'Saving…' : 'Add Entry'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!showAdd && (
+            <button
+              onClick={() => setShowAdd(true)}
+              className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-2xl py-4 text-sm transition-colors"
+            >
+              <Plus size={18} /> Add Stock Entry
+            </button>
+          )}
+
+          {/* Status guide */}
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3 space-y-2">
+            <p className="text-gray-400 text-xs font-semibold">Status Guide</p>
+            {[
+              { icon: '🌟', label: 'Commend', desc: 'Yield exceeds benchmark — judiciously used' },
+              { icon: '✅', label: 'On Target', desc: 'Within tolerance band — all good' },
+              {
+                icon: '⚠️',
+                label: 'Investigate',
+                desc: 'Below benchmark — check portioning/wastage',
               },
-            ].map(({ label, value, color }) => (
-              <div
-                key={label}
-                className="bg-gray-900 border border-gray-800 rounded-2xl p-3 text-center"
-              >
-                <p className={`text-lg font-bold ${color || 'text-white'}`}>{value}</p>
-                <p className="text-gray-500 text-xs mt-0.5">{label}</p>
+              { icon: '🚨', label: 'Alarm', desc: 'Significant shortfall — urgent investigation' },
+            ].map((s) => (
+              <div key={s.label} className="flex items-start gap-2.5">
+                <span className="text-sm mt-0.5">{s.icon}</span>
+                <div>
+                  <p className="text-gray-300 text-xs font-medium">{s.label}</p>
+                  <p className="text-gray-600 text-xs">{s.desc}</p>
+                </div>
               </div>
             ))}
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Entries */}
-        {loading ? (
-          <div className="text-center py-12 text-gray-500 text-sm">Loading…</div>
-        ) : enriched.length === 0 ? (
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
-            <Package size={32} className="text-gray-700 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm font-medium">No stock entries for this date</p>
-            <p className="text-gray-600 text-xs mt-1">Add items received in the kitchen today</p>
+      {/* ── BENCHMARKS TAB ── */}
+      {tab === 'benchmarks' && (
+        <div className="px-4 pt-4 space-y-3">
+          <div className="bg-gray-900 border border-amber-500/20 rounded-2xl px-4 py-3">
+            <p className="text-amber-400 text-xs font-semibold mb-1">What is a benchmark?</p>
+            <p className="text-gray-400 text-xs leading-relaxed">
+              A benchmark tells the system how much cooked output (portions) to expect from a given
+              raw input (kg, pack, etc.). For example:{' '}
+              <span className="text-white font-medium">1 kg beef = 8 portions</span>. The system
+              will then calculate expected yield daily and flag deviations.
+            </p>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {enriched.map((entry) => {
-              const expanded = expandedId === entry.id
-              const v = entry.computed_variance
-              return (
+
+          {canManage && (
+            <button
+              onClick={() => {
+                setBmForm({
+                  expected_yield: '',
+                  tolerance_pct: '5',
+                  raw_unit: 'kg',
+                  cooked_unit: 'portion',
+                  note: '',
+                })
+                setShowBenchmarkFor('__new__')
+              }}
+              className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-2xl py-3 text-sm transition-colors"
+            >
+              <Plus size={16} /> Add New Benchmark
+            </button>
+          )}
+
+          {Object.keys(benchmarks).length === 0 ? (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
+              <Settings size={32} className="text-gray-700 mx-auto mb-3" />
+              <p className="text-gray-400 text-sm font-medium">No benchmarks set yet</p>
+              <p className="text-gray-600 text-xs mt-1">
+                Set expected yield per ingredient for automatic scoring
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {Object.values(benchmarks).map((bm) => (
                 <div
-                  key={entry.id}
-                  className={`bg-gray-900 border rounded-2xl overflow-hidden ${varianceBg(v)}`}
+                  key={bm.item_name}
+                  className="bg-gray-900 border border-gray-800 rounded-2xl p-4"
                 >
-                  {/* Row header */}
-                  <button
-                    className="w-full px-4 py-3 flex items-center gap-3 text-left"
-                    onClick={() => setExpandedId(expanded ? null : entry.id)}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-white text-sm font-semibold truncate">{entry.item_name}</p>
-                      <p className="text-gray-500 text-xs mt-0.5">
-                        In: {(entry.opening_qty + entry.received_qty).toFixed(1)} {entry.unit}
-                        &nbsp;·&nbsp; Sold: {entry.effective_sold.toFixed(1)}
-                        &nbsp;·&nbsp; Left: {entry.closing_qty.toFixed(1)}
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-white font-bold">{bm.item_name}</p>
+                      <p className="text-gray-400 text-xs mt-1">
+                        <span className="text-amber-400 font-semibold">1 {bm.raw_unit}</span>
+                        {' → '}
+                        <span className="text-green-400 font-semibold">
+                          {bm.expected_yield} {bm.cooked_unit}
+                        </span>
+                        <span className="text-gray-600 ml-2">±{bm.tolerance_pct}% tolerance</span>
                       </p>
+                      {bm.note && <p className="text-gray-600 text-xs mt-1 italic">{bm.note}</p>}
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className={`text-sm font-bold ${varianceColor(v)}`}>
-                        {v > 0 ? '+' : ''}
-                        {v.toFixed(1)}
-                      </p>
-                      <p className="text-gray-600 text-xs">variance</p>
-                    </div>
-                    {expanded ? (
-                      <ChevronUp size={16} className="text-gray-500 shrink-0" />
-                    ) : (
-                      <ChevronDown size={16} className="text-gray-500 shrink-0" />
+                    {canManage && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => openBenchmark(bm.item_name)}
+                          className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-400 rounded-xl transition-colors"
+                        >
+                          <Edit3 size={13} />
+                        </button>
+                        <button
+                          onClick={() => deleteBenchmark(bm.item_name)}
+                          className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-colors"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     )}
-                  </button>
-
-                  {/* Expanded detail */}
-                  {expanded && (
-                    <div className="border-t border-gray-800 px-4 py-4 space-y-3">
-                      {/* Read-only row */}
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        {[
-                          ['Opening Stock', `${entry.opening_qty} ${entry.unit}`],
-                          ['Received Today', `${entry.received_qty} ${entry.unit}`],
-                          ['Sold (from orders)', `${entry.auto_sold} ${entry.unit}`],
-                          [
-                            'Total Available',
-                            `${(entry.opening_qty + entry.received_qty).toFixed(1)} ${entry.unit}`,
-                          ],
-                        ].map(([label, val]) => (
-                          <div key={label} className="bg-gray-800 rounded-xl px-3 py-2">
-                            <p className="text-gray-500 text-xs">{label}</p>
-                            <p className="text-white font-semibold mt-0.5">{val}</p>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Editable fields */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-gray-500 text-xs block mb-1">
-                            Void / Wastage ({entry.unit})
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.5"
-                            defaultValue={entry.void_qty}
-                            onBlur={(e) => updateVoid(entry.id, e.target.value)}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-gray-500 text-xs block mb-1">
-                            Physical Closing Count ({entry.unit})
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.5"
-                            defaultValue={entry.closing_qty}
-                            onBlur={(e) => updateClosing(entry.id, e.target.value)}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Variance explanation */}
-                      <div
-                        className={`rounded-xl px-3 py-2.5 text-xs ${Math.abs(v) < 0.01 ? 'bg-green-500/10 text-green-400' : v < 0 ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-400'}`}
-                      >
-                        {Math.abs(v) < 0.01
-                          ? '✓ Stock fully accounted for.'
-                          : v < 0
-                            ? `⚠ ${Math.abs(v).toFixed(1)} ${entry.unit} unaccounted for — investigate waste or theft.`
-                            : `ℹ ${v.toFixed(1)} ${entry.unit} surplus — check if closing count or received qty is correct.`}
-                      </div>
-
-                      {/* Formula display */}
-                      <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-500">
-                        Formula: Opening ({entry.opening_qty}) + Received ({entry.received_qty}) −
-                        Sold ({entry.effective_sold}) − Void ({entry.void_qty}) − Closing (
-                        {entry.closing_qty}) ={' '}
-                        <span className={varianceColor(v)}>{v.toFixed(1)}</span>
-                      </div>
-
-                      {entry.note && (
-                        <p className="text-gray-500 text-xs italic">Note: {entry.note}</p>
-                      )}
-
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={() => syncSold(entry)}
-                          className="flex-1 text-xs bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl py-2 font-medium"
-                        >
-                          Sync sold qty from orders
-                        </button>
-                        <button
-                          onClick={() => deleteEntry(entry.id)}
-                          className="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* Add entry form */}
-        {showAdd && (
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">
-            <p className="text-white font-semibold text-sm">Add Stock Entry</p>
-
-            {formError && (
-              <p className="text-red-400 text-xs bg-red-500/10 rounded-xl px-3 py-2">{formError}</p>
-            )}
-
-            <div>
-              <label className="text-gray-500 text-xs block mb-1">Item Name</label>
-              <input
-                list="kitchen-menu-items"
-                value={form.item_name}
-                onChange={(e) => setForm((f) => ({ ...f, item_name: e.target.value }))}
-                placeholder="e.g. Jollof Rice, Chicken Suya"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-              />
-              <datalist id="kitchen-menu-items">
-                {menuItems.map((n) => (
-                  <option key={n} value={n} />
-                ))}
-              </datalist>
+              ))}
             </div>
+          )}
+        </div>
+      )}
 
-            <div className="grid grid-cols-2 gap-2">
+      {/* ── BENCHMARK MODAL ── */}
+      {showBenchmarkFor && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0">
+          <div className="bg-gray-900 border border-gray-700 rounded-3xl w-full max-w-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
               <div>
-                <label className="text-gray-500 text-xs block mb-1">Unit</label>
-                <select
-                  value={form.unit}
-                  onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-                >
-                  {UNITS.map((u) => (
-                    <option key={u} value={u}>
-                      {u}
-                    </option>
-                  ))}
-                </select>
+                <h2 className="text-white font-bold text-sm">Set Benchmark</h2>
+                <p className="text-gray-500 text-xs mt-0.5">
+                  {showBenchmarkFor === '__new__' ? 'New item' : showBenchmarkFor}
+                </p>
               </div>
-              <div>
-                <label className="text-gray-500 text-xs block mb-1">Opening Stock</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={form.opening_qty}
-                  onChange={(e) => setForm((f) => ({ ...f, opening_qty: e.target.value }))}
-                  placeholder="0"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-gray-500 text-xs block mb-1">Received Today</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={form.received_qty}
-                  onChange={(e) => setForm((f) => ({ ...f, received_qty: e.target.value }))}
-                  placeholder="0"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-                />
-              </div>
-              <div>
-                <label className="text-gray-500 text-xs block mb-1">Void / Wastage</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  value={form.void_qty}
-                  onChange={(e) => setForm((f) => ({ ...f, void_qty: e.target.value }))}
-                  placeholder="0"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-gray-500 text-xs block mb-1">Physical Closing Count</label>
-              <input
-                type="number"
-                min="0"
-                step="0.5"
-                value={form.closing_qty}
-                onChange={(e) => setForm((f) => ({ ...f, closing_qty: e.target.value }))}
-                placeholder="0 — count what is physically left"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div>
-              <label className="text-gray-500 text-xs block mb-1">Note (optional)</label>
-              <input
-                type="text"
-                value={form.note}
-                onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-                placeholder="e.g. half bag spoiled, delivery came late"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            {/* Preview variance */}
-            {form.item_name && (
-              <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-400">
-                Sold from orders today:{' '}
-                <span className="text-white font-medium">
-                  {soldMap[form.item_name] || 0} {form.unit}
-                </span>
-                {soldMap[form.item_name] > 0 && ' — auto-filled from POS data'}
-              </div>
-            )}
-
-            <div className="flex gap-2 pt-1">
               <button
-                onClick={() => {
-                  setShowAdd(false)
-                  setFormError(null)
-                }}
-                className="flex-1 bg-gray-800 text-gray-300 rounded-2xl py-3 text-sm font-medium"
+                onClick={() => setShowBenchmarkFor(null)}
+                className="text-gray-400 hover:text-white"
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleAdd}
-                disabled={saving}
-                className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-bold rounded-2xl py-3 text-sm transition-colors"
-              >
-                {saving ? 'Saving…' : 'Add Entry'}
+                <X size={18} />
               </button>
             </div>
-          </div>
-        )}
+            <div className="p-5 space-y-4">
+              {showBenchmarkFor === '__new__' && (
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">Item Name</label>
+                  <input
+                    list="kitchen-items-bm"
+                    value={bmForm.item_name || ''}
+                    onChange={(e) => setBmForm((f) => ({ ...f, item_name: e.target.value }))}
+                    placeholder="e.g. Beef, Rice, Chicken"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+                  />
+                  <datalist id="kitchen-items-bm">
+                    {menuItems.map((n) => (
+                      <option key={n} value={n} />
+                    ))}
+                  </datalist>
+                </div>
+              )}
 
-        {/* Add button */}
-        {!showAdd && (
-          <button
-            onClick={() => setShowAdd(true)}
-            className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-2xl py-4 text-sm transition-colors"
-          >
-            <Plus size={18} />
-            Add Stock Entry
-          </button>
-        )}
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-xs text-amber-400">
+                How many <strong>cooked units</strong> do you expect from{' '}
+                <strong>1 raw unit</strong>?
+              </div>
 
-        {/* Legend */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3 space-y-1.5">
-          <p className="text-gray-500 text-xs font-medium mb-2">Variance Legend</p>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-green-400" />
-            <p className="text-gray-400 text-xs">Zero variance — fully accounted for</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-red-400" />
-            <p className="text-gray-400 text-xs">
-              Negative — missing stock, investigate waste or theft
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-amber-400" />
-            <p className="text-gray-400 text-xs">
-              Positive — surplus, verify received or closing counts
-            </p>
+              <div className="grid grid-cols-3 gap-2 items-end">
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">Raw unit</label>
+                  <select
+                    value={bmForm.raw_unit}
+                    onChange={(e) => setBmForm((f) => ({ ...f, raw_unit: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-2 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+                  >
+                    {UNITS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="text-center pb-2 text-gray-500 text-lg font-bold">→</div>
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">Cooked unit</label>
+                  <select
+                    value={bmForm.cooked_unit}
+                    onChange={(e) => setBmForm((f) => ({ ...f, cooked_unit: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-2 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+                  >
+                    {UNITS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">
+                  Expected yield (cooked units per 1 raw unit)
+                </label>
+                <input
+                  type="number"
+                  min="0.1"
+                  step="0.5"
+                  value={bmForm.expected_yield}
+                  onChange={(e) => setBmForm((f) => ({ ...f, expected_yield: e.target.value }))}
+                  placeholder="e.g. 8 (1 kg beef = 8 portions)"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">Tolerance % (±)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min="1"
+                    max="30"
+                    value={bmForm.tolerance_pct}
+                    onChange={(e) => setBmForm((f) => ({ ...f, tolerance_pct: e.target.value }))}
+                    className="flex-1 accent-amber-500"
+                  />
+                  <span className="text-white font-bold text-sm w-10 text-right">
+                    {bmForm.tolerance_pct}%
+                  </span>
+                </div>
+                <p className="text-gray-600 text-xs mt-1">
+                  Within ±{bmForm.tolerance_pct}% = ✅ OK &nbsp;·&nbsp; Below{' '}
+                  {100 - bmForm.tolerance_pct}% = ⚠️ Investigate &nbsp;·&nbsp; Below{' '}
+                  {100 - bmForm.tolerance_pct * 3}% = 🚨 Alarm
+                </p>
+              </div>
+
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">Note (optional)</label>
+                <input
+                  type="text"
+                  value={bmForm.note}
+                  onChange={(e) => setBmForm((f) => ({ ...f, note: e.target.value }))}
+                  placeholder="e.g. Based on supplier spec, 500g portions"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <button
+                onClick={saveBenchmark}
+                disabled={
+                  !bmForm.expected_yield || (showBenchmarkFor === '__new__' && !bmForm.item_name)
+                }
+                className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-black rounded-2xl py-3 text-sm transition-colors"
+              >
+                Save Benchmark
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
