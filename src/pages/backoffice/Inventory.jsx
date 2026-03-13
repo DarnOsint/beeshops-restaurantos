@@ -3,10 +3,26 @@ import { supabase } from '../../lib/supabase'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
 import {
-  ArrowLeft, Plus, Search, Edit2, X, Save,
-  AlertTriangle, Package, RefreshCw, ChevronDown,
-  Truck, Hash, DollarSign, FileText, User, Phone,
-  CheckCircle, Clock, Filter
+  ArrowLeft,
+  Plus,
+  Search,
+  Edit2,
+  X,
+  Save,
+  AlertTriangle,
+  Package,
+  RefreshCw,
+  ChevronDown,
+  Truck,
+  Hash,
+  DollarSign,
+  FileText,
+  User,
+  Phone,
+  CheckCircle,
+  Clock,
+  Filter,
+  Bell,
 } from 'lucide-react'
 
 const UNITS = ['bottles', 'crates', 'litres', 'kg', 'packs', 'cartons', 'pieces']
@@ -21,6 +37,8 @@ export default function Inventory({ onBack }) {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterLow, setFilterLow] = useState(false)
+  const [alertSending, setAlertSending] = useState(false)
+  const [alertResult, setAlertResult] = useState(null)
   const [showAddItem, setShowAddItem] = useState(false)
   const [showRestock, setShowRestock] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
@@ -28,9 +46,14 @@ export default function Inventory({ onBack }) {
   const [menuItems, setMenuItems] = useState([])
 
   const [itemForm, setItemForm] = useState({
-    item_name: '', category: '', unit: 'bottles',
-    current_stock: '', minimum_stock: '10',
-    cost_price: '', selling_price: '', menu_item_id: ''
+    item_name: '',
+    category: '',
+    unit: 'bottles',
+    current_stock: '',
+    minimum_stock: '10',
+    cost_price: '',
+    selling_price: '',
+    menu_item_id: '',
   })
 
   const [restockForm, setRestockForm] = useState({
@@ -42,22 +65,32 @@ export default function Inventory({ onBack }) {
     payment_method: 'cash',
     delivery_person: '',
     condition: 'good',
-    notes: ''
+    notes: '',
   })
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => {
+    fetchAll()
+  }, [])
 
   const fetchAll = async () => {
     setLoading(true)
     const [invRes, logRes, menuRes] = await Promise.all([
       supabase.from('inventory').select('*').eq('is_active', true).order('item_name'),
-      supabase.from('restock_log').select('*').order('restocked_at', { ascending: false }).limit(100),
-      supabase.from('menu_items').select('id, name, menu_categories(name, destination)')
-        .eq('is_available', true).order('name')
+      supabase
+        .from('restock_log')
+        .select('*')
+        .order('restocked_at', { ascending: false })
+        .limit(100),
+      supabase
+        .from('menu_items')
+        .select('id, name, menu_categories(name, destination)')
+        .eq('is_available', true)
+        .order('name'),
     ])
     if (invRes.data) setItems(invRes.data)
     if (logRes.data) setRestockLog(logRes.data)
-    if (menuRes.data) setMenuItems(menuRes.data.filter(i => i.menu_categories?.destination === 'bar'))
+    if (menuRes.data)
+      setMenuItems(menuRes.data.filter((i) => i.menu_categories?.destination === 'bar'))
     setLoading(false)
   }
 
@@ -73,7 +106,7 @@ export default function Inventory({ onBack }) {
       cost_price: parseFloat(itemForm.cost_price) || 0,
       selling_price: parseFloat(itemForm.selling_price) || 0,
       menu_item_id: itemForm.menu_item_id || null,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     }
     if (selectedItem) {
       await supabase.from('inventory').update(payload).eq('id', selectedItem.id)
@@ -81,10 +114,65 @@ export default function Inventory({ onBack }) {
       await supabase.from('inventory').insert(payload)
     }
     await fetchAll()
+    // Check stock alerts after manual stock edit
+    if (selectedItem) triggerStockAlerts(selectedItem.id)
     setSaving(false)
     setShowAddItem(false)
     setSelectedItem(null)
-    setItemForm({ item_name: '', category: '', unit: 'bottles', current_stock: '', minimum_stock: '10', cost_price: '', selling_price: '', menu_item_id: '' })
+    setItemForm({
+      item_name: '',
+      category: '',
+      unit: 'bottles',
+      current_stock: '',
+      minimum_stock: '10',
+      cost_price: '',
+      selling_price: '',
+      menu_item_id: '',
+    })
+  }
+
+  const manualStockAlert = async () => {
+    setAlertSending(true)
+    setAlertResult(null)
+    try {
+      const r = await fetch('/api/stock-alerts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-secret': import.meta.env.VITE_INTERNAL_API_SECRET,
+        },
+        body: JSON.stringify({ trigger: 'manual' }),
+      })
+      const data = await r.json()
+      const total = (data.outOfStock?.length || 0) + (data.lowStock?.length || 0)
+      setAlertResult(
+        total === 0
+          ? { type: 'ok', msg: 'All stock levels healthy — no alerts sent.' }
+          : {
+              type: 'sent',
+              msg: `Alerts sent for ${total} item${total !== 1 ? 's' : ''}: ${[...(data.outOfStock || []), ...(data.lowStock || [])].join(', ')}`,
+            }
+      )
+    } catch (_e) {
+      setAlertResult({ type: 'error', msg: 'Failed to send alerts. Check your connection.' })
+    }
+    setAlertSending(false)
+    setTimeout(() => setAlertResult(null), 6000)
+  }
+
+  const triggerStockAlerts = async (itemId = null) => {
+    try {
+      await fetch('/api/stock-alerts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-secret': import.meta.env.VITE_INTERNAL_API_SECRET,
+        },
+        body: JSON.stringify({ trigger: 'edit', item_id: itemId }),
+      })
+    } catch (_e) {
+      /* silent */
+    }
   }
 
   const openRestock = (item) => {
@@ -92,9 +180,13 @@ export default function Inventory({ onBack }) {
     setRestockForm({
       quantity_added: '',
       cost_price_per_unit: item.cost_price?.toString() || '',
-      supplier_name: '', supplier_phone: '',
-      invoice_number: '', payment_method: 'cash',
-      delivery_person: '', condition: 'good', notes: ''
+      supplier_name: '',
+      supplier_phone: '',
+      invoice_number: '',
+      payment_method: 'cash',
+      delivery_person: '',
+      condition: 'good',
+      notes: '',
     })
     setShowRestock(true)
   }
@@ -110,11 +202,14 @@ export default function Inventory({ onBack }) {
     const totalCost = qtyAdded * costPerUnit
 
     // Update inventory stock
-    await supabase.from('inventory').update({
-      current_stock: newStock,
-      cost_price: costPerUnit || selectedItem.cost_price,
-      updated_at: new Date().toISOString()
-    }).eq('id', selectedItem.id)
+    await supabase
+      .from('inventory')
+      .update({
+        current_stock: newStock,
+        cost_price: costPerUnit || selectedItem.cost_price,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', selectedItem.id)
 
     // Log the restock
     await supabase.from('restock_log').insert({
@@ -134,10 +229,12 @@ export default function Inventory({ onBack }) {
       notes: restockForm.notes,
       restocked_by: profile.id,
       restocked_by_name: profile.full_name,
-      restocked_at: new Date().toISOString()
+      restocked_at: new Date().toISOString(),
     })
 
     await fetchAll()
+    // Check if new stock level still triggers any alerts
+    triggerStockAlerts(selectedItem.id)
     setSaving(false)
     setShowRestock(false)
     setSelectedItem(null)
@@ -153,24 +250,30 @@ export default function Inventory({ onBack }) {
       minimum_stock: item.minimum_stock?.toString() || '10',
       cost_price: item.cost_price?.toString() || '',
       selling_price: item.selling_price?.toString() || '',
-      menu_item_id: item.menu_item_id || ''
+      menu_item_id: item.menu_item_id || '',
     })
     setShowAddItem(true)
   }
 
-  const filtered = items.filter(item => {
-    const matchSearch = item.item_name.toLowerCase().includes(search.toLowerCase()) ||
+  const filtered = items.filter((item) => {
+    const matchSearch =
+      item.item_name.toLowerCase().includes(search.toLowerCase()) ||
       item.category?.toLowerCase().includes(search.toLowerCase())
     const matchLow = !filterLow || item.current_stock <= item.minimum_stock
     return matchSearch && matchLow
   })
 
-  const lowStockCount = items.filter(i => i.current_stock <= i.minimum_stock).length
-  const totalStockValue = items.reduce((sum, i) => sum + ((i.current_stock || 0) * (i.cost_price || 0)), 0)
+  const lowStockCount = items.filter((i) => i.current_stock <= i.minimum_stock).length
+  const totalStockValue = items.reduce(
+    (sum, i) => sum + (i.current_stock || 0) * (i.cost_price || 0),
+    0
+  )
 
   const stockStatus = (item) => {
-    if (item.current_stock <= 0) return { label: 'Out of Stock', color: 'text-red-400 bg-red-500/10', icon: '🔴' }
-    if (item.current_stock <= item.minimum_stock) return { label: 'Low Stock', color: 'text-amber-400 bg-amber-500/10', icon: '🟡' }
+    if (item.current_stock <= 0)
+      return { label: 'Out of Stock', color: 'text-red-400 bg-red-500/10', icon: '🔴' }
+    if (item.current_stock <= item.minimum_stock)
+      return { label: 'Low Stock', color: 'text-amber-400 bg-amber-500/10', icon: '🟡' }
     return { label: 'In Stock', color: 'text-green-400 bg-green-500/10', icon: '🟢' }
   }
 
@@ -179,16 +282,38 @@ export default function Inventory({ onBack }) {
       {/* Header */}
       <div className="lg:hidden bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="text-gray-400 hover:text-white"><ArrowLeft size={20} /></button>
+          <button onClick={onBack} className="text-gray-400 hover:text-white">
+            <ArrowLeft size={20} />
+          </button>
           <div>
             <h1 className="text-white font-bold">Drink Inventory & Restocking</h1>
-            <p className="text-gray-400 text-xs">{items.length} items · {lowStockCount} low stock · Stock value: ₦{totalStockValue.toLocaleString()}</p>
+            <p className="text-gray-400 text-xs">
+              {items.length} items · {lowStockCount} low stock · Stock value: ₦
+              {totalStockValue.toLocaleString()}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={fetchAll} className="text-gray-400 hover:text-white p-2"><RefreshCw size={16} /></button>
-          <button onClick={() => { setSelectedItem(null); setItemForm({ item_name: '', category: '', unit: 'bottles', current_stock: '', minimum_stock: '10', cost_price: '', selling_price: '', menu_item_id: '' }); setShowAddItem(true) }}
-            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-xl text-sm transition-colors">
+          <button onClick={fetchAll} className="text-gray-400 hover:text-white p-2">
+            <RefreshCw size={16} />
+          </button>
+          <button
+            onClick={() => {
+              setSelectedItem(null)
+              setItemForm({
+                item_name: '',
+                category: '',
+                unit: 'bottles',
+                current_stock: '',
+                minimum_stock: '10',
+                cost_price: '',
+                selling_price: '',
+                menu_item_id: '',
+              })
+              setShowAddItem(true)
+            }}
+            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-xl text-sm transition-colors"
+          >
             <Plus size={16} /> Add Item
           </button>
         </div>
@@ -196,12 +321,16 @@ export default function Inventory({ onBack }) {
 
       {/* View Toggle */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 flex gap-1 py-2">
-        <button onClick={() => setView('stock')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${view === 'stock' ? 'bg-amber-500 text-black' : 'text-gray-400 hover:text-white'}`}>
+        <button
+          onClick={() => setView('stock')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${view === 'stock' ? 'bg-amber-500 text-black' : 'text-gray-400 hover:text-white'}`}
+        >
           <Package size={14} /> Stock Levels
         </button>
-        <button onClick={() => setView('log')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${view === 'log' ? 'bg-amber-500 text-black' : 'text-gray-400 hover:text-white'}`}>
+        <button
+          onClick={() => setView('log')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${view === 'log' ? 'bg-amber-500 text-black' : 'text-gray-400 hover:text-white'}`}
+        >
           <Clock size={14} /> Restock Log
         </button>
       </div>
@@ -214,10 +343,34 @@ export default function Inventory({ onBack }) {
             {/* Summary cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               {[
-                { label: 'Total Items', value: items.length, icon: Package, color: 'text-blue-400', bg: 'bg-blue-400/10' },
-                { label: 'Low Stock', value: lowStockCount, icon: AlertTriangle, color: 'text-amber-400', bg: 'bg-amber-400/10' },
-                { label: 'Out of Stock', value: items.filter(i => i.current_stock <= 0).length, icon: X, color: 'text-red-400', bg: 'bg-red-400/10' },
-                { label: 'Stock Value', value: `₦${totalStockValue.toLocaleString()}`, icon: DollarSign, color: 'text-green-400', bg: 'bg-green-400/10' },
+                {
+                  label: 'Total Items',
+                  value: items.length,
+                  icon: Package,
+                  color: 'text-blue-400',
+                  bg: 'bg-blue-400/10',
+                },
+                {
+                  label: 'Low Stock',
+                  value: lowStockCount,
+                  icon: AlertTriangle,
+                  color: 'text-amber-400',
+                  bg: 'bg-amber-400/10',
+                },
+                {
+                  label: 'Out of Stock',
+                  value: items.filter((i) => i.current_stock <= 0).length,
+                  icon: X,
+                  color: 'text-red-400',
+                  bg: 'bg-red-400/10',
+                },
+                {
+                  label: 'Stock Value',
+                  value: `₦${totalStockValue.toLocaleString()}`,
+                  icon: DollarSign,
+                  color: 'text-green-400',
+                  bg: 'bg-green-400/10',
+                },
               ].map((card, i) => (
                 <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                   <div className={`inline-flex p-2 rounded-lg ${card.bg} mb-2`}>
@@ -232,28 +385,53 @@ export default function Inventory({ onBack }) {
             {/* Filters */}
             <div className="flex gap-3 mb-4 flex-wrap">
               <div className="relative flex-1 min-w-48">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                <input value={search} onChange={e => setSearch(e.target.value)}
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+                />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search items..."
-                  className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl pl-9 pr-4 py-2.5 focus:outline-none focus:border-amber-500 text-sm" />
+                  className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl pl-9 pr-4 py-2.5 focus:outline-none focus:border-amber-500 text-sm"
+                />
               </div>
-              <button onClick={() => setFilterLow(!filterLow)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm border-2 transition-all ${filterLow ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-gray-700 bg-gray-900 text-gray-400 hover:text-white'}`}>
+              <button
+                onClick={() => setFilterLow(!filterLow)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm border-2 transition-all ${filterLow ? 'border-amber-500 bg-amber-500/10 text-amber-400' : 'border-gray-700 bg-gray-900 text-gray-400 hover:text-white'}`}
+              >
                 <Filter size={14} /> Low Stock Only
               </button>
             </div>
 
             {/* Stock table */}
             {filtered.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">No items found. Add your first inventory item.</div>
+              <div className="text-center py-12 text-gray-500">
+                No items found. Add your first inventory item.
+              </div>
             ) : (
               <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-gray-800">
-                        {['Item', 'Category', 'Stock', 'Min', 'Unit', 'Cost/Unit', 'Stock Value', 'Status', 'Actions'].map(h => (
-                          <th key={h} className="text-left text-gray-500 text-xs uppercase tracking-wide px-4 py-3 font-medium whitespace-nowrap">{h}</th>
+                        {[
+                          'Item',
+                          'Category',
+                          'Stock',
+                          'Min',
+                          'Unit',
+                          'Cost/Unit',
+                          'Stock Value',
+                          'Status',
+                          'Actions',
+                        ].map((h) => (
+                          <th
+                            key={h}
+                            className="text-left text-gray-500 text-xs uppercase tracking-wide px-4 py-3 font-medium whitespace-nowrap"
+                          >
+                            {h}
+                          </th>
                         ))}
                       </tr>
                     </thead>
@@ -261,21 +439,35 @@ export default function Inventory({ onBack }) {
                       {filtered.map((item, i) => {
                         const status = stockStatus(item)
                         return (
-                          <tr key={item.id} className={`border-b border-gray-800 last:border-0 ${i % 2 === 0 ? '' : 'bg-gray-800/20'}`}>
+                          <tr
+                            key={item.id}
+                            className={`border-b border-gray-800 last:border-0 ${i % 2 === 0 ? '' : 'bg-gray-800/20'}`}
+                          >
                             <td className="px-4 py-3">
                               <p className="text-white font-medium text-sm">{item.item_name}</p>
                             </td>
-                            <td className="px-4 py-3 text-gray-400 text-sm">{item.category || '—'}</td>
+                            <td className="px-4 py-3 text-gray-400 text-sm">
+                              {item.category || '—'}
+                            </td>
                             <td className="px-4 py-3">
-                              <span className={`font-bold text-sm ${item.current_stock <= 0 ? 'text-red-400' : item.current_stock <= item.minimum_stock ? 'text-amber-400' : 'text-white'}`}>
+                              <span
+                                className={`font-bold text-sm ${item.current_stock <= 0 ? 'text-red-400' : item.current_stock <= item.minimum_stock ? 'text-amber-400' : 'text-white'}`}
+                              >
                                 {item.current_stock}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-gray-500 text-sm">{item.minimum_stock}</td>
+                            <td className="px-4 py-3 text-gray-500 text-sm">
+                              {item.minimum_stock}
+                            </td>
                             <td className="px-4 py-3 text-gray-400 text-sm">{item.unit}</td>
-                            <td className="px-4 py-3 text-gray-400 text-sm">₦{item.cost_price?.toLocaleString()}</td>
+                            <td className="px-4 py-3 text-gray-400 text-sm">
+                              ₦{item.cost_price?.toLocaleString()}
+                            </td>
                             <td className="px-4 py-3 text-amber-400 text-sm font-medium">
-                              ₦{((item.current_stock || 0) * (item.cost_price || 0)).toLocaleString()}
+                              ₦
+                              {(
+                                (item.current_stock || 0) * (item.cost_price || 0)
+                              ).toLocaleString()}
                             </td>
                             <td className="px-4 py-3">
                               <span className={`text-xs px-2 py-1 rounded-lg ${status.color}`}>
@@ -284,11 +476,16 @@ export default function Inventory({ onBack }) {
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <button onClick={() => openRestock(item)}
-                                  className="flex items-center gap-1 text-xs bg-blue-600 hover:bg-blue-500 text-white px-2.5 py-1.5 rounded-lg transition-colors">
+                                <button
+                                  onClick={() => openRestock(item)}
+                                  className="flex items-center gap-1 text-xs bg-blue-600 hover:bg-blue-500 text-white px-2.5 py-1.5 rounded-lg transition-colors"
+                                >
                                   <Truck size={11} /> Restock
                                 </button>
-                                <button onClick={() => openEdit(item)} className="text-gray-400 hover:text-white">
+                                <button
+                                  onClick={() => openEdit(item)}
+                                  className="text-gray-400 hover:text-white"
+                                >
                                   <Edit2 size={14} />
                                 </button>
                               </div>
@@ -307,56 +504,74 @@ export default function Inventory({ onBack }) {
           <div className="space-y-3">
             <div className="flex items-center justify-between mb-2">
               <p className="text-gray-400 text-sm">{restockLog.length} restock entries</p>
-              <p className="text-gray-500 text-xs">Total spent: ₦{restockLog.reduce((s, r) => s + (r.total_cost || 0), 0).toLocaleString()}</p>
+              <p className="text-gray-500 text-xs">
+                Total spent: ₦
+                {restockLog.reduce((s, r) => s + (r.total_cost || 0), 0).toLocaleString()}
+              </p>
             </div>
             {restockLog.length === 0 ? (
               <div className="text-center py-12 text-gray-500">No restock history yet</div>
-            ) : restockLog.map(log => (
-              <div key={log.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <p className="text-white font-semibold">{log.item_name}</p>
-                    <p className="text-gray-500 text-xs mt-0.5">
-                      {new Date(log.restocked_at).toLocaleString('en-NG', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-green-400 font-bold">+{log.quantity_added} units</p>
-                    <p className="text-gray-500 text-xs">₦{log.total_cost?.toLocaleString()} total</p>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                  {[
-                    { label: 'Before', value: log.previous_stock },
-                    { label: 'After', value: log.new_stock },
-                    { label: 'Cost/Unit', value: `₦${log.cost_price_per_unit?.toLocaleString()}` },
-                    { label: 'Payment', value: log.payment_method },
-                    { label: 'Supplier', value: log.supplier_name || '—' },
-                    { label: 'Invoice #', value: log.invoice_number || '—' },
-                    { label: 'Condition', value: log.condition },
-                    { label: 'By', value: log.restocked_by_name || '—' },
-                  ].map(field => (
-                    <div key={field.label} className="bg-gray-800 rounded-lg px-3 py-2">
-                      <p className="text-gray-500">{field.label}</p>
-                      <p className="text-white font-medium capitalize">{field.value}</p>
+            ) : (
+              restockLog.map((log) => (
+                <div key={log.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <p className="text-white font-semibold">{log.item_name}</p>
+                      <p className="text-gray-500 text-xs mt-0.5">
+                        {new Date(log.restocked_at).toLocaleString('en-NG', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </p>
                     </div>
-                  ))}
+                    <div className="text-right">
+                      <p className="text-green-400 font-bold">+{log.quantity_added} units</p>
+                      <p className="text-gray-500 text-xs">
+                        ₦{log.total_cost?.toLocaleString()} total
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                    {[
+                      { label: 'Before', value: log.previous_stock },
+                      { label: 'After', value: log.new_stock },
+                      {
+                        label: 'Cost/Unit',
+                        value: `₦${log.cost_price_per_unit?.toLocaleString()}`,
+                      },
+                      { label: 'Payment', value: log.payment_method },
+                      { label: 'Supplier', value: log.supplier_name || '—' },
+                      { label: 'Invoice #', value: log.invoice_number || '—' },
+                      { label: 'Condition', value: log.condition },
+                      { label: 'By', value: log.restocked_by_name || '—' },
+                    ].map((field) => (
+                      <div key={field.label} className="bg-gray-800 rounded-lg px-3 py-2">
+                        <p className="text-gray-500">{field.label}</p>
+                        <p className="text-white font-medium capitalize">{field.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {log.notes && (
+                    <div className="mt-2 text-xs text-gray-500 bg-gray-800 rounded-lg px-3 py-2">
+                      📝 {log.notes}
+                    </div>
+                  )}
+                  {log.delivery_person && (
+                    <p className="text-gray-500 text-xs mt-2">
+                      🚚 Delivered by: {log.delivery_person}
+                    </p>
+                  )}
+                  {log.condition !== 'good' && (
+                    <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 text-xs text-amber-400">
+                      ⚠️ Delivery condition: {log.condition}
+                    </div>
+                  )}
                 </div>
-                {log.notes && (
-                  <div className="mt-2 text-xs text-gray-500 bg-gray-800 rounded-lg px-3 py-2">
-                    📝 {log.notes}
-                  </div>
-                )}
-                {log.delivery_person && (
-                  <p className="text-gray-500 text-xs mt-2">🚚 Delivered by: {log.delivery_person}</p>
-                )}
-                {log.condition !== 'good' && (
-                  <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 text-xs text-amber-400">
-                    ⚠️ Delivery condition: {log.condition}
-                  </div>
-                )}
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
       </div>
@@ -366,80 +581,146 @@ export default function Inventory({ onBack }) {
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 rounded-2xl w-full max-w-md border border-gray-800 max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between p-5 border-b border-gray-800 shrink-0">
-              <h3 className="text-white font-bold">{selectedItem ? 'Edit Inventory Item' : 'Add Inventory Item'}</h3>
-              <button onClick={() => setShowAddItem(false)} className="text-gray-400 hover:text-white"><X size={20} /></button>
+              <h3 className="text-white font-bold">
+                {selectedItem ? 'Edit Inventory Item' : 'Add Inventory Item'}
+              </h3>
+              <button
+                onClick={() => setShowAddItem(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X size={20} />
+              </button>
             </div>
             <div className="p-5 space-y-4 overflow-y-auto flex-1">
-
               {/* Link to menu item */}
               <div>
-                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Link to Menu Item (optional)</label>
-                <select value={itemForm.menu_item_id} onChange={e => {
-                  const selected = menuItems.find(m => m.id === e.target.value)
-                  setItemForm({...itemForm, menu_item_id: e.target.value, item_name: selected?.name || itemForm.item_name })
-                }}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm">
+                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                  Link to Menu Item (optional)
+                </label>
+                <select
+                  value={itemForm.menu_item_id}
+                  onChange={(e) => {
+                    const selected = menuItems.find((m) => m.id === e.target.value)
+                    setItemForm({
+                      ...itemForm,
+                      menu_item_id: e.target.value,
+                      item_name: selected?.name || itemForm.item_name,
+                    })
+                  }}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
+                >
                   <option value="">— Not linked —</option>
-                  {menuItems.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  {menuItems.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Item Name *</label>
-                <input value={itemForm.item_name} onChange={e => setItemForm({...itemForm, item_name: e.target.value})}
+                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                  Item Name *
+                </label>
+                <input
+                  value={itemForm.item_name}
+                  onChange={(e) => setItemForm({ ...itemForm, item_name: e.target.value })}
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
-                  placeholder="e.g. Heineken Bottle" />
+                  placeholder="e.g. Heineken Bottle"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Category</label>
-                  <input value={itemForm.category} onChange={e => setItemForm({...itemForm, category: e.target.value})}
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Category
+                  </label>
+                  <input
+                    value={itemForm.category}
+                    onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
-                    placeholder="e.g. Beer, Spirits" />
+                    placeholder="e.g. Beer, Spirits"
+                  />
                 </div>
                 <div>
-                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Unit</label>
-                  <select value={itemForm.unit} onChange={e => setItemForm({...itemForm, unit: e.target.value})}
-                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm">
-                    {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Unit
+                  </label>
+                  <select
+                    value={itemForm.unit}
+                    onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
+                  >
+                    {UNITS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Current Stock</label>
-                  <input type="number" value={itemForm.current_stock} onChange={e => setItemForm({...itemForm, current_stock: e.target.value})}
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Current Stock
+                  </label>
+                  <input
+                    type="number"
+                    value={itemForm.current_stock}
+                    onChange={(e) => setItemForm({ ...itemForm, current_stock: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
-                    placeholder="0" />
+                    placeholder="0"
+                  />
                 </div>
                 <div>
-                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Min Stock (Alert)</label>
-                  <input type="number" value={itemForm.minimum_stock} onChange={e => setItemForm({...itemForm, minimum_stock: e.target.value})}
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Min Stock (Alert)
+                  </label>
+                  <input
+                    type="number"
+                    value={itemForm.minimum_stock}
+                    onChange={(e) => setItemForm({ ...itemForm, minimum_stock: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
-                    placeholder="10" />
+                    placeholder="10"
+                  />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Cost Price (₦)</label>
-                  <input type="number" value={itemForm.cost_price} onChange={e => setItemForm({...itemForm, cost_price: e.target.value})}
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Cost Price (₦)
+                  </label>
+                  <input
+                    type="number"
+                    value={itemForm.cost_price}
+                    onChange={(e) => setItemForm({ ...itemForm, cost_price: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
-                    placeholder="0" />
+                    placeholder="0"
+                  />
                 </div>
                 <div>
-                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Selling Price (₦)</label>
-                  <input type="number" value={itemForm.selling_price} onChange={e => setItemForm({...itemForm, selling_price: e.target.value})}
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Selling Price (₦)
+                  </label>
+                  <input
+                    type="number"
+                    value={itemForm.selling_price}
+                    onChange={(e) => setItemForm({ ...itemForm, selling_price: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
-                    placeholder="0" />
+                    placeholder="0"
+                  />
                 </div>
               </div>
 
-              <button onClick={saveItem} disabled={saving}
-                className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black font-bold rounded-xl py-3 flex items-center justify-center gap-2 transition-colors">
-                <Save size={16} /> {saving ? 'Saving...' : selectedItem ? 'Update Item' : 'Add Item'}
+              <button
+                onClick={saveItem}
+                disabled={saving}
+                className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black font-bold rounded-xl py-3 flex items-center justify-center gap-2 transition-colors"
+              >
+                <Save size={16} />{' '}
+                {saving ? 'Saving...' : selectedItem ? 'Update Item' : 'Add Item'}
               </button>
             </div>
           </div>
@@ -453,22 +734,44 @@ export default function Inventory({ onBack }) {
             <div className="flex items-center justify-between p-5 border-b border-gray-800 shrink-0">
               <div>
                 <h3 className="text-white font-bold">Restock — {selectedItem.item_name}</h3>
-                <p className="text-gray-400 text-xs mt-0.5">Current stock: <span className="text-amber-400 font-bold">{selectedItem.current_stock} {selectedItem.unit}</span></p>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  Current stock:{' '}
+                  <span className="text-amber-400 font-bold">
+                    {selectedItem.current_stock} {selectedItem.unit}
+                  </span>
+                </p>
               </div>
-              <button onClick={() => setShowRestock(false)} className="text-gray-400 hover:text-white"><X size={20} /></button>
+              <button
+                onClick={() => setShowRestock(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X size={20} />
+              </button>
             </div>
 
             <div className="p-5 space-y-4 overflow-y-auto flex-1">
-
               {/* Quantity */}
               <div>
-                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Quantity Added ({selectedItem.unit}) *</label>
-                <input type="number" value={restockForm.quantity_added} onChange={e => setRestockForm({...restockForm, quantity_added: e.target.value})}
+                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                  Quantity Added ({selectedItem.unit}) *
+                </label>
+                <input
+                  type="number"
+                  value={restockForm.quantity_added}
+                  onChange={(e) =>
+                    setRestockForm({ ...restockForm, quantity_added: e.target.value })
+                  }
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-2xl font-bold"
-                  placeholder="0" />
+                  placeholder="0"
+                />
                 {restockForm.quantity_added && (
                   <p className="text-green-400 text-xs mt-1">
-                    New stock will be: <span className="font-bold">{(selectedItem.current_stock || 0) + parseFloat(restockForm.quantity_added || 0)} {selectedItem.unit}</span>
+                    New stock will be:{' '}
+                    <span className="font-bold">
+                      {(selectedItem.current_stock || 0) +
+                        parseFloat(restockForm.quantity_added || 0)}{' '}
+                      {selectedItem.unit}
+                    </span>
                   </p>
                 )}
               </div>
@@ -476,15 +779,27 @@ export default function Inventory({ onBack }) {
               {/* Cost */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Cost/Unit (₦)</label>
-                  <input type="number" value={restockForm.cost_price_per_unit} onChange={e => setRestockForm({...restockForm, cost_price_per_unit: e.target.value})}
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Cost/Unit (₦)
+                  </label>
+                  <input
+                    type="number"
+                    value={restockForm.cost_price_per_unit}
+                    onChange={(e) =>
+                      setRestockForm({ ...restockForm, cost_price_per_unit: e.target.value })
+                    }
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm font-bold"
-                    placeholder="0" />
+                    placeholder="0"
+                  />
                 </div>
                 <div className="bg-gray-800 rounded-xl px-4 py-3 flex flex-col justify-center">
                   <p className="text-gray-500 text-xs">Total Cost</p>
                   <p className="text-amber-400 font-bold text-lg">
-                    ₦{((parseFloat(restockForm.quantity_added) || 0) * (parseFloat(restockForm.cost_price_per_unit) || 0)).toLocaleString()}
+                    ₦
+                    {(
+                      (parseFloat(restockForm.quantity_added) || 0) *
+                      (parseFloat(restockForm.cost_price_per_unit) || 0)
+                    ).toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -492,57 +807,103 @@ export default function Inventory({ onBack }) {
               {/* Supplier */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Supplier Name</label>
-                  <input value={restockForm.supplier_name} onChange={e => setRestockForm({...restockForm, supplier_name: e.target.value})}
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Supplier Name
+                  </label>
+                  <input
+                    value={restockForm.supplier_name}
+                    onChange={(e) =>
+                      setRestockForm({ ...restockForm, supplier_name: e.target.value })
+                    }
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
-                    placeholder="e.g. Guinness Nigeria" />
+                    placeholder="e.g. Guinness Nigeria"
+                  />
                 </div>
                 <div>
-                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Supplier Phone</label>
-                  <input value={restockForm.supplier_phone} onChange={e => setRestockForm({...restockForm, supplier_phone: e.target.value})}
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Supplier Phone
+                  </label>
+                  <input
+                    value={restockForm.supplier_phone}
+                    onChange={(e) =>
+                      setRestockForm({ ...restockForm, supplier_phone: e.target.value })
+                    }
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
-                    placeholder="08012345678" />
+                    placeholder="08012345678"
+                  />
                 </div>
               </div>
 
               {/* Invoice + Payment */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Invoice Number</label>
-                  <input value={restockForm.invoice_number} onChange={e => setRestockForm({...restockForm, invoice_number: e.target.value})}
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Invoice Number
+                  </label>
+                  <input
+                    value={restockForm.invoice_number}
+                    onChange={(e) =>
+                      setRestockForm({ ...restockForm, invoice_number: e.target.value })
+                    }
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
-                    placeholder="INV-0001" />
+                    placeholder="INV-0001"
+                  />
                 </div>
                 <div>
-                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Payment Method</label>
-                  <select value={restockForm.payment_method} onChange={e => setRestockForm({...restockForm, payment_method: e.target.value})}
-                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm">
-                    {PAYMENT_METHODS.map(m => <option key={m} value={m} className="capitalize">{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Payment Method
+                  </label>
+                  <select
+                    value={restockForm.payment_method}
+                    onChange={(e) =>
+                      setRestockForm({ ...restockForm, payment_method: e.target.value })
+                    }
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
+                  >
+                    {PAYMENT_METHODS.map((m) => (
+                      <option key={m} value={m} className="capitalize">
+                        {m.charAt(0).toUpperCase() + m.slice(1)}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
               {/* Delivery person */}
               <div>
-                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Delivery Person / Driver</label>
-                <input value={restockForm.delivery_person} onChange={e => setRestockForm({...restockForm, delivery_person: e.target.value})}
+                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                  Delivery Person / Driver
+                </label>
+                <input
+                  value={restockForm.delivery_person}
+                  onChange={(e) =>
+                    setRestockForm({ ...restockForm, delivery_person: e.target.value })
+                  }
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
-                  placeholder="Name of person who delivered" />
+                  placeholder="Name of person who delivered"
+                />
               </div>
 
               {/* Condition */}
               <div>
-                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Delivery Condition</label>
+                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                  Delivery Condition
+                </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {CONDITIONS.map(c => (
-                    <button key={c} onClick={() => setRestockForm({...restockForm, condition: c})}
+                  {CONDITIONS.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setRestockForm({ ...restockForm, condition: c })}
                       className={`py-2.5 rounded-xl text-sm font-medium border-2 capitalize transition-all ${
                         restockForm.condition === c
-                          ? c === 'good' ? 'border-green-500 bg-green-500/10 text-green-400'
-                          : c === 'damaged' ? 'border-red-500 bg-red-500/10 text-red-400'
-                          : 'border-amber-500 bg-amber-500/10 text-amber-400'
+                          ? c === 'good'
+                            ? 'border-green-500 bg-green-500/10 text-green-400'
+                            : c === 'damaged'
+                              ? 'border-red-500 bg-red-500/10 text-red-400'
+                              : 'border-amber-500 bg-amber-500/10 text-amber-400'
                           : 'border-gray-700 bg-gray-800 text-gray-400'
-                      }`}>
+                      }`}
+                    >
                       {c === 'good' ? '✅' : c === 'damaged' ? '❌' : '⚠️'} {c}
                     </button>
                   ))}
@@ -551,20 +912,33 @@ export default function Inventory({ onBack }) {
 
               {/* Notes */}
               <div>
-                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">Notes</label>
-                <textarea value={restockForm.notes} onChange={e => setRestockForm({...restockForm, notes: e.target.value})}
-                  rows={2} placeholder="Any additional notes, discrepancies, or observations..."
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm resize-none" />
+                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                  Notes
+                </label>
+                <textarea
+                  value={restockForm.notes}
+                  onChange={(e) => setRestockForm({ ...restockForm, notes: e.target.value })}
+                  rows={2}
+                  placeholder="Any additional notes, discrepancies, or observations..."
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm resize-none"
+                />
               </div>
 
               {/* Accountability info box */}
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-xs text-blue-300">
                 <p className="font-semibold mb-1">📋 Accountability Record</p>
-                <p>This restock will be logged under <span className="font-bold text-white">{profile?.full_name}</span> at {new Date().toLocaleString('en-NG')}. This record cannot be deleted.</p>
+                <p>
+                  This restock will be logged under{' '}
+                  <span className="font-bold text-white">{profile?.full_name}</span> at{' '}
+                  {new Date().toLocaleString('en-NG')}. This record cannot be deleted.
+                </p>
               </div>
 
-              <button onClick={processRestock} disabled={saving}
-                className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white font-bold rounded-xl py-3 flex items-center justify-center gap-2 transition-colors">
+              <button
+                onClick={processRestock}
+                disabled={saving}
+                className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white font-bold rounded-xl py-3 flex items-center justify-center gap-2 transition-colors"
+              >
                 <Truck size={16} /> {saving ? 'Processing...' : `Confirm Restock`}
               </button>
             </div>
