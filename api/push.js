@@ -12,8 +12,16 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
+const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
+
+  // Reject requests that don't carry the internal secret
+  const authHeader = req.headers['x-internal-secret']
+  if (!INTERNAL_SECRET || authHeader !== INTERNAL_SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
 
   const { staff_id, title, body, data } = req.body
   if (!staff_id || !title) return res.status(400).json({ error: 'Missing fields' })
@@ -33,7 +41,6 @@ export default async function handler(req, res) {
       await webpush.sendNotification(row.subscription, payload)
       sent++
     } catch (err) {
-      // Subscription expired — remove it
       if (err.statusCode === 410) {
         await supabase.from('push_subscriptions')
           .delete()

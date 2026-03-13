@@ -5,9 +5,33 @@ import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
 import { useAuth } from '../../context/AuthContext'
 import { Beer, Clock, LogOut, RefreshCw, CheckCircle } from 'lucide-react'
+import React from 'react'
+
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-full bg-gray-950 flex items-center justify-center p-6">
+          <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-8 text-center max-w-sm w-full">
+            <p className="text-red-400 font-bold text-lg mb-2">Display Error</p>
+            <p className="text-gray-400 text-sm mb-4">{this.state.error.message}</p>
+            <button onClick={() => this.setState({ error: null })}
+              className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-xl text-sm">
+              Retry
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 import { HelpTooltip } from '../../components/HelpTooltip'
 
-export default function BarKDS() {
+function BarKDSInner() {
   const { profile, signOut } = useAuth()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence("main")
   const [orders, setOrders] = useState([])
@@ -24,10 +48,10 @@ export default function BarKDS() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
       .subscribe()
 
-    clearInterval(timer)
-    clearInterval(timer)
-    clearInterval(timer)
-    return () => supabase.removeChannel(channel)
+    return () => {
+      clearInterval(timer)
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const fetchOrders = async () => {
@@ -105,6 +129,13 @@ export default function BarKDS() {
     return 'border-gray-700 bg-gray-900'
   }
 
+  const getTimerColor = (createdAt) => {
+    const diff = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000 / 60)
+    if (diff >= 15) return 'text-red-400 font-bold'
+    if (diff >= 7) return 'text-amber-400 font-bold'
+    return 'text-gray-400'
+  }
+
   const getStatusColor = (status) => {
     if (status === 'ready') return 'bg-green-500/20 text-green-400'
     if (status === 'preparing') return 'bg-amber-500/20 text-amber-400'
@@ -144,7 +175,7 @@ export default function BarKDS() {
             <RefreshCw size={16} />
           </button>
           <p className="text-gray-400 text-sm">{profile?.full_name}</p>
-          <HelpTooltip tips={[
+          <HelpTooltip storageKey="bar-kds" tips={[
             { id: 'bar-incoming', title: 'Incoming Orders', description: 'Drink orders from all tables arrive here automatically the moment a waitron confirms an order on the POS. Orders are sorted oldest first — always work top to bottom.' },
             { id: 'bar-status', title: 'Item Status Buttons', description: 'Each drink item has a status button: Pending → tap to mark Preparing → tap again to mark Ready. You can update items individually or use the All Ready button to mark the entire order at once.' },
             { id: 'bar-notify', title: 'Waitron Notification', description: 'When you mark an item or the full order as Ready, the assigned waitron receives a push notification on their device to come and collect. Do not shout across the floor — let the system do it.' },
@@ -221,4 +252,7 @@ export default function BarKDS() {
       </div>
     </div>
   )
+}
+export default function BarKDS() {
+  return <ErrorBoundary><BarKDSInner /></ErrorBoundary>
 }

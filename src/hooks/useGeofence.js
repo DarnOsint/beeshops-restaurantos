@@ -1,8 +1,8 @@
-
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
-const LOCATIONS = {
+// Fallback coordinates — overridden by settings table if present
+const FALLBACK_LOCATIONS = {
   main:      { lat: 7.350834, lng: 3.840780 },
   apartment: { lat: 7.349545, lng: 3.839690 },
 }
@@ -24,27 +24,52 @@ export function useGeofence(locKey = 'main') {
   const [location, setLocation] = useState(null)
   const [enabled,  setEnabled]  = useState(null)
   const [radius,   setRadius]   = useState(null)
+  const [target,   setTarget]   = useState(null)
 
-  // Fetch all geofence settings at once
   useEffect(() => {
     supabase
       .from('settings')
       .select('id, value')
-      .in('id', ['geofence_enabled', 'geofence_radius_main', 'geofence_radius_apartment'])
+      .in('id', [
+        'geofence_enabled',
+        'geofence_radius_main', 'geofence_radius_apartment',
+        'geofence_lat_main',    'geofence_lng_main',
+        'geofence_lat_apartment', 'geofence_lng_apartment',
+      ])
       .then(({ data }) => {
-        if (!data) { setEnabled(true); setRadius(DEFAULT_RADIUS[locKey] || 400); return }
+        const fallback = FALLBACK_LOCATIONS[locKey] || FALLBACK_LOCATIONS.main
+        if (!data) {
+          setEnabled(true)
+          setRadius(DEFAULT_RADIUS[locKey] || 400)
+          setTarget(fallback)
+          return
+        }
         const map = Object.fromEntries(data.map(r => [r.id, r.value]))
+
         setEnabled(map['geofence_enabled'] !== 'false')
+
         const r = locKey === 'apartment'
           ? parseInt(map['geofence_radius_apartment'] || DEFAULT_RADIUS.apartment)
-          : parseInt(map['geofence_radius_main'] || DEFAULT_RADIUS.main)
+          : parseInt(map['geofence_radius_main']      || DEFAULT_RADIUS.main)
         setRadius(r)
+
+        const lat = locKey === 'apartment'
+          ? parseFloat(map['geofence_lat_apartment'] || fallback.lat)
+          : parseFloat(map['geofence_lat_main']      || fallback.lat)
+        const lng = locKey === 'apartment'
+          ? parseFloat(map['geofence_lng_apartment'] || fallback.lng)
+          : parseFloat(map['geofence_lng_main']      || fallback.lng)
+        setTarget({ lat, lng })
       })
-      .catch(() => { setEnabled(true); setRadius(DEFAULT_RADIUS[locKey] || 400) })
+      .catch(() => {
+        setEnabled(true)
+        setRadius(DEFAULT_RADIUS[locKey] || 400)
+        setTarget(FALLBACK_LOCATIONS[locKey] || FALLBACK_LOCATIONS.main)
+      })
   }, [locKey])
 
   useEffect(() => {
-    if (enabled === null || radius === null) return
+    if (enabled === null || radius === null || !target) return
 
     if (!enabled) {
       setStatus('inside')
@@ -52,12 +77,10 @@ export function useGeofence(locKey = 'main') {
       return
     }
 
-    const loc = LOCATIONS[locKey] || LOCATIONS['main']
-
     const check = (pos) => {
       const { latitude: lat, longitude: lng } = pos.coords
       setLocation({ lat, lng })
-      const dist = getDistance(lat, lng, loc.lat, loc.lng)
+      const dist = getDistance(lat, lng, target.lat, target.lng)
       setDistance(Math.round(dist))
       setStatus(dist <= radius ? 'inside' : 'outside')
     }
@@ -72,7 +95,7 @@ export function useGeofence(locKey = 'main') {
     }, 60000)
 
     return () => clearInterval(interval)
-  }, [locKey, enabled, radius])
+  }, [locKey, enabled, radius, target])
 
   return { status, distance, location }
 }

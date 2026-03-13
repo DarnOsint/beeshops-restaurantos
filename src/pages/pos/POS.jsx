@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import { offlineInsert, offlineUpdate } from '../../lib/offlineWrite'
@@ -110,13 +110,17 @@ export default function POS() {
     setAssignedTableIds(allIds)
   }
 
+  const activeOrderRef = useRef(null)
+  useEffect(() => { activeOrderRef.current = activeOrder }, [activeOrder])
+
   const fullRefresh = () => {
     fetchTables()
     if (profile) fetchAssignedTables(profile.role, profile.id)
-    if (activeOrder) {
+    const current = activeOrderRef.current
+    if (current) {
       supabase.from('orders')
         .select('*, order_items(*, menu_items(name, price, menu_categories(name, destination)))')
-        .eq('id', activeOrder.id)
+        .eq('id', current.id)
         .single()
         .then(({ data }) => { if (data) setActiveOrder(data) })
     }
@@ -442,7 +446,7 @@ export default function POS() {
               <p className="text-white text-xs">{profile?.full_name}</p>
               <p className="text-amber-500 text-xs capitalize">{profile?.role}</p>
             </div>
-            <HelpTooltip tips={[
+            <HelpTooltip storageKey="pos" tips={[
               { id: 'pos-clockin', title: 'Clock In Required', description: 'You must be clocked in by a manager before you can access the POS. If you see a clock-in screen, contact your shift manager.' },
               { id: 'pos-tables', title: 'Table Grid', description: 'Your assigned tables are shown here. Green = available, amber/coloured = occupied. Tap an occupied table to add items or proceed to payment. Tables outside your assigned zone are greyed out and locked.' },
               { id: 'pos-cashsale', title: 'Cash Sale', description: 'For counter walk-ins where the customer pays immediately without sitting at a table. No table selection needed — just pick items and process payment on the spot.' },

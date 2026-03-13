@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { Receipt, Bell, Plus, Loader, CheckCircle, Clock, ChefHat, Truck } from 'lucide-react'
+import { sendPushToStaff } from '../../hooks/usePushNotifications'
+import { HelpTooltip } from '../../components/HelpTooltip'
+import { Receipt, Bell, Plus, Loader, CheckCircle, Clock, ChefHat, Truck, AlertCircle } from 'lucide-react'
 
 const ITEM_STATUS = {
   pending:   { label: 'Waiting',   icon: Clock,       color: 'text-gray-400'  },
@@ -25,7 +27,7 @@ export default function ReceiptView() {
   const fetchOrder = async () => {
     const { data } = await supabase
       .from('orders')
-      .select('*, order_items(*, menu_items(name, price)), tables(name, assigned_staff, profiles(full_name))')
+      .select('*, order_items(*, menu_items(name, price)), tables(name, assigned_staff, profiles(full_name, id))')
       .eq('id', orderId)
       .single()
     setOrder(data)
@@ -36,6 +38,7 @@ export default function ReceiptView() {
     fetchOrder()
     const channel = supabase.channel(`receipt-${orderId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchOrder)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${orderId}` }, fetchOrder)
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [orderId])
@@ -43,13 +46,17 @@ export default function ReceiptView() {
   const callWaiter = async () => {
     if (waiterCalled || calling || !order?.tables) return
     setCalling(true)
+    const waitronId = order.tables?.assigned_staff || order.tables?.profiles?.id || null
     await supabase.from('waiter_calls').insert({
       table_id: order.table_id,
       table_name: order.tables?.name,
-      waitron_id: order.tables?.assigned_staff || null,
+      waitron_id: waitronId,
       waitron_name: order.tables?.profiles?.full_name || null,
       status: 'pending'
     })
+    if (waitronId) {
+      await sendPushToStaff(waitronId, '🔔 Waiter Called', `${order.tables?.name} needs assistance`)
+    }
     setCalling(false)
     setWaiterCalled(true)
     setTimeout(() => setWaiterCalled(false), 30000)
@@ -86,11 +93,20 @@ export default function ReceiptView() {
               <p className="text-amber-400 text-xs">{order.tables?.name}</p>
             </div>
           </div>
-          <button onClick={callWaiter} disabled={calling || waiterCalled}
-            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition-all ${waiterCalled ? 'bg-green-500/15 text-green-400 border border-green-500/30' : 'bg-gray-800 text-white border border-gray-700 hover:bg-gray-700'}`}>
-            <Bell size={13} />
-            {waiterCalled ? 'Called!' : calling ? '...' : 'Call Waiter'}
-          </button>
+          <div className="flex items-center gap-2">
+            <HelpTooltip storageKey="customer-receipt" tips={[
+              { id: 'rv-status', title: 'Order Status', description: 'This page shows whether your order is still in progress or has been marked as paid. The status updates automatically — you do not need to refresh.' },
+              { id: 'rv-items', title: 'Item Progress', description: 'Each item shows its current stage — Waiting means it has not started yet, Preparing means it is being made, Ready means it is done and on its way to you, and Served means it has been delivered to your table.' },
+              { id: 'rv-payment', title: 'Paying Your Bill', description: 'Payment is collected by your waiter at the table. Once paid, this receipt will update to show Payment complete and the method used. Do not leave without settling your bill.' },
+              { id: 'rv-more', title: 'Adding More Items', description: 'If your order is still open, tap Add More Items to go back to the menu and add to your order. New items will appear on this receipt automatically.' },
+              { id: 'rv-waiter', title: 'Call Waiter', description: 'Tap the Call Waiter button at any time if you need assistance. Your waiter will receive a push notification on their device.' },
+            ]} />
+            <button onClick={callWaiter} disabled={calling || waiterCalled}
+              className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition-all ${waiterCalled ? 'bg-green-500/15 text-green-400 border border-green-500/30' : 'bg-gray-800 text-white border border-gray-700 hover:bg-gray-700'}`}>
+              <Bell size={13} />
+              {waiterCalled ? 'Called!' : calling ? '...' : 'Call Waiter'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -128,6 +144,7 @@ export default function ReceiptView() {
             {items.map(item => {
               const cfg = ITEM_STATUS[item.status] || ITEM_STATUS.pending
               const Icon = cfg.icon
+              const unitPrice = item.unit_price || item.menu_items?.price || 0
               return (
                 <div key={item.id} className="px-4 py-3 flex items-center gap-3">
                   <div className="flex-1 min-w-0">
@@ -138,13 +155,13 @@ export default function ReceiptView() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-gray-500 text-xs">x{item.quantity}</p>
-                    <p className="text-white text-sm font-bold">₦{((item.unit_price || 0) * item.quantity).toLocaleString()}</p>
+                    <p className="text-white text-sm font-bold">₦{(unitPrice * item.quantity).toLocaleString()}</p>
                   </div>
                 </div>
               )
             })}
           </div>
-          <div className="px-4 py-3 border-t border-gray-800 space-y-2">
+          <div className="px-4 py-3 border-t border-gray-800">
             <div className="flex items-center justify-between pt-1">
               <span className="text-white font-bold">Total</span>
               <span className="text-amber-400 font-bold text-xl">₦{order.total_amount?.toLocaleString()}</span>

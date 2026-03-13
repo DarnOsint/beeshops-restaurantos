@@ -49,13 +49,17 @@ export default function Executive() {
   useEffect(() => {
     fetchStats()
     supabase.from('settings').select('id, value')
-      .in('id', ['geofence_enabled', 'geofence_radius_main', 'geofence_radius_apartment', 'bank_name', 'bank_account_number', 'bank_account_name'])
+      .in('id', ['geofence_enabled', 'geofence_radius_main', 'geofence_radius_apartment', 'geofence_lat_main', 'geofence_lng_main', 'geofence_lat_apartment', 'geofence_lng_apartment', 'bank_name', 'bank_account_number', 'bank_account_name'])
       .then(({ data }) => {
         if (!data) return
         const map = Object.fromEntries(data.map(r => [r.id, r.value]))
         if (map['geofence_enabled'] !== undefined) setGeofenceEnabled(map['geofence_enabled'] === 'true')
-        if (map['geofence_radius_main']) setRadiusMain(parseInt(map['geofence_radius_main']))
+        if (map['geofence_radius_main'])      setRadiusMain(parseInt(map['geofence_radius_main']))
         if (map['geofence_radius_apartment']) setRadiusApartment(parseInt(map['geofence_radius_apartment']))
+        if (map['geofence_lat_main'])         setLatMain(map['geofence_lat_main'])
+        if (map['geofence_lng_main'])         setLngMain(map['geofence_lng_main'])
+        if (map['geofence_lat_apartment'])    setLatApartment(map['geofence_lat_apartment'])
+        if (map['geofence_lng_apartment'])    setLngApartment(map['geofence_lng_apartment'])
         if (map['bank_name'] !== undefined) setBankName(map['bank_name'])
         if (map['bank_account_number'] !== undefined) setBankAccountNumber(map['bank_account_number'])
         if (map['bank_account_name'] !== undefined) setBankAccountName(map['bank_account_name'])
@@ -91,8 +95,12 @@ export default function Executive() {
   const saveRadius = async () => {
     setRadiusSaving(true)
     await Promise.all([
-      supabase.from('settings').update({ value: String(radiusMain), updated_at: new Date().toISOString() }).eq('id', 'geofence_radius_main'),
-      supabase.from('settings').update({ value: String(radiusApartment), updated_at: new Date().toISOString() }).eq('id', 'geofence_radius_apartment'),
+      supabase.from('settings').upsert({ id: 'geofence_radius_main',      value: String(radiusMain),      updated_at: new Date().toISOString() }),
+      supabase.from('settings').upsert({ id: 'geofence_radius_apartment', value: String(radiusApartment), updated_at: new Date().toISOString() }),
+      supabase.from('settings').upsert({ id: 'geofence_lat_main',         value: String(latMain),         updated_at: new Date().toISOString() }),
+      supabase.from('settings').upsert({ id: 'geofence_lng_main',         value: String(lngMain),         updated_at: new Date().toISOString() }),
+      supabase.from('settings').upsert({ id: 'geofence_lat_apartment',    value: String(latApartment),    updated_at: new Date().toISOString() }),
+      supabase.from('settings').upsert({ id: 'geofence_lng_apartment',    value: String(lngApartment),    updated_at: new Date().toISOString() }),
     ])
     setRadiusSaving(false)
     setShowRadiusEdit(false)
@@ -200,7 +208,7 @@ export default function Executive() {
           <p className="text-gray-400 text-xs">Good {getGreeting()}, {profile?.full_name}</p>
         </div>
         <div className="flex items-center gap-2">
-          <HelpTooltip tips={[
+          <HelpTooltip storageKey="executive" tips={[
             { id: 'exec-kpis', title: 'Live KPI Cards', description: 'Six real-time metrics — today's revenue, open orders, occupied tables (out of 60), occupied rooms (out of 20), staff on duty, and low stock item count. Cards auto-refresh every 30 seconds and on any database change.' },
             { id: 'exec-geofence', title: 'Geofence Control', description: 'Toggle location enforcement for all floor staff and waitrons. When ON, staff can only log in and use the POS from within the restaurant's GPS boundary. Owners and managers are exempt. Use the Radius button to adjust the boundary size for the Main venue and Apartments separately.' },
             { id: 'exec-bank', title: 'Bank Transfer Details', description: 'Set the venue's bank name, account number, and account name. These details are shown to waitrons at payment time when a customer selects Bank Transfer as their payment method.' },
@@ -258,17 +266,47 @@ export default function Executive() {
             <div className="absolute top-12 left-0 z-50 bg-gray-900 border border-gray-700 rounded-2xl p-4 shadow-xl w-72">
               <p className="text-white font-semibold text-sm mb-3">Geofence Radius Settings</p>
               <div className="space-y-3">
+                <p className="text-gray-600 text-xs mb-1">Main Venue</p>
                 <div>
-                  <label className="text-gray-400 text-xs mb-1 block">Main Venue (metres)</label>
+                  <label className="text-gray-400 text-xs mb-1 block">Radius (metres)</label>
                   <input type="number" value={radiusMain}
                     onChange={e => setRadiusMain(parseInt(e.target.value) || 0)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-gray-400 text-xs mb-1 block">Latitude</label>
+                    <input type="text" value={latMain} placeholder="e.g. 7.350834"
+                      onChange={e => setLatMain(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+                  </div>
+                  <div>
+                    <label className="text-gray-400 text-xs mb-1 block">Longitude</label>
+                    <input type="text" value={lngMain} placeholder="e.g. 3.840780"
+                      onChange={e => setLngMain(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+                  </div>
+                </div>
+                <p className="text-gray-600 text-xs mt-2 mb-1">Apartments</p>
                 <div>
-                  <label className="text-gray-400 text-xs mb-1 block">Apartments (metres)</label>
+                  <label className="text-gray-400 text-xs mb-1 block">Radius (metres)</label>
                   <input type="number" value={radiusApartment}
                     onChange={e => setRadiusApartment(parseInt(e.target.value) || 0)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-gray-400 text-xs mb-1 block">Latitude</label>
+                    <input type="text" value={latApartment} placeholder="e.g. 7.349545"
+                      onChange={e => setLatApartment(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+                  </div>
+                  <div>
+                    <label className="text-gray-400 text-xs mb-1 block">Longitude</label>
+                    <input type="text" value={lngApartment} placeholder="e.g. 3.839690"
+                      onChange={e => setLngApartment(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+                  </div>
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button onClick={saveRadius} disabled={radiusSaving}

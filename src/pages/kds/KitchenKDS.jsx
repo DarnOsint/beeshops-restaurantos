@@ -6,8 +6,32 @@ import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
 import { useAuth } from '../../context/AuthContext'
 import { ChefHat, Clock, LogOut, RefreshCw, CheckCircle } from 'lucide-react'
+import React from 'react'
 
-export default function KitchenKDS() {
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-full bg-gray-950 flex items-center justify-center p-6">
+          <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-8 text-center max-w-sm w-full">
+            <p className="text-red-400 font-bold text-lg mb-2">Display Error</p>
+            <p className="text-gray-400 text-sm mb-4">{this.state.error.message}</p>
+            <button onClick={() => this.setState({ error: null })}
+              className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-xl text-sm">
+              Retry
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+
+function KitchenKDSInner() {
   const { profile, signOut } = useAuth()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence("main")
   const [orders, setOrders] = useState([])
@@ -24,10 +48,10 @@ export default function KitchenKDS() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
       .subscribe()
 
-    clearInterval(timer)
-    clearInterval(timer)
-    clearInterval(timer)
-    return () => supabase.removeChannel(channel)
+    return () => {
+      clearInterval(timer)
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const fetchOrders = async () => {
@@ -154,7 +178,7 @@ export default function KitchenKDS() {
             <RefreshCw size={16} />
           </button>
           <p className="text-gray-400 text-sm">{profile?.full_name}</p>
-          <HelpTooltip tips={[
+          <HelpTooltip storageKey="kitchen-kds" tips={[
             { id: 'kds-incoming', title: 'Incoming Orders', description: 'Food orders routed to the kitchen appear here automatically the moment a waitron confirms an order on the POS. Orders are sorted oldest first — always work from the top of the screen down.' },
             { id: 'kds-status', title: 'Item Status Buttons', description: 'Each item has a Pending button. Tap it to move to Preparing (shown in amber) — then tap again when the dish is plated to mark it Ready (shown in green). Update items individually as they are cooked.' },
             { id: 'kds-urgency', title: 'Urgency Colours', description: 'Order cards change border colour based on wait time — normal (grey, under 10 minutes), getting late (amber, 10–20 minutes), urgent (red, 20+ minutes). Urgency is based on when the order was first placed, not when each item was added.' },
@@ -235,4 +259,7 @@ export default function KitchenKDS() {
       </div>
     </div>
   )
+}
+export default function KitchenKDS() {
+  return <ErrorBoundary><KitchenKDSInner /></ErrorBoundary>
 }

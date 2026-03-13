@@ -44,7 +44,10 @@ export async function sendPushToStaff(staffId, title, body, data = {}) {
   try {
     await fetch('/api/push', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': import.meta.env.VITE_INTERNAL_API_SECRET || ''
+      },
       body: JSON.stringify({ staff_id: staffId, title, body, data })
     })
   } catch (e) {

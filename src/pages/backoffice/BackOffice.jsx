@@ -37,7 +37,7 @@ export default function BackOffice() {
   if (activeSection === 'menu') return <MenuManagement onBack={() => setActiveSection(null)} />
   if (activeSection === 'zonepricing') return <ZonePricing onBack={() => setActiveSection(null)} />
   if (activeSection === 'tables') return <TableConfig onBack={() => setActiveSection(null)} />
-  if (activeSection === 'qrcards') { window.location.href = '/backoffice/qr-cards'; return null }
+  if (activeSection === 'qrcards') { navigate('/backoffice/qr-cards'); return null }
   if (activeSection === 'inventory') return <Inventory onBack={() => setActiveSection(null)} />
   if (activeSection === 'suppliers') return <Suppliers onBack={() => setActiveSection(null)} />
 
@@ -51,7 +51,7 @@ export default function BackOffice() {
             <h2 className="text-white text-2xl font-bold">Back Office</h2>
             <p className="text-gray-400 mt-1">Manage your restaurant settings</p>
           </div>
-          <HelpTooltip tips={[
+          <HelpTooltip storageKey="backoffice" tips={[
             { id: 'bo-staff', title: 'Staff Management', description: 'Create and manage staff accounts. Set each person's role (owner, manager, waitron, kitchen, bar, griller) and assign a 4-digit PIN. A staff member cannot log into the system until they have an active account here.' },
             { id: 'bo-menu', title: 'Menu Management', description: 'Add, edit, disable, or delete menu items. Each item must be assigned a category and a destination — Kitchen, Bar, or Griller. The destination controls which KDS screen the order appears on when placed.' },
             { id: 'bo-zone', title: 'Zone Pricing', description: 'Set separate drink prices for each table zone: Outdoor, Indoor, VIP Lounge, and The Nook. Food items always carry a fixed price regardless of zone. Zone prices are applied automatically when a waitron takes an order.' },

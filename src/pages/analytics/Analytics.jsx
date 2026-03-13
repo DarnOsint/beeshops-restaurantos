@@ -205,7 +205,10 @@ export default function Analytics() {
       const d = data
       const response = await fetch('/api/insights', {
         method:'POST',
-        headers:{'Content-Type':'application/json'},
+        headers:{
+          'Content-Type': 'application/json',
+          'x-internal-secret': import.meta.env.VITE_INTERNAL_API_SECRET || ''
+        },
         body: JSON.stringify({
           model:'claude-sonnet-4-20250514',
           max_tokens:1000,

@@ -10,6 +10,30 @@ import {
   Beer, LogOut, RefreshCw, Flame, CheckCircle, Clock,
   AlertTriangle, ChefHat
 } from 'lucide-react'
+import React from 'react'
+
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null } }
+  static getDerivedStateFromError(error) { return { error } }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-full bg-gray-950 flex items-center justify-center p-6">
+          <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-8 text-center max-w-sm w-full">
+            <p className="text-red-400 font-bold text-lg mb-2">Display Error</p>
+            <p className="text-gray-400 text-sm mb-4">{this.state.error.message}</p>
+            <button onClick={() => this.setState({ error: null })}
+              className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-xl text-sm">
+              Retry
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 
 function getElapsed(createdAt) {
   const diff = Math.floor((Date.now() - new Date(createdAt)) / 1000)
@@ -25,7 +49,7 @@ function getUrgency(createdAt) {
   return 'normal'
 }
 
-export default function GrillerKDS() {
+function GrillerKDSInner() {
   const { profile, signOut } = useAuth()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence("main")
   const navigate = useNavigate()
@@ -81,6 +105,7 @@ export default function GrillerKDS() {
           orderId,
           orderType: item.orders?.order_type,
           tableName: item.orders?.tables?.name || item.orders?.customer_name || 'Counter',
+          staffId: item.orders?.staff_id || null,
           createdAt: item.created_at,
           items: []
         }
@@ -109,11 +134,10 @@ export default function GrillerKDS() {
       .eq('id', itemId)
     setCompleting(prev => ({ ...prev, [itemId]: false }))
     const ticket = tickets.find(t => t.items.some(i => i.id === itemId))
-    if (ticket?.orders?.staff_id) {
+    if (ticket?.staffId) {
       const item = ticket.items.find(i => i.id === itemId)
       const itemName = item?.menu_items?.name || 'Item'
-      const tableName = ticket.orders?.tables?.name || 'a table'
-      await sendPushToStaff(ticket.orders.staff_id, '✅ Item Ready', `${itemName} ready for ${tableName}`)
+      await sendPushToStaff(ticket.staffId, '✅ Item Ready', `${itemName} ready for ${ticket.tableName}`)
     }
   }
 
@@ -127,9 +151,8 @@ export default function GrillerKDS() {
       .update({ status: 'ready' })
       .in('id', ids)
     ids.forEach(id => setCompleting(prev => ({ ...prev, [id]: false })))
-    if (ticket.orders?.staff_id) {
-      const tableName = ticket.orders?.tables?.name || 'a table'
-      await sendPushToStaff(ticket.orders.staff_id, '✅ Order Ready', `Grill order for ${tableName} is ready to collect`)
+    if (ticket.staffId) {
+      await sendPushToStaff(ticket.staffId, '✅ Order Ready', `Grill order for ${ticket.tableName} is ready to collect`)
     }
   }
 
@@ -187,7 +210,7 @@ export default function GrillerKDS() {
             <button onClick={signOut} className="text-gray-400 hover:text-white">
               <LogOut size={18} />
             </button>
-            <HelpTooltip tips={[
+            <HelpTooltip storageKey="griller-kds" tips={[
               { id: 'grill-tickets', title: 'Grill Tickets', description: 'Each card is a grill ticket grouping all grillable items from a single order. Tickets arrive automatically when a waitron confirms an order on the POS. They are sorted oldest first — work from the top.' },
               { id: 'grill-items', title: 'Marking Items Done', description: 'Tap the Done button next to each individual item as it comes off the grill. Once all items on a ticket are marked done, the waitron is automatically notified to collect.' },
               { id: 'grill-allready', title: 'Ticket Complete Button', description: 'Use the All Done — Ticket Complete button at the bottom of a ticket to mark every item ready at once. Use this when the full order is plated and ready to go together.' },
@@ -346,4 +369,7 @@ export default function GrillerKDS() {
       </div>
     </div>
   )
+}
+export default function GrillerKDS() {
+  return <ErrorBoundary><GrillerKDSInner /></ErrorBoundary>
 }

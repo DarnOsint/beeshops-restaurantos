@@ -290,9 +290,24 @@ export default function Accounting() {
               className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-amber-500" />
           </div>
         )}
-        <span className="text-gray-600 text-xs ml-auto">
-          {loading ? 'Loading...' : `${orders.filter(o => o.status === 'paid').length} paid orders`}
-        </span>
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-gray-600 text-xs">
+            {loading ? 'Loading...' : `${orders.filter(o => o.status === 'paid').length} paid orders`}
+          </span>
+          <HelpTooltip storageKey="accounting" tips={[
+            { id: 'acc-daterange', title: 'Date Range Filter', description: 'All tabs respect the date range selected at the top — Today, This Week, This Month, or Custom. Change the range first before reading any figures, as all data filters to that period.' },
+            { id: 'acc-overview', title: 'Overview Tab', description: 'Gross revenue, net revenue (after payouts), and a breakdown by payment method — Cash, Bank POS, and Bank Transfer. Also shows order count and average order value. A visual bar chart shows the payment method split at a glance.' },
+            { id: 'acc-orders', title: 'Orders Tab', description: 'Full list of all orders in the selected period. Filter by status (open/paid/voided) and type (table/cash sale/takeaway/room). Tap any order row to expand and see every item, the assigned waitron, table, payment method, and exact time.' },
+            { id: 'acc-staff', title: 'Staff Tab', description: 'Per-waitron performance breakdown — total revenue generated, number of orders closed, and average order value. Use this at shift close to verify each waitron\'s accountability before clocking them out.' },
+            { id: 'acc-till', title: 'Till Tab', description: 'Full log of all till sessions. Each session shows the opening float, total sales collected, payout deductions, expected closing cash, actual closing float, and any shortfall or surplus. Tap a session to see full detail.' },
+            { id: 'acc-payouts', title: 'Payouts Tab', description: 'Record any cash paid out of the till — petty cash, supplier payments, staff advances, or other expenses. Each payout requires an amount, a reason, and a category. All payouts are deducted from net revenue and appear in the till session.' },
+            { id: 'acc-trends', title: 'Trends Tab', description: 'Line and bar charts showing revenue and order count over the selected period. Useful for identifying peak trading days, slow periods, and week-on-week performance patterns.' },
+            { id: 'acc-debtors', title: 'Debtors Tab', description: 'Manage account customers — corporate clients or individuals who are allowed to run a tab and settle at the end of a period. You can record payments, view outstanding balances, and export a debtor statement.' },
+            { id: 'acc-voids', title: 'Voids Tab', description: 'A date-filtered log of all items voided today. Each entry shows the item name, quantity, value lost, reason given, and which manager PIN approved the void. Voids cannot be deleted — they are a permanent record.' },
+            { id: 'acc-ledger', title: 'Ledger Tab', description: 'The double-entry general ledger — every financial transaction recorded as a credit or debit with a running balance. Covers sales, payouts, debtor payments, and room charges. Tap any entry for full detail. Exportable to PDF.' },
+            { id: 'acc-audit', title: 'Audit Log Tab', description: 'A tamper-evident log of every action performed in the system — logins, order changes, voids, menu edits, staff changes, and settings updates. Each entry shows who did it, their role, what changed, and the exact timestamp.' },
+          ]} />
+        </div>
       </div>
 
       {/* Tabs */}
@@ -303,21 +318,6 @@ export default function Accounting() {
             <tab.icon size={15} />{tab.label}
           </button>
         ))}
-        <div className="ml-auto pl-2 shrink-0">
-          <HelpTooltip tips={[
-            { id: 'acc-daterange', title: 'Date Range Filter', description: 'All tabs respect the date range selected at the top — Today, This Week, This Month, or Custom. Change the range first before reading any figures, as all data filters to that period.' },
-            { id: 'acc-overview', title: 'Overview Tab', description: 'Gross revenue, net revenue (after payouts), and a breakdown by payment method — Cash, Bank POS, and Bank Transfer. Also shows order count and average order value. A visual bar chart shows the payment method split at a glance.' },
-            { id: 'acc-orders', title: 'Orders Tab', description: 'Full list of all orders in the selected period. Filter by status (open/paid/voided) and type (table/cash sale/takeaway/room). Tap any order row to expand and see every item, the assigned waitron, table, payment method, and exact time.' },
-            { id: 'acc-staff', title: 'Staff Tab', description: 'Per-waitron performance breakdown — total revenue generated, number of orders closed, and average order value. Use this at shift close to verify each waitron's accountability before clocking them out.' },
-            { id: 'acc-till', title: 'Till Tab', description: 'Full log of all till sessions. Each session shows the opening float, total sales collected, payout deductions, expected closing cash, actual closing float, and any shortfall or surplus. Tap a session to see full detail.' },
-            { id: 'acc-payouts', title: 'Payouts Tab', description: 'Record any cash paid out of the till — petty cash, supplier payments, staff advances, or other expenses. Each payout requires an amount, a reason, and a category. All payouts are deducted from net revenue and appear in the till session.' },
-            { id: 'acc-trends', title: 'Trends Tab', description: 'Line and bar charts showing revenue and order count over the selected period. Useful for identifying peak trading days, slow periods, and week-on-week performance patterns.' },
-            { id: 'acc-debtors', title: 'Debtors Tab', description: 'Manage account customers — corporate clients or individuals who are allowed to run a tab and settle at the end of a period. You can record payments, view outstanding balances, and export a debtor statement.' },
-            { id: 'acc-voids', title: 'Voids Tab', description: 'A date-filtered log of all items voided today. Each entry shows the item name, quantity, value lost, reason given, and which manager PIN approved the void. Voids cannot be deleted — they are a permanent record.' },
-            { id: 'acc-ledger', title: 'Ledger Tab', description: 'The double-entry general ledger — every financial transaction recorded as a credit or debit with a running balance. Covers sales, payouts, debtor payments, and room charges. Tap any entry for full detail. Exportable to PDF.' },
-            { id: 'acc-audit', title: 'Audit Log Tab', description: 'A tamper-evident log of every action performed in the system — logins, order changes, voids, menu edits, staff changes, and settings updates. Each entry shows who did it, their role, what changed, and the exact timestamp.' },
-          ]} />
-        </div>
       </div>
 
       <div className="p-4 md:p-6">

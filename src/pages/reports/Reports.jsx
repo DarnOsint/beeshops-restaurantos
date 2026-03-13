@@ -298,7 +298,7 @@ export default function Reports() {
             <h2 className="text-white font-bold flex items-center gap-2">
               <FileText size={18} className="text-amber-400" /> Generate Report
             </h2>
-            <HelpTooltip tips={[
+            <HelpTooltip storageKey="reports" tips={[
               { id: 'rep-daily', title: 'Daily Report', description: 'Full trading summary for any selected day — total revenue, cash/POS/transfer breakdown, order count, top-selling menu items, per-waitron sales, void log, room stay revenue, and payout deductions.' },
               { id: 'rep-monthly', title: 'Monthly Report', description: 'Aggregated figures for a full calendar month — total and net revenue, orders, average order value, payment method split, and top items. Useful for month-end accounting and comparing trading periods.' },
               { id: 'rep-annual', title: 'Annual Report', description: 'Year-level performance summary — total revenue, order volume, revenue by category, and monthly breakdown. Use this for annual accounts, tax filing, and investor or owner review.' },

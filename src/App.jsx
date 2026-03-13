@@ -1,6 +1,7 @@
 import { useNotifications } from './hooks/useNotifications'
 import AppShell from './components/AppShell'
 import NotificationToast from './components/NotificationToast'
+import ErrorBoundary from './components/ErrorBoundary'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import MFAChallenge from './components/MFAChallenge'
@@ -91,6 +92,9 @@ function RoleRoute() {
   return <Navigate to="/login" />
 }
 
+// Convenience wrapper — each screen gets its own isolated boundary
+const EB = ({ title, children }) => <ErrorBoundary title={title}>{children}</ErrorBoundary>
+
 function AppRoutes() {
   return (
     <Routes>
@@ -98,69 +102,90 @@ function AppRoutes() {
       <Route path="/dashboard" element={<PrivateRoute><RoleRoute /></PrivateRoute>} />
 
       <Route path="/executive" element={
-        <PrivateRoute><RoleGuard allowed={['owner']}><Executive /></RoleGuard></PrivateRoute>
+        <PrivateRoute><RoleGuard allowed={['owner']}>
+          <EB title="Dashboard error"><Executive /></EB>
+        </RoleGuard></PrivateRoute>
       } />
 
       <Route path="/management" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><Management /></RoleGuard></PrivateRoute>
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}>
+          <EB title="Management error"><Management /></EB>
+        </RoleGuard></PrivateRoute>
       } />
 
       <Route path="/accounting" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'accountant']}><Accounting /></RoleGuard></PrivateRoute>
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'accountant']}>
+          <EB title="Accounting error"><Accounting /></EB>
+        </RoleGuard></PrivateRoute>
       } />
 
       <Route path="/backoffice" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><BackOffice /></RoleGuard></PrivateRoute>
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}>
+          <EB title="Back office error"><BackOffice /></EB>
+        </RoleGuard></PrivateRoute>
       } />
       <Route path="/backoffice/qr-cards" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'executive']}><QRTableCards /></RoleGuard></PrivateRoute>
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'executive']}>
+          <EB title="QR cards error"><QRTableCards /></EB>
+        </RoleGuard></PrivateRoute>
       } />
 
       <Route path="/pos" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'waitron']}><POS /></RoleGuard></PrivateRoute>
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'waitron']}>
+          <EB title="POS error"><POS /></EB>
+        </RoleGuard></PrivateRoute>
       } />
 
+      {/* KDS screens have their own internal ErrorBoundary — wrapped here too for extra safety */}
       <Route path="/kds/kitchen" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'kitchen']}><KitchenKDS /></RoleGuard></PrivateRoute>
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'kitchen']}>
+          <EB title="Kitchen display error"><KitchenKDS /></EB>
+        </RoleGuard></PrivateRoute>
       } />
 
       <Route path="/kds/bar" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'bar']}><BarKDS /></RoleGuard></PrivateRoute>
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'bar']}>
+          <EB title="Bar display error"><BarKDS /></EB>
+        </RoleGuard></PrivateRoute>
       } />
 
       <Route path="/kds/griller" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'griller']}><GrillerKDS /></RoleGuard></PrivateRoute>
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'griller']}>
+          <EB title="Grill display error"><GrillerKDS /></EB>
+        </RoleGuard></PrivateRoute>
       } />
 
       <Route path="/rooms" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><RoomManagement /></RoleGuard></PrivateRoute>
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}>
+          <EB title="Room management error"><RoomManagement /></EB>
+        </RoleGuard></PrivateRoute>
       } />
 
       <Route path="/debtors" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'accountant', 'waitron']}><Debtors onBack={() => window.history.back()} /></RoleGuard></PrivateRoute>
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager', 'accountant']}>
+          <EB title="Debtors error"><Debtors onBack={() => window.history.back()} /></EB>
+        </RoleGuard></PrivateRoute>
       } />
 
       <Route path="/reports" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><Reports /></RoleGuard></PrivateRoute>
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}>
+          <EB title="Reports error"><Reports /></EB>
+        </RoleGuard></PrivateRoute>
       } />
       <Route path="/analytics" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><Analytics /></RoleGuard></PrivateRoute>
+        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}>
+          <EB title="Analytics error"><Analytics /></EB>
+        </RoleGuard></PrivateRoute>
       } />
       <Route path="/apartment" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'apartment_manager']}><ApartmentDashboard /></RoleGuard></PrivateRoute>
+        <PrivateRoute><RoleGuard allowed={['owner', 'apartment_manager']}>
+          <EB title="Apartment dashboard error"><ApartmentDashboard /></EB>
+        </RoleGuard></PrivateRoute>
       } />
 
-      <Route path="/reports" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><Reports /></RoleGuard></PrivateRoute>
-      } />
-
-      <Route path="/reports" element={
-        <PrivateRoute><RoleGuard allowed={['owner', 'manager']}><Reports /></RoleGuard></PrivateRoute>
-      } />
-
-      {/* Public route — no auth required */}
-      <Route path="/table/:tableId" element={<TableView />} />
-      <Route path="/receipt/:orderId" element={<ReceiptView />} />
+      {/* Public customer routes */}
+      <Route path="/table/:tableId" element={<EB title="Order page error"><TableView /></EB>} />
+      <Route path="/receipt/:orderId" element={<EB title="Receipt error"><ReceiptView /></EB>} />
 
       <Route path="/" element={<Navigate to="/dashboard" />} />
     </Routes>

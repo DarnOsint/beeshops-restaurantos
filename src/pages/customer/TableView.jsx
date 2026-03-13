@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { sendPushToStaff } from '../../hooks/usePushNotifications'
+import { HelpTooltip } from '../../components/HelpTooltip'
 import {
   ShoppingCart, X, Plus, Minus, Info, Bell, ChefHat,
   Clock, CheckCircle, Truck, UtensilsCrossed, Search,
@@ -82,6 +84,7 @@ export default function TableView() {
   const [search, setSearch]         = useState('')
   const [infoItem, setInfoItem]     = useState(null)
   const [loading, setLoading]       = useState(true)
+  const [fetchError, setFetchError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [customerOrder, setCustomerOrder] = useState(null)
   const [liveOrder, setLiveOrder]   = useState(null)
@@ -91,20 +94,26 @@ export default function TableView() {
   const [error, setError]           = useState(null)
 
   const fetchAll = async () => {
-    const today = new Date(); today.setHours(0,0,0,0)
-    const [tableRes, menuRes, catRes, custOrderRes, liveOrderRes] = await Promise.all([
-      supabase.from('tables').select('*, table_categories(name), profiles(id, full_name)').eq('id', tableId).single(),
-      supabase.from('menu_items').select('*, menu_categories(name, destination)').order('name'),
-      supabase.from('menu_categories').select('*').order('name'),
-      supabase.from('customer_orders').select('*').eq('table_id', tableId).in('status', ['pending','accepted']).gte('created_at', today.toISOString()).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-      supabase.from('orders').select('*, order_items(*, menu_items(name))').eq('table_id', tableId).eq('status', 'open').gte('created_at', today.toISOString()).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    ])
-    if (tableRes.data)     setTable(tableRes.data)
-    if (menuRes.data)      setMenu(menuRes.data)
-    if (catRes.data)       setCategories(catRes.data)
-    setCustomerOrder(custOrderRes.data || null)
-    setLiveOrder(liveOrderRes.data || null)
-    setLoading(false)
+    try {
+      const today = new Date(); today.setHours(0,0,0,0)
+      const [tableRes, menuRes, catRes, custOrderRes, liveOrderRes] = await Promise.all([
+        supabase.from('tables').select('*, table_categories(name), profiles(id, full_name)').eq('id', tableId).single(),
+        supabase.from('menu_items').select('*, menu_categories(name, destination)').eq('is_available', true).order('name'),
+        supabase.from('menu_categories').select('*').order('name'),
+        supabase.from('customer_orders').select('*').eq('table_id', tableId).in('status', ['pending','accepted']).gte('created_at', today.toISOString()).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('orders').select('*, order_items(*, menu_items(name))').eq('table_id', tableId).eq('status', 'open').gte('created_at', today.toISOString()).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      ])
+      if (tableRes.data)     setTable(tableRes.data)
+      if (menuRes.data)      setMenu(menuRes.data)
+      if (catRes.data)       setCategories(catRes.data)
+      setCustomerOrder(custOrderRes.data || null)
+      setLiveOrder(liveOrderRes.data || null)
+      setFetchError(null)
+    } catch (e) {
+      setFetchError('Could not load menu. Please check your connection and refresh.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -112,19 +121,18 @@ export default function TableView() {
     const channel = supabase.channel(`tableview-${tableId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_orders', filter: `table_id=eq.${tableId}` }, fetchAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `table_id=eq.${tableId}` }, fetchAll)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchAll)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'order_items' }, fetchAll)
       .subscribe()
     return () => supabase.removeChannel(channel)
   }, [tableId])
 
-  // Only auto-switch to tracking on initial load, not on every realtime refresh
   const [initialLoadDone, setInitialLoadDone] = useState(false)
   useEffect(() => {
-    if (!initialLoadDone && !loading) {
+    if (!loading && !initialLoadDone) {
       if (customerOrder) setView('tracking')
       setInitialLoadDone(true)
     }
-  }, [loading])
+  }, [loading, customerOrder, initialLoadDone])
 
   const addToCart = (item) => {
     if (!item.is_available) return
@@ -153,18 +161,24 @@ export default function TableView() {
   const submitOrder = async () => {
     if (!cart.length || !table) return
     setSubmitting(true); setError(null)
-    const items = cart.map(i => ({
-      menu_item_id: i.id, name: i.name, price: i.price,
-      quantity: i.quantity, total: i.price * i.quantity,
-      destination: i.menu_categories?.destination || 'kitchen',
-      category: i.menu_categories?.name || '',
-    }))
-    const { data, error: err } = await supabase.from('customer_orders').insert({
-      table_id: tableId, table_name: table.name,
-      status: 'pending', items, total_amount: cartTotal,
-    }).select().single()
-    if (err) { setError('Failed to place order. Please try again.'); setSubmitting(false); return }
-    setCustomerOrder(data); setCart([]); setView('tracking'); setSubmitting(false)
+    try {
+      const items = cart.map(i => ({
+        menu_item_id: i.id, name: i.name, price: i.price,
+        quantity: i.quantity, total: i.price * i.quantity,
+        destination: i.menu_categories?.destination || 'kitchen',
+        category: i.menu_categories?.name || '',
+      }))
+      const { data, error: err } = await supabase.from('customer_orders').insert({
+        table_id: tableId, table_name: table.name,
+        status: 'pending', items, total_amount: cartTotal,
+      }).select().single()
+      if (err) { setError('Failed to place order. Please try again.'); return }
+      setCustomerOrder(data); setCart([]); setView('tracking')
+    } catch (e) {
+      setError('Something went wrong. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const cancelOrder = async () => {
@@ -183,15 +197,7 @@ export default function TableView() {
       waitron_name: table.profiles?.full_name || null, status: 'pending'
     })
     if (waitronId) {
-      await fetch('/api/push', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          staff_id: waitronId,
-          title: '🔔 Waiter Called',
-          body: `${table.name} is calling for assistance`
-        })
-      }).catch(() => {})
+      await sendPushToStaff(waitronId, '🔔 Waiter Called', `${table.name} is calling for assistance`)
     }
     setCallingWaiter(false); setWaiterCalled(true)
     setTimeout(() => setWaiterCalled(false), 30000)
@@ -209,6 +215,19 @@ export default function TableView() {
       <div className="flex flex-col items-center gap-3">
         <Loader size={24} className="text-amber-500 animate-spin" />
         <p className="text-gray-500 text-sm">Loading menu...</p>
+      </div>
+    </div>
+  )
+
+  if (fetchError) return (
+    <div className="min-h-full bg-gray-950 flex items-center justify-center p-6">
+      <div className="text-center">
+        <AlertCircle size={40} className="text-red-400 mx-auto mb-3" />
+        <p className="text-white font-bold mb-2">Could not load menu</p>
+        <p className="text-gray-500 text-sm mb-4">{fetchError}</p>
+        <button onClick={fetchAll} className="bg-amber-500 text-black font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 mx-auto">
+          <RefreshCw size={15} /> Try Again
+        </button>
       </div>
     </div>
   )
@@ -237,6 +256,13 @@ export default function TableView() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <HelpTooltip storageKey="customer-tableview" tips={[
+              { id: 'tv-browse', title: 'Browsing the Menu', description: 'Scroll through available items and tap any item to add it to your order. Use the category filters at the top to find what you want faster. Tap the ℹ️ icon on any item for more details.' },
+              { id: 'tv-cart', title: 'Your Cart', description: 'Tap the amber basket button in the top right to view your cart at any time. You can adjust quantities or remove items before placing your order.' },
+              { id: 'tv-order', title: 'Placing Your Order', description: 'When you are ready, tap Place Order from your cart. Your order goes to the waiter for approval before the kitchen or bar starts preparing it. You will see the status update in real time.' },
+              { id: 'tv-tracking', title: 'Tracking Your Order', description: 'Switch to the My Order tab to see the live status of your items — Waiting, Preparing, Ready, or Served. The progress bar shows how much of your order has been completed.' },
+              { id: 'tv-waiter', title: 'Calling the Waiter', description: 'Tap Call Waiter at any time to alert your assigned waiter. They will receive a notification on their device. Use this if you need assistance, want to add more items, or are ready to pay.' },
+            ]} />
             <button onClick={callWaiter} disabled={callingWaiter || waiterCalled}
               className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl transition-all ${waiterCalled ? 'bg-green-500/15 text-green-400 border border-green-500/30' : 'bg-gray-800 text-white hover:bg-gray-700 border border-gray-700'}`}>
               <Bell size={13} />
@@ -292,7 +318,6 @@ export default function TableView() {
                 const isAdded = addedItemId === item.id
                 return (
                   <div key={item.id} className={`relative bg-gray-900 border rounded-2xl overflow-hidden transition-all ${!item.is_available ? 'border-gray-800 opacity-50' : isAdded ? 'border-green-500 scale-[0.98]' : 'border-gray-800 hover:border-amber-500/40'}`}>
-                    {/* Info button */}
                     <button onClick={e => { e.stopPropagation(); setInfoItem(item) }}
                       className="absolute top-2 right-2 z-10 w-6 h-6 bg-gray-800/90 rounded-lg flex items-center justify-center text-gray-400 hover:text-white">
                       <Info size={11} />
@@ -507,8 +532,6 @@ export default function TableView() {
       )}
 
       <ItemInfoSheet item={infoItem} onClose={() => setInfoItem(null)} onAdd={addToCart} />
-
-
     </div>
   )
 }
