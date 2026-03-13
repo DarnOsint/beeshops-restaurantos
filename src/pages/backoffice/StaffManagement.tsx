@@ -157,20 +157,18 @@ export default function StaffManagement({ onBack }: Props) {
         const { error } = await supabase.from('profiles').update(updates).eq('id', editingStaff.id)
         if (error) throw error
       } else if (isFloorRole(form.role)) {
-        const { error } = await supabase
-          .from('profiles')
-          .insert({
-            id: crypto.randomUUID(),
-            full_name: form.full_name,
-            email: form.email || null,
-            phone: form.phone,
-            role: form.role,
-            pin: form.pin,
-            hire_date: form.hire_date,
-            emergency_contact: form.emergency_contact,
-            notes: form.notes,
-            is_active: true,
-          })
+        const { error } = await supabase.from('profiles').insert({
+          id: crypto.randomUUID(),
+          full_name: form.full_name,
+          email: form.email || null,
+          phone: form.phone,
+          role: form.role,
+          pin: form.pin,
+          hire_date: form.hire_date,
+          emergency_contact: form.emergency_contact,
+          notes: form.notes,
+          is_active: true,
+        })
         if (error) throw error
       } else {
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
@@ -179,20 +177,18 @@ export default function StaffManagement({ onBack }: Props) {
           options: { data: { full_name: form.full_name } },
         })
         if (signUpError) throw signUpError
-        await supabase
-          .from('profiles')
-          .upsert({
-            id: signUpData.user!.id,
-            full_name: form.full_name,
-            email: form.email,
-            phone: form.phone,
-            role: form.role,
-            pin: form.pin,
-            hire_date: form.hire_date,
-            emergency_contact: form.emergency_contact,
-            notes: form.notes,
-            is_active: true,
-          })
+        await supabase.from('profiles').upsert({
+          id: signUpData.user!.id,
+          full_name: form.full_name,
+          email: form.email,
+          phone: form.phone,
+          role: form.role,
+          pin: form.pin,
+          hire_date: form.hire_date,
+          emergency_contact: form.emergency_contact,
+          notes: form.notes,
+          is_active: true,
+        })
       }
       await fetchStaff()
       setSaving(false)
@@ -227,7 +223,7 @@ export default function StaffManagement({ onBack }: Props) {
 
   return (
     <div className="min-h-full bg-gray-950">
-      <div className="lg:hidden bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+      <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="text-gray-400 hover:text-white">
             <ArrowLeft size={20} />

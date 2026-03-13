@@ -212,27 +212,25 @@ export default function Inventory({ onBack }: Props) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', selectedItem.id)
-    await supabase
-      .from('restock_log')
-      .insert({
-        inventory_id: selectedItem.id,
-        item_name: selectedItem.item_name,
-        quantity_added: qtyAdded,
-        previous_stock: previousStock,
-        new_stock: newStock,
-        cost_price_per_unit: costPerUnit,
-        total_cost: qtyAdded * costPerUnit,
-        supplier_name: restockForm.supplier_name,
-        supplier_phone: restockForm.supplier_phone,
-        invoice_number: restockForm.invoice_number,
-        payment_method: restockForm.payment_method,
-        delivery_person: restockForm.delivery_person,
-        condition: restockForm.condition,
-        notes: restockForm.notes,
-        restocked_by: profile?.id,
-        restocked_by_name: profile?.full_name,
-        restocked_at: new Date().toISOString(),
-      })
+    await supabase.from('restock_log').insert({
+      inventory_id: selectedItem.id,
+      item_name: selectedItem.item_name,
+      quantity_added: qtyAdded,
+      previous_stock: previousStock,
+      new_stock: newStock,
+      cost_price_per_unit: costPerUnit,
+      total_cost: qtyAdded * costPerUnit,
+      supplier_name: restockForm.supplier_name,
+      supplier_phone: restockForm.supplier_phone,
+      invoice_number: restockForm.invoice_number,
+      payment_method: restockForm.payment_method,
+      delivery_person: restockForm.delivery_person,
+      condition: restockForm.condition,
+      notes: restockForm.notes,
+      restocked_by: profile?.id,
+      restocked_by_name: profile?.full_name,
+      restocked_at: new Date().toISOString(),
+    })
     await fetchAll()
     triggerStockAlerts(selectedItem.id)
     setSaving(false)
@@ -278,7 +276,7 @@ export default function Inventory({ onBack }: Props) {
 
   return (
     <div className="min-h-full bg-gray-950">
-      <div className="lg:hidden bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+      <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="text-gray-400 hover:text-white">
             <ArrowLeft size={20} />

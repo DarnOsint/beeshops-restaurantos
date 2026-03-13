@@ -257,15 +257,13 @@ export default function Suppliers({ onBack }: Props) {
               updated_at: new Date().toISOString(),
             })
             .eq('id', item.inventory_id)
-          await supabase
-            .from('restock_log')
-            .insert({
-              inventory_id: item.inventory_id,
-              change_amount: item.quantity,
-              reason: 'purchase_order',
-              recorded_by: profile?.id,
-              notes: 'PO received from ' + po.supplier_name,
-            })
+          await supabase.from('restock_log').insert({
+            inventory_id: item.inventory_id,
+            change_amount: item.quantity,
+            reason: 'purchase_order',
+            recorded_by: profile?.id,
+            notes: 'PO received from ' + po.supplier_name,
+          })
         }
       }
     }
@@ -321,7 +319,7 @@ export default function Suppliers({ onBack }: Props) {
 
   return (
     <div className="min-h-full bg-gray-950 text-white">
-      <div className="lg:hidden bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+      <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {onBack && (
             <button onClick={onBack} className="text-gray-400 hover:text-white">

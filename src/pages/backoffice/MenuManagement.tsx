@@ -173,7 +173,7 @@ export default function MenuManagement({ onBack }: Props) {
 
   return (
     <div className="min-h-full bg-gray-950">
-      <div className="lg:hidden bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+      <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="text-gray-400 hover:text-white">
             <ArrowLeft size={20} />
