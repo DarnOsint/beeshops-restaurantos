@@ -443,12 +443,16 @@ export default function POS() {
               <p className="text-amber-500 text-xs capitalize">{profile?.role}</p>
             </div>
             <HelpTooltip tips={[
-              { id: 'pos-tables', title: 'Table Grid', description: 'Tap any table to open an order. Green = available, coloured = occupied. Tables outside your assigned zone are locked.' },
-              { id: 'pos-cashsale', title: 'Cash Sale', description: 'Use this for counter sales where the customer pays immediately without sitting at a table.' },
-              { id: 'pos-takeaway', title: 'Takeaway', description: 'For phone-in or walk-in orders to go. Enter the customer name and phone number.' },
-              { id: 'pos-order', title: 'Placing an Order', description: 'Select a table, pick items from the menu, then tap Confirm Order to send to Kitchen/Bar/Griller.' },
-              { id: 'pos-payment', title: 'Payment', description: 'Once items are ready, open the table and tap Pay. Choose Cash, Bank POS, or Transfer. Run Tab keeps the order open.' },
-              { id: 'pos-served', title: 'Mark as Served', description: 'After delivering items to the table, tap the circle icon next to each item to mark it as served. Management can see this in real time.' },
+              { id: 'pos-clockin', title: 'Clock In Required', description: 'You must be clocked in by a manager before you can access the POS. If you see a clock-in screen, contact your shift manager.' },
+              { id: 'pos-tables', title: 'Table Grid', description: 'Your assigned tables are shown here. Green = available, amber/coloured = occupied. Tap an occupied table to add items or proceed to payment. Tables outside your assigned zone are greyed out and locked.' },
+              { id: 'pos-cashsale', title: 'Cash Sale', description: 'For counter walk-ins where the customer pays immediately without sitting at a table. No table selection needed — just pick items and process payment on the spot.' },
+              { id: 'pos-takeaway', title: 'Takeaway', description: 'For phone-in or walk-in orders to go. You will be prompted to enter the customer name and phone number before selecting items.' },
+              { id: 'pos-ordering', title: 'Placing an Order', description: 'Tap a table → select items from the menu panel → tap Confirm Order. Items are automatically routed to the Kitchen, Bar, or Grill display based on category.' },
+              { id: 'pos-zonepricing', title: 'Zone Pricing', description: 'Drink prices vary by table zone — Outdoor, Indoor, VIP Lounge, and The Nook each have their own price tier. Food items are always fixed price. The correct price is applied automatically.' },
+              { id: 'pos-payment', title: 'Processing Payment', description: 'Open the table and tap Pay. Choose Cash, Bank POS, or Transfer. For Bank Transfer, the venue account details are shown on screen. Run Tab keeps the order open for more items.' },
+              { id: 'pos-void', title: 'Voiding an Item', description: 'To remove an item from an order, use the void option in the order panel. A manager PIN is required to authorise any void — this is logged in the system.' },
+              { id: 'pos-myorders', title: 'My Orders Tab', description: 'Shows all orders you have closed today. You can reprint a receipt from here if a customer requests one.' },
+              { id: 'pos-shift', title: 'My Shift Tab', description: 'Displays your current shift summary — clock-in time, number of orders closed, tables served, items sold, and your total sales for the shift.' },
             ]} />
             <button onClick={signOut} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white">
               <LogOut size={16} />

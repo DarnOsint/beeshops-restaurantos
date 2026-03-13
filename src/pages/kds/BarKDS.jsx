@@ -145,9 +145,11 @@ export default function BarKDS() {
           </button>
           <p className="text-gray-400 text-sm">{profile?.full_name}</p>
           <HelpTooltip tips={[
-            { id: 'bar-orders', title: 'Bar Orders', description: 'Drink orders from all tables appear here automatically. Prepare them in order of arrival.' },
-            { id: 'bar-ready', title: 'Mark Ready', description: 'Tap Mark Ready when drinks are prepared. The waitron will be notified to collect.' },
-            { id: 'bar-timer', title: 'Order Timer', description: 'Shows how long each order has been waiting. Act quickly on orders turning amber or red.' },
+            { id: 'bar-incoming', title: 'Incoming Orders', description: 'Drink orders from all tables arrive here automatically the moment a waitron confirms an order on the POS. Orders are sorted oldest first — always work top to bottom.' },
+            { id: 'bar-status', title: 'Item Status Buttons', description: 'Each drink item has a status button: Pending → tap to mark Preparing → tap again to mark Ready. You can update items individually or use the All Ready button to mark the entire order at once.' },
+            { id: 'bar-notify', title: 'Waitron Notification', description: 'When you mark an item or the full order as Ready, the assigned waitron receives a push notification on their device to come and collect. Do not shout across the floor — let the system do it.' },
+            { id: 'bar-urgency', title: 'Urgency Colours', description: 'Order cards change colour based on wait time — grey is normal (under 7 minutes), amber means it is getting late (7–15 minutes), and red means it is critically overdue (15+ minutes). Prioritise red cards first.' },
+            { id: 'bar-notes', title: 'Order Notes', description: 'If a waitron added a special instruction on the order (e.g. no ice, extra lime), it appears as an amber note card at the top of that order. Always check for notes before preparing.' },
           ]} />
           <button onClick={signOut} className="text-gray-400 hover:text-white">
             <LogOut size={16} />

@@ -195,12 +195,16 @@ export default function Management() {
       <div className="flex border-b border-gray-800 bg-gray-900 px-4 overflow-x-auto items-center">
         <div className="ml-auto pl-2 py-1 shrink-0">
           <HelpTooltip tips={[
-            { id: 'mgmt-overview', title: 'Overview', description: 'Live KPIs — open orders, occupied tables, staff on shift, and today revenue. Updates in real time.' },
-            { id: 'mgmt-alerts', title: 'Late Order Alerts', description: 'Red banner appears when an order has been pending longer than the configured threshold. Tap Delivered to clear it.' },
-            { id: 'mgmt-shifts', title: 'Shifts', description: 'Clock staff in and out. Staff cannot access the POS unless they are clocked in.' },
-            { id: 'mgmt-tables', title: 'Tables', description: 'Assign waitrons to zones. A waitron can only serve tables in their assigned zones.' },
-            { id: 'mgmt-service', title: 'Service Log', description: 'Real-time log of every item marked as served by waitrons, including who served it and when.' },
-            { id: 'mgmt-settings', title: 'Settings', description: 'Set the order alert threshold — how many minutes before an open order triggers a late alert.' },
+            { id: 'mgmt-overview', title: 'Overview', description: 'Live dashboard showing open orders, occupied tables, occupied rooms, staff on shift, and today's revenue. All figures update in real time via Supabase subscriptions.' },
+            { id: 'mgmt-lateorders', title: 'Late Order Banner', description: 'A red alert banner appears at the top when any order has been pending longer than the configured threshold. It shows the table name, pending item count, which station (Kitchen/Bar/Grill) is holding it, and how long it has waited. Tap Delivered to dismiss.' },
+            { id: 'mgmt-shifts', title: 'Shifts Tab', description: 'Clock staff in and out for the current shift. A waitron who is not clocked in cannot access the POS — they will see a blocked screen. You can also view who is currently on shift and their clock-in time.' },
+            { id: 'mgmt-tables', title: 'Tables Tab', description: 'Assign waitrons to table zones (Outdoor, Indoor, VIP Lounge, The Nook). A waitron will only see and serve tables in their assigned zone. You can also assign individual tables directly to a specific waitron.' },
+            { id: 'mgmt-orders', title: 'Orders Tab', description: 'Live view of all currently open orders across the venue — table name, assigned waitron, items ordered, and total amount. Useful for monitoring floor activity without walking around.' },
+            { id: 'mgmt-till', title: 'Till Tab', description: 'Open and close till sessions, record the opening float, and log cash payouts. Each session is saved with expected vs actual cash for reconciliation.' },
+            { id: 'mgmt-service', title: 'Service Tab', description: 'Real-time log of every item marked as served by a waitron today — item name, table, waitron, and timestamp. Useful for verifying service delivery disputes.' },
+            { id: 'mgmt-voids', title: 'Voids Tab', description: 'Shows all void actions performed today — item name, quantity, value, reason given, and which manager PIN authorised it. Voids require manager approval and cannot be deleted.' },
+            { id: 'mgmt-cctv', title: 'CCTV Tab', description: 'Live occupancy count, unresolved camera alerts, bar shelf stock warnings, and zone activity heatmaps fed from the CV intelligence module. Alerts are colour-coded by severity.' },
+            { id: 'mgmt-settings', title: 'Settings Tab', description: 'Configure the late order alert threshold — the number of minutes an order must be pending before it triggers the red alert banner. Applies across all order types including takeaway.' },
           ]} />
         </div>
         {tabs.map(tab => (

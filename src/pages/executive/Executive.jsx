@@ -201,11 +201,14 @@ export default function Executive() {
         </div>
         <div className="flex items-center gap-2">
           <HelpTooltip tips={[
-            { id: 'exec-kpis', title: 'Live KPIs', description: 'Real-time revenue, open orders, occupied tables, rooms, staff on duty, and low stock alerts. Updates every 30 seconds.' },
-            { id: 'exec-geofence', title: 'Geofence', description: 'Toggle location restrictions. When ON, waitrons and floor staff can only access the app within the restaurant premises.' },
-            { id: 'exec-nav', title: 'Quick Navigation', description: 'Jump directly to BackOffice, Analytics, Reports, Management, Accounting, and Rooms from the action buttons below.' },
-            { id: 'exec-orders', title: 'Recent Orders', description: 'Live feed of the most recent orders across all tables and rooms.' },
-            { id: 'exec-trend', title: 'Revenue Trend', description: '7-day revenue chart showing daily performance at a glance.' },
+            { id: 'exec-kpis', title: 'Live KPI Cards', description: 'Six real-time metrics — today's revenue, open orders, occupied tables (out of 60), occupied rooms (out of 20), staff on duty, and low stock item count. Cards auto-refresh every 30 seconds and on any database change.' },
+            { id: 'exec-geofence', title: 'Geofence Control', description: 'Toggle location enforcement for all floor staff and waitrons. When ON, staff can only log in and use the POS from within the restaurant's GPS boundary. Owners and managers are exempt. Use the Radius button to adjust the boundary size for the Main venue and Apartments separately.' },
+            { id: 'exec-bank', title: 'Bank Transfer Details', description: 'Set the venue's bank name, account number, and account name. These details are shown to waitrons at payment time when a customer selects Bank Transfer as their payment method.' },
+            { id: 'exec-cctv', title: 'CCTV Intelligence', description: 'Toggle the CCTV panel to see live occupancy, unresolved camera alerts by severity, zone activity heatmaps, till anomalies, and bar shelf stock warnings — all fed from the CV module running on your server.' },
+            { id: 'exec-lowstock', title: 'Low Stock Alert', description: 'A red button appears in the controls bar when any inventory item is at or below its minimum stock threshold. Tap it to go directly to the Back Office inventory screen to restock.' },
+            { id: 'exec-trend', title: '7-Day Revenue Chart', description: 'A daily revenue bar chart for the last 7 days showing the ₦ value and peak hour above the chart. Tap Full Report to go to the detailed Reports page.' },
+            { id: 'exec-recentorders', title: 'Recent Orders Feed', description: 'The 8 most recent orders across all tables and rooms — table name, assigned waitron, time, amount, and status. Status badges show open (amber) or paid (green).' },
+            { id: 'exec-quickactions', title: 'Quick Actions', description: 'Shortcut buttons to Accounting, Reports, Back Office, Management, and Rooms. Use these to navigate quickly without going through the app menu.' },
           ]} />
           <button onClick={() => setCvTab(v => !v)}
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border transition-colors ${cvTab ? 'bg-purple-500/20 border-purple-500/40 text-purple-400' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'}`}>

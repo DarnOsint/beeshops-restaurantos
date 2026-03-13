@@ -154,6 +154,13 @@ export default function KitchenKDS() {
             <RefreshCw size={16} />
           </button>
           <p className="text-gray-400 text-sm">{profile?.full_name}</p>
+          <HelpTooltip tips={[
+            { id: 'kds-incoming', title: 'Incoming Orders', description: 'Food orders routed to the kitchen appear here automatically the moment a waitron confirms an order on the POS. Orders are sorted oldest first — always work from the top of the screen down.' },
+            { id: 'kds-status', title: 'Item Status Buttons', description: 'Each item has a Pending button. Tap it to move to Preparing (shown in amber) — then tap again when the dish is plated to mark it Ready (shown in green). Update items individually as they are cooked.' },
+            { id: 'kds-urgency', title: 'Urgency Colours', description: 'Order cards change border colour based on wait time — normal (grey, under 10 minutes), getting late (amber, 10–20 minutes), urgent (red, 20+ minutes). Urgency is based on when the order was first placed, not when each item was added.' },
+            { id: 'kds-notify', title: 'Waitron Notification', description: 'When you mark an item Ready, the assigned waitron receives a push notification on their device to come and collect it. You do not need to call out — the system handles it.' },
+            { id: 'kds-realtime', title: 'Live Updates', description: 'This screen updates automatically whenever a new order is placed or an item status changes. You do not need to refresh manually, but the refresh button in the top bar can be used if the screen ever appears stuck.' },
+          ]} />
           <button onClick={signOut} className="text-gray-400 hover:text-white">
             <LogOut size={16} />
           </button>

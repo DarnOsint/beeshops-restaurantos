@@ -188,9 +188,12 @@ export default function GrillerKDS() {
               <LogOut size={18} />
             </button>
             <HelpTooltip tips={[
-              { id: 'grill-orders', title: 'Grill Orders', description: 'Orders routed to the griller appear here. These are items that require grilling.' },
-              { id: 'grill-ready', title: 'Mark Ready', description: 'Tap Mark Ready when the grilled item is done. The waitron will collect and serve it.' },
-              { id: 'grill-timer', title: 'Urgency Colours', description: 'Cards turn amber when waiting too long and red when critically overdue. Prioritise red orders.' },
+              { id: 'grill-tickets', title: 'Grill Tickets', description: 'Each card is a grill ticket grouping all grillable items from a single order. Tickets arrive automatically when a waitron confirms an order on the POS. They are sorted oldest first — work from the top.' },
+              { id: 'grill-items', title: 'Marking Items Done', description: 'Tap the Done button next to each individual item as it comes off the grill. Once all items on a ticket are marked done, the waitron is automatically notified to collect.' },
+              { id: 'grill-allready', title: 'Ticket Complete Button', description: 'Use the All Done — Ticket Complete button at the bottom of a ticket to mark every item ready at once. Use this when the full order is plated and ready to go together.' },
+              { id: 'grill-urgency', title: 'Urgency Colours', description: 'Ticket headers change colour based on wait time — grey is normal (under 10 minutes), amber means getting late (10–20 minutes), red with a pulsing icon means critically overdue (20+ minutes). A critical ticket also shows a flashing triangle. Never let a ticket go red.' },
+              { id: 'grill-notes', title: 'Item Notes', description: 'Special instructions added by the waitron (e.g. well done, no pepper) appear in amber text under the item name. Always read notes before you start cooking.' },
+              { id: 'grill-sound', title: 'New Order Alert', description: 'The screen plays a sound when a new ticket arrives while you are on this page. If you do not hear sounds, check that your device volume is turned up.' },
             ]} />
           </div>
         </div>

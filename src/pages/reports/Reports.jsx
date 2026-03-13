@@ -294,9 +294,19 @@ export default function Reports() {
 
         {/* Generator */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6 print:hidden">
-          <h2 className="text-white font-bold mb-4 flex items-center gap-2">
-            <FileText size={18} className="text-amber-400" /> Generate Report
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-white font-bold flex items-center gap-2">
+              <FileText size={18} className="text-amber-400" /> Generate Report
+            </h2>
+            <HelpTooltip tips={[
+              { id: 'rep-daily', title: 'Daily Report', description: 'Full trading summary for any selected day — total revenue, cash/POS/transfer breakdown, order count, top-selling menu items, per-waitron sales, void log, room stay revenue, and payout deductions.' },
+              { id: 'rep-monthly', title: 'Monthly Report', description: 'Aggregated figures for a full calendar month — total and net revenue, orders, average order value, payment method split, and top items. Useful for month-end accounting and comparing trading periods.' },
+              { id: 'rep-annual', title: 'Annual Report', description: 'Year-level performance summary — total revenue, order volume, revenue by category, and monthly breakdown. Use this for annual accounts, tax filing, and investor or owner review.' },
+              { id: 'rep-zreport', title: 'Z-Report', description: 'The end-of-day trading closure report. All staff must be clocked out before it will run — if anyone is still on shift, you will be shown their name and blocked. Run this at the end of every business day to reconcile the till.' },
+              { id: 'rep-period', title: 'Selecting the Period', description: 'For daily and Z-Reports, select the specific day, month, and year. For monthly reports, select month and year. For annual, select the year. The report generates only after you tap the Generate button.' },
+              { id: 'rep-export', title: 'Exporting to PDF', description: 'After a report is generated, tap Export PDF to download a formatted, printable version. The PDF includes all tables and charts from the on-screen report and is stamped with the venue name and report period.' },
+            ]} />
+          </div>
           <div className="flex flex-wrap gap-3 items-end">
             <div>
               <label className="text-gray-400 text-xs block mb-1">Report Type</label>
