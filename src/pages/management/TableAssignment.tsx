@@ -1,33 +1,67 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { X, Users, UserPlus, UserMinus } from 'lucide-react'
 
-const categoryColors = {
-  'Outdoor': { card: 'bg-green-500/10 border-green-500/20', text: 'text-green-400', badge: 'bg-green-500/20 text-green-300' },
-  'Indoor': { card: 'bg-blue-500/10 border-blue-500/20', text: 'text-blue-400', badge: 'bg-blue-500/20 text-blue-300' },
-  'VIP Lounge': { card: 'bg-amber-500/10 border-amber-500/20', text: 'text-amber-400', badge: 'bg-amber-500/20 text-amber-300' },
-  'The Nook': { card: 'bg-purple-500/10 border-purple-500/20', text: 'text-purple-400', badge: 'bg-purple-500/20 text-purple-300' },
+interface CategoryColors {
+  card: string
+  text: string
+  badge: string
 }
 
-export default function TableAssignment({ onClose }) {
-  const [categories, setCategories] = useState([])
-  const [staff, setStaff] = useState([])
-  const [assignments, setAssignments] = useState({})
-  const [selectedStaff, setSelectedStaff] = useState({})
+const categoryColors: Record<string, CategoryColors> = {
+  Outdoor: {
+    card: 'bg-green-500/10 border-green-500/20',
+    text: 'text-green-400',
+    badge: 'bg-green-500/20 text-green-300',
+  },
+  Indoor: {
+    card: 'bg-blue-500/10 border-blue-500/20',
+    text: 'text-blue-400',
+    badge: 'bg-blue-500/20 text-blue-300',
+  },
+  'VIP Lounge': {
+    card: 'bg-amber-500/10 border-amber-500/20',
+    text: 'text-amber-400',
+    badge: 'bg-amber-500/20 text-amber-300',
+  },
+  'The Nook': {
+    card: 'bg-purple-500/10 border-purple-500/20',
+    text: 'text-purple-400',
+    badge: 'bg-purple-500/20 text-purple-300',
+  },
+}
+
+interface TableRow {
+  id: string
+  status: string
+}
+interface Category {
+  id: string
+  name: string
+  tables?: TableRow[]
+}
+interface StaffMember {
+  id: string
+  full_name: string
+  role: string
+}
+interface Assignment {
+  id: string
+  staff_id: string
+  category_id: string
+  profiles?: { id: string; full_name: string }
+}
+
+interface Props {
+  onClose?: () => void
+}
+
+export default function TableAssignment({ onClose }: Props) {
+  const [categories, setCategories] = useState<Category[]>([])
+  const [staff, setStaff] = useState<StaffMember[]>([])
+  const [assignments, setAssignments] = useState<Record<string, Assignment[]>>({})
+  const [selectedStaff, setSelectedStaff] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetchAll()
-  }, [])
-
-  const fetchAll = async () => {
-    await Promise.all([
-      fetchCategories(),
-      fetchActiveStaff(),
-      fetchAssignments()
-    ])
-    setLoading(false)
-  }
 
   const fetchCategories = async () => {
     const { data } = await supabase
@@ -38,89 +72,84 @@ export default function TableAssignment({ onClose }) {
   }
 
   const fetchActiveStaff = async () => {
-    // Get staff currently clocked in (attendance with no clock_out)
     const today = new Date().toISOString().split('T')[0]
     const { data: attendance } = await supabase
       .from('attendance')
       .select('staff_id')
       .eq('date', today)
       .is('clock_out', null)
-
     if (!attendance || attendance.length === 0) {
       setStaff([])
       return
     }
-
-    // Get profiles for clocked-in waitrons only
-    const staffIds = attendance.map(a => a.staff_id)
+    const staffIds = attendance.map((a: { staff_id: string }) => a.staff_id)
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, full_name, role')
       .in('id', staffIds)
       .eq('role', 'waitron')
       .eq('is_active', true)
-
     setStaff(profiles || [])
   }
 
-  const fetchAssignments = async () => {
+  const fetchAssignments = useCallback(async () => {
     const { data } = await supabase
       .from('zone_assignments')
       .select('*, profiles(id, full_name)')
       .eq('is_active', true)
-
     if (data) {
-      const map = {}
-      data.forEach(a => {
+      const map: Record<string, Assignment[]> = {}
+      data.forEach((a: Assignment) => {
         if (!map[a.category_id]) map[a.category_id] = []
         map[a.category_id].push(a)
       })
       setAssignments(map)
     }
-  }
+  }, [])
 
-  const addStaffToZone = async (categoryId) => {
+  const fetchAll = useCallback(async () => {
+    await Promise.all([fetchCategories(), fetchActiveStaff(), fetchAssignments()])
+    setLoading(false)
+  }, [fetchAssignments])
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
+
+  const addStaffToZone = async (categoryId: string) => {
     const staffId = selectedStaff[categoryId]
     if (!staffId) return
-
     const existing = assignments[categoryId] || []
-    if (existing.find(a => a.staff_id === staffId)) {
+    if (existing.find((a) => a.staff_id === staffId)) {
       alert('This staff member is already assigned to this zone!')
       return
     }
-
     const { error } = await supabase
       .from('zone_assignments')
-      .insert({
-        category_id: categoryId,
-        staff_id: staffId,
-        is_active: true
-      })
-
+      .insert({ category_id: categoryId, staff_id: staffId, is_active: true })
     if (!error) {
-      setSelectedStaff(prev => ({ ...prev, [categoryId]: '' }))
+      setSelectedStaff((prev) => ({ ...prev, [categoryId]: '' }))
       fetchAssignments()
     }
   }
 
-  const removeStaffFromZone = async (assignmentId) => {
-    await supabase
-      .from('zone_assignments')
-      .delete()
-      .eq('id', assignmentId)
+  const removeStaffFromZone = async (assignmentId: string) => {
+    await supabase.from('zone_assignments').delete().eq('id', assignmentId)
     fetchAssignments()
   }
 
-  const getAvailableStaff = (categoryId) => {
-    const assigned = (assignments[categoryId] || []).map(a => a.staff_id)
-    return staff.filter(s => !assigned.includes(s.id))
+  const getAvailableStaff = (categoryId: string) => {
+    const assigned = (assignments[categoryId] || []).map((a) => a.staff_id)
+    return staff.filter((s) => !assigned.includes(s.id))
   }
 
-  if (loading) return (
-    <div className="flex items-center justify-center p-8">
-      <div className="text-amber-500">Loading...</div>
-    </div>
-  )
+  if (loading)
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-amber-500">Loading...</div>
+      </div>
+    )
 
   return (
     <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
@@ -145,20 +174,19 @@ export default function TableAssignment({ onClose }) {
       )}
 
       <div className="space-y-4">
-        {categories.map(category => {
+        {categories.map((category) => {
           const colors = categoryColors[category.name] || {
             card: 'bg-gray-800 border-gray-700',
             text: 'text-gray-400',
-            badge: 'bg-gray-700 text-gray-300'
+            badge: 'bg-gray-700 text-gray-300',
           }
           const totalTables = category.tables?.length || 0
-          const occupiedTables = category.tables?.filter(t => t.status === 'occupied').length || 0
+          const occupiedTables = category.tables?.filter((t) => t.status === 'occupied').length || 0
           const zoneAssignments = assignments[category.id] || []
           const available = getAvailableStaff(category.id)
 
           return (
             <div key={category.id} className={`rounded-xl border p-4 ${colors.card}`}>
-
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <h4 className={`font-semibold ${colors.text}`}>{category.name}</h4>
@@ -176,7 +204,7 @@ export default function TableAssignment({ onClose }) {
 
               {zoneAssignments.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-3">
-                  {zoneAssignments.map(assignment => (
+                  {zoneAssignments.map((assignment) => (
                     <div
                       key={assignment.id}
                       className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${colors.badge}`}
@@ -198,14 +226,13 @@ export default function TableAssignment({ onClose }) {
                 <div className="flex gap-2">
                   <select
                     value={selectedStaff[category.id] || ''}
-                    onChange={(e) => setSelectedStaff(prev => ({
-                      ...prev,
-                      [category.id]: e.target.value
-                    }))}
+                    onChange={(e) =>
+                      setSelectedStaff((prev) => ({ ...prev, [category.id]: e.target.value }))
+                    }
                     className="flex-1 bg-black/20 text-white text-sm rounded-lg px-3 py-1.5 border border-white/10 focus:outline-none focus:border-white/30"
                   >
                     <option value="">-- Add waitron --</option>
-                    {available.map(s => (
+                    {available.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.full_name}
                       </option>
@@ -216,14 +243,15 @@ export default function TableAssignment({ onClose }) {
                     disabled={!selectedStaff[category.id]}
                     className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white rounded-lg px-3 py-1.5 text-sm transition-colors"
                   >
-                    <UserPlus size={14} />
-                    Add
+                    <UserPlus size={14} /> Add
                   </button>
                 </div>
               )}
 
               {staff.length > 0 && available.length === 0 && zoneAssignments.length > 0 && (
-                <p className="text-xs text-gray-500 mt-1">All on-shift waitrons assigned to this zone</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  All on-shift waitrons assigned to this zone
+                </p>
               )}
             </div>
           )

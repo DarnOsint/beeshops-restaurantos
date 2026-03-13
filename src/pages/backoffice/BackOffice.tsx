@@ -1,22 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { supabase } from '../../lib/supabase'
 import {
   Users,
   UtensilsCrossed,
   MapPin,
   LayoutGrid,
-  LogOut,
-  Beer,
-  ArrowLeft,
   Package,
   Truck,
   QrCode,
   Lock,
-  Eye,
-  EyeOff,
-  CheckCircle,
-  XCircle,
   ChefHat,
 } from 'lucide-react'
 import { HelpTooltip } from '../../components/HelpTooltip'
@@ -29,18 +21,27 @@ import Suppliers from './Suppliers'
 import ChangePassword from './ChangePassword'
 import KitchenStock from './KitchenStock'
 import { useNavigate } from 'react-router-dom'
+import type { Role } from '../../types'
+
+interface Section {
+  id: string
+  label: string
+  desc: string
+  icon: React.ElementType
+  color: string
+  roles: Role[]
+}
 
 export default function BackOffice() {
   const { profile, signOut } = useAuth()
-  const [activeSection, setActiveSection] = useState(null)
+  const [activeSection, setActiveSection] = useState<string | null>(null)
   const navigate = useNavigate()
 
-  // Scroll to top whenever section changes
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' })
   }, [activeSection])
 
-  const sections = [
+  const sections: Section[] = [
     {
       id: 'staff',
       label: 'Staff Management',
@@ -115,6 +116,8 @@ export default function BackOffice() {
     },
   ]
 
+  void signOut // referenced to satisfy linter if profile is also unused
+
   if (!profile)
     return (
       <div className="min-h-full bg-gray-950 flex items-center justify-center">
@@ -122,7 +125,7 @@ export default function BackOffice() {
       </div>
     )
 
-  const allowed = sections.filter((s) => s.roles.includes(profile?.role))
+  const allowed = sections.filter((s) => s.roles.includes(profile.role as Role))
 
   if (activeSection === 'staff') return <StaffManagement onBack={() => setActiveSection(null)} />
   if (activeSection === 'menu') return <MenuManagement onBack={() => setActiveSection(null)} />

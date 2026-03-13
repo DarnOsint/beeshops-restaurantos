@@ -1,27 +1,38 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { UserCheck, UserX, Clock, X, Calendar, Timer, FileText } from 'lucide-react'
 import ShiftSummary from './ShiftSummary'
 
-export default function ShiftManager({ onClose }) {
+interface StaffMember {
+  id: string
+  full_name: string
+  role: string
+  is_active: boolean
+}
+interface Shift {
+  id: string
+  staff_id: string
+  staff_name: string
+  role: string
+  clock_in: string
+  clock_out?: string | null
+  duration_minutes?: number | null
+  date?: string
+}
+
+interface Props {
+  onClose?: () => void
+}
+
+export default function ShiftManager({ onClose }: Props) {
   const { profile } = useAuth()
-  const [staff, setStaff] = useState([])
-  const [activeShifts, setActiveShifts] = useState([])
-  const [todayLog, setTodayLog] = useState([])
+  const [staff, setStaff] = useState<StaffMember[]>([])
+  const [activeShifts, setActiveShifts] = useState<Shift[]>([])
+  const [todayLog, setTodayLog] = useState<Shift[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('active')
-  const [summaryShift, setSummaryShift] = useState(null)
-
-  useEffect(() => {
-    fetchAll()
-  }, [])
-
-  const fetchAll = async () => {
-    setLoading(true)
-    await Promise.all([fetchStaff(), fetchActiveShifts(), fetchTodayLog()])
-    setLoading(false)
-  }
+  const [tab, setTab] = useState<'active' | 'all' | 'log'>('active')
+  const [summaryShift, setSummaryShift] = useState<Shift | null>(null)
 
   const fetchStaff = async () => {
     const { data } = await supabase
@@ -32,7 +43,6 @@ export default function ShiftManager({ onClose }) {
       .order('full_name')
     if (data) setStaff(data)
   }
-
   const fetchActiveShifts = async () => {
     const { data } = await supabase
       .from('attendance')
@@ -41,7 +51,6 @@ export default function ShiftManager({ onClose }) {
       .order('clock_in', { ascending: true })
     if (data) setActiveShifts(data)
   }
-
   const fetchTodayLog = async () => {
     const today = new Date().toISOString().split('T')[0]
     const { data } = await supabase
@@ -52,7 +61,18 @@ export default function ShiftManager({ onClose }) {
     if (data) setTodayLog(data)
   }
 
-  const clockIn = async (member) => {
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
+    await Promise.all([fetchStaff(), fetchActiveShifts(), fetchTodayLog()])
+    setLoading(false)
+  }, [])
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
+
+  const clockIn = async (member: StaffMember) => {
     const already = activeShifts.find((s) => s.staff_id === member.id)
     if (already) {
       alert(member.full_name + ' is already clocked in!')
@@ -74,30 +94,23 @@ export default function ShiftManager({ onClose }) {
     fetchAll()
   }
 
-  const clockOut = (shift) => {
-    // Show shift summary first — confirm clock-out from there
+  const clockOut = (shift: Shift) => {
     setSummaryShift(shift)
   }
 
-  const confirmClockOut = async (shift) => {
+  const confirmClockOut = async (shift: Shift) => {
     const clockOutTime = new Date()
-    const clockInTime = new Date(shift.clock_in)
-    const duration = Math.round((clockOutTime - clockInTime) / 60000)
-
+    const duration = Math.round(
+      (clockOutTime.getTime() - new Date(shift.clock_in).getTime()) / 60000
+    )
     const { error } = await supabase
       .from('attendance')
-      .update({
-        clock_out: clockOutTime.toISOString(),
-        duration_minutes: duration,
-      })
+      .update({ clock_out: clockOutTime.toISOString(), duration_minutes: duration })
       .eq('id', shift.id)
-
     if (error) {
       alert('Error: ' + error.message)
       return
     }
-
-    // Deallocate waitron from tables if role is waitron
     if (shift.role === 'waitron') {
       await supabase
         .from('tables')
@@ -105,21 +118,19 @@ export default function ShiftManager({ onClose }) {
         .eq('assigned_staff', shift.staff_id)
       await supabase.from('zone_assignments').delete().eq('staff_id', shift.staff_id)
     }
-
     setSummaryShift(null)
     fetchAll()
   }
 
-  const isActive = (staffId) => activeShifts.some((s) => s.staff_id === staffId)
+  const isActive = (staffId: string) => activeShifts.some((s) => s.staff_id === staffId)
 
-  const formatDuration = (minutes) => {
+  const formatDuration = (minutes?: number | null) => {
     if (!minutes) return '—'
-    const h = Math.floor(minutes / 60)
-    const m = minutes % 60
-    return h > 0 ? h + 'h ' + m + 'm' : m + 'm'
+    const h = Math.floor(minutes / 60),
+      m = minutes % 60
+    return h > 0 ? `${h}h ${m}m` : `${m}m`
   }
-
-  const formatTime = (ts) =>
+  const formatTime = (ts?: string | null) =>
     ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'
 
   if (loading)
@@ -135,7 +146,7 @@ export default function ShiftManager({ onClose }) {
         <h3 className="text-white font-bold text-lg">Shift Manager</h3>
         <div className="flex items-center gap-2">
           <div className="flex bg-gray-800 rounded-lg p-1 gap-1">
-            {['active', 'all', 'log'].map((t) => (
+            {(['active', 'all', 'log'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -153,7 +164,6 @@ export default function ShiftManager({ onClose }) {
         </div>
       </div>
 
-      {/* ON SHIFT TAB */}
       {tab === 'active' && (
         <div className="space-y-2">
           {activeShifts.length === 0 ? (
@@ -186,7 +196,6 @@ export default function ShiftManager({ onClose }) {
         </div>
       )}
 
-      {/* ALL STAFF TAB */}
       {tab === 'all' && (
         <div className="space-y-2">
           {staff.map((member) => (
@@ -200,8 +209,7 @@ export default function ShiftManager({ onClose }) {
               </div>
               {isActive(member.id) ? (
                 <span className="flex items-center gap-1 text-green-400 text-xs font-medium">
-                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                  On Shift
+                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" /> On Shift
                 </span>
               ) : (
                 <button
@@ -216,7 +224,6 @@ export default function ShiftManager({ onClose }) {
         </div>
       )}
 
-      {/* TODAY'S LOG TAB */}
       {tab === 'log' && (
         <div className="space-y-2">
           {todayLog.length === 0 ? (
@@ -253,8 +260,7 @@ export default function ShiftManager({ onClose }) {
                     </>
                   ) : (
                     <span className="flex items-center gap-1 text-green-400 text-xs">
-                      <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                      Active
+                      <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" /> Active
                     </span>
                   )}
                 </div>
@@ -263,6 +269,7 @@ export default function ShiftManager({ onClose }) {
           )}
         </div>
       )}
+
       {summaryShift && (
         <ShiftSummary
           shift={summaryShift}
