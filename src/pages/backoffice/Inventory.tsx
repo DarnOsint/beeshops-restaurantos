@@ -145,7 +145,6 @@ export default function Inventory({ onBack }: Props) {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll()
   }, [])
 
@@ -163,16 +162,23 @@ export default function Inventory({ onBack }: Props) {
       menu_item_id: itemForm.menu_item_id || null,
       updated_at: new Date().toISOString(),
     }
-    if (selectedItem) {
-      await supabase.from('inventory').update(payload).eq('id', selectedItem.id)
-      triggerStockAlerts(selectedItem.id)
-    } else {
-      await supabase.from('inventory').insert(payload)
+    try {
+      if (selectedItem) {
+        const { error } = await supabase.from('inventory').update(payload).eq('id', selectedItem.id)
+        if (error) throw error
+        triggerStockAlerts(selectedItem.id)
+      } else {
+        const { error } = await supabase.from('inventory').insert(payload)
+        if (error) throw error
+      }
+      await fetchAll()
+      setShowAddItem(false)
+      setSelectedItem(null)
+    } catch (err) {
+      alert('Error saving item: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
     }
-    await fetchAll()
-    setSaving(false)
-    setShowAddItem(false)
-    setSelectedItem(null)
     setItemForm(blankItemForm)
   }
 
@@ -204,38 +210,45 @@ export default function Inventory({ onBack }: Props) {
     const costPerUnit = parseFloat(restockForm.cost_price_per_unit) || 0
     const previousStock = selectedItem.current_stock || 0
     const newStock = previousStock + qtyAdded
-    await supabase
-      .from('inventory')
-      .update({
-        current_stock: newStock,
-        cost_price: costPerUnit || selectedItem.cost_price,
-        updated_at: new Date().toISOString(),
+    try {
+      const { error: invError } = await supabase
+        .from('inventory')
+        .update({
+          current_stock: newStock,
+          cost_price: costPerUnit || selectedItem.cost_price,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', selectedItem.id)
+      if (invError) throw invError
+      const { error: logError } = await supabase.from('restock_log').insert({
+        inventory_id: selectedItem.id,
+        item_name: selectedItem.item_name,
+        quantity_added: qtyAdded,
+        previous_stock: previousStock,
+        new_stock: newStock,
+        cost_price_per_unit: costPerUnit,
+        total_cost: qtyAdded * costPerUnit,
+        supplier_name: restockForm.supplier_name,
+        supplier_phone: restockForm.supplier_phone,
+        invoice_number: restockForm.invoice_number,
+        payment_method: restockForm.payment_method,
+        delivery_person: restockForm.delivery_person,
+        condition: restockForm.condition,
+        notes: restockForm.notes,
+        restocked_by: profile?.id,
+        restocked_by_name: profile?.full_name,
+        restocked_at: new Date().toISOString(),
       })
-      .eq('id', selectedItem.id)
-    await supabase.from('restock_log').insert({
-      inventory_id: selectedItem.id,
-      item_name: selectedItem.item_name,
-      quantity_added: qtyAdded,
-      previous_stock: previousStock,
-      new_stock: newStock,
-      cost_price_per_unit: costPerUnit,
-      total_cost: qtyAdded * costPerUnit,
-      supplier_name: restockForm.supplier_name,
-      supplier_phone: restockForm.supplier_phone,
-      invoice_number: restockForm.invoice_number,
-      payment_method: restockForm.payment_method,
-      delivery_person: restockForm.delivery_person,
-      condition: restockForm.condition,
-      notes: restockForm.notes,
-      restocked_by: profile?.id,
-      restocked_by_name: profile?.full_name,
-      restocked_at: new Date().toISOString(),
-    })
-    await fetchAll()
-    triggerStockAlerts(selectedItem.id)
-    setSaving(false)
-    setShowRestock(false)
-    setSelectedItem(null)
+      if (logError) throw logError
+      await fetchAll()
+      triggerStockAlerts(selectedItem.id)
+      setShowRestock(false)
+      setSelectedItem(null)
+    } catch (err) {
+      alert('Restock failed: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const openEdit = (item: InventoryItem) => {

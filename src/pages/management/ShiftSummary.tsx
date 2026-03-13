@@ -36,9 +36,10 @@ interface Props {
 
 interface VoidEntry {
   id: string
-  amount?: number
-  item_name?: string
-  reason?: string
+  total_value?: number
+  menu_item_name?: string
+  void_type?: string
+  approved_by_name?: string
   created_at: string
 }
 interface OrderItemEntry {
@@ -112,14 +113,14 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
         .order('closed_at', { ascending: true }),
       supabase
         .from('void_log')
-        .select('id, amount, item_name, reason, created_at')
-        .eq('staff_id', shift.staff_id)
+        .select('id, total_value, menu_item_name, void_type, approved_by_name, created_at')
+        .eq('approved_by', shift.staff_id)
         .gte('created_at', shift.clock_in)
         .lte('created_at', clockOutTime.toISOString()),
       supabase
         .from('waiter_calls')
-        .select('id, resolved_at, tables(name)')
-        .eq('staff_id', shift.staff_id)
+        .select('id, resolved_at, table_name')
+        .eq('waitron_id', shift.staff_id)
         .gte('created_at', shift.clock_in)
         .lte('created_at', clockOutTime.toISOString())
         .not('resolved_at', 'is', null),
@@ -130,7 +131,7 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
     const callsArr = callsRes.data || []
 
     const totalSales = ordersArr.reduce((s, o) => s + (o.total_amount || 0), 0)
-    const totalVoided = voidsArr.reduce((s, v) => s + (v.amount || 0), 0)
+    const totalVoided = voidsArr.reduce((s, v) => s + (v.total_value || 0), 0)
     const paymentBreakdown: Record<string, number> = {}
     ordersArr.forEach((o) => {
       const m = o.payment_method || 'unknown'
@@ -414,11 +415,13 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
                       className={`px-4 py-3 ${i !== 0 ? 'border-t border-red-500/10' : ''}`}
                     >
                       <div className="flex items-center justify-between">
-                        <p className="text-white text-sm">{v.item_name || 'Item'}</p>
-                        <p className="text-red-400 font-bold text-sm">{fmt(v.amount)}</p>
+                        <p className="text-white text-sm">{v.menu_item_name || 'Item'}</p>
+                        <p className="text-red-400 font-bold text-sm">{fmt(v.total_value)}</p>
                       </div>
-                      {v.reason && (
-                        <p className="text-gray-500 text-xs mt-0.5">Reason: {v.reason}</p>
+                      {v.approved_by_name && (
+                        <p className="text-gray-500 text-xs mt-0.5">
+                          Approved by: {v.approved_by_name}
+                        </p>
                       )}
                       <p className="text-gray-600 text-xs mt-0.5">{fmtTime(v.created_at)}</p>
                     </div>

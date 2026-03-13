@@ -65,7 +65,6 @@ export default function MenuManagement({ onBack }: Props) {
   }, [])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll()
   }, [fetchAll])
 
@@ -102,17 +101,28 @@ export default function MenuManagement({ onBack }: Props) {
       description: itemForm.description,
       is_available: itemForm.is_available,
     }
-    if (editingItem) {
-      await supabase.from('menu_items').update(payload).eq('id', editingItem.id)
-    } else {
-      await supabase.from('menu_items').insert(payload)
+    try {
+      const { error } = editingItem
+        ? await supabase.from('menu_items').update(payload).eq('id', editingItem.id)
+        : await supabase.from('menu_items').insert(payload)
+      if (error) throw error
+      await fetchAll()
+      setShowItemModal(false)
+    } catch (err) {
+      alert('Error saving item: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
     }
-    await fetchAll()
-    setSaving(false)
-    setShowItemModal(false)
   }
   const toggleAvailable = async (item: MenuItem) => {
-    await supabase.from('menu_items').update({ is_available: !item.is_available }).eq('id', item.id)
+    const { error } = await supabase
+      .from('menu_items')
+      .update({ is_available: !item.is_available })
+      .eq('id', item.id)
+    if (error) {
+      alert('Error: ' + error.message)
+      return
+    }
     fetchAll()
   }
   const openAddCat = () => {
@@ -128,19 +138,23 @@ export default function MenuManagement({ onBack }: Props) {
   const saveCat = async () => {
     if (!catForm.name) return alert('Category name is required')
     setSaving(true)
-    if (editingCat) {
-      await supabase
-        .from('menu_categories')
-        .update({ name: catForm.name, destination: catForm.destination })
-        .eq('id', editingCat.id)
-    } else {
-      await supabase
-        .from('menu_categories')
-        .insert({ name: catForm.name, destination: catForm.destination })
+    try {
+      const { error } = editingCat
+        ? await supabase
+            .from('menu_categories')
+            .update({ name: catForm.name, destination: catForm.destination })
+            .eq('id', editingCat.id)
+        : await supabase
+            .from('menu_categories')
+            .insert({ name: catForm.name, destination: catForm.destination })
+      if (error) throw error
+      await fetchAll()
+      setShowCatModal(false)
+    } catch (err) {
+      alert('Error saving category: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
     }
-    await fetchAll()
-    setSaving(false)
-    setShowCatModal(false)
   }
 
   void audit // suppress unused import warning
