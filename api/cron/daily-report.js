@@ -177,7 +177,7 @@ export default async function handler(req, res) {
     </div>`}
 
     <div class="footer">
-      <p>RestaurantOS · Beeshop's Place Lounge · Generated automatically at 11:30 PM WAT</p>
+      <p>RestaurantOS · Beeshop's Place Lounge · Generated automatically at 4:30 AM WAT</p>
       <p>Manage your restaurant at <a href="https://beeshop.place" style="color:#f59e0b;">beeshop.place</a></p>
     </div>
 
