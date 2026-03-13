@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
 import {
   ArrowLeft,
@@ -12,65 +11,114 @@ import {
   AlertTriangle,
   Package,
   RefreshCw,
-  ChevronDown,
   Truck,
-  Hash,
   DollarSign,
-  FileText,
-  User,
-  Phone,
-  CheckCircle,
-  Clock,
   Filter,
-  Bell,
+  Clock,
 } from 'lucide-react'
 
-const UNITS = ['bottles', 'crates', 'litres', 'kg', 'packs', 'cartons', 'pieces']
-const CONDITIONS = ['good', 'damaged', 'partial']
-const PAYMENT_METHODS = ['cash', 'transfer', 'credit']
+const UNITS = ['bottles', 'crates', 'litres', 'kg', 'packs', 'cartons', 'pieces'] as const
+const CONDITIONS = ['good', 'damaged', 'partial'] as const
+const PAYMENT_METHODS = ['cash', 'transfer', 'credit'] as const
 
-export default function Inventory({ onBack }) {
+interface InventoryItem {
+  id: string
+  item_name: string
+  category?: string
+  unit?: string
+  current_stock: number
+  minimum_stock: number
+  cost_price?: number
+  selling_price?: number
+  menu_item_id?: string
+}
+interface RestockEntry {
+  id: string
+  item_name: string
+  quantity_added: number
+  previous_stock: number
+  new_stock: number
+  cost_price_per_unit?: number
+  total_cost?: number
+  supplier_name?: string
+  supplier_phone?: string
+  invoice_number?: string
+  payment_method?: string
+  delivery_person?: string
+  condition?: string
+  notes?: string
+  restocked_by_name?: string
+  restocked_at: string
+}
+interface MenuItem {
+  id: string
+  name: string
+  menu_categories?: { name?: string; destination?: string } | null
+}
+interface ItemForm {
+  item_name: string
+  category: string
+  unit: string
+  current_stock: string
+  minimum_stock: string
+  cost_price: string
+  selling_price: string
+  menu_item_id: string
+}
+interface RestockForm {
+  quantity_added: string
+  cost_price_per_unit: string
+  supplier_name: string
+  supplier_phone: string
+  invoice_number: string
+  payment_method: string
+  delivery_person: string
+  condition: string
+  notes: string
+}
+interface Props {
+  onBack: () => void
+}
+
+const blankItemForm: ItemForm = {
+  item_name: '',
+  category: '',
+  unit: 'bottles',
+  current_stock: '',
+  minimum_stock: '10',
+  cost_price: '',
+  selling_price: '',
+  menu_item_id: '',
+}
+const blankRestockForm: RestockForm = {
+  quantity_added: '',
+  cost_price_per_unit: '',
+  supplier_name: '',
+  supplier_phone: '',
+  invoice_number: '',
+  payment_method: 'cash',
+  delivery_person: '',
+  condition: 'good',
+  notes: '',
+}
+
+export default function Inventory({ onBack }: Props) {
   const { profile } = useAuth()
-  const [view, setView] = useState('stock') // 'stock' | 'log'
-  const [items, setItems] = useState([])
-  const [restockLog, setRestockLog] = useState([])
+  const [view, setView] = useState<'stock' | 'log'>('stock')
+  const [items, setItems] = useState<InventoryItem[]>([])
+  const [restockLog, setRestockLog] = useState<RestockEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterLow, setFilterLow] = useState(false)
-  const [alertSending, setAlertSending] = useState(false)
-  const [alertResult, setAlertResult] = useState(null)
   const [showAddItem, setShowAddItem] = useState(false)
   const [showRestock, setShowRestock] = useState(false)
-  const [selectedItem, setSelectedItem] = useState(null)
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
   const [saving, setSaving] = useState(false)
-  const [menuItems, setMenuItems] = useState([])
-
-  const [itemForm, setItemForm] = useState({
-    item_name: '',
-    category: '',
-    unit: 'bottles',
-    current_stock: '',
-    minimum_stock: '10',
-    cost_price: '',
-    selling_price: '',
-    menu_item_id: '',
-  })
-
-  const [restockForm, setRestockForm] = useState({
-    quantity_added: '',
-    cost_price_per_unit: '',
-    supplier_name: '',
-    supplier_phone: '',
-    invoice_number: '',
-    payment_method: 'cash',
-    delivery_person: '',
-    condition: 'good',
-    notes: '',
-  })
-
-  useEffect(() => {
-    fetchAll()
-  }, [])
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([])
+  const [itemForm, setItemForm] = useState<ItemForm>(blankItemForm)
+  const [restockForm, setRestockForm] = useState<RestockForm>(blankRestockForm)
+  const fi = (v: Partial<ItemForm>) => setItemForm((p) => ({ ...p, ...v }))
+  const fr = (v: Partial<RestockForm>) => setRestockForm((p) => ({ ...p, ...v }))
 
   const fetchAll = async () => {
     setLoading(true)
@@ -87,12 +135,19 @@ export default function Inventory({ onBack }) {
         .eq('is_available', true)
         .order('name'),
     ])
-    if (invRes.data) setItems(invRes.data)
-    if (logRes.data) setRestockLog(logRes.data)
+    if (invRes.data) setItems(invRes.data as InventoryItem[])
+    if (logRes.data) setRestockLog(logRes.data as RestockEntry[])
     if (menuRes.data)
-      setMenuItems(menuRes.data.filter((i) => i.menu_categories?.destination === 'bar'))
+      setMenuItems(
+        (menuRes.data as MenuItem[]).filter((i) => i.menu_categories?.destination === 'bar')
+      )
     setLoading(false)
   }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchAll()
+  }, [])
 
   const saveItem = async () => {
     if (!itemForm.item_name) return alert('Item name is required')
@@ -110,57 +165,18 @@ export default function Inventory({ onBack }) {
     }
     if (selectedItem) {
       await supabase.from('inventory').update(payload).eq('id', selectedItem.id)
+      triggerStockAlerts(selectedItem.id)
     } else {
       await supabase.from('inventory').insert(payload)
     }
     await fetchAll()
-    // Check stock alerts after manual stock edit
-    if (selectedItem) triggerStockAlerts(selectedItem.id)
     setSaving(false)
     setShowAddItem(false)
     setSelectedItem(null)
-    setItemForm({
-      item_name: '',
-      category: '',
-      unit: 'bottles',
-      current_stock: '',
-      minimum_stock: '10',
-      cost_price: '',
-      selling_price: '',
-      menu_item_id: '',
-    })
+    setItemForm(blankItemForm)
   }
 
-  const manualStockAlert = async () => {
-    setAlertSending(true)
-    setAlertResult(null)
-    try {
-      const r = await fetch('/api/stock-alerts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-internal-secret': import.meta.env.VITE_INTERNAL_API_SECRET,
-        },
-        body: JSON.stringify({ trigger: 'manual' }),
-      })
-      const data = await r.json()
-      const total = (data.outOfStock?.length || 0) + (data.lowStock?.length || 0)
-      setAlertResult(
-        total === 0
-          ? { type: 'ok', msg: 'All stock levels healthy — no alerts sent.' }
-          : {
-              type: 'sent',
-              msg: `Alerts sent for ${total} item${total !== 1 ? 's' : ''}: ${[...(data.outOfStock || []), ...(data.lowStock || [])].join(', ')}`,
-            }
-      )
-    } catch (_e) {
-      setAlertResult({ type: 'error', msg: 'Failed to send alerts. Check your connection.' })
-    }
-    setAlertSending(false)
-    setTimeout(() => setAlertResult(null), 6000)
-  }
-
-  const triggerStockAlerts = async (itemId = null) => {
+  const triggerStockAlerts = async (itemId: string | null = null) => {
     try {
       await fetch('/api/stock-alerts', {
         method: 'POST',
@@ -170,38 +186,24 @@ export default function Inventory({ onBack }) {
         },
         body: JSON.stringify({ trigger: 'edit', item_id: itemId }),
       })
-    } catch (_e) {
+    } catch {
       /* silent */
     }
   }
 
-  const openRestock = (item) => {
+  const openRestock = (item: InventoryItem) => {
     setSelectedItem(item)
-    setRestockForm({
-      quantity_added: '',
-      cost_price_per_unit: item.cost_price?.toString() || '',
-      supplier_name: '',
-      supplier_phone: '',
-      invoice_number: '',
-      payment_method: 'cash',
-      delivery_person: '',
-      condition: 'good',
-      notes: '',
-    })
+    setRestockForm({ ...blankRestockForm, cost_price_per_unit: item.cost_price?.toString() || '' })
     setShowRestock(true)
   }
 
   const processRestock = async () => {
-    if (!restockForm.quantity_added) return alert('Quantity is required')
+    if (!restockForm.quantity_added || !selectedItem) return alert('Quantity is required')
     setSaving(true)
-
     const qtyAdded = parseFloat(restockForm.quantity_added)
     const costPerUnit = parseFloat(restockForm.cost_price_per_unit) || 0
     const previousStock = selectedItem.current_stock || 0
     const newStock = previousStock + qtyAdded
-    const totalCost = qtyAdded * costPerUnit
-
-    // Update inventory stock
     await supabase
       .from('inventory')
       .update({
@@ -210,37 +212,35 @@ export default function Inventory({ onBack }) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', selectedItem.id)
-
-    // Log the restock
-    await supabase.from('restock_log').insert({
-      inventory_id: selectedItem.id,
-      item_name: selectedItem.item_name,
-      quantity_added: qtyAdded,
-      previous_stock: previousStock,
-      new_stock: newStock,
-      cost_price_per_unit: costPerUnit,
-      total_cost: totalCost,
-      supplier_name: restockForm.supplier_name,
-      supplier_phone: restockForm.supplier_phone,
-      invoice_number: restockForm.invoice_number,
-      payment_method: restockForm.payment_method,
-      delivery_person: restockForm.delivery_person,
-      condition: restockForm.condition,
-      notes: restockForm.notes,
-      restocked_by: profile.id,
-      restocked_by_name: profile.full_name,
-      restocked_at: new Date().toISOString(),
-    })
-
+    await supabase
+      .from('restock_log')
+      .insert({
+        inventory_id: selectedItem.id,
+        item_name: selectedItem.item_name,
+        quantity_added: qtyAdded,
+        previous_stock: previousStock,
+        new_stock: newStock,
+        cost_price_per_unit: costPerUnit,
+        total_cost: qtyAdded * costPerUnit,
+        supplier_name: restockForm.supplier_name,
+        supplier_phone: restockForm.supplier_phone,
+        invoice_number: restockForm.invoice_number,
+        payment_method: restockForm.payment_method,
+        delivery_person: restockForm.delivery_person,
+        condition: restockForm.condition,
+        notes: restockForm.notes,
+        restocked_by: profile?.id,
+        restocked_by_name: profile?.full_name,
+        restocked_at: new Date().toISOString(),
+      })
     await fetchAll()
-    // Check if new stock level still triggers any alerts
     triggerStockAlerts(selectedItem.id)
     setSaving(false)
     setShowRestock(false)
     setSelectedItem(null)
   }
 
-  const openEdit = (item) => {
+  const openEdit = (item: InventoryItem) => {
     setSelectedItem(item)
     setItemForm({
       item_name: item.item_name,
@@ -262,14 +262,13 @@ export default function Inventory({ onBack }) {
     const matchLow = !filterLow || item.current_stock <= item.minimum_stock
     return matchSearch && matchLow
   })
-
   const lowStockCount = items.filter((i) => i.current_stock <= i.minimum_stock).length
   const totalStockValue = items.reduce(
-    (sum, i) => sum + (i.current_stock || 0) * (i.cost_price || 0),
+    (s, i) => s + (i.current_stock || 0) * (i.cost_price || 0),
     0
   )
 
-  const stockStatus = (item) => {
+  const stockStatus = (item: InventoryItem) => {
     if (item.current_stock <= 0)
       return { label: 'Out of Stock', color: 'text-red-400 bg-red-500/10', icon: '🔴' }
     if (item.current_stock <= item.minimum_stock)
@@ -279,7 +278,6 @@ export default function Inventory({ onBack }) {
 
   return (
     <div className="min-h-full bg-gray-950">
-      {/* Header */}
       <div className="lg:hidden bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="text-gray-400 hover:text-white">
@@ -300,16 +298,7 @@ export default function Inventory({ onBack }) {
           <button
             onClick={() => {
               setSelectedItem(null)
-              setItemForm({
-                item_name: '',
-                category: '',
-                unit: 'bottles',
-                current_stock: '',
-                minimum_stock: '10',
-                cost_price: '',
-                selling_price: '',
-                menu_item_id: '',
-              })
+              setItemForm(blankItemForm)
               setShowAddItem(true)
             }}
             className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-xl text-sm transition-colors"
@@ -319,7 +308,6 @@ export default function Inventory({ onBack }) {
         </div>
       </div>
 
-      {/* View Toggle */}
       <div className="bg-gray-900 border-b border-gray-800 px-4 flex gap-1 py-2">
         <button
           onClick={() => setView('stock')}
@@ -340,7 +328,6 @@ export default function Inventory({ onBack }) {
           <div className="text-amber-500 text-center py-12">Loading...</div>
         ) : view === 'stock' ? (
           <>
-            {/* Summary cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               {[
                 {
@@ -381,8 +368,6 @@ export default function Inventory({ onBack }) {
                 </div>
               ))}
             </div>
-
-            {/* Filters */}
             <div className="flex gap-3 mb-4 flex-wrap">
               <div className="relative flex-1 min-w-48">
                 <Search
@@ -403,8 +388,6 @@ export default function Inventory({ onBack }) {
                 <Filter size={14} /> Low Stock Only
               </button>
             </div>
-
-            {/* Stock table */}
             {filtered.length === 0 ? (
               <div className="text-center py-12 text-gray-500">
                 No items found. Add your first inventory item.
@@ -500,7 +483,6 @@ export default function Inventory({ onBack }) {
             )}
           </>
         ) : (
-          /* Restock Log */
           <div className="space-y-3">
             <div className="flex items-center justify-between mb-2">
               <p className="text-gray-400 text-sm">{restockLog.length} restock entries</p>
@@ -547,10 +529,10 @@ export default function Inventory({ onBack }) {
                       { label: 'Invoice #', value: log.invoice_number || '—' },
                       { label: 'Condition', value: log.condition },
                       { label: 'By', value: log.restocked_by_name || '—' },
-                    ].map((field) => (
-                      <div key={field.label} className="bg-gray-800 rounded-lg px-3 py-2">
-                        <p className="text-gray-500">{field.label}</p>
-                        <p className="text-white font-medium capitalize">{field.value}</p>
+                    ].map((f) => (
+                      <div key={f.label} className="bg-gray-800 rounded-lg px-3 py-2">
+                        <p className="text-gray-500">{f.label}</p>
+                        <p className="text-white font-medium capitalize">{f.value}</p>
                       </div>
                     ))}
                   </div>
@@ -576,7 +558,6 @@ export default function Inventory({ onBack }) {
         )}
       </div>
 
-      {/* Add/Edit Item Modal */}
       {showAddItem && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 rounded-2xl w-full max-w-md border border-gray-800 max-h-[90vh] flex flex-col">
@@ -592,7 +573,6 @@ export default function Inventory({ onBack }) {
               </button>
             </div>
             <div className="p-5 space-y-4 overflow-y-auto flex-1">
-              {/* Link to menu item */}
               <div>
                 <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
                   Link to Menu Item (optional)
@@ -600,12 +580,8 @@ export default function Inventory({ onBack }) {
                 <select
                   value={itemForm.menu_item_id}
                   onChange={(e) => {
-                    const selected = menuItems.find((m) => m.id === e.target.value)
-                    setItemForm({
-                      ...itemForm,
-                      menu_item_id: e.target.value,
-                      item_name: selected?.name || itemForm.item_name,
-                    })
+                    const sel = menuItems.find((m) => m.id === e.target.value)
+                    fi({ menu_item_id: e.target.value, item_name: sel?.name || itemForm.item_name })
                   }}
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
                 >
@@ -617,19 +593,17 @@ export default function Inventory({ onBack }) {
                   ))}
                 </select>
               </div>
-
               <div>
                 <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
                   Item Name *
                 </label>
                 <input
                   value={itemForm.item_name}
-                  onChange={(e) => setItemForm({ ...itemForm, item_name: e.target.value })}
+                  onChange={(e) => fi({ item_name: e.target.value })}
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
                   placeholder="e.g. Heineken Bottle"
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
@@ -637,7 +611,7 @@ export default function Inventory({ onBack }) {
                   </label>
                   <input
                     value={itemForm.category}
-                    onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })}
+                    onChange={(e) => fi({ category: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
                     placeholder="e.g. Beer, Spirits"
                   />
@@ -648,7 +622,7 @@ export default function Inventory({ onBack }) {
                   </label>
                   <select
                     value={itemForm.unit}
-                    onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })}
+                    onChange={(e) => fi({ unit: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
                   >
                     {UNITS.map((u) => (
@@ -659,7 +633,6 @@ export default function Inventory({ onBack }) {
                   </select>
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
@@ -668,7 +641,7 @@ export default function Inventory({ onBack }) {
                   <input
                     type="number"
                     value={itemForm.current_stock}
-                    onChange={(e) => setItemForm({ ...itemForm, current_stock: e.target.value })}
+                    onChange={(e) => fi({ current_stock: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
                     placeholder="0"
                   />
@@ -680,13 +653,12 @@ export default function Inventory({ onBack }) {
                   <input
                     type="number"
                     value={itemForm.minimum_stock}
-                    onChange={(e) => setItemForm({ ...itemForm, minimum_stock: e.target.value })}
+                    onChange={(e) => fi({ minimum_stock: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
                     placeholder="10"
                   />
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
@@ -695,7 +667,7 @@ export default function Inventory({ onBack }) {
                   <input
                     type="number"
                     value={itemForm.cost_price}
-                    onChange={(e) => setItemForm({ ...itemForm, cost_price: e.target.value })}
+                    onChange={(e) => fi({ cost_price: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
                     placeholder="0"
                   />
@@ -707,19 +679,18 @@ export default function Inventory({ onBack }) {
                   <input
                     type="number"
                     value={itemForm.selling_price}
-                    onChange={(e) => setItemForm({ ...itemForm, selling_price: e.target.value })}
+                    onChange={(e) => fi({ selling_price: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
                     placeholder="0"
                   />
                 </div>
               </div>
-
               <button
                 onClick={saveItem}
                 disabled={saving}
                 className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black font-bold rounded-xl py-3 flex items-center justify-center gap-2 transition-colors"
               >
-                <Save size={16} />{' '}
+                <Save size={16} />
                 {saving ? 'Saving...' : selectedItem ? 'Update Item' : 'Add Item'}
               </button>
             </div>
@@ -727,7 +698,6 @@ export default function Inventory({ onBack }) {
         </div>
       )}
 
-      {/* Restock Modal */}
       {showRestock && selectedItem && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 rounded-2xl w-full max-w-md border border-gray-800 max-h-[92vh] flex flex-col">
@@ -748,9 +718,7 @@ export default function Inventory({ onBack }) {
                 <X size={20} />
               </button>
             </div>
-
             <div className="p-5 space-y-4 overflow-y-auto flex-1">
-              {/* Quantity */}
               <div>
                 <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
                   Quantity Added ({selectedItem.unit}) *
@@ -758,9 +726,7 @@ export default function Inventory({ onBack }) {
                 <input
                   type="number"
                   value={restockForm.quantity_added}
-                  onChange={(e) =>
-                    setRestockForm({ ...restockForm, quantity_added: e.target.value })
-                  }
+                  onChange={(e) => fr({ quantity_added: e.target.value })}
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-2xl font-bold"
                   placeholder="0"
                 />
@@ -769,14 +735,12 @@ export default function Inventory({ onBack }) {
                     New stock will be:{' '}
                     <span className="font-bold">
                       {(selectedItem.current_stock || 0) +
-                        parseFloat(restockForm.quantity_added || 0)}{' '}
+                        parseFloat(restockForm.quantity_added || '0')}{' '}
                       {selectedItem.unit}
                     </span>
                   </p>
                 )}
               </div>
-
-              {/* Cost */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
@@ -785,9 +749,7 @@ export default function Inventory({ onBack }) {
                   <input
                     type="number"
                     value={restockForm.cost_price_per_unit}
-                    onChange={(e) =>
-                      setRestockForm({ ...restockForm, cost_price_per_unit: e.target.value })
-                    }
+                    onChange={(e) => fr({ cost_price_per_unit: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm font-bold"
                     placeholder="0"
                   />
@@ -803,8 +765,6 @@ export default function Inventory({ onBack }) {
                   </p>
                 </div>
               </div>
-
-              {/* Supplier */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
@@ -812,9 +772,7 @@ export default function Inventory({ onBack }) {
                   </label>
                   <input
                     value={restockForm.supplier_name}
-                    onChange={(e) =>
-                      setRestockForm({ ...restockForm, supplier_name: e.target.value })
-                    }
+                    onChange={(e) => fr({ supplier_name: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
                     placeholder="e.g. Guinness Nigeria"
                   />
@@ -825,16 +783,12 @@ export default function Inventory({ onBack }) {
                   </label>
                   <input
                     value={restockForm.supplier_phone}
-                    onChange={(e) =>
-                      setRestockForm({ ...restockForm, supplier_phone: e.target.value })
-                    }
+                    onChange={(e) => fr({ supplier_phone: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
                     placeholder="08012345678"
                   />
                 </div>
               </div>
-
-              {/* Invoice + Payment */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
@@ -842,9 +796,7 @@ export default function Inventory({ onBack }) {
                   </label>
                   <input
                     value={restockForm.invoice_number}
-                    onChange={(e) =>
-                      setRestockForm({ ...restockForm, invoice_number: e.target.value })
-                    }
+                    onChange={(e) => fr({ invoice_number: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
                     placeholder="INV-0001"
                   />
@@ -855,36 +807,28 @@ export default function Inventory({ onBack }) {
                   </label>
                   <select
                     value={restockForm.payment_method}
-                    onChange={(e) =>
-                      setRestockForm({ ...restockForm, payment_method: e.target.value })
-                    }
+                    onChange={(e) => fr({ payment_method: e.target.value })}
                     className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
                   >
                     {PAYMENT_METHODS.map((m) => (
-                      <option key={m} value={m} className="capitalize">
+                      <option key={m} value={m}>
                         {m.charAt(0).toUpperCase() + m.slice(1)}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
-
-              {/* Delivery person */}
               <div>
                 <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
                   Delivery Person / Driver
                 </label>
                 <input
                   value={restockForm.delivery_person}
-                  onChange={(e) =>
-                    setRestockForm({ ...restockForm, delivery_person: e.target.value })
-                  }
+                  onChange={(e) => fr({ delivery_person: e.target.value })}
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
                   placeholder="Name of person who delivered"
                 />
               </div>
-
-              {/* Condition */}
               <div>
                 <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
                   Delivery Condition
@@ -893,38 +837,26 @@ export default function Inventory({ onBack }) {
                   {CONDITIONS.map((c) => (
                     <button
                       key={c}
-                      onClick={() => setRestockForm({ ...restockForm, condition: c })}
-                      className={`py-2.5 rounded-xl text-sm font-medium border-2 capitalize transition-all ${
-                        restockForm.condition === c
-                          ? c === 'good'
-                            ? 'border-green-500 bg-green-500/10 text-green-400'
-                            : c === 'damaged'
-                              ? 'border-red-500 bg-red-500/10 text-red-400'
-                              : 'border-amber-500 bg-amber-500/10 text-amber-400'
-                          : 'border-gray-700 bg-gray-800 text-gray-400'
-                      }`}
+                      onClick={() => fr({ condition: c })}
+                      className={`py-2.5 rounded-xl text-sm font-medium border-2 capitalize transition-all ${restockForm.condition === c ? (c === 'good' ? 'border-green-500 bg-green-500/10 text-green-400' : c === 'damaged' ? 'border-red-500 bg-red-500/10 text-red-400' : 'border-amber-500 bg-amber-500/10 text-amber-400') : 'border-gray-700 bg-gray-800 text-gray-400'}`}
                     >
                       {c === 'good' ? '✅' : c === 'damaged' ? '❌' : '⚠️'} {c}
                     </button>
                   ))}
                 </div>
               </div>
-
-              {/* Notes */}
               <div>
                 <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
                   Notes
                 </label>
                 <textarea
                   value={restockForm.notes}
-                  onChange={(e) => setRestockForm({ ...restockForm, notes: e.target.value })}
+                  onChange={(e) => fr({ notes: e.target.value })}
                   rows={2}
-                  placeholder="Any additional notes, discrepancies, or observations..."
+                  placeholder="Any additional notes..."
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm resize-none"
                 />
               </div>
-
-              {/* Accountability info box */}
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-xs text-blue-300">
                 <p className="font-semibold mb-1">📋 Accountability Record</p>
                 <p>
@@ -933,13 +865,13 @@ export default function Inventory({ onBack }) {
                   {new Date().toLocaleString('en-NG')}. This record cannot be deleted.
                 </p>
               </div>
-
               <button
                 onClick={processRestock}
                 disabled={saving}
                 className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white font-bold rounded-xl py-3 flex items-center justify-center gap-2 transition-colors"
               >
-                <Truck size={16} /> {saving ? 'Processing...' : `Confirm Restock`}
+                <Truck size={16} />
+                {saving ? 'Processing...' : 'Confirm Restock'}
               </button>
             </div>
           </div>

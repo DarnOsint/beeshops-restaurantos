@@ -30,13 +30,12 @@ import {
   MapPin,
 } from 'lucide-react'
 
-const AMBER = '#f59e0b'
-const GREEN = '#10b981'
-const RED = '#ef4444'
-const BLUE = '#3b82f6'
-const PURPLE = '#8b5cf6'
+const AMBER = '#f59e0b',
+  GREEN = '#10b981',
+  RED = '#ef4444',
+  BLUE = '#3b82f6',
+  PURPLE = '#8b5cf6'
 const PIE_COLORS = [AMBER, GREEN, BLUE, PURPLE, RED, '#ec4899', '#14b8a6']
-
 const RANGES = [
   { id: 'today', label: 'Today' },
   { id: 'week', label: 'This Week' },
@@ -44,44 +43,106 @@ const RANGES = [
   { id: 'custom', label: 'Custom' },
 ]
 
-function getRangeDates(range, custom) {
+interface ChartPoint {
+  label?: string
+  day?: string
+  revenue: number
+  orders: number
+}
+interface HeatmapRow {
+  day: string
+  [hour: number]: number
+}
+interface ItemStat {
+  name: string
+  category: string
+  qty: number
+  revenue: number
+}
+interface CatStat {
+  name: string
+  value: number
+}
+interface StaffStat {
+  name: string
+  orders: number
+  revenue: number
+}
+interface ZoneStat {
+  name: string
+  value: number
+}
+interface KPIs {
+  totalRevenue: number
+  totalOrders: number
+  avgOrder: number
+  cancelRate: number | string
+  debtExposure: number
+  repeatRate: number | string
+}
+interface AnalyticsData {
+  kpis: KPIs
+  heatmap: HeatmapRow[]
+  hours: number[]
+  hourlyChart: ChartPoint[]
+  bestSellers: ItemStat[]
+  categorySplit: CatStat[]
+  paymentBreakdown: CatStat[]
+  staffPerf: StaffStat[]
+  revenueByZone: ZoneStat[]
+  revenueTrend: ChartPoint[]
+}
+
+function getRangeDates(range: string, custom: { from: string; to: string }) {
   const now = new Date()
-  const pad = (d) => d.toISOString()
+  const pad = (d: Date) => d.toISOString()
   if (range === 'today') {
-    const start = new Date(now)
-    start.setHours(0, 0, 0, 0)
-    return { from: pad(start), to: pad(now) }
+    const s = new Date(now)
+    s.setHours(0, 0, 0, 0)
+    return { from: pad(s), to: pad(now) }
   }
   if (range === 'week') {
-    const start = new Date(now)
-    start.setDate(now.getDate() - 6)
-    start.setHours(0, 0, 0, 0)
-    return { from: pad(start), to: pad(now) }
+    const s = new Date(now)
+    s.setDate(now.getDate() - 6)
+    s.setHours(0, 0, 0, 0)
+    return { from: pad(s), to: pad(now) }
   }
   if (range === 'month') {
-    const start = new Date(now)
-    start.setDate(1)
-    start.setHours(0, 0, 0, 0)
-    return { from: pad(start), to: pad(now) }
+    const s = new Date(now)
+    s.setDate(1)
+    s.setHours(0, 0, 0, 0)
+    return { from: pad(s), to: pad(now) }
   }
-  if (range === 'custom' && custom.from && custom.to) {
+  if (range === 'custom' && custom.from && custom.to)
     return {
       from: new Date(custom.from).toISOString(),
       to: new Date(custom.to + 'T23:59:59').toISOString(),
     }
-  }
   return { from: null, to: null }
 }
 
-function StatCard({ icon: Icon, label, value, sub, color = 'amber' }) {
-  const colors = {
+type ColorKey = 'amber' | 'green' | 'red' | 'blue' | 'purple'
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  color = 'amber',
+}: {
+  icon: React.ElementType
+  label: string
+  value: string | number
+  sub?: string
+  color?: ColorKey
+}) {
+  const colors: Record<ColorKey, string> = {
     amber: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
     green: 'text-green-400 bg-green-500/10 border-green-500/20',
     red: 'text-red-400 bg-red-500/10 border-red-500/20',
     blue: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
     purple: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
   }
-  const iconColor = {
+  const iconColors: Record<ColorKey, string> = {
     amber: 'text-amber-400',
     green: 'text-green-400',
     red: 'text-red-400',
@@ -91,7 +152,7 @@ function StatCard({ icon: Icon, label, value, sub, color = 'amber' }) {
   return (
     <div className={`rounded-2xl border p-5 ${colors[color]}`}>
       <div className="flex items-center gap-3 mb-3">
-        <Icon size={18} className={iconColor[color]} />
+        <Icon size={18} className={iconColors[color]} />
         <span className="text-gray-400 text-xs uppercase tracking-wide">{label}</span>
       </div>
       <p className="text-white text-2xl font-bold">{value}</p>
@@ -108,124 +169,152 @@ export default function Analytics() {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiInsight, setAiInsight] = useState('')
   const [aiError, setAiError] = useState(false)
-  const [data, setData] = useState(null)
+  const [data, setData] = useState<AnalyticsData | null>(null)
+  const fmt = (n: number) => '₦' + (n || 0).toLocaleString()
 
-  const processData = useCallback((orders, items, staff, debtors, tables) => {
-    const paid = orders.filter((o) => o.status === 'paid')
-    const cancelled = orders.filter((o) => o.status === 'cancelled')
-    const totalOrders = paid.length
-    const totalRevenue = paid.reduce((s, o) => s + (o.total_amount || 0), 0)
-    const avgOrder = totalOrders ? Math.round(totalRevenue / totalOrders) : 0
-    const cancelRate = orders.length ? ((cancelled.length / orders.length) * 100).toFixed(1) : 0
-    const debtExposure = (debtors || [])
-      .filter((d) => d.status !== 'paid')
-      .reduce((s, d) => s + (d.current_balance || 0), 0)
-    const phoneMap = {}
-    paid.forEach((o) => {
-      if (o.customer_phone) phoneMap[o.customer_phone] = (phoneMap[o.customer_phone] || 0) + 1
-    })
-    const repeatCustomers = Object.values(phoneMap).filter((v) => v > 1).length
-    const totalWithPhone = Object.keys(phoneMap).length
-    const repeatRate = totalWithPhone ? ((repeatCustomers / totalWithPhone) * 100).toFixed(1) : 0
-    const hourMap = {}
-    paid.forEach((o) => {
-      const d = new Date(o.created_at)
-      const day = d.toLocaleDateString('en-US', { weekday: 'short' })
-      const hour = d.getHours()
-      hourMap[`${day}-${hour}`] = (hourMap[`${day}-${hour}`] || 0) + 1
-    })
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-    const hours = Array.from({ length: 18 }, (_, i) => i + 6)
-    const heatmap = days.map((day) => {
-      const row = { day }
-      hours.forEach((h) => {
-        row[h] = hourMap[`${day}-${h}`] || 0
+  const processData = useCallback(
+    (
+      orders: Record<string, unknown>[],
+      items: Record<string, unknown>[],
+      _staff: unknown[],
+      debtors: { status?: string; current_balance?: number }[],
+      _tables: unknown[]
+    ) => {
+      const paid = orders.filter((o) => o.status === 'paid')
+      const cancelled = orders.filter((o) => o.status === 'cancelled')
+      const totalOrders = paid.length
+      const totalRevenue = paid.reduce((s, o) => s + ((o.total_amount as number) || 0), 0)
+      const avgOrder = totalOrders ? Math.round(totalRevenue / totalOrders) : 0
+      const cancelRate = orders.length ? ((cancelled.length / orders.length) * 100).toFixed(1) : 0
+      const debtExposure = (debtors || [])
+        .filter((d) => d.status !== 'paid')
+        .reduce((s, d) => s + (d.current_balance || 0), 0)
+
+      const phoneMap: Record<string, number> = {}
+      paid.forEach((o) => {
+        if (o.customer_phone)
+          phoneMap[o.customer_phone as string] = (phoneMap[o.customer_phone as string] || 0) + 1
       })
-      return row
-    })
-    const hourlyMap = {}
-    paid.forEach((o) => {
-      const h = new Date(o.created_at).getHours()
-      if (!hourlyMap[h]) hourlyMap[h] = { hour: h, orders: 0, revenue: 0 }
-      hourlyMap[h].orders += 1
-      hourlyMap[h].revenue += o.total_amount || 0
-    })
-    const hourlyChart = Array.from({ length: 18 }, (_, i) => {
-      const h = i + 6
-      const label = h === 12 ? '12pm' : h > 12 ? `${h - 12}pm` : `${h}am`
-      return { label, orders: hourlyMap[h]?.orders || 0, revenue: hourlyMap[h]?.revenue || 0 }
-    })
-    const itemMap = {}
-    items.forEach((i) => {
-      const name = i.menu_items?.name || 'Unknown'
-      const cat = i.menu_items?.menu_categories?.name || 'Other'
-      if (!itemMap[name]) itemMap[name] = { name, category: cat, qty: 0, revenue: 0 }
-      itemMap[name].qty += i.quantity
-      itemMap[name].revenue += (i.unit_price || 0) * i.quantity
-    })
-    const bestSellers = Object.values(itemMap)
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 10)
-    const catMap = {}
-    items.forEach((i) => {
-      const cat = i.menu_items?.menu_categories?.name || 'Other'
-      catMap[cat] = (catMap[cat] || 0) + (i.unit_price || 0) * i.quantity
-    })
-    const categorySplit = Object.entries(catMap)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-    const payMap = { cash: 0, card: 0, transfer: 0, credit: 0 }
-    paid.forEach((o) => {
-      if (payMap[o.payment_method] !== undefined) payMap[o.payment_method] += o.total_amount || 0
-    })
-    const paymentBreakdown = [
-      { name: 'Cash', value: payMap.cash },
-      { name: 'POS/Card', value: payMap.card },
-      { name: 'Transfer', value: payMap.transfer },
-      { name: 'Credit', value: payMap.credit },
-    ].filter((p) => p.value > 0)
-    const staffMap = {}
-    paid.forEach((o) => {
-      const name = o.waitron_name || 'Unknown'
-      if (!staffMap[name]) staffMap[name] = { name, orders: 0, revenue: 0 }
-      staffMap[name].orders++
-      staffMap[name].revenue += o.total_amount || 0
-    })
-    const staffPerf = Object.values(staffMap)
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 8)
-    const zoneMap = {}
-    paid.forEach((o) => {
-      const zone = o.table_zone || 'Unknown'
-      zoneMap[zone] = (zoneMap[zone] || 0) + (o.total_amount || 0)
-    })
-    const revenueByZone = Object.entries(zoneMap)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value)
-    const dayMap = {}
-    paid.forEach((o) => {
-      const day = new Date(o.created_at).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
+      const repeatCustomers = Object.values(phoneMap).filter((v) => v > 1).length
+      const totalWithPhone = Object.keys(phoneMap).length
+      const repeatRate = totalWithPhone ? ((repeatCustomers / totalWithPhone) * 100).toFixed(1) : 0
+
+      const hourMapRaw: Record<string, number> = {}
+      paid.forEach((o) => {
+        const d = new Date(o.created_at as string)
+        const day = d.toLocaleDateString('en-US', { weekday: 'short' })
+        const hour = d.getHours()
+        hourMapRaw[`${day}-${hour}`] = (hourMapRaw[`${day}-${hour}`] || 0) + 1
       })
-      if (!dayMap[day]) dayMap[day] = { day, revenue: 0, orders: 0 }
-      dayMap[day].revenue += o.total_amount || 0
-      dayMap[day].orders++
-    })
-    const revenueTrend = Object.values(dayMap).slice(-14)
-    setData({
-      kpis: { totalRevenue, totalOrders, avgOrder, cancelRate, debtExposure, repeatRate },
-      heatmap,
-      hours,
-      hourlyChart,
-      bestSellers,
-      categorySplit,
-      paymentBreakdown,
-      staffPerf,
-      revenueByZone,
-      revenueTrend,
-    })
-  }, [])
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+      const hours = Array.from({ length: 18 }, (_, i) => i + 6)
+      const heatmap: HeatmapRow[] = days.map((day) => {
+        const row: HeatmapRow = { day }
+        hours.forEach((h) => {
+          row[h] = hourMapRaw[`${day}-${h}`] || 0
+        })
+        return row
+      })
+
+      const hourlyMap: Record<number, { hour: number; orders: number; revenue: number }> = {}
+      paid.forEach((o) => {
+        const h = new Date(o.created_at as string).getHours()
+        if (!hourlyMap[h]) hourlyMap[h] = { hour: h, orders: 0, revenue: 0 }
+        hourlyMap[h].orders++
+        hourlyMap[h].revenue += (o.total_amount as number) || 0
+      })
+      const hourlyChart = Array.from({ length: 18 }, (_, i) => {
+        const h = i + 6
+        const label = h === 12 ? '12pm' : h > 12 ? `${h - 12}pm` : `${h}am`
+        return { label, orders: hourlyMap[h]?.orders || 0, revenue: hourlyMap[h]?.revenue || 0 }
+      })
+
+      const itemMap: Record<string, ItemStat> = {}
+      ;(
+        items as {
+          quantity?: number
+          unit_price?: number
+          menu_items?: { name?: string; menu_categories?: { name?: string } | null } | null
+        }[]
+      ).forEach((i) => {
+        const name = i.menu_items?.name || 'Unknown',
+          cat = i.menu_items?.menu_categories?.name || 'Other'
+        if (!itemMap[name]) itemMap[name] = { name, category: cat, qty: 0, revenue: 0 }
+        itemMap[name].qty += i.quantity || 0
+        itemMap[name].revenue += (i.unit_price || 0) * (i.quantity || 0)
+      })
+
+      const catMap: Record<string, number> = {}
+      ;(
+        items as {
+          unit_price?: number
+          quantity?: number
+          menu_items?: { menu_categories?: { name?: string } | null } | null
+        }[]
+      ).forEach((i) => {
+        const cat = i.menu_items?.menu_categories?.name || 'Other'
+        catMap[cat] = (catMap[cat] || 0) + (i.unit_price || 0) * (i.quantity || 0)
+      })
+
+      const payMap: Record<string, number> = { cash: 0, card: 0, transfer: 0, credit: 0 }
+      paid.forEach((o) => {
+        const m = o.payment_method as string
+        if (payMap[m] !== undefined) payMap[m] += (o.total_amount as number) || 0
+      })
+
+      const staffMap: Record<string, StaffStat> = {}
+      paid.forEach((o) => {
+        const name = (o.waitron_name as string) || 'Unknown'
+        if (!staffMap[name]) staffMap[name] = { name, orders: 0, revenue: 0 }
+        staffMap[name].orders++
+        staffMap[name].revenue += (o.total_amount as number) || 0
+      })
+
+      const zoneMap: Record<string, number> = {}
+      paid.forEach((o) => {
+        const zone = (o.table_zone as string) || 'Unknown'
+        zoneMap[zone] = (zoneMap[zone] || 0) + ((o.total_amount as number) || 0)
+      })
+
+      const dayMap: Record<string, ChartPoint> = {}
+      paid.forEach((o) => {
+        const day = new Date(o.created_at as string).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+        })
+        if (!dayMap[day]) dayMap[day] = { day, revenue: 0, orders: 0 }
+        dayMap[day].revenue += (o.total_amount as number) || 0
+        dayMap[day].orders++
+      })
+
+      setData({
+        kpis: { totalRevenue, totalOrders, avgOrder, cancelRate, debtExposure, repeatRate },
+        heatmap,
+        hours,
+        hourlyChart,
+        bestSellers: Object.values(itemMap)
+          .sort((a, b) => b.revenue - a.revenue)
+          .slice(0, 10),
+        categorySplit: Object.entries(catMap)
+          .map(([name, value]) => ({ name, value }))
+          .sort((a, b) => b.value - a.value),
+        paymentBreakdown: [
+          { name: 'Cash', value: payMap.cash },
+          { name: 'POS/Card', value: payMap.card },
+          { name: 'Transfer', value: payMap.transfer },
+          { name: 'Credit', value: payMap.credit },
+        ].filter((p) => p.value > 0),
+        staffPerf: Object.values(staffMap)
+          .sort((a, b) => b.revenue - a.revenue)
+          .slice(0, 8),
+        revenueByZone: Object.entries(zoneMap)
+          .map(([name, value]) => ({ name, value }))
+          .sort((a, b) => b.value - a.value),
+        revenueTrend: Object.values(dayMap).slice(-14),
+      })
+    },
+    []
+  )
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -234,7 +323,6 @@ export default function Analytics() {
       setLoading(false)
       return
     }
-
     const { data: orders } = await supabase
       .from('orders')
       .select(
@@ -242,38 +330,34 @@ export default function Analytics() {
       )
       .gte('created_at', from)
       .lte('created_at', to)
-
-    const orderIds = (orders || []).map((o) => o.id)
+    const orderIds = (orders || []).map((o: { id: string }) => o.id)
     const { data: items } = orderIds.length
       ? await supabase
           .from('order_items')
           .select('id, quantity, unit_price, order_id, menu_items(name, menu_categories(name))')
           .in('order_id', orderIds)
       : { data: [] }
-
     const { data: staff } = await supabase
       .from('profiles')
       .select('id, full_name, role')
       .eq('is_active', true)
-
     const { data: debtors } = await supabase
       .from('debtors')
       .select('current_balance, status')
       .eq('is_active', true)
-
     const { data: tables } = await supabase
       .from('tables')
       .select('id, category_id, table_categories(name)')
-
     processData(orders || [], items || [], staff || [], debtors || [], tables || [])
     setLoading(false)
-  }, [range, custom])
+  }, [range, custom, processData])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData()
   }, [fetchData])
 
-  async function getAIInsights() {
+  const getAIInsights = async () => {
     if (!data) return
     setAiLoading(true)
     setAiInsight('')
@@ -292,21 +376,15 @@ export default function Analytics() {
           messages: [
             {
               role: 'user',
-              content: `You are a hospitality business analyst for Beeshop's Place Lounge, a Nigerian restaurant and bar. Analyze this performance data and give 5-6 sharp, actionable bullet-point insights. Be specific with numbers. Use Nigerian Naira symbol. No headers, just bullet points.
-
-Period: ${range}
-Revenue: ${fmt(d.kpis.totalRevenue)} | Orders: ${d.kpis.totalOrders} | Avg Order: ${fmt(d.kpis.avgOrder)}
-Cancel Rate: ${d.kpis.cancelRate}% | Repeat Customers: ${d.kpis.repeatRate}% | Debt Exposure: ${fmt(d.kpis.debtExposure)}
-Top Items: ${d.bestSellers
+              content: `You are a hospitality business analyst for Beeshop's Place Lounge, a Nigerian restaurant and bar. Analyze this performance data and give 5-6 sharp, actionable bullet-point insights. Be specific with numbers. Use Nigerian Naira symbol. No headers, just bullet points.\n\nPeriod: ${range}\nRevenue: ${fmt(d.kpis.totalRevenue)} | Orders: ${d.kpis.totalOrders} | Avg Order: ${fmt(d.kpis.avgOrder)}\nCancel Rate: ${d.kpis.cancelRate}% | Repeat Customers: ${d.kpis.repeatRate}% | Debt Exposure: ${fmt(d.kpis.debtExposure)}\nTop Items: ${d.bestSellers
                 .slice(0, 5)
                 .map((i) => i.name + ' ' + fmt(i.revenue))
-                .join(', ')}
-Top Zones: ${d.revenueByZone
+                .join(', ')}\nTop Zones: ${d.revenueByZone
                 .slice(0, 3)
                 .map((z) => z.name + ' ' + fmt(z.value))
-                .join(', ')}
-Payment Mix: ${d.paymentBreakdown.map((p) => p.name + ' ' + fmt(p.value)).join(', ')}
-Categories: ${d.categorySplit
+                .join(
+                  ', '
+                )}\nPayment Mix: ${d.paymentBreakdown.map((p) => p.name + ' ' + fmt(p.value)).join(', ')}\nCategories: ${d.categorySplit
                 .slice(0, 3)
                 .map((c) => c.name + ' ' + fmt(c.value))
                 .join(', ')}`,
@@ -315,16 +393,17 @@ Categories: ${d.categorySplit
         }),
       })
       const result = await response.json()
-      setAiInsight(result.content?.find((b) => b.type === 'text')?.text || 'No insights returned.')
-    } catch (e) {
+      setAiInsight(
+        result.content?.find((b: { type: string; text?: string }) => b.type === 'text')?.text ||
+          'No insights returned.'
+      )
+    } catch {
       setAiError(true)
     }
     setAiLoading(false)
   }
 
-  const fmt = (n) => '₦' + (n || 0).toLocaleString()
-
-  const heatColor = (val, max) => {
+  const heatColor = (val: number, max: number) => {
     if (!val) return 'bg-gray-800'
     const i = val / max
     if (i < 0.25) return 'bg-amber-900/40'
@@ -474,13 +553,13 @@ Categories: ${d.categorySplit
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={data.revenueTrend}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                  <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 11 }} />
+                  <XAxis dataKey="day" tick={{ fill: '#6b7280', fontSize: 11 }} />
                   <YAxis
                     tick={{ fill: '#6b7280', fontSize: 11 }}
-                    tickFormatter={(v) => '₦' + (v / 1000).toFixed(0) + 'k'}
+                    tickFormatter={(v: number) => '₦' + (v / 1000).toFixed(0) + 'k'}
                   />
                   <Tooltip
-                    formatter={(v) => ['₦' + v.toLocaleString(), 'Revenue']}
+                    formatter={(v: number) => ['₦' + v.toLocaleString(), 'Revenue']}
                     contentStyle={{
                       background: '#111827',
                       border: '1px solid #374151',
@@ -517,7 +596,9 @@ Categories: ${d.categorySplit
                     yAxisId="right"
                     orientation="right"
                     tick={{ fill: '#6b7280', fontSize: 10 }}
-                    tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v)}
+                    tickFormatter={(v: number) =>
+                      v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
+                    }
                   />
                   <Tooltip
                     contentStyle={{
@@ -526,7 +607,7 @@ Categories: ${d.categorySplit
                       borderRadius: 8,
                     }}
                     labelStyle={{ color: '#f9fafb', fontSize: 12 }}
-                    formatter={(value, name) => [
+                    formatter={(value: number, name: string) => [
                       name === 'revenue' ? `₦${value.toLocaleString()}` : value,
                       name === 'revenue' ? 'Revenue' : 'Orders',
                     ]}
@@ -585,7 +666,7 @@ Categories: ${d.categorySplit
                           <td key={h} className="py-1 px-0.5">
                             <div
                               title={`${row[h] || 0} orders`}
-                              className={`h-6 w-full rounded ${heatColor(row[h], max)}`}
+                              className={`h-6 w-full rounded ${heatColor(row[h] || 0, max)}`}
                             />
                           </td>
                         ))}
@@ -644,7 +725,6 @@ Categories: ${d.categorySplit
                 </div>
               )}
             </div>
-
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
               <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
                 <ShoppingBag size={16} className="text-amber-400" /> Sales by Category
@@ -668,7 +748,7 @@ Categories: ${d.categorySplit
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(v) => fmt(v)}
+                        formatter={(v: number) => fmt(v)}
                         contentStyle={{
                           background: '#111827',
                           border: '1px solid #374151',
@@ -708,7 +788,7 @@ Categories: ${d.categorySplit
                     <XAxis
                       type="number"
                       tick={{ fill: '#6b7280', fontSize: 10 }}
-                      tickFormatter={(v) => '₦' + (v / 1000).toFixed(0) + 'k'}
+                      tickFormatter={(v: number) => '₦' + (v / 1000).toFixed(0) + 'k'}
                     />
                     <YAxis
                       type="category"
@@ -717,7 +797,7 @@ Categories: ${d.categorySplit
                       width={80}
                     />
                     <Tooltip
-                      formatter={(v) => fmt(v)}
+                      formatter={(v: number) => fmt(v)}
                       contentStyle={{
                         background: '#111827',
                         border: '1px solid #374151',
@@ -729,7 +809,6 @@ Categories: ${d.categorySplit
                 </ResponsiveContainer>
               )}
             </div>
-
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
               <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
                 <CreditCard size={16} className="text-amber-400" /> Payment Methods
@@ -749,11 +828,11 @@ Categories: ${d.categorySplit
                         strokeWidth={0}
                       >
                         {data.paymentBreakdown.map((_, i) => (
-                          <Cell key={i} fill={[GREEN, BLUE, PURPLE, RED][i]} />
+                          <Cell key={i} fill={[GREEN, BLUE, PURPLE, RED][i % 4]} />
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(v) => fmt(v)}
+                        formatter={(v: number) => fmt(v)}
                         contentStyle={{
                           background: '#111827',
                           border: '1px solid #374151',
@@ -777,7 +856,7 @@ Categories: ${d.categorySplit
                               className="h-1.5 rounded-full"
                               style={{
                                 width: `${pct}%`,
-                                background: [GREEN, BLUE, PURPLE, RED][i],
+                                background: [GREEN, BLUE, PURPLE, RED][i % 4],
                               }}
                             />
                           </div>
@@ -820,7 +899,7 @@ Categories: ${d.categorySplit
                   </thead>
                   <tbody>
                     {data.staffPerf.map((s, i) => (
-                      <tr key={s.id || s.name + i} className="border-b border-gray-800/50">
+                      <tr key={s.name + i} className="border-b border-gray-800/50">
                         <td className="py-3 flex items-center gap-2">
                           <span>{i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '  '}</span>
                           <span className="text-white">{s.name}</span>
