@@ -491,7 +491,7 @@ export default function POS() {
     )
 
   return (
-    <div className="h-full bg-gray-950 flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-gray-950 flex flex-col" style={{ zIndex: 10 }}>
       <WaiterCalls />
       <CustomerOrderAlerts profile={profile} assignedTableIds={assignedTableIds || []} />
 
@@ -814,7 +814,10 @@ export default function POS() {
         )}
 
         {selectedTable && !showPayment && (
-          <div className="w-full md:w-96 border-l border-gray-800 flex flex-col overflow-hidden">
+          <div
+            className="w-full md:w-96 border-l border-gray-800 flex flex-col overflow-hidden"
+            style={{ height: '100%' }}
+          >
             <OrderPanel
               table={selectedTable}
               menuItems={getMenuItemsWithZonePrices(selectedTable) as MenuItem[]}
