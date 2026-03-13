@@ -344,16 +344,73 @@ export default function POS() {
   }
 
   const handlePlaceOrder = async ({ table, items, notes, total }: OrderPayload) => {
-    if (activeOrder) {
-      const newTotal = (activeOrder.total_amount || 0) + total
-      await offlineUpdate('orders', activeOrder.id, {
-        total_amount: newTotal,
-        notes: notes || activeOrder.notes,
-        updated_at: new Date().toISOString(),
+    try {
+      if (activeOrder) {
+        const newTotal = (activeOrder.total_amount || 0) + total
+        await offlineUpdate('orders', activeOrder.id, {
+          total_amount: newTotal,
+          notes: notes || activeOrder.notes,
+          updated_at: new Date().toISOString(),
+        })
+        const newItems = items.map((item) => ({
+          id: crypto.randomUUID(),
+          order_id: activeOrder.id,
+          menu_item_id: item.id,
+          quantity: item.quantity,
+          unit_price: item.price,
+          total_price: item.total,
+          status: 'pending',
+          destination: item.menu_categories?.destination || 'bar',
+          modifier_notes: item.modifier_notes || null,
+          extra_charge: item.extra_charge || 0,
+          created_at: new Date().toISOString(),
+        }))
+        for (const item of newItems) {
+          const { error } = await offlineInsert('order_items', item)
+          if (error) {
+            alert('Error adding items: ' + error.message)
+            return
+          }
+        }
+        await depleteInventory(items)
+        await audit({
+          action: 'ORDER_UPDATED',
+          entity: 'order',
+          entityId: activeOrder.id,
+          entityName: 'Table ' + table.name,
+          newValue: { addedItems: items.length, newTotal },
+          performer: profile as Profile,
+        })
+        const { data: refreshed } = await supabase
+          .from('orders')
+          .select('*, order_items(*, menu_items(name))')
+          .eq('id', activeOrder.id)
+          .single()
+        setActiveOrder(refreshed)
+        setShowPayment(true)
+        return
+      }
+
+      const orderId = crypto.randomUUID()
+      const { data: newOrder, error: orderError } = await offlineInsert('orders', {
+        id: orderId,
+        table_id: table.id,
+        staff_id: profile!.id,
+        order_type: 'table',
+        status: 'open',
+        total_amount: total,
+        notes,
+        created_at: new Date().toISOString(),
       })
-      const newItems = items.map((item) => ({
+      if (orderError) {
+        console.error('Order error:', orderError)
+        alert('Error creating order: ' + orderError.message)
+        return
+      }
+
+      const orderItemRows = items.map((item) => ({
         id: crypto.randomUUID(),
-        order_id: activeOrder.id,
+        order_id: (newOrder as Order).id,
         menu_item_id: item.id,
         quantity: item.quantity,
         unit_price: item.price,
@@ -364,7 +421,7 @@ export default function POS() {
         extra_charge: item.extra_charge || 0,
         created_at: new Date().toISOString(),
       }))
-      for (const item of newItems) {
+      for (const item of orderItemRows) {
         const { error } = await offlineInsert('order_items', item)
         if (error) {
           alert('Error adding items: ' + error.message)
@@ -373,82 +430,30 @@ export default function POS() {
       }
       await depleteInventory(items)
       await audit({
-        action: 'ORDER_UPDATED',
+        action: 'ORDER_CREATED',
         entity: 'order',
-        entityId: activeOrder.id,
+        entityId: (newOrder as Order).id,
         entityName: 'Table ' + table.name,
-        newValue: { addedItems: items.length, newTotal },
+        newValue: { total, items: items.length, table: table.name },
         performer: profile as Profile,
       })
-      const { data: refreshed } = await supabase
+      await offlineUpdate('tables', table.id, { status: 'occupied' })
+      // Reload the newly created order so PaymentModal has full order_items
+      const { data: freshOrder } = await supabase
         .from('orders')
         .select('*, order_items(*, menu_items(name))')
-        .eq('id', activeOrder.id)
+        .eq('id', (newOrder as Order).id)
         .single()
-      setActiveOrder(refreshed)
-      setShowPayment(true)
-      return
-    }
-
-    const orderId = crypto.randomUUID()
-    const { data: newOrder, error: orderError } = await offlineInsert('orders', {
-      id: orderId,
-      table_id: table.id,
-      staff_id: profile!.id,
-      order_type: 'table',
-      status: 'open',
-      total_amount: total,
-      notes,
-      created_at: new Date().toISOString(),
-    })
-    if (orderError) {
-      console.error('Order error:', orderError)
-      alert('Error creating order: ' + orderError.message)
-      return
-    }
-
-    const orderItemRows = items.map((item) => ({
-      id: crypto.randomUUID(),
-      order_id: (newOrder as Order).id,
-      menu_item_id: item.id,
-      quantity: item.quantity,
-      unit_price: item.price,
-      total_price: item.total,
-      status: 'pending',
-      destination: item.menu_categories?.destination || 'bar',
-      modifier_notes: item.modifier_notes || null,
-      extra_charge: item.extra_charge || 0,
-      created_at: new Date().toISOString(),
-    }))
-    for (const item of orderItemRows) {
-      const { error } = await offlineInsert('order_items', item)
-      if (error) {
-        alert('Error adding items: ' + error.message)
-        return
+      if (freshOrder) {
+        setActiveOrder(freshOrder)
+        setShowPayment(true)
       }
+      // Refresh table grid in background — don't await so it doesn't block modal
+      void fetchTables()
+    } catch (err) {
+      console.error('handlePlaceOrder error:', err)
+      alert('Order failed: ' + (err instanceof Error ? err.message : String(err)))
     }
-    await depleteInventory(items)
-    await audit({
-      action: 'ORDER_CREATED',
-      entity: 'order',
-      entityId: (newOrder as Order).id,
-      entityName: 'Table ' + table.name,
-      newValue: { total, items: items.length, table: table.name },
-      performer: profile as Profile,
-    })
-    await offlineUpdate('tables', table.id, { status: 'occupied' })
-    // Reload the newly created order so PaymentModal has full order_items
-    const { data: freshOrder } = await supabase
-      .from('orders')
-      .select('*, order_items(*, menu_items(name))')
-      .eq('id', (newOrder as Order).id)
-      .single()
-    if (freshOrder) {
-      setActiveOrder(freshOrder)
-      setShowPayment(true)
-    }
-    // Refresh table grid in background — don't await so it doesn't block modal
-    void fetchTables()
   }
 
   const openCashSale = (type: 'cash' | 'takeaway') => {
