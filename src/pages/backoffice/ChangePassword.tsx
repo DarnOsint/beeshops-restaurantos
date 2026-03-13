@@ -2,7 +2,31 @@ import { useState } from 'react'
 import { ArrowLeft, Lock, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
-export default function ChangePassword({ onBack }) {
+interface Props {
+  onBack: () => void
+}
+
+function passwordStrength(pw: string): number {
+  let score = 0
+  if (pw.length >= 8) score++
+  if (pw.length >= 12) score++
+  if (/[A-Z]/.test(pw)) score++
+  if (/[0-9]/.test(pw)) score++
+  if (/[^A-Za-z0-9]/.test(pw)) score++
+  return score
+}
+
+const STRENGTH_LABEL = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong'] as const
+const STRENGTH_COLOR = [
+  '',
+  'bg-red-500',
+  'bg-orange-400',
+  'bg-yellow-400',
+  'bg-green-400',
+  'bg-green-500',
+] as const
+
+export default function ChangePassword({ onBack }: Props) {
   const [current, setCurrent] = useState('')
   const [newPw, setNewPw] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -10,29 +34,10 @@ export default function ChangePassword({ onBack }) {
   const [showNew, setShowNew] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
 
-  const strength = (pw) => {
-    let score = 0
-    if (pw.length >= 8) score++
-    if (pw.length >= 12) score++
-    if (/[A-Z]/.test(pw)) score++
-    if (/[0-9]/.test(pw)) score++
-    if (/[^A-Za-z0-9]/.test(pw)) score++
-    return score
-  }
-
-  const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong']
-  const strengthColor = [
-    '',
-    'bg-red-500',
-    'bg-orange-400',
-    'bg-yellow-400',
-    'bg-green-400',
-    'bg-green-500',
-  ]
-  const s = strength(newPw)
+  const s = passwordStrength(newPw)
 
   const handleSubmit = async () => {
     setError(null)
@@ -54,8 +59,6 @@ export default function ChangePassword({ onBack }) {
     }
 
     setLoading(true)
-
-    // Re-authenticate with current password first
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -69,14 +72,12 @@ export default function ChangePassword({ onBack }) {
       email: user.email,
       password: current,
     })
-
     if (signInErr) {
       setError('Current password is incorrect.')
       setLoading(false)
       return
     }
 
-    // Update password
     const { error: updateErr } = await supabase.auth.updateUser({ password: newPw })
     if (updateErr) {
       setError(updateErr.message)
@@ -93,7 +94,6 @@ export default function ChangePassword({ onBack }) {
 
   return (
     <div className="min-h-screen bg-gray-950 pb-24">
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center gap-3">
         <button onClick={onBack} className="p-2 rounded-xl hover:bg-gray-800 transition-colors">
           <ArrowLeft size={20} className="text-gray-400" />
@@ -127,26 +127,24 @@ export default function ChangePassword({ onBack }) {
             )}
 
             {/* Current password */}
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
-              <div>
-                <label className="text-gray-400 text-xs font-medium block mb-2">
-                  Current Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showCurrent ? 'text' : 'password'}
-                    value={current}
-                    onChange={(e) => setCurrent(e.target.value)}
-                    placeholder="Enter current password"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm pr-10 focus:outline-none focus:border-amber-500"
-                  />
-                  <button
-                    onClick={() => setShowCurrent((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
-                  >
-                    {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </button>
-                </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+              <label className="text-gray-400 text-xs font-medium block mb-2">
+                Current Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showCurrent ? 'text' : 'password'}
+                  value={current}
+                  onChange={(e) => setCurrent(e.target.value)}
+                  placeholder="Enter current password"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm pr-10 focus:outline-none focus:border-amber-500"
+                />
+                <button
+                  onClick={() => setShowCurrent((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"
+                >
+                  {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 
@@ -175,14 +173,14 @@ export default function ChangePassword({ onBack }) {
                       {[1, 2, 3, 4, 5].map((i) => (
                         <div
                           key={i}
-                          className={`h-1 flex-1 rounded-full transition-colors ${i <= s ? strengthColor[s] : 'bg-gray-700'}`}
+                          className={`h-1 flex-1 rounded-full transition-colors ${i <= s ? STRENGTH_COLOR[s] : 'bg-gray-700'}`}
                         />
                       ))}
                     </div>
                     <p
                       className={`text-xs ${s >= 4 ? 'text-green-400' : s >= 3 ? 'text-yellow-400' : 'text-orange-400'}`}
                     >
-                      {strengthLabel[s]} —{' '}
+                      {STRENGTH_LABEL[s]} —{' '}
                       {s < 3
                         ? 'Add uppercase, numbers, or symbols to strengthen it.'
                         : 'Good to go.'}
@@ -190,7 +188,6 @@ export default function ChangePassword({ onBack }) {
                   </div>
                 )}
               </div>
-
               <div>
                 <label className="text-gray-400 text-xs font-medium block mb-2">
                   Confirm New Password
@@ -225,11 +222,13 @@ export default function ChangePassword({ onBack }) {
             {/* Requirements */}
             <div className="bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4">
               <p className="text-gray-500 text-xs font-medium mb-2">Requirements</p>
-              {[
-                ['At least 8 characters', newPw.length >= 8],
-                ['Different from current password', newPw.length > 0 && newPw !== current],
-                ['Passwords match', confirm.length > 0 && newPw === confirm],
-              ].map(([label, met]) => (
+              {(
+                [
+                  ['At least 8 characters', newPw.length >= 8],
+                  ['Different from current password', newPw.length > 0 && newPw !== current],
+                  ['Passwords match', confirm.length > 0 && newPw === confirm],
+                ] as [string, boolean][]
+              ).map(([label, met]) => (
                 <div key={label} className="flex items-center gap-2 py-1">
                   <div
                     className={`w-4 h-4 rounded-full flex items-center justify-center ${met ? 'bg-green-500/20' : 'bg-gray-800'}`}
