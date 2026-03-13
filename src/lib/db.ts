@@ -89,6 +89,11 @@ export async function localPut<T extends { id: string }>(
   storeName: StoreName,
   record: T
 ): Promise<IDBValidKey> {
+  // Guard: never attempt to store a record without an id — IDB will throw DataError
+  if (!record.id) {
+    console.warn(`[localPut] Skipping ${storeName} record with missing id`, record)
+    return ''
+  }
   const db = await openDB()
   return new Promise((resolve, reject) => {
     const req = db.transaction(storeName, 'readwrite').objectStore(storeName).put(record)

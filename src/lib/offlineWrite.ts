@@ -13,7 +13,10 @@ export async function offlineInsert<T extends { id: string }>(
   record: T
 ): Promise<OfflineResult<T>> {
   const localRecord = { ...record, synced: false }
-  await localPut(tableName, localRecord)
+  // Guard: only write to IDB if record has a valid id
+  if (localRecord.id) {
+    await localPut(tableName, localRecord)
+  }
 
   if (!navigator.onLine) {
     await queueSync(tableName, 'INSERT', record.id, record as Record<string, unknown>)
@@ -22,7 +25,10 @@ export async function offlineInsert<T extends { id: string }>(
 
   const { data, error } = await supabase.from(tableName).insert(record).select().single()
   if (!error && data) {
-    await localPut(tableName, { ...(data as T), synced: true })
+    const toStore = { ...(data as T), synced: true }
+    if ((toStore as { id?: string }).id) {
+      await localPut(tableName, toStore)
+    }
     return { data: data as T, error: null, offline: false }
   }
 
@@ -51,7 +57,10 @@ export async function offlineUpdate<T extends { id: string }>(
     .select()
     .single()
   if (!error && data) {
-    await localPut(tableName, { ...(data as T), synced: true })
+    const toStore = { ...(data as T), synced: true }
+    if ((toStore as { id?: string }).id) {
+      await localPut(tableName, toStore)
+    }
     return { data: data as T, error: null, offline: false }
   }
 
