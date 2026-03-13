@@ -112,9 +112,9 @@ export default function TableAssignment({ onClose }: Props) {
     setLoading(false)
   }, [fetchAssignments])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
-    fetchAll()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchAll()
   }, [fetchAll])
 
   const addStaffToZone = async (categoryId: string) => {

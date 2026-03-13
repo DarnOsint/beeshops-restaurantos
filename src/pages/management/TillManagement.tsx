@@ -131,9 +131,9 @@ export default function TillManagement({ onClose }: Props) {
     setLoading(false)
   }, [])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
-    fetchAll()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchAll()
   }, [fetchAll])
 
   const closeSession = async (session: TillSession) => {
@@ -154,15 +154,13 @@ export default function TillManagement({ onClose }: Props) {
       alert('Please enter amount and reason')
       return
     }
-    const { error } = await supabase
-      .from('payouts')
-      .insert({
-        staff_id: profile!.id,
-        amount: parseFloat(payoutForm.amount),
-        reason: payoutForm.reason,
-        category: payoutForm.category,
-        approved_by: profile!.id,
-      })
+    const { error } = await supabase.from('payouts').insert({
+      staff_id: profile!.id,
+      amount: parseFloat(payoutForm.amount),
+      reason: payoutForm.reason,
+      category: payoutForm.category,
+      approved_by: profile!.id,
+    })
     if (!error) {
       setPayoutForm({ amount: '', reason: '', category: 'general' })
       fetchPayouts()

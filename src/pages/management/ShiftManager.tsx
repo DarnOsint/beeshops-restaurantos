@@ -67,9 +67,9 @@ export default function ShiftManager({ onClose }: Props) {
     setLoading(false)
   }, [])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
-    fetchAll()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchAll()
   }, [fetchAll])
 
   const clockIn = async (member: StaffMember) => {

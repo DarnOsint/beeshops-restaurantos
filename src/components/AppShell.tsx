@@ -146,8 +146,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [role])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDrawerOpen(false)
   }, [location.pathname])
 
