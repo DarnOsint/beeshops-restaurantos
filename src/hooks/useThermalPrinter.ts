@@ -5,9 +5,8 @@
 const ESC = 0x1b
 const GS = 0x1d
 
-// ESC/POS command helpers
 const cmd = {
-  init: [ESC, 0x40], // Initialize printer
+  init: [ESC, 0x40],
   alignLeft: [ESC, 0x61, 0x00],
   alignCenter: [ESC, 0x61, 0x01],
   alignRight: [ESC, 0x61, 0x02],
@@ -16,25 +15,47 @@ const cmd = {
   doubleHeight: [ESC, 0x21, 0x10],
   doubleSize: [ESC, 0x21, 0x30],
   normalSize: [ESC, 0x21, 0x00],
-  cut: [GS, 0x56, 0x42, 0x00], // Full cut
-  feed: (n) => [ESC, 0x64, n], // Feed n lines
-  divider: () => text('-'.repeat(32) + '\n'),
-}
+  cut: [GS, 0x56, 0x42, 0x00],
+  feed: (n: number) => [ESC, 0x64, n],
+} as const
 
-function text(str) {
+function text(str: string): number[] {
   return Array.from(new TextEncoder().encode(str))
 }
 
-function row(left, right, width = 32) {
+function row(left: string, right: string, width = 32): number[] {
   const space = width - left.length - right.length
   if (space <= 0) return text(left.substring(0, width - right.length - 1) + ' ' + right + '\n')
   return text(left + ' '.repeat(space) + right + '\n')
 }
 
-function buildReceipt({ order, items, table, staffName, orderRef, subtotal, vatAmount, total }) {
-  const bytes = []
-  const push = (...chunks) =>
-    chunks.forEach((c) => (Array.isArray(c) ? bytes.push(...c) : bytes.push(...c)))
+export interface ReceiptData {
+  order: { created_at: string; order_type: string; payment_method?: string | null }
+  items: Array<{
+    quantity: number
+    total_price: number
+    extra_charge?: number
+    modifier_notes?: string | null
+    menu_items?: { name: string } | null
+    name?: string
+  }>
+  table?: { name: string } | null
+  staffName?: string
+  orderRef: string
+  subtotal: number
+  vatAmount: number
+  total: number
+}
+
+function buildReceipt(data: ReceiptData): Uint8Array {
+  const { order, items, table, staffName, orderRef, subtotal, vatAmount, total } = data
+  const bytes: number[] = []
+  const push = (...chunks: number[][]) => chunks.forEach((c) => bytes.push(...c))
+
+  const fmtDate = (d: string) =>
+    new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
+  const fmtTime = (d: string) =>
+    new Date(d).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true })
 
   push(cmd.init)
   push(cmd.alignCenter)
@@ -42,28 +63,20 @@ function buildReceipt({ order, items, table, staffName, orderRef, subtotal, vatA
   push(cmd.bold, ...text('Lounge & Restaurant\n'), cmd.boldOff)
   push(...text('--------------------------------\n'))
   push(cmd.alignLeft)
-
-  const formatDate = (d) =>
-    new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
-  const formatTime = (d) =>
-    new Date(d).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true })
-
   push(...row('Ref:', orderRef))
-  push(...row('Date:', formatDate(order.created_at)))
-  push(...row('Time:', formatTime(order.created_at)))
-  push(...row('Table:', table?.name || (order.order_type === 'takeaway' ? 'Takeaway' : 'Counter')))
-  push(...row('Served by:', staffName || ''))
-  push(...row('Payment:', order.payment_method?.toUpperCase() || ''))
+  push(...row('Date:', fmtDate(order.created_at)))
+  push(...row('Time:', fmtTime(order.created_at)))
+  push(...row('Table:', table?.name ?? (order.order_type === 'takeaway' ? 'Takeaway' : 'Counter')))
+  push(...row('Served by:', staffName ?? ''))
+  push(...row('Payment:', (order.payment_method ?? '').toUpperCase()))
   push(...text('--------------------------------\n'))
-
-  // Items header
   push(cmd.bold, ...text('ITEM             QTY    TOTAL\n'), cmd.boldOff)
   push(...text('--------------------------------\n'))
 
   items.forEach((item) => {
-    const name = (item.menu_items?.name || item.name || '').substring(0, 16).padEnd(16)
+    const name = (item.menu_items?.name ?? item.name ?? '').substring(0, 16).padEnd(16)
     const qty = String(item.quantity).padStart(3)
-    const tot = ('\u20A6' + (item.total_price || 0).toLocaleString()).padStart(10)
+    const tot = ('\u20A6' + (item.total_price ?? 0).toLocaleString()).padStart(10)
     push(...text(`${name} ${qty} ${tot}\n`))
     if (item.modifier_notes) push(...text(`  > ${item.modifier_notes.substring(0, 28)}\n`))
   })
@@ -93,8 +106,7 @@ function buildReceipt({ order, items, table, staffName, orderRef, subtotal, vatA
   push(...text('--------------------------------\n'))
   push(cmd.alignCenter)
   push(...text('Thank you for visiting!\n'))
-  push(...text('Please come again\n'))
-  push(...text('\n'))
+  push(...text('Please come again\n\n'))
   push(...text('Powered by RestaurantOS\n'))
   push(...cmd.feed(4))
   push(...cmd.cut)
@@ -102,18 +114,21 @@ function buildReceipt({ order, items, table, staffName, orderRef, subtotal, vatA
   return new Uint8Array(bytes)
 }
 
-let port = null
-let writer = null
+// Module-level serial port state (survives re-renders)
+let port: SerialPort | null = null
+let writer: WritableStreamDefaultWriter | null = null
 
 export function useThermalPrinter() {
   const isSupported = typeof navigator !== 'undefined' && 'serial' in navigator
 
-  const connect = async () => {
+  const connect = async (): Promise<boolean> => {
     if (!isSupported) return false
     try {
-      port = await navigator.serial.requestPort()
+      port = await (
+        navigator as Navigator & { serial: { requestPort: () => Promise<SerialPort> } }
+      ).serial.requestPort()
       await port.open({ baudRate: 9600 })
-      writer = port.writable.getWriter()
+      writer = port.writable!.getWriter()
       return true
     } catch (e) {
       console.warn('Serial port not selected or failed:', e)
@@ -121,7 +136,7 @@ export function useThermalPrinter() {
     }
   }
 
-  const printReceipt = async (data, fallbackFn) => {
+  const printReceipt = async (data: ReceiptData, fallbackFn?: () => void): Promise<void> => {
     if (!isSupported) {
       fallbackFn?.()
       return
@@ -134,11 +149,9 @@ export function useThermalPrinter() {
           return
         }
       }
-      const bytes = buildReceipt(data)
-      await writer.write(bytes)
+      await writer!.write(buildReceipt(data))
     } catch (e) {
       console.warn('Thermal print failed, falling back:', e)
-      // Release port on error
       try {
         writer?.releaseLock()
         writer = null
@@ -150,7 +163,7 @@ export function useThermalPrinter() {
     }
   }
 
-  const disconnect = async () => {
+  const disconnect = async (): Promise<void> => {
     try {
       writer?.releaseLock()
       await port?.close()

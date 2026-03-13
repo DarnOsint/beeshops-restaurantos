@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { startSyncListener, replayQueue } from '../lib/sync'
 import { getPendingCount } from '../lib/db'
+import type { SyncStatus } from '../lib/sync'
 
 export function useSyncStatus() {
-  const [status, setStatus] = useState(navigator.onLine ? 'online' : 'offline')
+  const [status, setStatus] = useState<SyncStatus>(navigator.onLine ? 'online' : 'offline')
   const [pendingCount, setPendingCount] = useState(0)
-  const [lastSynced, setLastSynced] = useState(null)
+  const [lastSynced, setLastSynced] = useState<Date | null>(null)
 
   useEffect(() => {
     const cleanup = startSyncListener((s) => {
@@ -15,21 +16,22 @@ export function useSyncStatus() {
     })
 
     const interval = setInterval(async () => {
-      const count = await getPendingCount()
-      setPendingCount(count)
-    }, 10000)
+      setPendingCount(await getPendingCount())
+    }, 10_000)
 
-    return () => { cleanup(); clearInterval(interval) }
+    return () => {
+      cleanup()
+      clearInterval(interval)
+    }
   }, [])
 
-  const manualSync = async () => {
+  const manualSync = async (): Promise<void> => {
     if (!navigator.onLine) return
     setStatus('syncing')
     const result = await replayQueue()
     setStatus(result.failed > 0 ? 'partial' : 'online')
     setLastSynced(new Date())
-    const count = await getPendingCount()
-    setPendingCount(count)
+    setPendingCount(await getPendingCount())
   }
 
   return { status, pendingCount, lastSynced, manualSync }

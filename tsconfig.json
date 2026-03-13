@@ -13,7 +13,8 @@
     "noEmit": true,
 
     "jsx": "react-jsx",
-    "allowJs": false,
+    "allowJs": true,
+    "checkJs": false,
 
     "strict": false,
     "noUnusedLocals": false,
@@ -25,6 +26,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.js", "src/**/*.jsx"],
   "exclude": ["node_modules", "dist"]
 }

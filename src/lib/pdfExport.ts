@@ -2,12 +2,11 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
 const BRAND = "Beeshop's Place Lounge"
-const SUBTEXT = "Restaurant & Bar"
+const SUBTEXT = 'Restaurant & Bar'
 
-export function createPDF(title, subtitle) {
+export function createPDF(title: string, subtitle?: string): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  
-  // Header
+
   doc.setFillColor(15, 23, 42)
   doc.rect(0, 0, 210, 28, 'F')
   doc.setTextColor(245, 158, 11)
@@ -31,30 +30,41 @@ export function createPDF(title, subtitle) {
   return doc
 }
 
-export function addTable(doc, head, body, startY) {
+export function addTable(
+  doc: jsPDF,
+  head: string[],
+  body: (string | number)[][],
+  startY?: number
+): number {
   autoTable(doc, {
-    startY: startY || 35,
+    startY: startY ?? 35,
     head: [head],
     body,
     theme: 'grid',
     headStyles: { fillColor: [245, 158, 11], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 8 },
     bodyStyles: { fontSize: 7, textColor: [30, 30, 30] },
     alternateRowStyles: { fillColor: [245, 245, 245] },
-    margin: { left: 14, right: 14 }
+    margin: { left: 14, right: 14 },
   })
-  return doc.lastAutoTable.finalY
+  return (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY
 }
 
-export function addSummaryRow(doc, label, value, y, color) {
+export function addSummaryRow(
+  doc: jsPDF,
+  label: string,
+  value: string,
+  y: number,
+  color: [number, number, number] = [0, 0, 0]
+): void {
   doc.setFontSize(9)
   doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...(color || [0, 0, 0]))
+  doc.setTextColor(...color)
   doc.text(label, 14, y)
   doc.text(value, 196, y, { align: 'right' })
   doc.setTextColor(0, 0, 0)
 }
 
-export function addFooter(doc) {
+export function addFooter(doc: jsPDF): void {
   const pageCount = doc.getNumberOfPages()
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i)
@@ -65,7 +75,7 @@ export function addFooter(doc) {
   }
 }
 
-export function savePDF(doc, filename) {
+export function savePDF(doc: jsPDF, filename: string): void {
   addFooter(doc)
   doc.save(filename)
 }
