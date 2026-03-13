@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import {
   ShoppingBag,
   LayoutDashboard,
@@ -13,6 +14,7 @@ import {
   UtensilsCrossed,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { supabase } from '../../../lib/supabase'
 import UnassignedCustomerOrders from '../../../components/UnassignedCustomerOrders'
 
 interface Stats {
@@ -31,6 +33,18 @@ interface Props {
 
 export default function OverviewTab({ stats, pendingCount, onTabChange }: Props) {
   const navigate = useNavigate()
+  const [totalTables, setTotalTables] = useState(0)
+  const [totalRooms, setTotalRooms] = useState(0)
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('tables').select('id', { count: 'exact', head: true }),
+      supabase.from('rooms').select('id', { count: 'exact', head: true }),
+    ]).then(([t, r]) => {
+      setTotalTables(t.count || 0)
+      setTotalRooms(r.count || 0)
+    })
+  }, [])
 
   const kpis = [
     {
@@ -42,14 +56,14 @@ export default function OverviewTab({ stats, pendingCount, onTabChange }: Props)
     },
     {
       label: 'Occupied Tables',
-      value: `${stats.occupiedTables}/60`,
+      value: `${stats.occupiedTables}/${totalTables || '—'}`,
       icon: LayoutDashboard,
       color: 'text-blue-400',
       bg: 'bg-blue-400/10',
     },
     {
       label: 'Occupied Rooms',
-      value: `${stats.occupiedRooms}/20`,
+      value: `${stats.occupiedRooms}/${totalRooms || '—'}`,
       icon: BedDouble,
       color: 'text-purple-400',
       bg: 'bg-purple-400/10',

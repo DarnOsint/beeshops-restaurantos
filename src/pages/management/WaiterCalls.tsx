@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Bell, CheckCircle, X } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
@@ -16,19 +16,7 @@ export default function WaiterCalls() {
   const { profile } = useAuth()
   const [calls, setCalls] = useState<WaiterCall[]>([])
 
-  useEffect(() => {
-    fetchCalls()
-    const channel = supabase
-      .channel('waiter-calls-' + profile?.id)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'waiter_calls' }, fetchCalls)
-      .subscribe()
-    return () => {
-      supabase.removeChannel(channel)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.id])
-
-  const fetchCalls = async () => {
+  const fetchCalls = useCallback(async () => {
     let query = supabase
       .from('waiter_calls')
       .select('*')
@@ -41,7 +29,19 @@ export default function WaiterCalls() {
 
     const { data } = await query
     setCalls((data as WaiterCall[]) || [])
-  }
+  }, [profile?.id, profile?.role])
+
+  useEffect(() => {
+    fetchCalls()
+    const channel = supabase
+      .channel('waiter-calls-' + profile?.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'waiter_calls' }, fetchCalls)
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchCalls])
 
   const acknowledge = async (id: string) => {
     await supabase
@@ -52,10 +52,12 @@ export default function WaiterCalls() {
         acknowledged_by: profile?.full_name,
       })
       .eq('id', id)
+    fetchCalls()
   }
 
   const dismiss = async (id: string) => {
     await supabase.from('waiter_calls').update({ status: 'dismissed' }).eq('id', id)
+    fetchCalls()
   }
 
   if (calls.length === 0) return null
