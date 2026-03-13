@@ -1,0 +1,465 @@
+import { useState, useEffect, useCallback } from 'react'
+import { supabase } from '../../lib/supabase'
+import { HelpTooltip } from '../../components/HelpTooltip'
+import { useAuth } from '../../context/AuthContext'
+import {
+  ShoppingBag,
+  AlertTriangle,
+  Users,
+  Trash2,
+  DollarSign,
+  BarChart2,
+  Clock,
+  BookOpen,
+  Shield,
+  TrendingUp,
+} from 'lucide-react'
+
+import Debtors from './Debtors'
+import OverviewTab from './OverviewTab'
+import OrdersTab from './OrdersTab'
+import StaffTab from './StaffTab'
+import TillTab from './TillTab'
+import PayoutsTab from './PayoutsTab'
+import TrendsTab from './TrendsTab'
+import VoidsTab from './VoidsTab'
+import LedgerTab from './LedgerTab'
+import AuditTab from './AuditTab'
+
+import type {
+  AccountingSummary,
+  WaitronStat,
+  TrendPoint,
+  LedgerEntry,
+  PayoutRow,
+  TillSession,
+  TimesheetEntry,
+  AuditEntry,
+  VoidEntry,
+} from './types'
+import type { Order } from '../../types'
+
+const DATE_RANGES = ['Today', 'This Week', 'This Month', 'Custom'] as const
+type DateRange = (typeof DATE_RANGES)[number]
+
+const TABS = [
+  { id: 'overview', label: 'Overview', icon: BarChart2 },
+  { id: 'orders', label: 'Orders', icon: ShoppingBag },
+  { id: 'staff', label: 'Staff', icon: Users },
+  { id: 'till', label: 'Till', icon: Clock },
+  { id: 'payouts', label: 'Payouts', icon: DollarSign },
+  { id: 'trends', label: 'Trends', icon: TrendingUp },
+  { id: 'debtors', label: 'Debtors', icon: AlertTriangle },
+  { id: 'voids', label: 'Voids', icon: Trash2 },
+  { id: 'ledger', label: 'Ledger', icon: BookOpen },
+  { id: 'audit', label: 'Audit', icon: Shield },
+] as const
+
+export default function Accounting() {
+  useAuth()
+
+  // ── UI state ──────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState('overview')
+  const [dateRange, setDateRange] = useState<DateRange>('Today')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [orderFilter, setOrderFilter] = useState({ status: 'all', type: 'all' })
+
+  // ── Void sub-state (date-specific fetch) ─────────────────────────────────
+  const [voidLog, setVoidLog] = useState<VoidEntry[]>([])
+  const [voidLoading, setVoidLoading] = useState(false)
+  const [voidDateFilter, setVoidDateFilter] = useState(new Date().toISOString().split('T')[0])
+
+  // ── Data state ────────────────────────────────────────────────────────────
+  const [summary, setSummary] = useState<AccountingSummary>({
+    total: 0,
+    cash: 0,
+    card: 0,
+    transfer: 0,
+    orders: 0,
+    avgOrder: 0,
+  })
+  const [orders, setOrders] = useState<Order[]>([])
+  const [waitronStats, setWaitronStats] = useState<WaitronStat[]>([])
+  const [trendData, setTrendData] = useState<TrendPoint[]>([])
+  const [tillSessions, setTillSessions] = useState<TillSession[]>([])
+  const [timesheet, setTimesheet] = useState<TimesheetEntry[]>([])
+  const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
+  const [payouts, setPayouts] = useState<PayoutRow[]>([])
+  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const getDateBounds = useCallback(() => {
+    const now = new Date()
+    let start: Date, end: Date
+
+    if (dateRange === 'Today') {
+      start = new Date(now)
+      start.setHours(0, 0, 0, 0)
+      end = new Date(now)
+      end.setHours(23, 59, 59, 999)
+    } else if (dateRange === 'This Week') {
+      start = new Date(now)
+      start.setDate(now.getDate() - now.getDay())
+      start.setHours(0, 0, 0, 0)
+      end = new Date(now)
+      end.setHours(23, 59, 59, 999)
+    } else if (dateRange === 'This Month') {
+      start = new Date(now.getFullYear(), now.getMonth(), 1)
+      end = new Date(now)
+      end.setHours(23, 59, 59, 999)
+    } else if (dateRange === 'Custom' && customStart && customEnd) {
+      start = new Date(customStart)
+      start.setHours(0, 0, 0, 0)
+      end = new Date(customEnd)
+      end.setHours(23, 59, 59, 999)
+    } else {
+      start = new Date(now)
+      start.setHours(0, 0, 0, 0)
+      end = new Date(now)
+      end.setHours(23, 59, 59, 999)
+    }
+    return { start: start.toISOString(), end: end.toISOString() }
+  }, [dateRange, customStart, customEnd])
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true)
+    const { start, end } = getDateBounds()
+
+    const [ordersRes, tillRes, payoutsRes, trendRes, timesheetRes, auditRes] = await Promise.all([
+      supabase
+        .from('orders')
+        .select('*, profiles(full_name), tables(name), order_items(*, menu_items(name))')
+        .gte('created_at', start)
+        .lte('created_at', end)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('till_sessions')
+        .select('*, profiles(full_name)')
+        .gte('opened_at', start)
+        .lte('opened_at', end)
+        .order('opened_at', { ascending: false }),
+      supabase
+        .from('payouts')
+        .select('*, profiles(full_name)')
+        .gte('created_at', start)
+        .lte('created_at', end)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('orders')
+        .select('created_at, total_amount')
+        .eq('status', 'paid')
+        .gte('created_at', new Date(Date.now() - 30 * 864e5).toISOString())
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('attendance')
+        .select('*')
+        .gte('clock_in', start)
+        .lte('clock_in', end)
+        .order('clock_in', { ascending: false }),
+      supabase
+        .from('audit_log')
+        .select('*')
+        .gte('created_at', start)
+        .lte('created_at', end)
+        .order('created_at', { ascending: false })
+        .limit(200),
+    ])
+
+    const allOrders = (ordersRes.data || []) as Order[]
+    const paidOrders = allOrders.filter((o) => o.status === 'paid')
+    const total = paidOrders.reduce((s, o) => s + (o.total_amount || 0), 0)
+    const cash = paidOrders
+      .filter((o) => o.payment_method === 'cash')
+      .reduce((s, o) => s + (o.total_amount || 0), 0)
+    const card = paidOrders
+      .filter((o) => o.payment_method === 'card')
+      .reduce((s, o) => s + (o.total_amount || 0), 0)
+    const transfer = paidOrders
+      .filter((o) => o.payment_method === 'transfer')
+      .reduce((s, o) => s + (o.total_amount || 0), 0)
+
+    setSummary({
+      total,
+      cash,
+      card,
+      transfer,
+      orders: paidOrders.length,
+      avgOrder: paidOrders.length ? Math.round(total / paidOrders.length) : 0,
+    })
+    setOrders(allOrders)
+
+    const wMap: Record<string, WaitronStat> = {}
+    paidOrders.forEach((o) => {
+      const name =
+        (o as Order & { profiles?: { full_name: string } }).profiles?.full_name || 'Unknown'
+      if (!wMap[name]) wMap[name] = { name, orders: 0, revenue: 0 }
+      wMap[name].orders++
+      wMap[name].revenue += o.total_amount || 0
+    })
+    setWaitronStats(Object.values(wMap).sort((a, b) => b.revenue - a.revenue))
+
+    const dayMap: Record<string, TrendPoint> = {}
+    ;(trendRes.data || []).forEach((o) => {
+      const day = new Date(o.created_at).toLocaleDateString('en-NG', {
+        month: 'short',
+        day: 'numeric',
+      })
+      if (!dayMap[day]) dayMap[day] = { day, revenue: 0, orders: 0 }
+      dayMap[day].revenue += o.total_amount || 0
+      dayMap[day].orders++
+    })
+    setTrendData(Object.values(dayMap))
+
+    setTillSessions((tillRes.data || []) as TillSession[])
+    setTimesheet((timesheetRes.data || []) as TimesheetEntry[])
+    setAuditLog((auditRes.data || []) as AuditEntry[])
+    setPayouts((payoutsRes.data || []) as PayoutRow[])
+
+    const ledger: LedgerEntry[] = []
+    paidOrders.forEach((o) => {
+      const ord = o as Order & { profiles?: { full_name: string } }
+      ledger.push({
+        id: o.id,
+        date: o.created_at,
+        type: 'credit',
+        description:
+          (o.payment_method === 'credit' ? '[Pay Later] ' : '') +
+          (o.tables?.name || o.order_type || 'Sale'),
+        ref: o.id.slice(0, 8).toUpperCase(),
+        debit: 0,
+        credit: o.total_amount || 0,
+        method: o.payment_method ?? null,
+        staff: ord.profiles?.full_name ?? null,
+        balance: 0,
+      })
+    })
+    ;(payoutsRes.data || []).forEach((p: PayoutRow & { profiles?: { full_name: string } }) => {
+      ledger.push({
+        id: p.id,
+        date: p.created_at,
+        type: 'debit',
+        description: p.reason || 'Expense',
+        ref: p.id.slice(0, 8).toUpperCase(),
+        debit: p.amount || 0,
+        credit: 0,
+        method: p.category,
+        staff: p.profiles?.full_name ?? null,
+        balance: 0,
+      })
+    })
+    ledger.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    let bal = 0
+    ledger.forEach((e) => {
+      bal += e.credit - e.debit
+      e.balance = bal
+    })
+    setLedgerEntries(ledger.reverse())
+    setLoading(false)
+  }, [getDateBounds])
+
+  // ── Scroll to top on tab change ───────────────────────────────────────────
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' })
+  }, [activeTab])
+
+  // ── Main data fetch ───────────────────────────────────────────────────────
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
+
+  // ── Void log fetch (date-specific) ───────────────────────────────────────
+  useEffect(() => {
+    if (activeTab !== 'voids') return
+    const start = new Date(voidDateFilter)
+    start.setHours(0, 0, 0, 0)
+    const end = new Date(voidDateFilter)
+    end.setHours(23, 59, 59, 999)
+    let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVoidLoading(true)
+    supabase
+      .from('void_log')
+      .select('*')
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString())
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (cancelled) return
+        setVoidLog((data as VoidEntry[]) || [])
+        setVoidLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, voidDateFilter])
+
+  const totalPayouts = payouts.reduce((s, p) => s + (p.amount || 0), 0)
+  const netRevenue = summary.total - totalPayouts
+  const paidCount = orders.filter((o) => o.status === 'paid').length
+
+  return (
+    <div className="min-h-full bg-gray-950">
+      {/* Date Range Picker */}
+      <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center gap-3 flex-wrap">
+        <div className="flex gap-1.5 flex-wrap">
+          {DATE_RANGES.map((r) => (
+            <button
+              key={r}
+              onClick={() => setDateRange(r)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${dateRange === r ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white border border-gray-700'}`}
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+        {dateRange === 'Custom' && (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={customStart}
+              onChange={(e) => setCustomStart(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-amber-500"
+            />
+            <span className="text-gray-500 text-xs">to</span>
+            <input
+              type="date"
+              value={customEnd}
+              onChange={(e) => setCustomEnd(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-amber-500"
+            />
+          </div>
+        )}
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-gray-600 text-xs">
+            {loading ? 'Loading...' : `${paidCount} paid orders`}
+          </span>
+          <HelpTooltip
+            storageKey="accounting"
+            tips={[
+              {
+                id: 'acc-daterange',
+                title: 'Date Range Filter',
+                description:
+                  'All tabs respect the date range selected at the top — Today, This Week, This Month, or Custom. Change the range first before reading any figures, as all data filters to that period.',
+              },
+              {
+                id: 'acc-overview',
+                title: 'Overview Tab',
+                description:
+                  'Gross revenue, net revenue (after payouts), and a breakdown by payment method — Cash, Bank POS, and Bank Transfer. Also shows order count and average order value.',
+              },
+              {
+                id: 'acc-orders',
+                title: 'Orders Tab',
+                description:
+                  'Full list of all orders in the selected period. Filter by status and type. Tap any order row to expand and see every item, the assigned waitron, table, payment method, and exact time.',
+              },
+              {
+                id: 'acc-staff',
+                title: 'Staff Tab',
+                description:
+                  "Per-waitron performance breakdown — total revenue generated, number of orders closed, and average order value. Use this at shift close to verify each waitron's accountability.",
+              },
+              {
+                id: 'acc-till',
+                title: 'Till Tab',
+                description:
+                  'Full log of all till sessions. Each session shows the opening float, total sales collected, payout deductions, expected closing cash, actual closing float, and any shortfall or surplus.',
+              },
+              {
+                id: 'acc-payouts',
+                title: 'Payouts Tab',
+                description:
+                  'Record any cash paid out of the till — petty cash, supplier payments, staff advances, or other expenses. Each payout requires an amount, a reason, and a category.',
+              },
+              {
+                id: 'acc-trends',
+                title: 'Trends Tab',
+                description:
+                  'Line and bar charts showing revenue and order count over the selected period. Useful for identifying peak trading days, slow periods, and week-on-week patterns.',
+              },
+              {
+                id: 'acc-debtors',
+                title: 'Debtors Tab',
+                description:
+                  'Manage account customers — corporate clients or individuals who are allowed to run a tab and settle at the end of a period. Record payments and view outstanding balances.',
+              },
+              {
+                id: 'acc-voids',
+                title: 'Voids Tab',
+                description:
+                  'A date-filtered log of all items voided. Each entry shows the item name, quantity, value lost, reason given, and which manager PIN approved the void.',
+              },
+              {
+                id: 'acc-ledger',
+                title: 'Ledger Tab',
+                description:
+                  'The double-entry general ledger — every financial transaction recorded as a credit or debit with a running balance. Covers sales, payouts, debtor payments, and room charges. Exportable to PDF.',
+              },
+              {
+                id: 'acc-audit',
+                title: 'Audit Log Tab',
+                description:
+                  'A tamper-evident log of every action performed in the system — logins, order changes, voids, menu edits, staff changes, and settings updates.',
+              },
+            ]}
+          />
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-gray-800 bg-gray-900 px-4 overflow-x-auto items-center">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-1.5 px-3 py-3 text-xs md:text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.id ? 'border-amber-500 text-amber-500' : 'border-transparent text-gray-400 hover:text-white'}`}
+          >
+            <tab.icon size={15} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div className="p-4 md:p-6">
+        {activeTab === 'overview' && (
+          <OverviewTab
+            summary={summary}
+            trendData={trendData}
+            totalPayouts={totalPayouts}
+            netRevenue={netRevenue}
+            onRecordPayout={() => setActiveTab('payouts')}
+          />
+        )}
+        {activeTab === 'orders' && (
+          <OrdersTab orders={orders} orderFilter={orderFilter} onFilterChange={setOrderFilter} />
+        )}
+        {activeTab === 'staff' && <StaffTab waitronStats={waitronStats} timesheet={timesheet} />}
+        {activeTab === 'till' && <TillTab tillSessions={tillSessions} />}
+        {activeTab === 'payouts' && (
+          <PayoutsTab payouts={payouts} totalPayouts={totalPayouts} onRefresh={fetchAll} />
+        )}
+        {activeTab === 'trends' && <TrendsTab trendData={trendData} />}
+        {activeTab === 'debtors' && (
+          <Debtors onBack={() => setActiveTab('overview')} embedded={true} />
+        )}
+        {activeTab === 'voids' && (
+          <VoidsTab
+            voidLog={voidLog}
+            voidLoading={voidLoading}
+            voidDateFilter={voidDateFilter}
+            onDateChange={setVoidDateFilter}
+          />
+        )}
+        {activeTab === 'ledger' && (
+          <LedgerTab ledgerEntries={ledgerEntries} dateRange={dateRange} />
+        )}
+        {activeTab === 'audit' && <AuditTab auditLog={auditLog} dateRange={dateRange} />}
+      </div>
+    </div>
+  )
+}
