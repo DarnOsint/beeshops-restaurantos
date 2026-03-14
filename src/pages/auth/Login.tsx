@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { verifyPinServer, verifyPbkdf2, hashPin } from '../../lib/pinHash'
 import { Eye, EyeOff, Delete } from 'lucide-react'
@@ -103,6 +103,7 @@ export default function Login() {
     const s = getRateState('rl_pin')
     return isLockedOut(s, PIN_LOCK_MS) ? getRemaining(s, PIN_LOCK_MS) : 0
   })
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const sessionExpired = searchParams.get('reason') === 'timeout'
   const emailLocked = emailRem > 0
@@ -150,9 +151,9 @@ export default function Login() {
         entity_name: email,
         new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
       })
-      // onAuthStateChange in AuthContext handles the redirect.
-      // Add a 10s timeout fallback so the button never hangs forever.
-      setTimeout(() => setLoading(false), 10_000)
+      // Navigate immediately — AuthContext will fetch profile in the background.
+      // PrivateRoute waits for profile before rendering, so no flicker.
+      navigate('/dashboard')
     }
   }
 

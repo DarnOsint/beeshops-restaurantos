@@ -134,8 +134,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── Auth init ──────────────────────────────────────────────────────────────
 
   const fetchProfile = useCallback(async (userId: string) => {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
-    if (!error) setProfile(data as Profile)
+    // Retry up to 3 times — handles transient RLS or network errors
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
+      if (!error && data) {
+        setProfile(data as Profile)
+        setLoading(false)
+        return
+      }
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 500))
+    }
+    // All retries failed — sign out cleanly rather than leaving broken state
+    await supabase.auth.signOut()
+    setUser(null)
+    setProfile(null)
     setLoading(false)
   }, [])
 
