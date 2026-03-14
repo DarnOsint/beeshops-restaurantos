@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { verifyPin, hashPin, isPinHashed } from '../../lib/pinHash'
+import { verifyPinServer, verifyPbkdf2, hashPin } from '../../lib/pinHash'
 import { Eye, EyeOff, Delete } from 'lucide-react'
 
 const EMAIL_MAX = 5
@@ -169,27 +169,21 @@ export default function Login() {
     setLoading(true)
     setError(null)
 
-    // Fast path: RPC handles plain-text PINs and bcrypt PINs server-side
-    let data: Record<string, unknown> | null = null
-    const { data: rpcResult } = await supabase.rpc('verify_pin_and_get_profile', {
-      entered_pin: entered,
-    })
-    if (rpcResult) {
-      data = rpcResult as Record<string, unknown>
-    }
+    // Step 1: Server-side verify — handles plain-text and bcrypt instantly
+    let data: Record<string, unknown> | null = await verifyPinServer(entered)
 
-    // Fallback: PBKDF2-hashed PINs must be verified client-side
-    // This path gets shorter over time as staff log in and auto-migrate to bcrypt
+    // Step 2: PBKDF2 legacy fallback (slow — only until all PINs are migrated)
+    // This loop shrinks to zero as each staff member logs in and gets re-hashed
     if (!data) {
-      const { data: hashedRows } = await supabase
+      const { data: pbkdf2Rows } = await supabase
         .from('profiles')
         .select('id, pin')
         .eq('is_active', true)
         .like('pin', 'pbkdf2:%')
 
-      if (hashedRows && hashedRows.length > 0) {
-        for (const row of hashedRows) {
-          if (row.pin && (await verifyPin(entered, row.pin))) {
+      if (pbkdf2Rows) {
+        for (const row of pbkdf2Rows) {
+          if (row.pin && (await verifyPbkdf2(entered, row.pin))) {
             const { data: fullProfile } = await supabase
               .from('profiles')
               .select('*')
@@ -228,10 +222,13 @@ export default function Login() {
     }
     resetAttempts('rl_pin')
 
-    // Auto-upgrade plain-text PIN to PBKDF2 hash on successful login
-    if (profile.pin && !isPinHashed(profile.pin)) {
+    // Auto-upgrade PIN to bcrypt on successful login (migrates plain-text and PBKDF2)
+    if (profile.pin && !profile.pin.startsWith('$2')) {
       void hashPin(entered).then((hashed) => {
-        supabase.from('profiles').update({ pin: hashed }).eq('id', profile.id)
+        if (hashed !== entered) {
+          // only update if hashPin returned a real hash
+          supabase.from('profiles').update({ pin: hashed }).eq('id', profile.id)
+        }
       })
     }
 

@@ -1,11 +1,39 @@
-// PIN Hashing — two strategies:
-// NEW: bcrypt via Supabase RPC (pgcrypto) — DB can verify, instant login
-// LEGACY: PBKDF2 (Web Crypto) — verified client-side, auto-migrated to bcrypt on login
+import { supabase } from './supabase'
+
+// ── PIN hashing strategy ──────────────────────────────────────────────────────
+// Storage format: bcrypt via pgcrypto (server-side, instant verification)
+// Legacy: PBKDF2 (client-side, slow — auto-migrated to bcrypt on login)
+// Legacy: plain text (pre-hash era — verified then immediately re-hashed)
+
+// ── bcrypt via Supabase RPC ───────────────────────────────────────────────────
+
+/** Hash a PIN using bcrypt server-side. Returns the bcrypt hash string. */
+export async function hashPin(pin: string): Promise<string> {
+  const { data, error } = await supabase.rpc('hash_pin', { pin_text: pin })
+  if (error || !data) {
+    // Fallback: if RPC unavailable, return plain text — will be hashed on next login
+    console.warn('hashPin RPC failed, storing plain text temporarily:', error?.message)
+    return pin
+  }
+  return data as string
+}
+
+/** Verify a PIN server-side. Returns the matching profile or null. */
+export async function verifyPinServer(pin: string): Promise<Record<string, unknown> | null> {
+  const { data, error } = await supabase.rpc('verify_pin_and_get_profile_v2', {
+    entered_pin: pin,
+  })
+  if (error) {
+    console.warn('verifyPin RPC error:', error.message)
+    return null
+  }
+  return data as Record<string, unknown> | null
+}
+
+// ── PBKDF2 (legacy client-side — only used during migration) ─────────────────
 
 const PBKDF2_ITERATIONS = 100_000
 const KEY_LENGTH = 32
-
-// ── PBKDF2 (legacy) ──────────────────────────────────────────────────────────
 
 async function pbkdf2Derive(pin: string, saltHex: string): Promise<string> {
   const encoder = new TextEncoder()
@@ -38,13 +66,7 @@ function bytesToHex(bytes: Uint8Array): string {
     .join('')
 }
 
-function randomSaltHex(): string {
-  const bytes = new Uint8Array(16)
-  crypto.getRandomValues(bytes)
-  return bytesToHex(bytes)
-}
-
-/** Verify a PBKDF2 hash (legacy path — slow, runs client-side) */
+/** Verify a PBKDF2 hash — legacy path only */
 export async function verifyPbkdf2(pin: string, stored: string): Promise<boolean> {
   if (!stored.startsWith('pbkdf2:')) return false
   const parts = stored.split(':')
@@ -54,42 +76,21 @@ export async function verifyPbkdf2(pin: string, stored: string): Promise<boolean
   return actualHash === expectedHash
 }
 
-/** Check if a stored value is a PBKDF2 hash */
-export function isPbkdf2Hash(stored: string): boolean {
-  return stored.startsWith('pbkdf2:')
-}
-
-/** Generate a PBKDF2 hash (used during migration only) */
-export async function hashPbkdf2(pin: string): Promise<string> {
-  const salt = randomSaltHex()
-  const hash = await pbkdf2Derive(pin, salt)
-  return `pbkdf2:${PBKDF2_ITERATIONS}:${salt}:${hash}`
-}
-
-// ── Public API ────────────────────────────────────────────────────────────────
-
-/**
- * Hash a PIN for storage.
- * New hashes use bcrypt via Supabase RPC (fast DB-side verification).
- * Falls back to PBKDF2 if RPC unavailable.
- */
-export async function hashPin(pin: string): Promise<string> {
-  // Use PBKDF2 for client-side hashing (bcrypt is done server-side via pgcrypto)
-  return hashPbkdf2(pin)
-}
-
-/**
- * Verify a plain PIN against a stored hash.
- * Supports both PBKDF2 (legacy) and plain-text (pre-hash).
- */
+/** Legacy compatibility — kept for any code still calling verifyPin directly */
 export async function verifyPin(pin: string, stored: string): Promise<boolean> {
   if (!stored) return false
   if (stored.startsWith('pbkdf2:')) return verifyPbkdf2(pin, stored)
-  // Plain text (legacy, not yet hashed)
+  if (stored.startsWith('$2')) {
+    // bcrypt — can't verify client-side, this path shouldn't be reached
+    return false
+  }
   return pin === stored
 }
 
-/** Check if a stored PIN value is already hashed (any format) */
 export function isPinHashed(stored: string): boolean {
   return stored.startsWith('pbkdf2:') || stored.startsWith('$2')
+}
+
+export function isPbkdf2Hash(stored: string): boolean {
+  return stored.startsWith('pbkdf2:')
 }
