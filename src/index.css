@@ -1,22 +1,15 @@
 @import "tailwindcss";
 
-html {
+html, body {
   background-color: #030712;
   overscroll-behavior: none;
+  height: 100%;
   margin: 0;
   padding: 0;
-}
-
-body {
-  background-color: #030712;
-  overscroll-behavior: none;
-  margin: 0;
-  padding: 0;
-  min-height: 100vh;
 }
 
 #root {
-  min-height: 100vh;
+  height: 100%;
   background-color: #030712;
   overflow-y: auto;
   overscroll-behavior: none;
