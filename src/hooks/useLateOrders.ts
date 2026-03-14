@@ -28,6 +28,7 @@ export function useLateOrders() {
 
   useEffect(() => {
     let active = true
+
     const check = async () => {
       try {
         const cutoff = new Date(Date.now() - threshold * 60 * 1000).toISOString()
@@ -47,11 +48,25 @@ export function useLateOrders() {
         // Network error — silently skip this poll cycle
       }
     }
+
     check()
-    const interval = setInterval(check, 90_000) // 90s — less noisy than 30s
+    const interval = setInterval(check, 30_000)
+
+    // Real-time: re-check immediately when any order_item status changes
+    const channel = supabase
+      .channel('late-orders-items')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'order_items' }, () => {
+        void check()
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, () => {
+        void check()
+      })
+      .subscribe()
+
     return () => {
       active = false
       clearInterval(interval)
+      void supabase.removeChannel(channel)
     }
   }, [threshold])
 
