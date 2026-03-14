@@ -1,13 +1,5 @@
-const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET || process.env.VITE_INTERNAL_API_SECRET
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end()
-
-  // Allow if no secret configured (dev) or secret matches
-  const authHeader = req.headers['x-internal-secret']
-  if (INTERNAL_SECRET && authHeader !== INTERNAL_SECRET) {
-    return res.status(401).json({ error: 'Unauthorized' })
-  }
 
   // SECURITY: never forward req.body directly to Anthropic.
   // Only extract the user data payload — model, system prompt, and

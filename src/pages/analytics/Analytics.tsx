@@ -209,6 +209,7 @@ export default function Analytics() {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiInsight, setAiInsight] = useState('')
   const [aiError, setAiError] = useState(false)
+  const [aiErrorMsg, setAiErrorMsg] = useState('')
   const [data, setData] = useState<AnalyticsData | null>(null)
   const fmt = (n: number) => '₦' + (n || 0).toLocaleString()
 
@@ -416,6 +417,7 @@ export default function Analytics() {
     setAiLoading(true)
     setAiInsight('')
     setAiError(false)
+    setAiErrorMsg('')
     try {
       const d = data
       // SECURITY: send only a data prompt — model/system/tokens are set server-side
@@ -454,7 +456,9 @@ Categories: ${d.categorySplit
       if (result.error) throw new Error(result.error)
       setAiInsight(result.content?.find((b) => b.type === 'text')?.text || 'No insights returned.')
     } catch (err) {
-      console.error('AI insights error:', err)
+      const msg = (err as Error)?.message || String(err)
+      console.error('AI insights error:', msg)
+      setAiErrorMsg(msg)
       setAiError(true)
     }
     setAiLoading(false)
@@ -588,7 +592,8 @@ Categories: ${d.categorySplit
             </div>
             {aiError && (
               <p className="text-gray-500 text-sm">
-                AI insights unavailable. All charts below are still fully functional.
+                AI insights unavailable{aiErrorMsg ? `: ${aiErrorMsg}` : ''}. All charts below are
+                still fully functional.
               </p>
             )}
             {!aiInsight && !aiError && !aiLoading && (
