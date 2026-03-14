@@ -257,7 +257,6 @@ export default function TableView() {
         { event: '*', schema: 'public', table: 'orders', filter: `table_id=eq.${tableId}` },
         fetchAll
       )
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'order_items' }, fetchAll)
       .subscribe()
     return () => {
       supabase.removeChannel(channel)

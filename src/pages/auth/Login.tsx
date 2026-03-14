@@ -168,21 +168,35 @@ export default function Login() {
     }
     setLoading(true)
     setError(null)
-    // Fetch all active staff with PINs, then verify client-side (supports hashed PINs)
-    const { data: allStaff, error: err } = await supabase
+    // SECURITY: fetch only id + pin for comparison — no names, roles, or emails.
+    // Full profile is fetched only after a match is confirmed.
+    // This prevents all staff data from being exposed to the browser.
+    const { data: pinRows, error: err } = await supabase
       .from('profiles')
-      .select('*')
+      .select('id, pin')
       .eq('is_active', true)
       .not('pin', 'is', null)
 
-    let data = null
-    if (!err && allStaff) {
-      for (const staff of allStaff) {
-        if (staff.pin && (await verifyPin(entered, staff.pin))) {
-          data = staff
+    let matchedId: string | null = null
+    if (!err && pinRows) {
+      for (const row of pinRows) {
+        if (row.pin && (await verifyPin(entered, row.pin))) {
+          matchedId = row.id
           break
         }
       }
+    }
+
+    // Fetch full profile only after confirmed match
+    let data = null
+    if (matchedId) {
+      const { data: fullProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', matchedId)
+        .eq('is_active', true)
+        .single()
+      data = fullProfile
     }
 
     if (!data) {

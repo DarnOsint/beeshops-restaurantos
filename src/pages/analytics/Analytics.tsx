@@ -404,33 +404,31 @@ export default function Analytics() {
     setAiError(false)
     try {
       const d = data
+      // SECURITY: send only a data prompt — model/system/tokens are set server-side
+      const prompt = `Period: ${range}
+Revenue: ${fmt(d.kpis.totalRevenue)} | Orders: ${d.kpis.totalOrders} | Avg Order: ${fmt(d.kpis.avgOrder)}
+Cancel Rate: ${d.kpis.cancelRate}% | Repeat Customers: ${d.kpis.repeatRate}% | Debt Exposure: ${fmt(d.kpis.debtExposure)}
+Top Items: ${d.bestSellers
+        .slice(0, 5)
+        .map((i) => i.name + ' ' + fmt(i.revenue))
+        .join(', ')}
+Top Zones: ${d.revenueByZone
+        .slice(0, 3)
+        .map((z) => z.name + ' ' + fmt(z.value))
+        .join(', ')}
+Payment Mix: ${d.paymentBreakdown.map((p) => p.name + ' ' + fmt(p.value)).join(', ')}
+Categories: ${d.categorySplit
+        .slice(0, 3)
+        .map((c) => c.name + ' ' + fmt(c.value))
+        .join(', ')}`
+
       const response = await fetch('/api/insights', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-internal-secret': import.meta.env.VITE_INTERNAL_API_SECRET || '',
         },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [
-            {
-              role: 'user',
-              content: `You are a hospitality business analyst for Beeshop's Place Lounge, a Nigerian restaurant and bar. Analyze this performance data and give 5-6 sharp, actionable bullet-point insights. Be specific with numbers. Use Nigerian Naira symbol. No headers, just bullet points.\n\nPeriod: ${range}\nRevenue: ${fmt(d.kpis.totalRevenue)} | Orders: ${d.kpis.totalOrders} | Avg Order: ${fmt(d.kpis.avgOrder)}\nCancel Rate: ${d.kpis.cancelRate}% | Repeat Customers: ${d.kpis.repeatRate}% | Debt Exposure: ${fmt(d.kpis.debtExposure)}\nTop Items: ${d.bestSellers
-                .slice(0, 5)
-                .map((i) => i.name + ' ' + fmt(i.revenue))
-                .join(', ')}\nTop Zones: ${d.revenueByZone
-                .slice(0, 3)
-                .map((z) => z.name + ' ' + fmt(z.value))
-                .join(
-                  ', '
-                )}\nPayment Mix: ${d.paymentBreakdown.map((p) => p.name + ' ' + fmt(p.value)).join(', ')}\nCategories: ${d.categorySplit
-                .slice(0, 3)
-                .map((c) => c.name + ' ' + fmt(c.value))
-                .join(', ')}`,
-            },
-          ],
-        }),
+        body: JSON.stringify({ prompt }),
       })
       const result = await response.json()
       setAiInsight(

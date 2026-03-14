@@ -70,7 +70,11 @@ export default function ReceiptView() {
     fetchOrder()
     const channel = supabase
       .channel(`receipt-${orderId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchOrder)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'order_items', filter: `order_id=eq.${orderId}` },
+        fetchOrder
+      )
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${orderId}` },
