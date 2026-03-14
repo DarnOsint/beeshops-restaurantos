@@ -51,7 +51,6 @@ export default function TableConfig({ onBack }: Props) {
     setLoading(false)
   }
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     fetchAll()
   }, [])
@@ -68,17 +67,23 @@ export default function TableConfig({ onBack }: Props) {
   const save = async () => {
     if (!form.name || !form.capacity || !editing) return
     setSaving(true)
-    await supabase
-      .from('tables')
-      .update({
-        name: form.name,
-        capacity: parseInt(form.capacity),
-        category_id: form.category_id,
-      })
-      .eq('id', editing.id)
-    await fetchAll()
-    setSaving(false)
-    setEditing(null)
+    try {
+      const { error } = await supabase
+        .from('tables')
+        .update({
+          name: form.name,
+          capacity: parseInt(form.capacity),
+          category_id: form.category_id,
+        })
+        .eq('id', editing.id)
+      if (error) throw error
+      await fetchAll()
+      setEditing(null)
+    } catch (err) {
+      alert('Failed to save table: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const filtered =

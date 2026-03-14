@@ -236,7 +236,11 @@ export default function ApartmentDashboard() {
   }
 
   async function updateRoomStatus(roomId: string, status: Room['status']) {
-    await supabase.from('rooms').update({ status }).eq('id', roomId)
+    const { error } = await supabase.from('rooms').update({ status }).eq('id', roomId)
+    if (error) {
+      alert('Failed to update room: ' + error.message)
+      return
+    }
     fetchAll()
   }
 

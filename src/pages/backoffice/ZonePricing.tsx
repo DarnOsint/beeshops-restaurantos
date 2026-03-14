@@ -51,7 +51,6 @@ export default function ZonePricing({ onBack }: Props) {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll()
   }, [])
 
@@ -61,30 +60,31 @@ export default function ZonePricing({ onBack }: Props) {
 
   const saveAll = async () => {
     setSaving(true)
-    const upserts: { menu_item_id: string; category_id: string; price: number }[] = []
-    items.forEach((item) =>
-      zones.forEach((zone) => {
-        const val = prices[`${item.id}_${zone.id}`]
-        if (val !== '' && val !== undefined && val !== null)
-          upserts.push({
-            menu_item_id: item.id,
-            category_id: zone.id,
-            price: parseFloat(String(val)),
-          })
-      })
-    )
-    if (upserts.length > 0) {
-      const { error } = await supabase
-        .from('menu_item_zone_prices')
-        .upsert(upserts, { onConflict: 'menu_item_id,category_id' })
-      if (error) {
-        alert('Error saving: ' + error.message)
-        setSaving(false)
-        return
+    try {
+      const upserts: { menu_item_id: string; category_id: string; price: number }[] = []
+      items.forEach((item) =>
+        zones.forEach((zone) => {
+          const val = prices[`${item.id}_${zone.id}`]
+          if (val !== '' && val !== undefined && val !== null)
+            upserts.push({
+              menu_item_id: item.id,
+              category_id: zone.id,
+              price: parseFloat(String(val)),
+            })
+        })
+      )
+      if (upserts.length > 0) {
+        const { error } = await supabase
+          .from('menu_item_zone_prices')
+          .upsert(upserts, { onConflict: 'menu_item_id,category_id' })
+        if (error) throw error
       }
+      alert('Zone prices saved successfully!')
+    } catch (err) {
+      alert('Error saving: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
-    alert('Zone prices saved successfully!')
   }
 
   const filtered =

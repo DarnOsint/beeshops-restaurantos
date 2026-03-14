@@ -146,7 +146,11 @@ export default function RoomManagement() {
       setSaving(false)
       return
     }
-    await supabase.from('rooms').update({ status: 'occupied' }).eq('id', selectedRoom.id)
+    const { error: roomErr } = await supabase
+      .from('rooms')
+      .update({ status: 'occupied' })
+      .eq('id', selectedRoom.id)
+    if (roomErr) console.error('Failed to mark room occupied:', roomErr.message)
     await fetchAll()
     setSaving(false)
     setShowCheckin(false)

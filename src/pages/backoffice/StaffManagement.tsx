@@ -177,7 +177,7 @@ export default function StaffManagement({ onBack }: Props) {
           options: { data: { full_name: form.full_name } },
         })
         if (signUpError) throw signUpError
-        await supabase.from('profiles').upsert({
+        const { error: upsertError } = await supabase.from('profiles').upsert({
           id: signUpData.user!.id,
           full_name: form.full_name,
           email: form.email,
@@ -189,6 +189,7 @@ export default function StaffManagement({ onBack }: Props) {
           notes: form.notes,
           is_active: true,
         })
+        if (upsertError) throw upsertError
       }
       await fetchStaff()
       setSaving(false)
@@ -201,10 +202,14 @@ export default function StaffManagement({ onBack }: Props) {
   }
 
   const toggleActive = async (member: Profile) => {
-    await supabase
+    const { error } = await supabase
       .from('profiles')
       .update({ is_active: !(member as unknown as { is_active?: boolean }).is_active })
       .eq('id', member.id)
+    if (error) {
+      alert('Failed to update staff status: ' + error.message)
+      return
+    }
     fetchStaff()
   }
 

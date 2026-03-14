@@ -344,7 +344,7 @@ export default function KitchenStock({ onBack }: Props) {
   }
 
   const saveEdit = async (id: string) => {
-    await supabase
+    const { error } = await supabase
       .from('kitchen_stock')
       .update({
         opening_qty: parseFloat(String(editVals.opening_qty)) || 0,
@@ -355,6 +355,10 @@ export default function KitchenStock({ onBack }: Props) {
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
+    if (error) {
+      alert('Failed to save edit: ' + error.message)
+      return
+    }
     setEditingId(null)
     loadEntries(date)
   }
@@ -393,7 +397,7 @@ export default function KitchenStock({ onBack }: Props) {
     if (!bmForm.expected_yield) return
     const itemName = showBenchmarkFor === '__new__' ? bmForm.item_name : showBenchmarkFor
     if (!itemName) return
-    await supabase.from('kitchen_stock_benchmarks').upsert(
+    const { error } = await supabase.from('kitchen_stock_benchmarks').upsert(
       {
         item_name: itemName,
         expected_yield: parseFloat(bmForm.expected_yield),
@@ -406,6 +410,10 @@ export default function KitchenStock({ onBack }: Props) {
       },
       { onConflict: 'item_name' }
     )
+    if (error) {
+      alert('Failed to save benchmark: ' + error.message)
+      return
+    }
     setShowBenchmarkFor(null)
     loadBenchmarks()
     loadEntries(date)
