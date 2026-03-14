@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useState } from 'react'
 import type { PayoutRow, PayoutForm } from './types'
+import { useToast } from '../../context/ToastContext'
 
 interface Props {
   payouts: PayoutRow[]
@@ -20,6 +21,7 @@ const categoryColor: Record<string, string> = {
 
 export default function PayoutsTab({ payouts, totalPayouts, onRefresh }: Props) {
   const { profile } = useAuth()
+  const toast = useToast()
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
@@ -31,7 +33,8 @@ export default function PayoutsTab({ payouts, totalPayouts, onRefresh }: Props) 
   })
 
   const save = async () => {
-    if (!form.amount || !form.reason) return alert('Amount and reason are required')
+    if (!form.amount || !form.reason)
+      return toast.warning('Required', 'Amount and reason are required')
     setSaving(true)
     const { error } = await supabase.from('payouts').insert({
       amount: parseFloat(form.amount),
@@ -42,7 +45,7 @@ export default function PayoutsTab({ payouts, totalPayouts, onRefresh }: Props) 
     })
     setSaving(false)
     if (error) {
-      alert('Error: ' + error.message)
+      toast.error('Error', error instanceof Error ? error.message : String(error))
       return
     }
     setForm({ amount: '', reason: '', category: 'expense', paid_to: '' })

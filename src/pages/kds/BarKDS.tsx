@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext'
 import ErrorBoundary from '../../components/ErrorBoundary'
 import { Beer, Clock, LogOut, RefreshCw, CheckCircle } from 'lucide-react'
 import type { KdsOrder } from './types'
+import { useToast } from '../../context/ToastContext'
 
 const HELP_TIPS = [
   {
@@ -72,6 +73,7 @@ function getNextStatus(status: string): string | null {
 
 function BarKDSInner() {
   const { profile, signOut } = useAuth()
+  const toast = useToast()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
   const [orders, setOrders] = useState<KdsOrder[]>([])
   const [loading, setLoading] = useState(true)
@@ -111,7 +113,7 @@ function BarKDSInner() {
       .update({ status: nextStatus })
       .eq('id', itemId)
     if (error) {
-      alert('Failed to update item: ' + error.message)
+      toast.error('Error', 'Failed to update item: ' + error.message)
       return
     }
     if (nextStatus === 'ready') {
@@ -139,7 +141,7 @@ function BarKDSInner() {
       .update({ status: 'ready' })
       .in('id', barItemIds)
     if (baErr) {
-      alert('Failed to mark all ready: ' + baErr.message)
+      toast.error('Error', 'Failed to mark all ready: ' + baErr.message)
       return
     }
     if (order.staff_id)

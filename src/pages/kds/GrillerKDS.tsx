@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext'
 import ErrorBoundary from '../../components/ErrorBoundary'
 import { LogOut, RefreshCw, Flame, CheckCircle, AlertTriangle } from 'lucide-react'
 import type { GrillerTicket, GrillerItem } from './types'
+import { useToast } from '../../context/ToastContext'
 
 const HELP_TIPS = [
   {
@@ -84,6 +85,7 @@ const URGENCY_STYLES: Record<
 
 function GrillerKDSInner() {
   const { profile, signOut } = useAuth()
+  const toast = useToast()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
   const [tickets, setTickets] = useState<GrillerTicket[]>([])
   const [loading, setLoading] = useState(true)
@@ -144,7 +146,7 @@ function GrillerKDSInner() {
       .eq('id', item.id)
     setCompleting((p) => ({ ...p, [item.id]: false }))
     if (iErr) {
-      alert('Failed to mark item ready: ' + iErr.message)
+      toast.error('Error', 'Failed to mark item ready: ' + iErr.message)
       return
     }
     if (ticket.staffId)
@@ -165,7 +167,7 @@ function GrillerKDSInner() {
       .in('id', ids)
     ids.forEach((id) => setCompleting((p) => ({ ...p, [id]: false })))
     if (gaErr) {
-      alert('Failed to mark all ready: ' + gaErr.message)
+      toast.error('Error', 'Failed to mark all ready: ' + gaErr.message)
       return
     }
     if (ticket.staffId)

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ShoppingBag, XCircle } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
+import { useToast } from '../../../context/ToastContext'
 
 export default function OpenOrdersTab() {
   const [orders, setOrders] = useState<
@@ -22,6 +23,7 @@ export default function OpenOrdersTab() {
     }>
   >([])
   const [loading, setLoading] = useState(true)
+  const toast = useToast()
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -81,7 +83,7 @@ export default function OpenOrdersTab() {
                       .update({ status: 'paid', closed_at: new Date().toISOString() })
                       .eq('id', order.id)
                     if (error) {
-                      alert('Failed: ' + error.message)
+                      toast.error('Error', 'Failed: ' + error.message)
                       return
                     }
                     // Mark all items delivered so KDS clears and shift summary is accurate

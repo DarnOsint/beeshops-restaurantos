@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { X, Banknote, CreditCard, Smartphone, CheckCircle, Clock, Beer } from 'lucide-react'
 import ReceiptModal from './ReceiptModal'
 import type { Order, OrderItem, Table, Profile } from '../../types'
+import { useToast } from '../../context/ToastContext'
 
 interface OrderItemExtended {
   id: string
@@ -58,6 +59,7 @@ interface Props {
 
 export default function PaymentModal({ order, table, onSuccess, onClose }: Props) {
   const { profile } = useAuth()
+  const toast = useToast()
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
   const [cashTendered, setCashTendered] = useState('')
   const [processing, setProcessing] = useState(false)
@@ -121,11 +123,11 @@ export default function PaymentModal({ order, table, onSuccess, onClose }: Props
   const processSplitPayment = async () => {
     const personTotal = getPersonTotal(currentSplitPerson)
     if (personTotal === 0) {
-      alert('No items assigned to this person')
+      toast.warning('No Items', 'No items assigned to this person')
       return
     }
     if (splitPayMethod === 'cash' && parseFloat(splitCash) < personTotal) {
-      alert('Cash tendered is less than amount due')
+      toast.warning('Insufficient Cash', 'Cash tendered is less than amount due')
       return
     }
     const newPayment: SplitPayment = {
@@ -332,7 +334,7 @@ export default function PaymentModal({ order, table, onSuccess, onClose }: Props
       setPaidOrder({ ...order, payment_method: paymentMethod } as any)
       setSuccess(true)
     } catch {
-      alert('Payment failed. Try again.')
+      toast.error('Error', 'Payment failed. Try again.')
     } finally {
       setProcessing(false)
     }

@@ -18,6 +18,7 @@ import {
   Printer,
 } from 'lucide-react'
 import type { MenuItem } from '../../types'
+import { useToast } from '../../context/ToastContext'
 
 interface OrderItemLocal {
   id: string
@@ -47,6 +48,7 @@ interface Props {
 
 export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onClose }: Props) {
   const { profile } = useAuth()
+  const toast = useToast()
   const [orderItems, setOrderItems] = useState<OrderItemLocal[]>([])
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('All')
@@ -144,8 +146,9 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
   }
 
   const processOrder = async () => {
-    if (orderItems.length === 0) return alert('Add at least one item')
-    if (isTakeaway && !customerName) return alert('Customer name is required for takeaway')
+    if (orderItems.length === 0) return toast.warning('Required', 'Add at least one item')
+    if (isTakeaway && !customerName)
+      return toast.warning('Required', 'Customer name is required for takeaway')
     setProcessing(true)
     try {
       const orderId = crypto.randomUUID()
@@ -197,7 +200,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
       })
       setSuccess(true)
     } catch (err) {
-      alert('Error processing order: ' + (err as Error).message)
+      toast.error('Error', 'Error processing order: ' + (err as Error).message)
       setProcessing(false)
     }
   }

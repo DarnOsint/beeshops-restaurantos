@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { audit } from '../../lib/audit'
+import { useToast } from '../../context/ToastContext'
 import {
   Plus,
   X,
@@ -86,6 +87,7 @@ interface Props {
 
 export default function Suppliers({ onBack }: Props) {
   const { profile } = useAuth()
+  const toast = useToast()
   const [tab, setTab] = useState<'suppliers' | 'orders'>('suppliers')
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [pos, setPOs] = useState<PurchaseOrder[]>([])
@@ -142,7 +144,7 @@ export default function Suppliers({ onBack }: Props) {
   }, [fetchAll])
 
   const saveSupplier = async () => {
-    if (!supplierForm.name.trim()) return alert('Supplier name is required')
+    if (!supplierForm.name.trim()) return toast.warning('Required', 'Supplier name is required')
     setSaving(true)
     try {
       if (editingSupplier) {
@@ -172,7 +174,10 @@ export default function Suppliers({ onBack }: Props) {
       setEditingSupplier(null)
       fetchAll()
     } catch (err) {
-      alert('Failed to save supplier: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error(
+        'Error',
+        'Failed to save supplier: ' + (err instanceof Error ? err.message : String(err))
+      )
     } finally {
       setSaving(false)
     }
@@ -197,7 +202,7 @@ export default function Suppliers({ onBack }: Props) {
     if (!window.confirm('Remove this supplier?')) return
     const { error } = await supabase.from('suppliers').update({ is_active: false }).eq('id', id)
     if (error) {
-      alert('Failed to deactivate supplier: ' + error.message)
+      toast.error('Error', 'Failed to deactivate supplier: ' + error.message)
       return
     }
     fetchAll()
@@ -205,7 +210,7 @@ export default function Suppliers({ onBack }: Props) {
 
   const addPOItem = () => {
     if (!poItem.name || !poItem.quantity || !poItem.unit_cost)
-      return alert('Fill in all item fields')
+      return toast.warning('Required', 'Fill in all item fields')
     const qty = parseFloat(poItem.quantity),
       cost = parseFloat(poItem.unit_cost)
     setPOForm((prev) => ({
@@ -228,8 +233,8 @@ export default function Suppliers({ onBack }: Props) {
     setPOForm((prev) => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) }))
 
   const savePO = async () => {
-    if (!poForm.supplier_id) return alert('Select a supplier')
-    if (poForm.items.length === 0) return alert('Add at least one item')
+    if (!poForm.supplier_id) return toast.warning('Required', 'Select a supplier')
+    if (poForm.items.length === 0) return toast.warning('Required', 'Add at least one item')
     const supplier = suppliers.find((s) => s.id === poForm.supplier_id)
     const total = poForm.items.reduce((s, i) => s + i.total, 0)
     const { error } = await supabase.from('purchase_orders').insert({
@@ -244,7 +249,7 @@ export default function Suppliers({ onBack }: Props) {
       ordered_by: profile?.id,
       ordered_by_name: profile?.full_name,
     })
-    if (error) return alert('Error: ' + error.message)
+    if (error) return toast.error('Error', error instanceof Error ? error.message : String(error))
     await audit({
       action: 'PO_CREATED',
       entity: 'purchase_order',
@@ -307,7 +312,10 @@ export default function Suppliers({ onBack }: Props) {
       })
       fetchAll()
     } catch (err) {
-      alert('Failed to receive PO: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error(
+        'Error',
+        'Failed to receive PO: ' + (err instanceof Error ? err.message : String(err))
+      )
     }
   }
 
@@ -317,7 +325,7 @@ export default function Suppliers({ onBack }: Props) {
       .update({ payment_status: 'paid', payment_date: new Date().toISOString().split('T')[0] })
       .eq('id', po.id)
     if (error) {
-      alert('Failed to mark paid: ' + error.message)
+      toast.error('Error', 'Failed to mark paid: ' + error.message)
       return
     }
     fetchAll()

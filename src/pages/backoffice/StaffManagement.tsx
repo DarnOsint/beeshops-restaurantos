@@ -21,6 +21,7 @@ import {
   FileText,
 } from 'lucide-react'
 import type { Profile } from '../../types'
+import { useToast } from '../../context/ToastContext'
 
 const ROLES = ['waitron', 'kitchen', 'bar', 'griller', 'manager', 'accountant', 'owner'] as const
 const FLOOR_ROLES = ['waitron', 'kitchen', 'bar', 'griller']
@@ -53,6 +54,7 @@ interface Props {
 export default function StaffManagement({ onBack }: Props) {
   const [staff, setStaff] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
+  const toast = useToast()
   const [search, setSearch] = useState('')
   const [filterRole, setFilterRole] = useState('All')
   const [showModal, setShowModal] = useState(false)
@@ -137,7 +139,7 @@ export default function StaffManagement({ onBack }: Props) {
   const saveStaff = async () => {
     const err = validateForm()
     if (err) {
-      alert(err)
+      toast.info('Notice', err)
       return
     }
     setSaving(true)
@@ -195,9 +197,9 @@ export default function StaffManagement({ onBack }: Props) {
       await fetchStaff()
       setSaving(false)
       setShowModal(false)
-      alert(editingStaff ? 'Staff updated successfully!' : 'Staff member added successfully!')
+      toast.success(editingStaff ? 'Staff Updated' : 'Staff Added')
     } catch (e) {
-      alert('Error saving staff: ' + (e as Error).message)
+      toast.error('Error', e instanceof Error ? e.message : String(e))
       setSaving(false)
     }
   }
@@ -208,7 +210,7 @@ export default function StaffManagement({ onBack }: Props) {
       .update({ is_active: !(member as unknown as { is_active?: boolean }).is_active })
       .eq('id', member.id)
     if (error) {
-      alert('Failed to update staff status: ' + error.message)
+      toast.error('Error', 'Failed to update staff status: ' + error.message)
       return
     }
     fetchStaff()

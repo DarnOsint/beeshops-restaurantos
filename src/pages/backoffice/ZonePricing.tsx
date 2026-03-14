@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { ArrowLeft, Save } from 'lucide-react'
+import { useToast } from '../../context/ToastContext'
 
 interface MenuItem {
   id: string
@@ -21,6 +22,7 @@ export default function ZonePricing({ onBack }: Props) {
   const [zones, setZones] = useState<Zone[]>([])
   const [prices, setPrices] = useState<Record<string, number | string>>({})
   const [loading, setLoading] = useState(true)
+  const toast = useToast()
   const [saving, setSaving] = useState(false)
   const [filterCat, setFilterCat] = useState('All')
   const [search, setSearch] = useState('')
@@ -80,9 +82,9 @@ export default function ZonePricing({ onBack }: Props) {
           .upsert(upserts, { onConflict: 'menu_item_id,category_id' })
         if (error) throw error
       }
-      alert('Zone prices saved successfully!')
+      toast.success('Zone Prices Saved')
     } catch (err) {
-      alert('Error saving: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error('Error', 'Error saving: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setSaving(false)
     }

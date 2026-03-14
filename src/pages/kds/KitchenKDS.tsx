@@ -9,6 +9,7 @@ import KitchenStock from '../backoffice/KitchenStock'
 import ErrorBoundary from '../../components/ErrorBoundary'
 import { ChefHat, Clock, LogOut, RefreshCw, CheckCircle } from 'lucide-react'
 import type { KdsOrder } from './types'
+import { useToast } from '../../context/ToastContext'
 
 const HELP_TIPS = [
   {
@@ -85,6 +86,7 @@ function getNextStatus(status: string): string | null {
 
 function KitchenKDSInner() {
   const { profile, signOut } = useAuth()
+  const toast = useToast()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
   const [tab, setTab] = useState<'orders' | 'stock'>('orders')
   const [orders, setOrders] = useState<KdsOrder[]>([])
@@ -126,7 +128,7 @@ function KitchenKDSInner() {
       .update({ status: nextStatus })
       .eq('id', itemId)
     if (error) {
-      alert('Failed to update item: ' + error.message)
+      toast.error('Error', 'Failed to update item: ' + error.message)
       return
     }
     if (nextStatus === 'ready') {
@@ -156,7 +158,7 @@ function KitchenKDSInner() {
       .update({ status: 'ready' })
       .in('id', kitchenItemIds)
     if (kaErr) {
-      alert('Failed to mark all ready: ' + kaErr.message)
+      toast.error('Error', 'Failed to mark all ready: ' + kaErr.message)
       return
     }
     if (order.staff_id)

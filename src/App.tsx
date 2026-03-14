@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useNotifications } from './hooks/useNotifications'
+import { ToastProvider } from './context/ToastContext'
 import AppShell from './components/AppShell'
 import NotificationToast from './components/NotificationToast'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -339,12 +340,12 @@ function AppInner() {
   const { profile } = useAuth()
   const { toasts, dismiss } = useNotifications(profile)
   return (
-    <>
+    <ToastProvider>
       <NotificationToast toasts={toasts} onDismiss={dismiss} />
       <AppShell>
         <AppRoutes />
       </AppShell>
-    </>
+    </ToastProvider>
   )
 }
 

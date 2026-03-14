@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Plus, Trash2, Save, Monitor } from 'lucide-react'
+import { useToast } from '../../context/ToastContext'
 
 interface Props {
   onBack: () => void
@@ -9,6 +10,7 @@ interface Props {
 export default function POSMachines({ onBack }: Props) {
   const [machines, setMachines] = useState<string[]>([])
   const [newName, setNewName] = useState('')
+  const toast = useToast()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -41,7 +43,7 @@ export default function POSMachines({ onBack }: Props) {
       if (error) throw error
       setMachines(updated)
     } catch (err) {
-      alert('Failed to save: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error('Error', 'Failed to save: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setSaving(false)
     }
@@ -51,7 +53,7 @@ export default function POSMachines({ onBack }: Props) {
     const name = newName.trim()
     if (!name) return
     if (machines.includes(name)) {
-      alert('A machine with that name already exists.')
+      toast.warning('Duplicate', 'A machine with that name already exists')
       return
     }
     await save([...machines, name])

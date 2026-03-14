@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
 import {
   ArrowLeft,
   Plus,
@@ -96,6 +97,7 @@ const debtTypeLabels: Record<string, string> = {
 
 export default function Debtors({ onBack, embedded = false }: Props) {
   const { profile } = useAuth()
+  const toast = useToast()
   const [debtors, setDebtors] = useState<Debtor[]>([])
   const [payments, setPayments] = useState<Record<string, DebtPayment[]>>({})
   const [loading, setLoading] = useState(true)
@@ -176,7 +178,8 @@ export default function Debtors({ onBack, embedded = false }: Props) {
   }
 
   const saveDebtor = async () => {
-    if (!form.name || !form.credit_limit) return alert('Name and amount are required')
+    if (!form.name || !form.credit_limit)
+      return toast.warning('Required', 'Name and amount are required')
     setSaving(true)
     try {
       const { error } = await supabase.from('debtors').insert({
@@ -206,17 +209,24 @@ export default function Debtors({ onBack, embedded = false }: Props) {
       setShowAddModal(false)
       setForm(blankForm)
     } catch (err) {
-      alert('Error saving debtor: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error(
+        'Error',
+        'Error saving debtor: ' + (err instanceof Error ? err.message : String(err))
+      )
     } finally {
       setSaving(false)
     }
   }
 
   const recordPayment = async (debtor: Debtor) => {
-    if (!payForm.amount || parseFloat(payForm.amount) <= 0) return alert('Enter a valid amount')
+    if (!payForm.amount || parseFloat(payForm.amount) <= 0)
+      return toast.warning('Required', 'Enter a valid amount')
     const amount = parseFloat(payForm.amount)
     if (amount > debtor.current_balance)
-      return alert('Amount exceeds balance of ' + debtor.current_balance.toLocaleString())
+      return toast.info(
+        'Notice',
+        'Amount exceeds balance of ' + debtor.current_balance.toLocaleString()
+      )
     setSaving(true)
     const newAmountPaid = (debtor.amount_paid || 0) + amount
     const newBalance = debtor.current_balance - amount
@@ -247,7 +257,7 @@ export default function Debtors({ onBack, embedded = false }: Props) {
       setShowPaymentModal(null)
       setPayForm(blankPay)
     } catch (err) {
-      alert('Payment failed: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error('Error', 'Payment failed: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setSaving(false)
     }
@@ -265,7 +275,7 @@ export default function Debtors({ onBack, embedded = false }: Props) {
       })
       .eq('id', debtor.id)
     if (error) {
-      alert('Error: ' + error.message)
+      toast.error('Error', error instanceof Error ? error.message : String(error))
       return
     }
     fetchAll()

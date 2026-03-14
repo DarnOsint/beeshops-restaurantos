@@ -51,7 +51,7 @@ export default function RoomServiceTab({ serviceOrders, onRefresh }: Props) {
                         .update({ status: 'delivered' })
                         .eq('id', order.id)
                       if (error) {
-                        alert('Error: ' + error.message)
+                        console.error(error.message)
                         return
                       }
                       onRefresh()

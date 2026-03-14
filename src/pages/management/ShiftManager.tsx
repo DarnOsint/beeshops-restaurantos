@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { audit } from '../../lib/audit'
 import { UserCheck, UserX, Clock, X, Calendar, Timer, FileText, Monitor } from 'lucide-react'
 import ShiftSummary from './ShiftSummary'
+import { useToast } from '../../context/ToastContext'
 
 interface StaffMember {
   id: string
@@ -30,6 +31,7 @@ interface Props {
 
 export default function ShiftManager({ onClose, onRefreshStats }: Props) {
   const { profile } = useAuth()
+  const toast = useToast()
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [activeShifts, setActiveShifts] = useState<Shift[]>([])
   const [search, setSearch] = useState('')
@@ -114,7 +116,7 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
       .is('clock_out', null)
       .limit(1)
     if (live && live.length > 0) {
-      alert(member.full_name + ' is already clocked in!')
+      toast.warning('Already Clocked In', member.full_name + ' is already clocked in')
       return
     }
     const posMachine = selectedPos[member.id] || null
@@ -129,7 +131,7 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
       pos_machine: posMachine,
     })
     if (error) {
-      alert('Error: ' + error.message)
+      toast.error('Error', error instanceof Error ? error.message : String(error))
       return
     }
     setSelectedPos((prev) => {
@@ -184,7 +186,7 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
       .update({ clock_out: clockOutTime.toISOString(), duration_minutes: duration })
       .eq('id', shift.id)
     if (error) {
-      alert('Error: ' + error.message)
+      toast.error('Error', error instanceof Error ? error.message : String(error))
       return
     }
     void audit({

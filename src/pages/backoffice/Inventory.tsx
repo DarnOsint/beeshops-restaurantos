@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
 import {
   ArrowLeft,
   Plus,
@@ -104,6 +105,7 @@ const blankRestockForm: RestockForm = {
 
 export default function Inventory({ onBack }: Props) {
   const { profile } = useAuth()
+  const toast = useToast()
   const [view, setView] = useState<'stock' | 'log'>('stock')
   const [items, setItems] = useState<InventoryItem[]>([])
   const [restockLog, setRestockLog] = useState<RestockEntry[]>([])
@@ -149,7 +151,7 @@ export default function Inventory({ onBack }: Props) {
   }, [])
 
   const saveItem = async () => {
-    if (!itemForm.item_name) return alert('Item name is required')
+    if (!itemForm.item_name) return toast.warning('Required', 'Item name is required')
     setSaving(true)
     const payload = {
       item_name: itemForm.item_name,
@@ -175,7 +177,7 @@ export default function Inventory({ onBack }: Props) {
       setShowAddItem(false)
       setSelectedItem(null)
     } catch (err) {
-      alert('Error saving item: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error('Error', err instanceof Error ? err.message : String(err))
     } finally {
       setSaving(false)
     }
@@ -204,7 +206,8 @@ export default function Inventory({ onBack }: Props) {
   }
 
   const processRestock = async () => {
-    if (!restockForm.quantity_added || !selectedItem) return alert('Quantity is required')
+    if (!restockForm.quantity_added || !selectedItem)
+      return toast.warning('Required', 'Quantity is required')
     setSaving(true)
     const qtyAdded = parseFloat(restockForm.quantity_added)
     const costPerUnit = parseFloat(restockForm.cost_price_per_unit) || 0
@@ -245,7 +248,7 @@ export default function Inventory({ onBack }: Props) {
       setShowRestock(false)
       setSelectedItem(null)
     } catch (err) {
-      alert('Restock failed: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error('Error', 'Restock failed: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setSaving(false)
     }

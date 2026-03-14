@@ -15,6 +15,7 @@ import RoomEditModal from './RoomEditModal'
 
 import type { RoomRow, StayRow, CheckinForm, RoomEditForm, RoomStatus } from './types'
 import { BLANK_CHECKIN } from './types'
+import { useToast } from '../../context/ToastContext'
 
 const TABS = [
   { id: 'board', label: 'Room Board', icon: BedDouble },
@@ -70,6 +71,7 @@ const ROOMS_HELP_TIPS = [
 
 export default function RoomManagement() {
   const { profile } = useAuth()
+  const toast = useToast()
 
   const [rooms, setRooms] = useState<RoomRow[]>([])
   const [stays, setStays] = useState<StayRow[]>([])
@@ -157,9 +159,9 @@ export default function RoomManagement() {
   }
 
   const processCheckin = async () => {
-    if (!checkinForm.guest_name) return alert('Guest name is required')
-    if (!checkinForm.guest_phone) return alert('Guest phone is required')
-    if (!checkinForm.id_number) return alert('ID number is required')
+    if (!checkinForm.guest_name) return toast.warning('Required', 'Guest name is required')
+    if (!checkinForm.guest_phone) return toast.warning('Required', 'Guest phone is required')
+    if (!checkinForm.id_number) return toast.warning('Required', 'ID number is required')
     if (!selectedRoom || !profile) return
     setSaving(true)
 
@@ -189,7 +191,7 @@ export default function RoomManagement() {
     })
 
     if (error) {
-      alert('Error: ' + error.message)
+      toast.error('Error', error instanceof Error ? error.message : String(error))
       setSaving(false)
       return
     }
@@ -220,7 +222,7 @@ export default function RoomManagement() {
       await fetchAll()
       setShowCheckout(false)
     } catch (err) {
-      alert('Checkout failed: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error('Error', 'Checkout failed: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setSaving(false)
     }
@@ -229,7 +231,7 @@ export default function RoomManagement() {
   const updateRoomStatus = async (room: RoomRow, status: RoomStatus) => {
     const { error } = await supabase.from('rooms').update({ status }).eq('id', room.id)
     if (error) {
-      alert('Error updating room: ' + error.message)
+      toast.error('Error', 'Error updating room: ' + error.message)
       return
     }
     fetchAll()

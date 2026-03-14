@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Printer,
 } from 'lucide-react'
+import { useToast } from '../../context/ToastContext'
 import {
   BarChart,
   Bar,
@@ -151,6 +152,7 @@ interface Report {
 
 export default function Reports() {
   const { profile } = useAuth()
+  const toast = useToast()
   const printRef = useRef<HTMLDivElement>(null)
   const now = new Date()
 
@@ -205,7 +207,8 @@ export default function Reports() {
             (s: { profiles?: { full_name?: string } | null }) => s.profiles?.full_name || 'Unknown'
           )
           .join(', ')
-        alert(
+        toast.warning(
+          'Required',
           'Z-Report blocked. The following staff are still clocked in:\n\n' +
             names +
             '\n\nAll staff must be clocked out before running the Z-Report.'
@@ -403,7 +406,10 @@ export default function Reports() {
         attendance,
       })
     } catch (err) {
-      alert('Report generation failed: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error(
+        'Error',
+        'Report generation failed: ' + (err instanceof Error ? err.message : String(err))
+      )
     } finally {
       setLoading(false)
     }

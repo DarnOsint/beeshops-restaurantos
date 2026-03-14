@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { audit } from '../../lib/audit'
 import { ArrowLeft, Plus, Edit2, X, Save, ToggleLeft, ToggleRight, Search, Tag } from 'lucide-react'
+import { useToast } from '../../context/ToastContext'
 
 interface MenuCategory {
   id: string
@@ -37,6 +38,7 @@ export default function MenuManagement({ onBack }: Props) {
   const [items, setItems] = useState<MenuItem[]>([])
   const [categories, setCategories] = useState<MenuCategory[]>([])
   const [loading, setLoading] = useState(true)
+  const toast = useToast()
   const [showItemModal, setShowItemModal] = useState(false)
   const [showCatModal, setShowCatModal] = useState(false)
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null)
@@ -92,7 +94,7 @@ export default function MenuManagement({ onBack }: Props) {
   }
   const saveItem = async () => {
     if (!itemForm.name || !itemForm.price || !itemForm.category_id)
-      return alert('Name, category and price are required')
+      return toast.warning('Required', 'Name, category and price are required')
     setSaving(true)
     const payload = {
       name: itemForm.name,
@@ -109,7 +111,7 @@ export default function MenuManagement({ onBack }: Props) {
       await fetchAll()
       setShowItemModal(false)
     } catch (err) {
-      alert('Error saving item: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error('Error', err instanceof Error ? err.message : String(err))
     } finally {
       setSaving(false)
     }
@@ -120,7 +122,7 @@ export default function MenuManagement({ onBack }: Props) {
       .update({ is_available: !item.is_available })
       .eq('id', item.id)
     if (error) {
-      alert('Error: ' + error.message)
+      toast.error('Error', error instanceof Error ? error.message : String(error))
       return
     }
     fetchAll()
@@ -136,7 +138,7 @@ export default function MenuManagement({ onBack }: Props) {
     setShowCatModal(true)
   }
   const saveCat = async () => {
-    if (!catForm.name) return alert('Category name is required')
+    if (!catForm.name) return toast.warning('Required', 'Category name is required')
     setSaving(true)
     try {
       const { error } = editingCat
@@ -151,7 +153,7 @@ export default function MenuManagement({ onBack }: Props) {
       await fetchAll()
       setShowCatModal(false)
     } catch (err) {
-      alert('Error saving category: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error('Error', err instanceof Error ? err.message : String(err))
     } finally {
       setSaving(false)
     }

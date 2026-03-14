@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Clock, Save } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
+import { useToast } from '../../../context/ToastContext'
 
 interface Props {
   threshold: number
@@ -9,6 +10,7 @@ interface Props {
 
 export default function SettingsTab({ threshold, setThreshold }: Props) {
   const [editThreshold, setEditThreshold] = useState('')
+  const toast = useToast()
   const [saving, setSaving] = useState(false)
 
   const save = async () => {
@@ -25,7 +27,10 @@ export default function SettingsTab({ threshold, setThreshold }: Props) {
       setThreshold(val)
       setEditThreshold('')
     } catch (err) {
-      alert('Failed to save setting: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error(
+        'Error',
+        'Failed to save setting: ' + (err instanceof Error ? err.message : String(err))
+      )
     } finally {
       setSaving(false)
     }

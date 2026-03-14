@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { X, Users, UserPlus, UserMinus } from 'lucide-react'
+import { useToast } from '../../context/ToastContext'
 
 interface CategoryColors {
   card: string
@@ -62,6 +63,7 @@ export default function TableAssignment({ onClose }: Props) {
   const [assignments, setAssignments] = useState<Record<string, Assignment[]>>({})
   const [selectedStaff, setSelectedStaff] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
+  const toast = useToast()
   const [staffSearch, setStaffSearch] = useState('')
 
   const fetchCategories = async () => {
@@ -123,7 +125,7 @@ export default function TableAssignment({ onClose }: Props) {
     if (!staffId) return
     const existing = assignments[categoryId] || []
     if (existing.find((a) => a.staff_id === staffId)) {
-      alert('This staff member is already assigned to this zone!')
+      toast.warning('Already Assigned', 'This staff member is already assigned to this zone')
       return
     }
     const { error } = await supabase
@@ -138,7 +140,7 @@ export default function TableAssignment({ onClose }: Props) {
   const removeStaffFromZone = async (assignmentId: string) => {
     const { error } = await supabase.from('zone_assignments').delete().eq('id', assignmentId)
     if (error) {
-      alert('Failed to remove assignment: ' + error.message)
+      toast.error('Error', 'Failed to remove assignment: ' + error.message)
       return
     }
     fetchAssignments()

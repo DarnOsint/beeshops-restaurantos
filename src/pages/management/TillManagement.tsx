@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
 import {
   DollarSign,
   TrendingUp,
@@ -58,6 +59,7 @@ const PETTY_CATEGORIES = [
 
 export default function TillManagement({ onClose }: Props) {
   const { profile } = useAuth()
+  const toast = useToast()
   const [sessions, setSessions] = useState<TillSession[]>([])
   const [payouts, setPayouts] = useState<Payout[]>([])
   const [todayStats, setTodayStats] = useState<TodayStats>({
@@ -151,7 +153,7 @@ export default function TillManagement({ onClose }: Props) {
 
   const recordPayout = async () => {
     if (!payoutForm.amount || !payoutForm.reason) {
-      alert('Please enter amount and reason')
+      toast.warning('Required', 'Please enter amount and reason')
       return
     }
     const { error } = await supabase.from('payouts').insert({
@@ -165,7 +167,7 @@ export default function TillManagement({ onClose }: Props) {
       setPayoutForm({ amount: '', reason: '', category: 'general' })
       fetchPayouts()
       fetchTodayStats()
-      alert('Payout recorded successfully!')
+      toast.success('Payout Recorded')
     }
   }
 

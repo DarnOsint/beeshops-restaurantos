@@ -25,6 +25,7 @@ import WaiterCalls from '../management/WaiterCalls'
 import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
 import type { Table, MenuItem, Order, OrderItem, Profile } from '../../types'
+import { useToast } from '../../context/ToastContext'
 
 interface ZonePrice {
   menu_item_id: string
@@ -86,6 +87,7 @@ interface OrderPayload {
 
 export default function POS() {
   const { profile, signOut } = useAuth()
+  const toast = useToast()
   usePushNotifications(profile?.id)
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
 
@@ -364,7 +366,7 @@ export default function POS() {
         for (const item of newItems) {
           const { error } = await supabase.from('order_items').insert(item)
           if (error) {
-            alert('Error adding items: ' + error.message)
+            toast.error('Error', 'Error adding items: ' + error.message)
             return
           }
         }
@@ -404,7 +406,7 @@ export default function POS() {
       })
       if (orderError) {
         console.error('Order error:', orderError)
-        alert('Error creating order: ' + orderError.message)
+        toast.error('Error', 'Error creating order: ' + orderError.message)
         return
       }
       const newOrder = { id: orderId } as Order
@@ -451,7 +453,7 @@ export default function POS() {
       for (const item of orderItemRows) {
         const { error } = await supabase.from('order_items').insert(item)
         if (error) {
-          alert('Error adding items: ' + error.message)
+          toast.error('Error', 'Error adding items: ' + error.message)
           return
         }
       }
@@ -478,7 +480,7 @@ export default function POS() {
       void fetchTables()
     } catch (err) {
       console.error('handlePlaceOrder error:', err)
-      alert('Order failed: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error('Error', 'Order failed: ' + (err instanceof Error ? err.message : String(err)))
     }
   }
 

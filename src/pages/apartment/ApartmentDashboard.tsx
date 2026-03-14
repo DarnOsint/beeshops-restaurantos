@@ -28,6 +28,7 @@ import DetailsModal from './apt/DetailsModal'
 import { fmtShort, todayStr } from './apt/types'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import type { Room, RoomStay, ServiceOrder, StaffMember, CheckInForm, PayForm } from './apt/types'
+import { useToast } from '../../context/ToastContext'
 
 const TABS = [
   { id: 'rooms', label: 'Rooms', icon: BedDouble },
@@ -105,6 +106,7 @@ const APARTMENT_HELP_TIPS = [
 
 export default function ApartmentDashboard() {
   const { profile, signOut } = useAuth()
+  const toast = useToast()
 
   const [tab, setTab] = useState<string>('rooms')
   const [rooms, setRooms] = useState<Room[]>([])
@@ -250,7 +252,7 @@ export default function ApartmentDashboard() {
       setCheckInForm(DEFAULT_FORM)
       fetchAll()
     } catch (err) {
-      alert('Check-in failed: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error('Error', 'Check-in failed: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setSaving(false)
     }
@@ -273,7 +275,10 @@ export default function ApartmentDashboard() {
       setShowCheckOut(null)
       fetchAll()
     } catch (err) {
-      alert('Check-out failed: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error(
+        'Error',
+        'Check-out failed: ' + (err instanceof Error ? err.message : String(err))
+      )
     } finally {
       setSaving(false)
     }
@@ -295,7 +300,7 @@ export default function ApartmentDashboard() {
       setPayForm({ amount: '', method: 'cash', reference: '' })
       fetchAll()
     } catch (err) {
-      alert('Payment failed: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error('Error', 'Payment failed: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setSaving(false)
     }
@@ -308,7 +313,7 @@ export default function ApartmentDashboard() {
       !reserveForm.check_in_date ||
       !reserveForm.check_out_date
     ) {
-      return alert('Please fill in room, guest name, check-in date and check-out date.')
+      return toast.warning('Required', 'Fill in room, guest name and dates')
     }
     setSaving(true)
     try {
@@ -321,7 +326,7 @@ export default function ApartmentDashboard() {
         .lt('check_in_date', reserveForm.check_out_date)
         .gt('check_out_date', reserveForm.check_in_date)
       if (conflicts && conflicts.length > 0) {
-        alert('This room already has an active booking or reservation overlapping those dates.')
+        toast.warning('Conflict', 'This room already has a booking for those dates')
         return
       }
       const { error } = await supabase.from('room_stays').insert({
@@ -354,7 +359,10 @@ export default function ApartmentDashboard() {
       })
       fetchAll()
     } catch (err) {
-      alert('Reservation failed: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error(
+        'Error',
+        'Reservation failed: ' + (err instanceof Error ? err.message : String(err))
+      )
     } finally {
       setSaving(false)
     }
@@ -372,7 +380,10 @@ export default function ApartmentDashboard() {
       await supabase.from('rooms').update({ status: 'available' }).eq('id', stay.room_id)
       fetchAll()
     } catch (err) {
-      alert('Failed to cancel: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error(
+        'Error',
+        'Failed to cancel: ' + (err instanceof Error ? err.message : String(err))
+      )
     } finally {
       setSaving(false)
     }
@@ -381,7 +392,7 @@ export default function ApartmentDashboard() {
   async function updateRoomStatus(roomId: string, status: Room['status']) {
     const { error } = await supabase.from('rooms').update({ status }).eq('id', roomId)
     if (error) {
-      alert('Failed to update room: ' + error.message)
+      toast.error('Error', 'Failed to update room: ' + error.message)
       return
     }
     fetchAll()

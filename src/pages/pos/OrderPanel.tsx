@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import VoidPinModal from '../../components/VoidPinModal'
 import { Plus, Minus, Trash2, Send, X, CheckCircle2, Circle, Search } from 'lucide-react'
 import type { Table, MenuItem, Order, OrderItem, Profile } from '../../types'
+import { useToast } from '../../context/ToastContext'
 
 interface OrderItemLocal {
   id: string
@@ -66,6 +67,7 @@ export default function OrderPanel({
   activeOrder,
   profile,
 }: Props) {
+  const toast = useToast()
   const [servedItems, setServedItems] = useState<Record<string, boolean>>(() => {
     if (!activeOrder?.order_items) return {}
     return activeOrder.order_items.reduce((acc: Record<string, boolean>, i) => {
@@ -90,7 +92,7 @@ export default function OrderPanel({
       .eq('id', dbId)
     if (error) {
       setServedItems((prev) => ({ ...prev, [dbId]: false }))
-      alert('Failed to mark item served: ' + error.message)
+      toast.error('Error', 'Failed to mark item served: ' + error.message)
       return
     }
     // service_log is best-effort — don't block on failure
@@ -158,7 +160,7 @@ export default function OrderPanel({
   const addItem = (item: MenuItem | OrderItemLocal) => {
     const stock = (item as unknown as { current_stock?: number | null }).current_stock
     if (stock !== null && stock !== undefined && stock <= 0) {
-      alert(item.name + ' is out of stock')
+      toast.warning('Out of Stock', item.name + ' is out of stock')
       return
     }
     setOrderItems((prev) => {
@@ -206,7 +208,7 @@ export default function OrderPanel({
 
   const deleteItem = (item: OrderItemLocal) => {
     if (paymentInProgress) {
-      alert('Cannot void items while payment is in progress. Close the payment screen first.')
+      toast.warning('Payment In Progress', 'Close the payment screen before voiding items')
       return
     }
     if (!activeOrder || !item._existing) {
@@ -230,7 +232,7 @@ export default function OrderPanel({
     if (dbId) {
       const { error: delErr } = await supabase.from('order_items').delete().eq('id', dbId)
       if (delErr) {
-        alert('Failed to void item: ' + delErr.message)
+        toast.error('Error', 'Failed to void item: ' + delErr.message)
         return
       }
     }

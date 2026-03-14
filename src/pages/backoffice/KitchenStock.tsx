@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
 const UNITS = ['portion', 'kg', 'g', 'litre', 'ml', 'piece', 'pack', 'tray', 'bowl', 'cup'] as const
@@ -197,6 +198,7 @@ const blankBm: BmForm = {
 
 export default function KitchenStock({ onBack }: Props) {
   const { profile } = useAuth()
+  const toast = useToast()
   const canManage = isManager(profile?.role)
 
   const [date, setDate] = useState(todayStr())
@@ -359,7 +361,7 @@ export default function KitchenStock({ onBack }: Props) {
       })
       .eq('id', id)
     if (error) {
-      alert('Failed to save edit: ' + error.message)
+      toast.error('Error', 'Failed to save edit: ' + error.message)
       return
     }
     setEditingId(null)
@@ -378,7 +380,7 @@ export default function KitchenStock({ onBack }: Props) {
     if (!confirm('Delete this stock entry?')) return
     const { error } = await supabase.from('kitchen_stock').delete().eq('id', id)
     if (error) {
-      alert('Failed to delete item: ' + error.message)
+      toast.error('Error', 'Failed to delete item: ' + error.message)
       return
     }
     loadEntries(date)
@@ -414,7 +416,7 @@ export default function KitchenStock({ onBack }: Props) {
       { onConflict: 'item_name' }
     )
     if (error) {
-      alert('Failed to save benchmark: ' + error.message)
+      toast.error('Error', 'Failed to save benchmark: ' + error.message)
       return
     }
     setShowBenchmarkFor(null)

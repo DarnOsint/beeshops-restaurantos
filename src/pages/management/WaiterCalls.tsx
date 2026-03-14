@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { Bell, CheckCircle, X } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
 
 interface WaiterCall {
   id: string
@@ -14,6 +15,7 @@ interface WaiterCall {
 
 export default function WaiterCalls() {
   const { profile } = useAuth()
+  const toast = useToast()
   const [calls, setCalls] = useState<WaiterCall[]>([])
 
   const fetchCalls = useCallback(async () => {
@@ -61,7 +63,7 @@ export default function WaiterCalls() {
       .update({ status: 'dismissed' })
       .eq('id', id)
     if (error) {
-      alert('Failed to dismiss call: ' + error.message)
+      toast.error('Error', 'Failed to dismiss call: ' + error.message)
       return
     }
     fetchCalls()

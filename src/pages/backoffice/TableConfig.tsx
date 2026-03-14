@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { ArrowLeft, Edit2, X, Save } from 'lucide-react'
+import { useToast } from '../../context/ToastContext'
 
 interface Zone {
   id: string
@@ -42,6 +43,7 @@ interface ZoneHireFeeFormProps {
 function ZoneHireForm({ zone, onSaved }: ZoneHireFeeFormProps) {
   const [hireFee, setHireFee] = useState(zone.hire_fee != null ? String(zone.hire_fee) : '')
   const [saving, setSaving] = useState(false)
+  const toast = useToast()
 
   const save = async () => {
     setSaving(true)
@@ -53,7 +55,7 @@ function ZoneHireForm({ zone, onSaved }: ZoneHireFeeFormProps) {
       if (error) throw error
       onSaved()
     } catch (err) {
-      alert('Failed: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error('Error', 'Failed: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setSaving(false)
     }
@@ -97,6 +99,7 @@ function ZoneHireForm({ zone, onSaved }: ZoneHireFeeFormProps) {
 
 export default function TableConfig({ onBack }: Props) {
   const [tables, setTables] = useState<Table[]>([])
+  const toast = useToast()
   const [zones, setZones] = useState<Zone[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Table | null>(null)
@@ -143,7 +146,10 @@ export default function TableConfig({ onBack }: Props) {
       await fetchAll()
       setEditing(null)
     } catch (err) {
-      alert('Failed to save table: ' + (err instanceof Error ? err.message : String(err)))
+      toast.error(
+        'Error',
+        'Failed to save table: ' + (err instanceof Error ? err.message : String(err))
+      )
     } finally {
       setSaving(false)
     }
