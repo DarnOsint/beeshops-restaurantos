@@ -95,17 +95,24 @@ export default function OrderPanel({
       toast.error('Error', 'Failed to mark item served: ' + error.message)
       return
     }
-    // service_log is best-effort — don't block on failure
-    await supabase.from('service_log').insert({
-      order_id: activeOrder.id,
-      order_item_id: dbId,
-      table_id: activeOrder.table_id,
-      item_name: item.name,
-      table_name: table?.name || null,
-      served_by: profile?.id || null,
-      served_by_name: profile?.full_name || null,
-      served_at: new Date().toISOString(),
-    })
+    // service_log is best-effort — requires RLS policy, fail silently if missing
+    supabase
+      .from('service_log')
+      .insert({
+        order_id: activeOrder.id,
+        order_item_id: dbId,
+        table_id: activeOrder.table_id,
+        item_name: item.name,
+        table_name: table?.name || null,
+        served_by: profile?.id || null,
+        served_by_name: profile?.full_name || null,
+        served_at: new Date().toISOString(),
+      })
+      .then(({ error }) => {
+        if (error && error.code !== 'PGRST301' && error.code !== '42501') {
+          console.warn('service_log insert failed:', error.message)
+        }
+      })
   }
 
   const [orderItems, setOrderItems] = useState<OrderItemLocal[]>(() => {

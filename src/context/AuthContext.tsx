@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const getMfaVerified = (userId?: string): boolean => {
     try {
-      const stored = sessionStorage.getItem('mfa_verified')
+      const stored = localStorage.getItem('mfa_verified')
       if (!stored) return false
       const { verified, expiry, uid } = JSON.parse(stored) as MfaStorage & { uid?: string }
       // Verify the stored userId matches the current user — prevents reuse across accounts
@@ -71,18 +71,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setMfaVerified = (value: boolean): void => {
     if (value) {
+      // Expires at end of current calendar day (WAT) — so they verify once per day,
+      // survives tab closes / app restarts within the same day
       const expiry = new Date()
       expiry.setHours(23, 59, 59, 999)
-      sessionStorage.setItem(
+      localStorage.setItem(
         'mfa_verified',
         JSON.stringify({
           verified: true,
           expiry: expiry.getTime(),
-          uid: user?.id ?? null, // tie verification to this specific user
+          uid: user?.id ?? null,
         })
       )
     } else {
-      sessionStorage.removeItem('mfa_verified')
+      localStorage.removeItem('mfa_verified')
     }
     setMfaVerifiedState(value)
   }
@@ -94,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMfaVerifiedState(false)
     // Only clear MFA on explicit sign-out — timeout re-login should not re-trigger OTP
     if (reason === 'manual') {
-      sessionStorage.removeItem('mfa_verified')
+      localStorage.removeItem('mfa_verified')
     }
 
     const pinSession = localStorage.getItem('pin_session')
