@@ -553,7 +553,12 @@ export default function TillManagement({ onClose }: Props) {
                           </div>
                           <p className="text-gray-400 text-xs">{payout.profiles?.full_name}</p>
                           <p className="text-gray-500 text-xs">
-                            {new Date(payout.created_at).toLocaleTimeString()}
+                            {new Date(payout.created_at).toLocaleTimeString('en-NG', {
+                              timeZone: 'Africa/Lagos',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              hour12: true,
+                            })}
                           </p>
                         </div>
                         <p className="text-red-400 font-bold">

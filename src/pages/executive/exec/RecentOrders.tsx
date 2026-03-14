@@ -40,7 +40,13 @@ export default function RecentOrders({ orders }: Props) {
                   {order.tables?.name || order.order_type || 'Unknown'}
                 </p>
                 <p className="text-gray-500 text-xs truncate">
-                  {order.profiles?.full_name} · {new Date(order.created_at).toLocaleTimeString()}
+                  {order.profiles?.full_name} ·{' '}
+                  {new Date(order.created_at).toLocaleTimeString('en-NG', {
+                    timeZone: 'Africa/Lagos',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true,
+                  })}
                 </p>
               </div>
               <div className="text-right flex-shrink-0">

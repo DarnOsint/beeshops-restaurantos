@@ -427,7 +427,12 @@ export default function Debtors({ onBack, embedded = false }: Props) {
                           className={`text-xs mt-1 flex items-center gap-1 ${overdue ? 'text-red-400' : 'text-gray-500'}`}
                         >
                           <Calendar size={10} /> Due:{' '}
-                          {new Date(debtor.due_date).toLocaleDateString()}
+                          {new Date(debtor.due_date).toLocaleDateString('en-NG', {
+                            timeZone: 'Africa/Lagos',
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
                         </p>
                       )}
                     </div>
@@ -533,7 +538,12 @@ export default function Debtors({ onBack, embedded = false }: Props) {
                                 </p>
                               </div>
                               <p className="text-gray-500 text-xs">
-                                {new Date(pmt.created_at).toLocaleDateString()}
+                                {new Date(pmt.created_at).toLocaleDateString('en-NG', {
+                                  timeZone: 'Africa/Lagos',
+                                  day: '2-digit',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })}
                               </p>
                             </div>
                           ))}

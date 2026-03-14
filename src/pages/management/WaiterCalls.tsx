@@ -92,7 +92,12 @@ export default function WaiterCalls() {
               </div>
             </div>
             <p className="text-gray-500 text-xs shrink-0">
-              {new Date(call.called_at).toLocaleTimeString()}
+              {new Date(call.called_at).toLocaleTimeString('en-NG', {
+                timeZone: 'Africa/Lagos',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+              })}
             </p>
           </div>
           <div className="flex gap-2">
