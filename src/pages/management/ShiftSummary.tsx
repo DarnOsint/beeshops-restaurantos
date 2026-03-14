@@ -27,6 +27,7 @@ interface ShiftIn {
   staff_name: string
   role: string
   clock_in: string
+  pos_machine?: string | null
 }
 interface Props {
   shift: ShiftIn | null
@@ -273,6 +274,9 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
                 <div>
                   <p className="text-white font-bold">{data.staffName}</p>
                   <p className="text-gray-400 text-xs capitalize">{data.role}</p>
+                  {shift.pos_machine && (
+                    <p className="text-cyan-400 text-xs mt-0.5">🖥 POS: {shift.pos_machine}</p>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">

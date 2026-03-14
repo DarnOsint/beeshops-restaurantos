@@ -10,11 +10,13 @@ import {
   QrCode,
   Lock,
   ChefHat,
+  Monitor,
 } from 'lucide-react'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import StaffManagement from './StaffManagement'
 import MenuManagement from './MenuManagement'
 import ZonePricing from './ZonePricing'
+import POSMachines from './POSMachines'
 import TableConfig from './TableConfig'
 import Inventory from './Inventory'
 import Suppliers from './Suppliers'
@@ -108,6 +110,14 @@ export default function BackOffice() {
       roles: ['owner', 'manager'],
     },
     {
+      id: 'posmachines',
+      label: 'POS Machines',
+      desc: 'Name and manage your POS terminals for shift reconciliation',
+      icon: Monitor,
+      color: 'bg-cyan-500',
+      roles: ['owner', 'manager'],
+    },
+    {
       id: 'changepassword',
       label: 'Change Password',
       desc: 'Update your account login password',
@@ -138,6 +148,7 @@ export default function BackOffice() {
   }
   if (activeSection === 'changepassword')
     return <ChangePassword onBack={() => setActiveSection(null)} />
+  if (activeSection === 'posmachines') return <POSMachines onBack={() => setActiveSection(null)} />
   if (activeSection === 'kitchenstock')
     return <KitchenStock onBack={() => setActiveSection(null)} />
   if (activeSection === 'inventory') return <Inventory onBack={() => setActiveSection(null)} />

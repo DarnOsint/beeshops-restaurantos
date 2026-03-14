@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { offlineUpdate, offlineInsert } from '../../lib/offlineWrite'
+import { offlineInsert } from '../../lib/offlineWrite'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
 import { X, Banknote, CreditCard, Smartphone, CheckCircle, Clock, Beer } from 'lucide-react'
@@ -219,15 +219,22 @@ export default function PaymentModal({ order, table, onSuccess, onClose }: Props
     setProcessing(true)
     try {
       if (paymentMethod === 'credit') {
-        await offlineUpdate('orders', order.id, {
-          status: 'paid',
-          payment_method: 'credit',
-          customer_name: debtorName,
-          customer_phone: debtorPhone,
-          closed_at: new Date().toISOString(),
-        })
+        const { error: creditOrderErr } = await supabase
+          .from('orders')
+          .update({
+            status: 'paid',
+            payment_method: 'credit',
+            customer_name: debtorName,
+            customer_phone: debtorPhone,
+            closed_at: new Date().toISOString(),
+          })
+          .eq('id', order.id)
+        if (creditOrderErr) throw creditOrderErr
         await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', order.id)
-        await offlineUpdate('tables', table.id, { status: 'available', assigned_staff: null })
+        await supabase
+          .from('tables')
+          .update({ status: 'available', assigned_staff: null })
+          .eq('id', table.id)
         await offlineInsert('debtors', {
           id: crypto.randomUUID(),
           created_at: new Date().toISOString(),
@@ -259,13 +266,22 @@ export default function PaymentModal({ order, table, onSuccess, onClose }: Props
         setProcessing(false)
         return
       }
-      await offlineUpdate('orders', order.id, {
-        status: 'paid',
-        payment_method: paymentMethod,
-        closed_at: new Date().toISOString(),
-      })
+      // Use direct Supabase calls for payment — offlineUpdate's .single() can silently
+      // fail (PGRST116) causing realtime events to not fire on Management/Executive
+      const { error: orderErr } = await supabase
+        .from('orders')
+        .update({
+          status: 'paid',
+          payment_method: paymentMethod,
+          closed_at: new Date().toISOString(),
+        })
+        .eq('id', order.id)
+      if (orderErr) throw orderErr
       await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', order.id)
-      await offlineUpdate('tables', table.id, { status: 'available', assigned_staff: null })
+      await supabase
+        .from('tables')
+        .update({ status: 'available', assigned_staff: null })
+        .eq('id', table.id)
       await depleteInventory(order.id)
       setPaidOrder({ ...order, payment_method: paymentMethod })
       setSuccess(true)

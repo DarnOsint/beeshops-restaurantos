@@ -125,8 +125,9 @@ export default function Executive() {
         supabase
           .from('orders')
           .select('*, tables(name), profiles(full_name)')
+          .gte('created_at', today.toISOString())
           .order('created_at', { ascending: false })
-          .limit(8),
+          .limit(10),
         supabase
           .from('orders')
           .select('total_amount')

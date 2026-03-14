@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { audit } from '../../lib/audit'
-import { UserCheck, UserX, Clock, X, Calendar, Timer, FileText } from 'lucide-react'
+import { UserCheck, UserX, Clock, X, Calendar, Timer, FileText, Monitor } from 'lucide-react'
 import ShiftSummary from './ShiftSummary'
 
 interface StaffMember {
@@ -20,6 +20,7 @@ interface Shift {
   clock_out?: string | null
   duration_minutes?: number | null
   date?: string
+  pos_machine?: string | null
 }
 
 interface Props {
@@ -31,10 +32,27 @@ export default function ShiftManager({ onClose }: Props) {
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [activeShifts, setActiveShifts] = useState<Shift[]>([])
   const [search, setSearch] = useState('')
+  const [posMachines, setPosMachines] = useState<string[]>([])
+  const [selectedPos, setSelectedPos] = useState<Record<string, string>>({}) // staffId → pos machine name
   const [todayLog, setTodayLog] = useState<Shift[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'active' | 'all' | 'log'>('active')
   const [summaryShift, setSummaryShift] = useState<Shift | null>(null)
+
+  const fetchPosMachines = async () => {
+    const { data } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('id', 'pos_machines')
+      .single()
+    if (data?.value) {
+      try {
+        setPosMachines(JSON.parse(data.value) as string[])
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 
   const fetchStaff = async () => {
     const { data } = await supabase
@@ -65,7 +83,7 @@ export default function ShiftManager({ onClose }: Props) {
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    await Promise.all([fetchStaff(), fetchActiveShifts(), fetchTodayLog()])
+    await Promise.all([fetchStaff(), fetchActiveShifts(), fetchTodayLog(), fetchPosMachines()])
     setLoading(false)
   }, [])
 
@@ -86,6 +104,7 @@ export default function ShiftManager({ onClose }: Props) {
       alert(member.full_name + ' is already clocked in!')
       return
     }
+    const posMachine = selectedPos[member.id] || null
     const { error } = await supabase.from('attendance').insert({
       staff_id: member.id,
       staff_name: member.full_name,
@@ -94,11 +113,17 @@ export default function ShiftManager({ onClose }: Props) {
       date: new Date().toISOString().split('T')[0],
       recorded_by: profile?.id,
       recorded_by_name: profile?.full_name,
+      pos_machine: posMachine,
     })
     if (error) {
       alert('Error: ' + error.message)
       return
     }
+    setSelectedPos((prev) => {
+      const n = { ...prev }
+      delete n[member.id]
+      return n
+    })
     void audit({
       action: 'CLOCK_IN',
       entity: 'attendance',
@@ -206,7 +231,15 @@ export default function ShiftManager({ onClose }: Props) {
               >
                 <div>
                   <p className="text-white font-medium">{shift.staff_name}</p>
-                  <p className="text-gray-400 text-xs capitalize">{shift.role}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-gray-400 text-xs capitalize">{shift.role}</p>
+                    {shift.pos_machine && (
+                      <span className="flex items-center gap-1 text-cyan-400 text-xs">
+                        <Monitor size={10} />
+                        {shift.pos_machine}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-green-400 text-xs mt-0.5 flex items-center gap-1">
                     <Timer size={10} /> Since {formatTime(shift.clock_in)}
                   </p>
@@ -252,12 +285,33 @@ export default function ShiftManager({ onClose }: Props) {
                     <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" /> On Shift
                   </span>
                 ) : (
-                  <button
-                    onClick={() => clockIn(member)}
-                    className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg px-3 py-1.5 text-sm transition-colors"
-                  >
-                    <UserCheck size={14} /> Clock In
-                  </button>
+                  <div className="flex flex-col items-end gap-1.5">
+                    {posMachines.length > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <Monitor size={11} className="text-cyan-400" />
+                        <select
+                          value={selectedPos[member.id] || ''}
+                          onChange={(e) =>
+                            setSelectedPos((prev) => ({ ...prev, [member.id]: e.target.value }))
+                          }
+                          className="bg-gray-700 border border-gray-600 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-cyan-500"
+                        >
+                          <option value="">No POS</option>
+                          {posMachines.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => clockIn(member)}
+                      className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg px-3 py-1.5 text-sm transition-colors"
+                    >
+                      <UserCheck size={14} /> Clock In
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
@@ -279,7 +333,15 @@ export default function ShiftManager({ onClose }: Props) {
               >
                 <div>
                   <p className="text-white font-medium">{entry.staff_name}</p>
-                  <p className="text-gray-400 text-xs capitalize">{entry.role}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-gray-400 text-xs capitalize">{entry.role}</p>
+                    {entry.pos_machine && (
+                      <span className="flex items-center gap-1 text-cyan-400 text-xs">
+                        <Monitor size={10} />
+                        {entry.pos_machine}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-gray-500 text-xs mt-0.5">
                     {formatTime(entry.clock_in)} →{' '}
                     {entry.clock_out ? formatTime(entry.clock_out) : 'Still on shift'}
