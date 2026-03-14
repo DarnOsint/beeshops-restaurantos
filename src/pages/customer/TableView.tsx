@@ -373,7 +373,7 @@ export default function TableView() {
 
   if (loading)
     return (
-      <div className="min-h-full bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <Loader size={24} className="text-amber-500 animate-spin" />
           <p className="text-gray-500 text-sm">Loading menu...</p>
@@ -382,7 +382,7 @@ export default function TableView() {
     )
   if (fetchError)
     return (
-      <div className="min-h-full bg-gray-950 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-6">
         <div className="text-center">
           <AlertCircle size={40} className="text-red-400 mx-auto mb-3" />
           <p className="text-white font-bold mb-2">Could not load menu</p>
@@ -398,7 +398,7 @@ export default function TableView() {
     )
   if (!table)
     return (
-      <div className="min-h-full bg-gray-950 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-6">
         <div className="text-center">
           <p className="text-white font-bold text-lg mb-2">Table not found</p>
           <p className="text-gray-500 text-sm">Please ask your waiter for assistance.</p>
@@ -407,7 +407,7 @@ export default function TableView() {
     )
 
   return (
-    <div className="min-h-full bg-gray-950 flex flex-col">
+    <div className="min-h-screen bg-gray-950 flex flex-col">
       <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 sticky top-0 z-30">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">

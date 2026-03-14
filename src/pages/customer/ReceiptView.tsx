@@ -108,14 +108,14 @@ export default function ReceiptView() {
 
   if (loading)
     return (
-      <div className="min-h-full bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
         <Loader size={24} className="text-amber-500 animate-spin" />
       </div>
     )
 
   if (!order)
     return (
-      <div className="min-h-full bg-gray-950 flex items-center justify-center p-6">
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-6">
         <div className="text-center">
           <p className="text-white font-bold text-lg mb-2">Receipt not found</p>
           <p className="text-gray-500 text-sm">Please ask your waiter for assistance.</p>
@@ -127,7 +127,7 @@ export default function ReceiptView() {
   const isPaid = order.status === 'paid'
 
   return (
-    <div className="min-h-full bg-gray-950 flex flex-col">
+    <div className="min-h-screen bg-gray-950 flex flex-col">
       <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 sticky top-0 z-30">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
