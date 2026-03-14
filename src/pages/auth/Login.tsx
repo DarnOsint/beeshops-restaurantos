@@ -169,7 +169,7 @@ export default function Login() {
     setLoading(true)
     setError(null)
 
-    // Step 1: Try server-side RPC for plain-text PINs (instant — no client loop)
+    // Fast path: RPC handles plain-text PINs and bcrypt PINs server-side
     let data: Record<string, unknown> | null = null
     const { data: rpcResult } = await supabase.rpc('verify_pin_and_get_profile', {
       entered_pin: entered,
@@ -178,8 +178,8 @@ export default function Login() {
       data = rpcResult as Record<string, unknown>
     }
 
-    // Step 2: If no match, check PBKDF2-hashed PINs client-side
-    // (only staff who have already had their PIN hashed will reach this path)
+    // Fallback: PBKDF2-hashed PINs must be verified client-side
+    // This path gets shorter over time as staff log in and auto-migrate to bcrypt
     if (!data) {
       const { data: hashedRows } = await supabase
         .from('profiles')
@@ -187,10 +187,9 @@ export default function Login() {
         .eq('is_active', true)
         .like('pin', 'pbkdf2:%')
 
-      if (hashedRows) {
+      if (hashedRows && hashedRows.length > 0) {
         for (const row of hashedRows) {
           if (row.pin && (await verifyPin(entered, row.pin))) {
-            // Fetch full profile after confirmed match
             const { data: fullProfile } = await supabase
               .from('profiles')
               .select('*')
