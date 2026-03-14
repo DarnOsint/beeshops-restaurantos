@@ -41,6 +41,45 @@ export default defineConfig({
       }
     })
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Core React — always needed immediately
+          if (id.includes('node_modules/react/') || 
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/react-router-dom/') ||
+              id.includes('node_modules/scheduler/')) {
+            return 'vendor-react'
+          }
+          // Supabase — needed at login
+          if (id.includes('node_modules/@supabase/')) {
+            return 'vendor-supabase'
+          }
+          // Lucide icons — bundle all icons together, not 200 tiny files
+          if (id.includes('node_modules/lucide-react/')) {
+            return 'vendor-icons'
+          }
+          // Recharts — only Reports/Analytics
+          if (id.includes('node_modules/recharts/') || 
+              id.includes('node_modules/d3-') ||
+              id.includes('node_modules/victory-vendor/')) {
+            return 'vendor-charts'
+          }
+          // PDF/canvas — only Reports export
+          if (id.includes('node_modules/html2canvas/') || 
+              id.includes('node_modules/jspdf/')) {
+            return 'vendor-pdf'
+          }
+          // DOMPurify — used in several pages
+          if (id.includes('node_modules/dompurify/')) {
+            return 'vendor-purify'
+          }
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600,
+  },
   test: {
     globals: true,
     environment: 'jsdom',
