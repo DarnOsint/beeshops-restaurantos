@@ -111,6 +111,14 @@ export default function Login() {
   useLockoutTimer(emailLocked, emailRem, setEmailRem)
   useLockoutTimer(pinLocked, pinRem, setPinRem)
 
+  const getDevice = () => {
+    const ua = navigator.userAgent
+    if (/iPhone|iPad|iPod/.test(ua)) return 'iOS'
+    if (/Android/.test(ua)) return 'Android'
+    if (/Windows/.test(ua)) return 'Windows'
+    if (/Mac/.test(ua)) return 'Mac'
+    return 'Browser'
+  }
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     if (emailLocked) return
@@ -136,6 +144,13 @@ export default function Login() {
       setLoading(false)
     } else {
       resetAttempts('rl_email')
+      // Audit login — we don't have profile yet so use email
+      void supabase.from('audit_log').insert({
+        action: 'LOGIN_EMAIL',
+        entity: 'auth',
+        entity_name: email,
+        new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
+      })
       navigate('/dashboard')
     }
   }
@@ -172,6 +187,15 @@ export default function Login() {
       return
     }
     resetAttempts('rl_pin')
+    void supabase.from('audit_log').insert({
+      action: 'LOGIN_PIN',
+      entity: 'auth',
+      entity_name: data.full_name,
+      performed_by: data.id,
+      performed_by_name: data.full_name,
+      performed_by_role: data.role,
+      new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
+    })
     localStorage.setItem(
       'pin_session',
       JSON.stringify({

@@ -45,6 +45,7 @@ const TABS = [
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'cctv', label: 'CCTV', icon: Camera },
   { id: 'sync', label: 'Sync', icon: RefreshCw },
+  { id: 'activity', label: 'Activity', icon: Shield },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -411,6 +412,14 @@ export default function Management() {
             lastSynced={lastSynced}
             syncQueue={syncQueue}
             onManualSync={manualSync}
+          />
+        )}
+        {activeTab === 'activity' && (
+          <ActivityLogTab
+            dateRange={{
+              start: new Date(new Date().setHours(0, 0, 0, 0)).toISOString(),
+              end: new Date().toISOString(),
+            }}
           />
         )}
         {activeTab === 'settings' && (

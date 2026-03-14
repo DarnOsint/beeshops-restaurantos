@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { audit } from '../../lib/audit'
 import { UserCheck, UserX, Clock, X, Calendar, Timer, FileText } from 'lucide-react'
 import ShiftSummary from './ShiftSummary'
 
@@ -40,7 +41,7 @@ export default function ShiftManager({ onClose }: Props) {
       .from('profiles')
       .select('id, full_name, role, is_active')
       .eq('is_active', true)
-      .in('role', ['waitron', 'kitchen', 'bar', 'griller', 'manager'])
+      .in('role', ['waitron', 'kitchen', 'bar', 'griller', 'manager', 'supervisor'])
       .order('full_name')
     if (data) setStaff(data)
   }
@@ -74,8 +75,14 @@ export default function ShiftManager({ onClose }: Props) {
   }, [fetchAll])
 
   const clockIn = async (member: StaffMember) => {
-    const already = activeShifts.find((s) => s.staff_id === member.id)
-    if (already) {
+    // Live DB check — avoids race on stale client state
+    const { data: live } = await supabase
+      .from('attendance')
+      .select('id')
+      .eq('staff_id', member.id)
+      .is('clock_out', null)
+      .limit(1)
+    if (live && live.length > 0) {
       alert(member.full_name + ' is already clocked in!')
       return
     }
@@ -92,6 +99,13 @@ export default function ShiftManager({ onClose }: Props) {
       alert('Error: ' + error.message)
       return
     }
+    void audit({
+      action: 'CLOCK_IN',
+      entity: 'attendance',
+      entityName: member.full_name,
+      newValue: { role: member.role, recorded_by: profile?.full_name },
+      performer: profile as import('../../types').Profile,
+    })
     fetchAll()
   }
 
@@ -112,6 +126,13 @@ export default function ShiftManager({ onClose }: Props) {
       alert('Error: ' + error.message)
       return
     }
+    void audit({
+      action: 'CLOCK_OUT',
+      entity: 'attendance',
+      entityName: shift.staff_name,
+      newValue: { role: shift.role, duration_minutes: duration },
+      performer: profile as import('../../types').Profile,
+    })
     if (shift.role === 'waitron') {
       const { error: tErr } = await supabase
         .from('tables')
@@ -214,7 +235,7 @@ export default function ShiftManager({ onClose }: Props) {
             .filter(
               (m) =>
                 !search ||
-                m.staff_name.toLowerCase().includes(search.toLowerCase()) ||
+                m.full_name.toLowerCase().includes(search.toLowerCase()) ||
                 (m.role || '').toLowerCase().includes(search.toLowerCase())
             )
             .map((member) => (

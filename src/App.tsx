@@ -21,6 +21,7 @@ import Debtors from './pages/accounting/Debtors'
 import Reports from './pages/reports/Reports'
 import Analytics from './pages/analytics/Analytics'
 import ApartmentDashboard from './pages/apartment/ApartmentDashboard'
+import SupervisorDashboard from './pages/supervisor/SupervisorDashboard'
 import TableView from './pages/customer/TableView'
 import ReceiptView from './pages/customer/ReceiptView'
 import type { Role } from './types'
@@ -108,6 +109,7 @@ function RoleRoute() {
   if (profile.role === 'bar') return <Navigate to="/kds/bar" />
   if (profile.role === 'griller') return <Navigate to="/kds/griller" />
   if (profile.role === 'apartment_manager') return <Navigate to="/apartment" />
+  if (profile.role === 'supervisor') return <Navigate to="/supervisor" />
   return <Navigate to="/login" />
 }
 
@@ -282,6 +284,16 @@ function AppRoutes() {
                 <EB title="Analytics error">
                   <Analytics />
                 </EB>
+              </RoleGuard>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/supervisor"
+          element={
+            <PrivateRoute>
+              <RoleGuard allowed={['owner', 'manager', 'supervisor'] as Role[]}>
+                <SupervisorDashboard />
               </RoleGuard>
             </PrivateRoute>
           }

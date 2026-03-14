@@ -8,6 +8,7 @@ import {
   ReactNode,
 } from 'react'
 import { supabase } from '../lib/supabase'
+import { audit } from '../lib/audit'
 import type { Profile } from '../types'
 import type { User } from '@supabase/supabase-js'
 
@@ -175,7 +176,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe()
   }, [fetchProfile])
 
-  const signOut = async () => doSignOut('manual')
+  const signOut = async () => {
+    void audit({
+      action: 'LOGOUT',
+      entity: 'auth',
+      entityName: profile?.full_name ?? undefined,
+      newValue: { reason: 'manual' },
+      performer: profile as import('../types').Profile,
+    })
+    doSignOut('manual')
+  }
 
   const mfaRequired = !!(
     profile &&

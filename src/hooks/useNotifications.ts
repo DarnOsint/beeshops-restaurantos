@@ -31,7 +31,7 @@ export function useNotifications(profile: Profile | null) {
     if (!profile) return
     const channels: ReturnType<typeof supabase.channel>[] = []
 
-    if (['owner', 'manager', 'waitron'].includes(profile.role)) {
+    if (['owner', 'manager', 'waitron', 'supervisor'].includes(profile.role)) {
       const orderCh = supabase
         .channel('notify-order-ready')
         .on(
@@ -87,7 +87,7 @@ export function useNotifications(profile: Profile | null) {
       channels.push(invCh)
     }
 
-    if (['owner', 'manager', 'waitron'].includes(profile.role)) {
+    if (['owner', 'manager', 'waitron', 'supervisor'].includes(profile.role)) {
       const callCh = supabase
         .channel('notify-waiter-calls')
         .on(

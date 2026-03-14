@@ -8,6 +8,7 @@ export type Role =
   | 'kitchen'
   | 'bar'
   | 'griller'
+  | 'supervisor'
   | 'apartment_manager'
 
 export type OrderStatus = 'open' | 'paid' | 'voided' | 'pending'

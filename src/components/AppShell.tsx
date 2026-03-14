@@ -48,7 +48,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
   apartment_manager: [{ label: 'Rooms', icon: BedDouble, path: '/apartment' }],
 }
 
-const BARE_ROLES = ['kitchen', 'bar', 'griller', 'waitron']
+const BARE_ROLES = ['kitchen', 'bar', 'griller', 'waitron', 'supervisor']
 const ZONES = ['Outdoor', 'Indoor', 'VIP Lounge', 'The Nook']
 
 interface TableRow {
