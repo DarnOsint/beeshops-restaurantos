@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ShoppingBag } from 'lucide-react'
+import { ShoppingBag, XCircle } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 
 export default function OpenOrdersTab() {
@@ -9,7 +9,7 @@ export default function OpenOrdersTab() {
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
       .from('orders')
-      .select('*, tables(name), profiles(full_name), order_items(*, menu_items(name))')
+      .select('*, table_id, tables(name), profiles(full_name), order_items(*, menu_items(name))')
       .eq('status', 'open')
       .order('created_at', { ascending: false })
     if (!error) setOrders(data || [])
@@ -46,11 +46,37 @@ export default function OpenOrdersTab() {
                 <p className="text-white font-bold">{order.tables?.name || 'Unknown Table'}</p>
                 <p className="text-gray-400 text-xs">{order.profiles?.full_name}</p>
               </div>
-              <div className="text-right">
+              <div className="text-right flex flex-col items-end gap-1.5">
                 <p className="text-amber-400 font-bold">₦{order.total_amount?.toLocaleString()}</p>
                 <p className="text-gray-500 text-xs">
                   {new Date(order.created_at).toLocaleTimeString()}
                 </p>
+                <button
+                  onClick={async () => {
+                    if (
+                      !confirm(
+                        'Force-close this order? Use this only for stuck orders that were already paid.'
+                      )
+                    )
+                      return
+                    const { error } = await supabase
+                      .from('orders')
+                      .update({ status: 'paid', closed_at: new Date().toISOString() })
+                      .eq('id', order.id)
+                    if (error) {
+                      alert('Failed: ' + error.message)
+                      return
+                    }
+                    await supabase
+                      .from('tables')
+                      .update({ status: 'available', assigned_staff: null })
+                      .eq('id', order.table_id)
+                    fetchOrders()
+                  }}
+                  className="flex items-center gap-1 text-[10px] bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg px-2 py-1 transition-colors"
+                >
+                  <XCircle size={10} /> Force Close
+                </button>
               </div>
             </div>
             <div className="space-y-1">

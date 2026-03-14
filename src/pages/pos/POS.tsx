@@ -392,7 +392,9 @@ export default function POS() {
       }
 
       const orderId = crypto.randomUUID()
-      const { data: newOrder, error: orderError } = await offlineInsert('orders', {
+      // Use direct Supabase call — offlineInsert's .single() can fail silently
+      // leaving the order in the sync queue instead of the DB
+      const { error: orderError } = await supabase.from('orders').insert({
         id: orderId,
         table_id: table.id,
         staff_id: profile!.id,
@@ -407,6 +409,7 @@ export default function POS() {
         alert('Error creating order: ' + orderError.message)
         return
       }
+      const newOrder = { id: orderId } as Order
 
       const orderItemRows = items.map((item) => ({
         id: crypto.randomUUID(),
@@ -437,7 +440,7 @@ export default function POS() {
         newValue: { total, items: items.length, table: table.name },
         performer: profile as Profile,
       })
-      await offlineUpdate('tables', table.id, { status: 'occupied' })
+      await supabase.from('tables').update({ status: 'occupied' }).eq('id', table.id)
       // Reload the newly created order so PaymentModal has full order_items
       const { data: freshOrder } = await supabase
         .from('orders')
