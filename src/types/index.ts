@@ -97,6 +97,7 @@ export interface Order {
   status: OrderStatus
   total_amount: number
   notes?: string | null
+  covers?: number | null
   payment_method?: PaymentMethod | null
   customer_name?: string | null
   customer_phone?: string | null

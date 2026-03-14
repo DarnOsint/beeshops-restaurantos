@@ -16,6 +16,7 @@ import {
   Clock,
 } from 'lucide-react'
 import TableGrid from './TableGrid'
+import CoversModal from './CoversModal'
 import OrderPanel from './OrderPanel'
 import ReceiptModal from './ReceiptModal'
 import PaymentModal from './PaymentModal'
@@ -95,6 +96,8 @@ export default function POS() {
   const [menuItems, setMenuItems] = useState<MenuItemWithZone[]>([])
   const [zonePrices, setZonePrices] = useState<ZonePrice[]>([])
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
+  const [pendingTable, setPendingTable] = useState<Table | null>(null)
+  const [pendingCovers, setPendingCovers] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeOrder, setActiveOrder] = useState<
     | (Order & {
@@ -333,9 +336,21 @@ export default function POS() {
         return
       }
     }
+    // New table — ask for covers before opening
     setActiveOrder(null)
     setShowPayment(false)
-    setSelectedTable(table)
+    setPendingTable(table)
+  }
+
+  const handleCoversConfirmed = (covers: number) => {
+    if (!pendingTable) return
+    setPendingCovers(covers)
+    setSelectedTable(pendingTable)
+    setPendingTable(null)
+  }
+
+  const handleCoversCancel = () => {
+    setPendingTable(null)
   }
 
   const handlePlaceOrder = async ({ table, items, notes, total }: OrderPayload) => {
@@ -402,8 +417,10 @@ export default function POS() {
         status: 'open',
         total_amount: total + hireFeeAmt,
         notes,
+        covers: pendingCovers,
         created_at: new Date().toISOString(),
       })
+      setPendingCovers(null)
       if (orderError) {
         console.error('Order error:', orderError)
         toast.error('Error', 'Error creating order: ' + orderError.message)

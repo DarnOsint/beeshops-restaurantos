@@ -104,7 +104,7 @@ export default async function handler(req, res) {
       { data: roomStays },
       { data: reservations },
     ] = await Promise.all([
-      supabase.from('orders').select('*, profiles(full_name), tables(name, table_categories(name))').gte('created_at', start).lte('created_at', end),
+      supabase.from('orders').select('*, profiles(full_name), tables(name, table_categories(name)), covers').gte('created_at', start).lte('created_at', end),
       supabase.from('order_items').select('*, menu_items(name, menu_categories(name))').gte('created_at', start).lte('created_at', end),
       supabase.from('void_log').select('*, profiles(full_name)').gte('created_at', start).lte('created_at', end),
       supabase.from('till_sessions').select('*, profiles(full_name)').gte('opened_at', start).lte('opened_at', end),
@@ -121,6 +121,8 @@ export default async function handler(req, res) {
     const voided         = (orders || []).filter(o => o.status === 'cancelled')
     const openOrders     = (orders || []).filter(o => o.status === 'open')
     const totalRevenue   = paid.reduce((s, o) => s + (o.total_amount || 0), 0)
+    const totalCovers    = paid.reduce((s, o) => s + (o.covers || 0), 0)
+    const revPerCover    = totalCovers > 0 ? totalRevenue / totalCovers : 0
     const avgOrder       = paid.length ? totalRevenue / paid.length : 0
 
     const byMethod = (method) => paid.filter(o => o.payment_method === method)

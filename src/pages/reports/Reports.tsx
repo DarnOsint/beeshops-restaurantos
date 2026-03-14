@@ -112,6 +112,7 @@ interface PaidOrder {
   payment_method?: string
   order_type?: string
   created_at: string
+  covers?: number | null
   profiles?: { full_name?: string } | null
   tables?: { name?: string; table_categories?: { name?: string } | null } | null
 }
@@ -126,6 +127,8 @@ interface Report {
   roomRevenue: number
   totalRevenue: number
   totalOrders: number
+  totalCovers: number
+  revenuePerCover: number
   paidOrders: PaidOrder[]
   paidOrdersCount: number
   cancelledOrders: number
@@ -366,6 +369,11 @@ export default function Reports() {
         roomRevenue,
         totalRevenue: grossRevenue + roomRevenue,
         totalOrders: orders.length,
+        totalCovers: paidOrders.reduce((s, o) => s + (o.covers || 0), 0),
+        revenuePerCover: (() => {
+          const c = paidOrders.reduce((s, o) => s + (o.covers || 0), 0)
+          return c > 0 ? grossRevenue / c : 0
+        })(),
         paidOrders,
         paidOrdersCount: paidOrders.length,
         cancelledOrders,
@@ -733,6 +741,21 @@ export default function Reports() {
                     value: 'NGN ' + report.avgOrderValue.toLocaleString(),
                     color: 'text-purple-400',
                     icon: BarChart2,
+                  },
+                  {
+                    label: 'Total Covers',
+                    value: report.totalCovers > 0 ? String(report.totalCovers) : '—',
+                    color: 'text-amber-400',
+                    icon: Users,
+                  },
+                  {
+                    label: 'Revenue / Cover',
+                    value:
+                      report.revenuePerCover > 0
+                        ? 'NGN ' + Math.round(report.revenuePerCover).toLocaleString()
+                        : '—',
+                    color: 'text-amber-400',
+                    icon: Users,
                   },
                 ] as const
               ).map((m, i) => (
