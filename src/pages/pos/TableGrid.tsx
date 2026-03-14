@@ -70,8 +70,9 @@ export default function TableGrid({
   onSelectTable,
   selectedTable,
   assignedTableIds,
-}: TableGridProps) {
-  const [activeCategory, setActiveCategory] = useState<string>('All')
+  defaultCategory = 'All',
+}: TableGridProps & { defaultCategory?: string }) {
+  const [activeCategory, setActiveCategory] = useState<string>(defaultCategory)
   console.log(
     '[GRID] assignedTableIds:',
     assignedTableIds === null ? 'null(all)' : assignedTableIds?.length,

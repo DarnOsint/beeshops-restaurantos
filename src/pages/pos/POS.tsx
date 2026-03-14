@@ -112,6 +112,7 @@ export default function POS() {
     | null
   >(null)
   const [assignedTableIds, setAssignedTableIds] = useState<string[] | null>(null)
+  const [defaultZone, setDefaultZone] = useState<string>('All')
   const [posTab, setPosTab] = useState<'tables' | 'history' | 'shift'>('tables')
   const [orderHistory, setOrderHistory] = useState<HistoryOrder[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -718,6 +719,7 @@ export default function POS() {
               onSelectTable={handleSelectTable}
               selectedTable={selectedTable}
               assignedTableIds={assignedTableIds}
+              defaultCategory={defaultZone}
             />
           </div>
         )}
