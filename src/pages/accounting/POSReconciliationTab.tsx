@@ -38,7 +38,7 @@ interface WaitronEntry {
 const fmt = (n: number) => `₦${n.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
 const fmtTime = (ts?: string | null) =>
   ts
-    ? new Date(ts).toLocaleTimeString({
+    ? new Date(ts).toLocaleTimeString('en-NG', {
         timeZone: 'Africa/Lagos',
         hour: '2-digit',
         minute: '2-digit',

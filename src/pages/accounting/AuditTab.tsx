@@ -24,7 +24,7 @@ export default function AuditTab({ auditLog, dateRange }: Props) {
     const doc = createPDF('Audit Log', dateRange)
     const body = auditLog.map((e) => [
       new Date(e.created_at).toLocaleDateString('en-NG'),
-      new Date(e.created_at).toLocaleTimeString({
+      new Date(e.created_at).toLocaleTimeString('en-NG', {
         timeZone: 'Africa/Lagos',
         hour: '2-digit',
         minute: '2-digit',
