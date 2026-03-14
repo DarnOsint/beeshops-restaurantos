@@ -73,12 +73,6 @@ export default function TableGrid({
   defaultCategory = 'All',
 }: TableGridProps & { defaultCategory?: string }) {
   const [activeCategory, setActiveCategory] = useState<string>(defaultCategory)
-  console.log(
-    '[GRID] assignedTableIds:',
-    assignedTableIds === null ? 'null(all)' : assignedTableIds?.length,
-    'tables:',
-    tables.length
-  )
 
   const filtered =
     activeCategory === 'All'
@@ -130,19 +124,6 @@ export default function TableGrid({
                   const isSelected = selectedTable?.id === table.id
                   const isAssigned =
                     assignedTableIds === null || assignedTableIds.includes(table.id)
-                  if (!isAssigned && assignedTableIds !== null)
-                    console.log(
-                      '[CHECK] table.id:',
-                      table.id,
-                      'type:',
-                      typeof table.id,
-                      'inArray:',
-                      assignedTableIds.includes(table.id),
-                      'firstId:',
-                      assignedTableIds[0],
-                      'firstType:',
-                      typeof assignedTableIds[0]
-                    )
                   const occupiedColor = occupiedColors[category]
                   return (
                     <button

@@ -149,11 +149,11 @@ export default function POS() {
 
   const fetchAssignedTables = async (role: string, staffId: string) => {
     if (['owner', 'manager', 'accountant'].includes(role)) {
-      console.log('[ASSIGN] owner/manager: null')
       setAssignedTableIds(null)
       setIsClockedIn(true)
       return
     }
+
     const today = new Date().toISOString().split('T')[0]
     const { data: attendance } = await supabase
       .from('attendance')
@@ -164,51 +164,44 @@ export default function POS() {
       .limit(1)
     setIsClockedIn(attendance !== null && attendance.length > 0)
 
-    const [zoneRes, directRes] = await Promise.all([
-      supabase
-        .from('zone_assignments')
-        .select('category_id')
-        .eq('staff_id', staffId)
-        .eq('is_active', true),
-      supabase.from('tables').select('id').eq('assigned_staff', staffId),
-    ])
+    const { data: zoneData } = await supabase
+      .from('zone_assignments')
+      .select('category_id')
+      .eq('staff_id', staffId)
+      .eq('is_active', true)
 
-    const zoneData = zoneRes.data
-    const directIds = (directRes.data || []).map((t: { id: string }) => t.id)
+    const { data: directTables } = await supabase
+      .from('tables')
+      .select('id')
+      .eq('assigned_staff', staffId)
+    const directIds = (directTables || []).map((t: { id: string }) => t.id)
 
-    // No assignments at all — full access
     if ((!zoneData || zoneData.length === 0) && directIds.length === 0) {
       setAssignedTableIds(null)
       return
     }
 
-    // Only direct table assignments
     if (!zoneData || zoneData.length === 0) {
-      console.log('[ASSIGN] direct only:', directIds.length)
       setAssignedTableIds(directIds)
       return
     }
 
-    // Resolve zone category IDs to table IDs using the already-loaded tables state
-    // This avoids a second DB round-trip and the timing/RLS issues it can cause
-    const categoryIds = new Set(zoneData.map((z: { category_id: string }) => z.category_id))
-    const zoneTableIds = tables
-      .filter((t) => t.category_id && categoryIds.has(t.category_id))
-      .map((t) => t.id)
+    const categoryIds = zoneData.map((z: { category_id: string }) => z.category_id)
+    const { data: zoneTableData } = await supabase
+      .from('tables')
+      .select('id, category_id')
+      .in('category_id', categoryIds)
 
-    const combined = [...new Set([...zoneTableIds, ...directIds])]
-    // If resolution yields nothing (tables not loaded yet), grant full access
-    console.log(
-      '[ASSIGN] tables.length:',
-      tables.length,
-      'categoryIds:',
-      [...categoryIds],
-      'zoneTableIds:',
-      zoneTableIds.length,
-      'combined:',
-      combined.length
-    )
+    const zoneIds = (zoneTableData || []).map((t: { id: string }) => t.id)
+    const combined = [...new Set([...zoneIds, ...directIds])]
     setAssignedTableIds(combined.length > 0 ? combined : null)
+
+    // Auto-open the waitron's zone tab
+    const firstCatId = categoryIds[0]
+    const matchingZone = tables.find((t) => t.category_id === firstCatId)
+    if (matchingZone?.table_categories?.name) {
+      setDefaultZone(matchingZone.table_categories.name)
+    }
   }
 
   const activeOrderRef = useRef<typeof activeOrder>(null)
