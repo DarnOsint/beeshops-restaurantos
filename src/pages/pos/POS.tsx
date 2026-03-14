@@ -162,7 +162,7 @@ export default function POS() {
       .limit(1)
     setIsClockedIn(attendance !== null && attendance.length > 0)
 
-    const { data: zoneData } = await supabase
+    const { data: zoneData, error: zoneErr } = await supabase
       .from('zone_assignments')
       .select('category_id')
       .eq('staff_id', staffId)
@@ -173,22 +173,23 @@ export default function POS() {
       .eq('assigned_staff', staffId)
     const directIds = (directTables || []).map((t: { id: string }) => t.id)
 
+    console.log('[POS] zoneData:', zoneData, 'err:', zoneErr)
+
     if (!zoneData || zoneData.length === 0) {
-      // No zone assignments set by manager — give access to directly assigned
-      // tables, or null (all tables) if none are directly assigned either.
       setAssignedTableIds(directIds.length > 0 ? directIds : null)
       return
     }
 
     const categoryIds = zoneData.map((z: { category_id: string }) => z.category_id)
-    const { data: tableData } = await supabase
+    console.log('[POS] categoryIds:', categoryIds)
+    const { data: tableData, error: tableErr } = await supabase
       .from('tables')
       .select('id')
       .in('category_id', categoryIds)
+    console.log('[POS] tableData:', tableData, 'err:', tableErr)
     const zoneIds = (tableData || []).map((t: { id: string }) => t.id)
     const combined = [...new Set([...zoneIds, ...directIds])]
-    // Safety: if zone assignments exist but resolve to no tables, grant full access
-    // This prevents stale/orphaned zone assignments locking waitrons out
+    console.log('[POS] combined assignedTableIds:', combined.length)
     setAssignedTableIds(combined.length > 0 ? combined : null)
   }
 
