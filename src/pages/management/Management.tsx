@@ -443,7 +443,7 @@ export default function Management() {
           <ActivityLogTab
             dateRange={{
               start: new Date(new Date().setHours(0, 0, 0, 0)).toISOString(),
-              end: new Date().toISOString(),
+              end: new Date(new Date().setHours(23, 59, 59, 999)).toISOString(),
             }}
           />
         )}
