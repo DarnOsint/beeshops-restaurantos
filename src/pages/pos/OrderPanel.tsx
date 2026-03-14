@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import VoidPinModal from '../../components/VoidPinModal'
-import { Plus, Minus, Trash2, Send, X, CheckCircle2, Circle } from 'lucide-react'
+import { Plus, Minus, Trash2, Send, X, CheckCircle2, Circle, Search } from 'lucide-react'
 import type { Table, MenuItem, Order, OrderItem, Profile } from '../../types'
 
 interface OrderItemLocal extends Omit<OrderItem, 'id'> {
@@ -118,6 +118,7 @@ export default function OrderPanel({
   })
 
   const [activeCategory, setActiveCategory] = useState('All')
+  const [menuSearch, setMenuSearch] = useState('')
   const [notes, setNotes] = useState('')
   const [voidRequest, setVoidRequest] = useState<VoidRequest | null>(null)
   const [modifierItem, setModifierItem] = useState<OrderItemLocal | null>(null)
@@ -135,14 +136,14 @@ export default function OrderPanel({
         .filter(Boolean) as string[]
     ),
   ]
-  const filteredMenu =
-    activeCategory === 'All'
-      ? menuItems
-      : menuItems.filter(
-          (item) =>
-            (item as unknown as { menu_categories?: { name?: string } }).menu_categories?.name ===
-            activeCategory
-        )
+  const filteredMenu = menuItems
+    .filter(
+      (item) =>
+        activeCategory === 'All' ||
+        (item as unknown as { menu_categories?: { name?: string } }).menu_categories?.name ===
+          activeCategory
+    )
+    .filter((item) => !menuSearch || item.name.toLowerCase().includes(menuSearch.toLowerCase()))
 
   const addItem = (item: MenuItem | OrderItemLocal) => {
     const stock = (item as unknown as { current_stock?: number | null }).current_stock
@@ -292,6 +293,23 @@ export default function OrderPanel({
               {cat}
             </button>
           ))}
+        </div>
+
+        <div className="flex px-3 pt-3 pb-0">
+          <div className="flex items-center gap-2 flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 focus-within:border-amber-500 transition-colors">
+            <Search size={14} className="text-gray-500 shrink-0" />
+            <input
+              value={menuSearch}
+              onChange={(e) => setMenuSearch(e.target.value)}
+              placeholder="Search menu…"
+              className="flex-1 bg-transparent text-white text-sm placeholder-gray-500 focus:outline-none"
+            />
+            {menuSearch && (
+              <button onClick={() => setMenuSearch('')} className="text-gray-500 hover:text-white">
+                <X size={12} />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
