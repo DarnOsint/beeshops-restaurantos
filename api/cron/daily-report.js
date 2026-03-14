@@ -1,14 +1,16 @@
 /**
  * api/cron/daily-report.js
- * Vercel cron job — runs every day at 11:30 PM WAT (22:30 UTC).
- * Sends a daily summary email to the owner.
+ * Vercel cron job — runs every day at 03:30 UTC (04:30 WAT).
+ * Sends a comprehensive daily Z-Report to the owner.
  *
- * Setup:
- * 1. Create a free account at resend.com
- * 2. Add RESEND_API_KEY to Vercel environment variables
- * 3. Add REPORT_EMAIL (owner's email) to Vercel environment variables
- * 4. Add a verified sender domain or use Resend's onboarding address
- * 5. The vercel.json cron config triggers this route automatically
+ * vercel.json schedule: "30 3 * * *"
+ *
+ * Required environment variables (Vercel dashboard → Settings → Environment Variables):
+ *   VITE_SUPABASE_URL          — Supabase project URL
+ *   SUPABASE_SERVICE_ROLE_KEY  — Supabase service role key (bypasses RLS)
+ *   RESEND_API_KEY             — Resend.com API key
+ *   REPORT_EMAIL               — Owner's email address
+ *   CRON_SECRET                — Vercel cron secret (auto-injected by Vercel)
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -21,191 +23,337 @@ const supabase = createClient(
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET
-
 function fmt(n) {
-  return `₦${Number(n || 0).toLocaleString('en-NG')}`
+  return `₦${Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function pct(num, den) {
+  if (!den) return '0%'
+  return `${Math.round((num / den) * 100)}%`
+}
+
+function getYesterdayWAT() {
+  const now = new Date()
+  const watNow = new Date(now.getTime() + 60 * 60 * 1000)
+  const watYesterday = new Date(watNow)
+  watYesterday.setDate(watYesterday.getDate() - 1)
+  const y = watYesterday.getFullYear()
+  const m = String(watYesterday.getMonth() + 1).padStart(2, '0')
+  const d = String(watYesterday.getDate()).padStart(2, '0')
+  return {
+    start: `${y}-${m}-${d}T00:00:00+01:00`,
+    end:   `${y}-${m}-${d}T23:59:59+01:00`,
+    label: watYesterday.toLocaleDateString('en-NG', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      timeZone: 'Africa/Lagos',
+    }),
+    short: `${d}/${m}/${y}`,
+  }
+}
+
+function section(title, icon, content, borderColor = '#e5e7eb') {
+  return `
+  <div style="background:white;border-radius:12px;padding:20px 24px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.08);border-top:3px solid ${borderColor};">
+    <h3 style="margin:0 0 14px;color:#111827;font-size:14px;font-weight:700;">${icon} ${title}</h3>
+    ${content}
+  </div>`
+}
+
+function kpiRow(items) {
+  return `<div style="display:grid;grid-template-columns:${Array(items.length).fill('1fr').join(' ')};gap:10px;">${items.join('')}</div>`
+}
+
+function kpiBox(label, value, color = '#111827', note = '') {
+  return `<div style="background:#f9fafb;border-radius:10px;padding:14px 16px;">
+    <div style="color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">${label}</div>
+    <div style="color:${color};font-size:20px;font-weight:800;margin-top:4px;">${value}</div>
+    ${note ? `<div style="color:#9ca3af;font-size:11px;margin-top:2px;">${note}</div>` : ''}
+  </div>`
+}
+
+function buildTable(headers, rows, emptyMsg = 'No data') {
+  if (!rows.length) return `<p style="color:#9ca3af;font-size:12px;margin:4px 0;">${emptyMsg}</p>`
+  const ths = headers.map(h =>
+    `<th style="text-align:${h.right ? 'right' : 'left'};color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;padding:6px 0;border-bottom:1px solid #e5e7eb;font-weight:600;">${h.label}</th>`
+  ).join('')
+  const trs = rows.map(row =>
+    `<tr>${row.map((cell, i) =>
+      `<td style="text-align:${headers[i]?.right ? 'right' : 'left'};padding:7px 0;border-bottom:1px solid #f3f4f6;color:#374151;font-size:12px;">${cell}</td>`
+    ).join('')}</tr>`
+  ).join('')
+  return `<table style="width:100%;border-collapse:collapse;"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`
 }
 
 export default async function handler(req, res) {
-  // Security — only allow Vercel cron or internal calls
-  const authHeader = req.headers['authorization']
-  const internalHeader = req.headers['x-internal-secret']
-  const isCron = authHeader === `Bearer ${process.env.CRON_SECRET}`
-  const isInternal = internalHeader === INTERNAL_SECRET
-
-  if (!isCron && !isInternal) {
-    return res.status(401).json({ error: 'Unauthorized' })
-  }
+  const isCron     = req.headers['authorization'] === `Bearer ${process.env.CRON_SECRET}`
+  const isInternal = req.headers['x-internal-secret'] === process.env.INTERNAL_API_SECRET
+  if (!isCron && !isInternal) return res.status(401).json({ error: 'Unauthorized' })
 
   try {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const todayISO = today.toISOString()
+    const { start, end, label, short } = getYesterdayWAT()
 
-    // Fetch today's orders
-    const { data: orders } = await supabase
-      .from('orders')
-      .select('*')
-      .gte('created_at', todayISO)
+    const [
+      { data: orders },
+      { data: orderItems },
+      { data: voidLog },
+      { data: tillSessions },
+      { data: payouts },
+      { data: attendance },
+      { data: debtors },
+      { data: inventory },
+      { data: roomStays },
+      { data: reservations },
+    ] = await Promise.all([
+      supabase.from('orders').select('*, profiles(full_name), tables(name, table_categories(name))').gte('created_at', start).lte('created_at', end),
+      supabase.from('order_items').select('*, menu_items(name, menu_categories(name))').gte('created_at', start).lte('created_at', end),
+      supabase.from('void_log').select('*, profiles(full_name)').gte('created_at', start).lte('created_at', end),
+      supabase.from('till_sessions').select('*, profiles(full_name)').gte('opened_at', start).lte('opened_at', end),
+      supabase.from('payouts').select('*').gte('created_at', start).lte('created_at', end),
+      supabase.from('attendance').select('*, profiles(full_name)').gte('clock_in', start).lte('clock_in', end),
+      supabase.from('debtors').select('*').gt('balance', 0),
+      supabase.from('inventory').select('*').eq('is_active', true),
+      supabase.from('room_stays').select('*').gte('created_at', start).lte('created_at', end),
+      supabase.from('reservations').select('*').gte('created_at', start).lte('created_at', end),
+    ])
 
-    const paid = orders?.filter(o => o.status === 'paid') || []
-    const voided = orders?.filter(o => o.status === 'cancelled') || []
-    const open = orders?.filter(o => o.status === 'open') || []
+    // Revenue
+    const paid           = (orders || []).filter(o => o.status === 'paid')
+    const voided         = (orders || []).filter(o => o.status === 'cancelled')
+    const openOrders     = (orders || []).filter(o => o.status === 'open')
+    const totalRevenue   = paid.reduce((s, o) => s + (o.total_amount || 0), 0)
+    const avgOrder       = paid.length ? totalRevenue / paid.length : 0
 
-    const totalRevenue = paid.reduce((s, o) => s + (o.total_amount || 0), 0)
-    const cashRevenue = paid.filter(o => o.payment_method === 'cash').reduce((s, o) => s + (o.total_amount || 0), 0)
-    const posRevenue = paid.filter(o => o.payment_method === 'bank_pos').reduce((s, o) => s + (o.total_amount || 0), 0)
-    const transferRevenue = paid.filter(o => o.payment_method === 'bank_transfer').reduce((s, o) => s + (o.total_amount || 0), 0)
-    const creditRevenue = paid.filter(o => o.payment_method === 'credit').reduce((s, o) => s + (o.total_amount || 0), 0)
+    const byMethod = (method) => paid.filter(o => o.payment_method === method)
+    const revByMethod = (method) => byMethod(method).reduce((s, o) => s + (o.total_amount || 0), 0)
 
-    // Fetch till sessions
-    const { data: tillSessions } = await supabase
-      .from('till_sessions')
-      .select('*')
-      .gte('created_at', todayISO)
+    const cashRev       = revByMethod('cash')
+    const posRev        = revByMethod('bank_pos')
+    const transferRev   = revByMethod('bank_transfer')
+    const creditRev     = revByMethod('credit')
+    const splitRev      = revByMethod('split')
+    const compRev       = revByMethod('complimentary')
 
-    const totalPayouts = tillSessions?.reduce((s, t) => s + (t.total_payouts || 0), 0) || 0
-    const totalFloat = tillSessions?.reduce((s, t) => s + (t.opening_float || 0), 0) || 0
+    // Zone breakdown
+    const zoneMap = {}
+    for (const o of paid) {
+      const zone = o.tables?.table_categories?.name || 'Takeaway / Unknown'
+      if (!zoneMap[zone]) zoneMap[zone] = { count: 0, revenue: 0 }
+      zoneMap[zone].count++
+      zoneMap[zone].revenue += o.total_amount || 0
+    }
 
-    // Fetch unresolved CV alerts
-    const { data: cvAlerts } = await supabase
-      .from('cv_alerts')
-      .select('*')
-      .eq('resolved', false)
-      .gte('created_at', todayISO)
+    // Top items
+    const itemMap = {}
+    for (const item of (orderItems || [])) {
+      if (!item.menu_items) continue
+      const k = item.menu_item_id
+      if (!itemMap[k]) itemMap[k] = { name: item.menu_items.name, category: item.menu_items.menu_categories?.name || '—', qty: 0, revenue: 0 }
+      itemMap[k].qty     += item.quantity || 1
+      itemMap[k].revenue += (item.price || 0) * (item.quantity || 1)
+    }
+    const topItems = Object.values(itemMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10)
 
-    const dateStr = new Date().toLocaleDateString('en-NG', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    // Voids
+    const totalVoidValue = (voidLog || []).reduce((s, v) => s + (v.amount || 0), 0)
+
+    // Till
+    const totalFloat   = (tillSessions || []).reduce((s, t) => s + (t.opening_float || 0), 0)
+    const totalPayouts = (payouts || []).reduce((s, p) => s + (p.amount || 0), 0)
+    const expectedCash = cashRev - totalPayouts
+    const unclosedTillCount = (tillSessions || []).filter(t => !t.closed_at).length
+
+    // Staff
+    const waitronMap = {}
+    for (const o of paid) {
+      const name = o.profiles?.full_name || 'Unknown'
+      if (!waitronMap[name]) waitronMap[name] = { orders: 0, revenue: 0 }
+      waitronMap[name].orders++
+      waitronMap[name].revenue += o.total_amount || 0
+    }
+    const topWaitrons  = Object.entries(waitronMap).sort((a, b) => b[1].revenue - a[1].revenue).slice(0, 8)
+    const clockedIn    = (attendance || []).length
+    const openShifts   = (attendance || []).filter(a => !a.clock_out).length
+
+    // Debtors
+    const totalDebt    = (debtors || []).reduce((s, d) => s + (d.balance || 0), 0)
+    const newDebtors   = (debtors || []).filter(d => new Date(d.created_at) >= new Date(start) && new Date(d.created_at) <= new Date(end))
+    const newDebtAmt   = newDebtors.reduce((s, d) => s + (d.balance || 0), 0)
+    const overdue      = (debtors || []).filter(d => {
+      const ref = d.last_payment_date ? new Date(d.last_payment_date) : new Date(d.created_at)
+      return (Date.now() - ref.getTime()) / 86400000 > 30
     })
 
-    const html = `
-<!DOCTYPE html>
+    // Stock
+    const outOfStock   = (inventory || []).filter(i => (i.current_stock || 0) <= 0)
+    const lowStock     = (inventory || []).filter(i => (i.current_stock || 0) > 0 && (i.current_stock || 0) <= (i.minimum_stock || 0))
+
+    // Rooms
+    const roomRevenue  = (roomStays || []).reduce((s, r) => s + (r.total_amount || 0), 0)
+    const checkIns     = (roomStays || []).filter(r => r.status === 'checked_in').length
+    const checkOuts    = (roomStays || []).filter(r => r.status === 'checked_out').length
+
+    // Nook
+    const nookBookings = (reservations || []).filter(r => r.zone === 'The Nook' || r.area === 'nook')
+    const nookRevenue  = nookBookings.reduce((s, r) => s + (r.hire_fee || 0), 0)
+
+    const grandTotal   = totalRevenue + roomRevenue
+
+    // ── Build email HTML ──────────────────────────────────────────────────────
+    const html = `<!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; margin: 0; padding: 20px; }
-    .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .header { background: #0f172a; color: #f59e0b; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
-    .header h1 { margin: 0; font-size: 20px; }
-    .header p { margin: 4px 0 0; color: #9ca3af; font-size: 13px; }
-    .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
-    .kpi { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-    .kpi .label { color: #6b7280; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .kpi .value { color: #111827; font-size: 22px; font-weight: 700; margin-top: 4px; }
-    .kpi .value.green { color: #059669; }
-    .kpi .value.red { color: #dc2626; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { text-align: left; color: #6b7280; font-size: 11px; text-transform: uppercase; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
-    td { padding: 8px 0; border-bottom: 1px solid #f3f4f6; color: #374151; }
-    .alert-badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
-    .critical { background: #fef2f2; color: #dc2626; }
-    .high { background: #fff7ed; color: #ea580c; }
-    .medium { background: #fefce8; color: #ca8a04; }
-    .footer { color: #9ca3af; font-size: 11px; text-align: center; margin-top: 24px; }
-  </style>
-</head>
-<body>
-  <div style="max-width: 600px; margin: 0 auto;">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f1f5f9;margin:0;padding:20px;">
+<div style="max-width:640px;margin:0 auto;">
 
-    <div class="header">
-      <h1>🍺 Beeshop's Place — Daily Report</h1>
-      <p>${dateStr}</p>
+  <div style="background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);border-radius:14px;padding:28px;margin-bottom:16px;">
+    <div style="color:#f59e0b;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;">🍺 Beeshop's Place Lounge</div>
+    <div style="color:white;font-size:22px;font-weight:800;">Daily Z-Report</div>
+    <div style="color:#94a3b8;font-size:13px;margin-top:4px;">${label}</div>
+    <div style="margin-top:20px;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);border-radius:10px;padding:16px 20px;display:inline-block;">
+      <div style="color:#fbbf24;font-size:11px;text-transform:uppercase;letter-spacing:0.06em;font-weight:600;">Grand Total Revenue</div>
+      <div style="color:white;font-size:32px;font-weight:900;letter-spacing:-1px;margin-top:4px;">${fmt(grandTotal)}</div>
+      <div style="color:#94a3b8;font-size:11px;margin-top:2px;">${paid.length} paid orders · avg ${fmt(avgOrder)}</div>
     </div>
-
-    <div class="kpi-grid">
-      <div class="kpi">
-        <div class="label">Total Revenue</div>
-        <div class="value green">${fmt(totalRevenue)}</div>
-      </div>
-      <div class="kpi">
-        <div class="label">Paid Orders</div>
-        <div class="value">${paid.length}</div>
-      </div>
-      <div class="kpi">
-        <div class="label">Voided Orders</div>
-        <div class="value red">${voided.length}</div>
-      </div>
-      <div class="kpi">
-        <div class="label">Still Open</div>
-        <div class="value">${open.length}</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3 style="margin: 0 0 12px; color: #111827; font-size: 14px;">Revenue by Payment Method</h3>
-      <table>
-        <tr><th>Method</th><th style="text-align:right">Amount</th></tr>
-        <tr><td>Cash</td><td style="text-align:right">${fmt(cashRevenue)}</td></tr>
-        <tr><td>POS / Card</td><td style="text-align:right">${fmt(posRevenue)}</td></tr>
-        <tr><td>Bank Transfer</td><td style="text-align:right">${fmt(transferRevenue)}</td></tr>
-        <tr><td>Credit (Debtors)</td><td style="text-align:right">${fmt(creditRevenue)}</td></tr>
-        <tr>
-          <td><strong>Total</strong></td>
-          <td style="text-align:right"><strong>${fmt(totalRevenue)}</strong></td>
-        </tr>
-      </table>
-    </div>
-
-    <div class="card">
-      <h3 style="margin: 0 0 12px; color: #111827; font-size: 14px;">Till Summary</h3>
-      <table>
-        <tr><th>Item</th><th style="text-align:right">Amount</th></tr>
-        <tr><td>Opening Float</td><td style="text-align:right">${fmt(totalFloat)}</td></tr>
-        <tr><td>Total Payouts</td><td style="text-align:right">${fmt(totalPayouts)}</td></tr>
-        <tr><td>Till Sessions</td><td style="text-align:right">${tillSessions?.length || 0}</td></tr>
-      </table>
-    </div>
-
-    ${cvAlerts && cvAlerts.length > 0 ? `
-    <div class="card" style="border: 1px solid #fecaca;">
-      <h3 style="margin: 0 0 12px; color: #dc2626; font-size: 14px;">⚠️ Unresolved CCTV Alerts (${cvAlerts.length})</h3>
-      <table>
-        <tr><th>Camera</th><th>Type</th><th>Severity</th></tr>
-        ${cvAlerts.slice(0, 5).map(a => `
-        <tr>
-          <td>${a.camera_id}</td>
-          <td>${a.alert_type?.replace(/_/g, ' ')}</td>
-          <td><span class="alert-badge ${a.severity}">${a.severity}</span></td>
-        </tr>`).join('')}
-      </table>
-      ${cvAlerts.length > 5 ? `<p style="color:#6b7280;font-size:12px;margin-top:8px;">...and ${cvAlerts.length - 5} more</p>` : ''}
-    </div>` : `
-    <div class="card" style="border: 1px solid #d1fae5; text-align: center; padding: 16px;">
-      <p style="color: #059669; margin: 0; font-size: 13px;">✓ No unresolved CCTV alerts today</p>
-    </div>`}
-
-    <div class="footer">
-      <p>RestaurantOS · Beeshop's Place Lounge · Generated automatically at 4:30 AM WAT</p>
-      <p>Manage your restaurant at <a href="https://beeshop.place" style="color:#f59e0b;">beeshop.place</a></p>
-    </div>
-
   </div>
+
+  ${section('Revenue Summary', '💰', `
+    ${kpiRow([kpiBox('F&B Revenue', fmt(totalRevenue), '#059669'), kpiBox('Room Revenue', fmt(roomRevenue), '#2563eb'), kpiBox('Nook Hire', fmt(nookRevenue), '#7c3aed')])}
+    <div style="height:10px;"></div>
+    ${kpiRow([kpiBox('Paid Orders', paid.length), kpiBox('Voided', voided.length, voided.length > 5 ? '#dc2626' : '#111827'), kpiBox('Still Open', openOrders.length, openOrders.length > 0 ? '#ea580c' : '#111827')])}
+  `, '#059669')}
+
+  ${section('Payment Methods', '💳', buildTable(
+    [{ label: 'Method' }, { label: 'Orders' }, { label: 'Amount', right: true }, { label: '%', right: true }],
+    [
+      ['Cash',         byMethod('cash').length,          fmt(cashRev),     pct(cashRev, totalRevenue)],
+      ['POS / Card',   byMethod('bank_pos').length,       fmt(posRev),      pct(posRev, totalRevenue)],
+      ['Transfer',     byMethod('bank_transfer').length,  fmt(transferRev), pct(transferRev, totalRevenue)],
+      ['Credit',       byMethod('credit').length,         fmt(creditRev),   pct(creditRev, totalRevenue)],
+      ['Split',        byMethod('split').length,          fmt(splitRev),    pct(splitRev, totalRevenue)],
+      ['Complimentary',byMethod('complimentary').length,  fmt(compRev),     pct(compRev, totalRevenue)],
+    ].filter(r => r[1] > 0),
+    'No paid orders.'
+  ), '#2563eb')}
+
+  ${section('Revenue by Zone', '🗺️', buildTable(
+    [{ label: 'Zone' }, { label: 'Orders' }, { label: 'Revenue', right: true }, { label: '%', right: true }],
+    Object.entries(zoneMap).sort((a, b) => b[1].revenue - a[1].revenue)
+      .map(([z, d]) => [z, d.count, fmt(d.revenue), pct(d.revenue, totalRevenue)]),
+    'No zone data.'
+  ), '#f59e0b')}
+
+  ${section('Top 10 Selling Items', '🏆', buildTable(
+    [{ label: '#' }, { label: 'Item' }, { label: 'Category' }, { label: 'Qty', right: true }, { label: 'Revenue', right: true }],
+    topItems.map((item, i) => [`<span style="color:#9ca3af;font-size:11px;">${i+1}</span>`, `<strong style="font-size:12px;">${item.name}</strong>`, item.category, item.qty, fmt(item.revenue)]),
+    'No item sales.'
+  ), '#10b981')}
+
+  ${section('Till & Cash Management', '🏧', `
+    ${kpiRow([kpiBox('Opening Float', fmt(totalFloat)), kpiBox('Cash Revenue', fmt(cashRev), '#059669'), kpiBox('Total Payouts', fmt(totalPayouts), '#dc2626')])}
+    <div style="height:10px;"></div>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 16px;">
+      <span style="color:#059669;font-weight:700;font-size:13px;">Expected Cash in Till: ${fmt(expectedCash)}</span>
+      <span style="color:#6b7280;font-size:11px;margin-left:8px;">(Cash − payouts)</span>
+    </div>
+    ${unclosedTillCount > 0 ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px 16px;margin-top:8px;"><span style="color:#ea580c;font-weight:700;font-size:12px;">⚠️ ${unclosedTillCount} till session(s) not closed at end of shift.</span></div>` : ''}
+  `, '#f59e0b')}
+
+  ${voided.length > 0 || (voidLog || []).length > 0 
+    ? section('Voids & Cancellations', '🚫', `
+        ${kpiRow([kpiBox('Voided Orders', voided.length, '#dc2626'), kpiBox('Void Log Entries', (voidLog||[]).length, '#dc2626'), kpiBox('Total Voided Value', fmt(totalVoidValue), '#dc2626')])}
+        ${(voidLog||[]).length > 0 ? `<div style="margin-top:12px;">${buildTable(
+          [{ label: 'Time' }, { label: 'Staff' }, { label: 'Reason / Item' }, { label: 'Amount', right: true }],
+          (voidLog||[]).slice(0,8).map(v => [
+            new Date(v.created_at).toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit', timeZone:'Africa/Lagos' }),
+            v.profiles?.full_name || '—', v.reason || v.item_name || '—', fmt(v.amount)
+          ])
+        )}</div>` : ''}
+      `, '#dc2626')
+    : section('Voids & Cancellations', '✅', `<p style="color:#059669;font-size:13px;font-weight:600;margin:4px 0;">No voids or cancellations today.</p>`, '#059669')
+  }
+
+  ${section('Staff Performance', '👥', `
+    ${kpiRow([
+      kpiBox('Clocked In', clockedIn),
+      kpiBox('Open Shifts', openShifts, openShifts > 0 ? '#ea580c' : '#6b7280', openShifts > 0 ? 'Not yet out' : 'All closed'),
+    ])}
+    <div style="margin-top:12px;">
+      ${buildTable(
+        [{ label: 'Waitron' }, { label: 'Orders' }, { label: 'Revenue', right: true }, { label: '%', right: true }],
+        topWaitrons.map(([name, s]) => [name, s.orders, fmt(s.revenue), pct(s.revenue, totalRevenue)]),
+        'No waitron data.'
+      )}
+    </div>
+  `, '#8b5cf6')}
+
+  ${section('Debtors / Credit Accounts', '📋', `
+    ${kpiRow([
+      kpiBox('Total Outstanding', fmt(totalDebt), totalDebt > 0 ? '#dc2626' : '#059669'),
+      kpiBox('Active Accounts', (debtors||[]).length),
+      kpiBox('Overdue 30+ days', overdue.length, overdue.length > 0 ? '#dc2626' : '#059669'),
+    ])}
+    ${newDebtors.length > 0 ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px 16px;margin-top:10px;"><span style="color:#ea580c;font-weight:700;font-size:12px;">⚠️ ${newDebtors.length} new credit account(s) today — ${fmt(newDebtAmt)} added.</span></div>` : ''}
+    ${overdue.length > 0 ? `<div style="margin-top:10px;">${buildTable(
+      [{ label: 'Name' }, { label: 'Phone' }, { label: 'Balance', right: true }],
+      overdue.slice(0,5).map(d => [d.name||'—', d.phone||'—', fmt(d.balance)])
+    )}</div>` : ''}
+  `, '#ef4444')}
+
+  ${outOfStock.length > 0 || lowStock.length > 0
+    ? section('Stock Alerts', '📦', `
+        ${outOfStock.length > 0 ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin-bottom:10px;">
+          <div style="color:#dc2626;font-weight:700;font-size:12px;margin-bottom:6px;">🔴 Out of Stock (${outOfStock.length})</div>
+          ${outOfStock.slice(0,10).map(i => `<div style="color:#374151;font-size:12px;padding:2px 0;">• ${i.item_name}</div>`).join('')}
+          ${outOfStock.length > 10 ? `<div style="color:#9ca3af;font-size:11px;margin-top:4px;">...and ${outOfStock.length - 10} more</div>` : ''}
+        </div>` : ''}
+        ${lowStock.length > 0 ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px 16px;">
+          <div style="color:#ea580c;font-weight:700;font-size:12px;margin-bottom:6px;">🟡 Low Stock (${lowStock.length})</div>
+          ${lowStock.slice(0,10).map(i => `<div style="color:#374151;font-size:12px;padding:2px 0;">• ${i.item_name} — ${i.current_stock} left (min: ${i.minimum_stock})</div>`).join('')}
+          ${lowStock.length > 10 ? `<div style="color:#9ca3af;font-size:11px;margin-top:4px;">...and ${lowStock.length - 10} more</div>` : ''}
+        </div>` : ''}
+      `, '#f59e0b')
+    : section('Stock', '✅', `<p style="color:#059669;font-size:13px;font-weight:600;margin:4px 0;">All inventory items are sufficiently stocked.</p>`, '#059669')
+  }
+
+  ${(roomStays||[]).length > 0 ? section('Rooms & Accommodation', '🛏️', `
+    ${kpiRow([kpiBox('Check-Ins', checkIns, '#2563eb'), kpiBox('Check-Outs', checkOuts, '#7c3aed'), kpiBox('Room Revenue', fmt(roomRevenue), '#059669')])}
+  `, '#2563eb') : ''}
+
+  ${(reservations||[]).length > 0 ? section('Reservations & The Nook', '📅', `
+    ${kpiRow([kpiBox('Reservations', (reservations||[]).length), kpiBox('Nook Bookings', nookBookings.length, '#7c3aed'), kpiBox('Nook Hire Revenue', fmt(nookRevenue), '#059669')])}
+  `, '#7c3aed') : ''}
+
+  <div style="text-align:center;padding:20px 0 10px;color:#94a3b8;font-size:11px;line-height:1.7;">
+    <div style="font-weight:700;color:#64748b;margin-bottom:4px;">RestaurantOS · Beeshop's Place Lounge</div>
+    <div>Trading period: 12:00 AM – 11:59 PM WAT · ${short}</div>
+    <div>Generated at 4:30 AM WAT · <a href="https://beeshop.place" style="color:#f59e0b;text-decoration:none;">beeshop.place</a></div>
+  </div>
+
+</div>
 </body>
 </html>`
 
-    const { data, error } = await resend.emails.send({
+    const { data: emailData, error: emailError } = await resend.emails.send({
       from: 'RestaurantOS <reports@beeshop.place>',
       to: [process.env.REPORT_EMAIL],
-      subject: `Daily Report — Beeshop's Place · ${fmt(totalRevenue)} · ${dateStr}`,
+      subject: `Z-Report ${short} · ${fmt(grandTotal)} · ${paid.length} orders — Beeshop's Place`,
       html,
     })
 
-    if (error) {
-      console.error('Email send failed:', error)
-      return res.status(500).json({ error: error.message })
+    if (emailError) {
+      console.error('[daily-report] Email failed:', emailError)
+      return res.status(500).json({ error: emailError.message })
     }
 
+    console.log(`[daily-report] OK — ${fmt(grandTotal)}, ${paid.length} orders, id: ${emailData?.id}`)
     return res.status(200).json({
-      sent: true,
-      emailId: data?.id,
-      revenue: totalRevenue,
-      orders: paid.length,
+      sent: true, emailId: emailData?.id, date: short,
+      grandTotal, paidOrders: paid.length, voidedOrders: voided.length,
+      stockAlerts: outOfStock.length + lowStock.length, overdueDebtors: overdue.length,
     })
 
   } catch (err) {
-    console.error('Daily report error:', err)
+    console.error('[daily-report] Error:', err)
     return res.status(500).json({ error: err.message })
   }
 }
