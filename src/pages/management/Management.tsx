@@ -156,6 +156,7 @@ export default function Management() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchStats)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, fetchStats)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'room_stays' }, fetchStats)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, fetchStats)
       .subscribe()
     return () => {
       supabase.removeChannel(ch)
@@ -406,7 +407,7 @@ export default function Management() {
             onTabChange={(id) => setActiveTab(id as TabId)}
           />
         )}
-        {activeTab === 'shifts' && <ShiftManager />}
+        {activeTab === 'shifts' && <ShiftManager onRefreshStats={fetchStats} />}
         {activeTab === 'tables' && <TableAssignment />}
         {activeTab === 'orders' && <OpenOrdersTab />}
         {activeTab === 'till' && <TillManagement />}

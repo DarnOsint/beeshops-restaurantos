@@ -25,9 +25,10 @@ interface Shift {
 
 interface Props {
   onClose?: () => void
+  onRefreshStats?: () => void
 }
 
-export default function ShiftManager({ onClose }: Props) {
+export default function ShiftManager({ onClose, onRefreshStats }: Props) {
   const { profile } = useAuth()
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [activeShifts, setActiveShifts] = useState<Shift[]>([])
@@ -99,8 +100,9 @@ export default function ShiftManager({ onClose }: Props) {
   }, [])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchAll()
+    onRefreshStats?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchAll])
 
   const clockIn = async (member: StaffMember) => {
@@ -206,6 +208,7 @@ export default function ShiftManager({ onClose }: Props) {
     }
     setSummaryShift(null)
     fetchAll()
+    onRefreshStats?.()
   }
 
   const isActive = (staffId: string) => activeShifts.some((s) => s.staff_id === staffId)
