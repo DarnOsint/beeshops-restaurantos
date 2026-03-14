@@ -134,32 +134,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    // PIN session (staff roles)
-    const pinSession = localStorage.getItem('pin_session')
-    if (pinSession) {
-      try {
-        const parsed = JSON.parse(pinSession) as Profile & { logged_in_at: string }
-        const hoursSince = (Date.now() - new Date(parsed.logged_in_at).getTime()) / 3_600_000
-        if (hoursSince < 12) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setProfile(parsed)
-          setUser({ id: parsed.id, pin_session: true } as unknown as User)
-          setLoading(false)
-          return
-        } else {
+    let cancelled = false
+
+    async function init() {
+      // PIN session — SECURITY: only ID is trusted from localStorage.
+      // Role/name/active status are always re-fetched from the DB to prevent forgery.
+      const pinSession = localStorage.getItem('pin_session')
+      if (pinSession) {
+        try {
+          const parsed = JSON.parse(pinSession) as { id: string; logged_in_at: string }
+          const hoursSince = (Date.now() - new Date(parsed.logged_in_at).getTime()) / 3_600_000
+          if (hoursSince < 12 && parsed.id) {
+            const { data: freshProfile, error } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', parsed.id)
+              .eq('is_active', true)
+              .single()
+            if (cancelled) return
+            if (error || !freshProfile) {
+              localStorage.removeItem('pin_session')
+            } else {
+              setProfile(freshProfile as Profile)
+              setUser({ id: freshProfile.id, pin_session: true } as unknown as User)
+              setLoading(false)
+              return
+            }
+          } else {
+            localStorage.removeItem('pin_session')
+          }
+        } catch {
           localStorage.removeItem('pin_session')
         }
-      } catch {
-        localStorage.removeItem('pin_session')
       }
-    }
 
-    // Email session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+      // Email session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (cancelled) return
       setUser(session?.user ?? null)
       if (session?.user) fetchProfile(session.user.id)
       else setLoading(false)
-    })
+    }
+
+    void init()
 
     const {
       data: { subscription },
@@ -173,7 +192,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
   }, [fetchProfile])
 
   const signOut = async () => {

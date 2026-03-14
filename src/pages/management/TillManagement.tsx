@@ -156,6 +156,15 @@ export default function TillManagement({ onClose }: Props) {
       toast.warning('Required', 'Please enter amount and reason')
       return
     }
+    // Enforce petty cash limit client-side (DB trigger also enforces this)
+    const remaining = PETTY_CASH_LIMIT - payouts.reduce((s, p) => s + (p.amount || 0), 0)
+    if (parseFloat(payoutForm.amount) > remaining) {
+      toast.error(
+        'Limit Exceeded',
+        `This would exceed today's ₦${PETTY_CASH_LIMIT.toLocaleString()} daily limit. ₦${remaining.toLocaleString()} remaining.`
+      )
+      return
+    }
     const { error } = await supabase.from('payouts').insert({
       staff_id: profile!.id,
       amount: parseFloat(payoutForm.amount),

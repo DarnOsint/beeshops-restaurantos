@@ -251,7 +251,7 @@ export default function OrderPanel({
       approved_by_name: approver.name,
       approved_by: approver.id,
     })
-    if (voidErr) console.error('void_log insert failed:', voidErr.message)
+    if (voidErr) toast.error('Void log failed', voidErr.message)
 
     // 4. Update local state
     setOrderItems((prev) => prev.filter((i) => i.id !== voidRequest.itemId))

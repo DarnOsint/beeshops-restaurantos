@@ -57,7 +57,8 @@ interface Props {
   onClose: () => void
 }
 
-export default function PaymentModal({ order, table, onSuccess, onClose }: Props) {
+export default function PaymentModal({ order: orderProp, table, onSuccess, onClose }: Props) {
+  let order = orderProp
   const { profile } = useAuth()
   const toast = useToast()
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
@@ -186,6 +187,21 @@ export default function PaymentModal({ order, table, onSuccess, onClose }: Props
 
   const depleteInventory = async (orderId: string) => {
     try {
+      // Guard: check if already depleted (prevents double-depletion on retry)
+      const { data: orderCheck } = await supabase
+        .from('orders')
+        .select('depleted_at')
+        .eq('id', orderId)
+        .single()
+      if (orderCheck?.depleted_at) return // Already depleted — skip
+
+      // Mark as depleted first (atomic guard)
+      await supabase
+        .from('orders')
+        .update({ depleted_at: new Date().toISOString() })
+        .eq('id', orderId)
+        .is('depleted_at', null) // Only update if not already set
+
       const { data: items } = await supabase
         .from('order_items')
         .select('menu_item_id, quantity')
@@ -240,6 +256,25 @@ export default function PaymentModal({ order, table, onSuccess, onClose }: Props
     }
     setProcessing(true)
     try {
+      // Verify total against server-side order_items sum before processing
+      // Prevents client-side total manipulation
+      const { data: serverItems } = await supabase
+        .from('order_items')
+        .select('total_price, extra_charge')
+        .eq('order_id', order.id)
+      if (serverItems && serverItems.length > 0) {
+        const serverTotal = serverItems.reduce(
+          (s: number, i: { total_price: number; extra_charge?: number }) =>
+            s + (i.total_price || 0) + (i.extra_charge || 0),
+          0
+        )
+        if (Math.abs(serverTotal - order.total_amount) > 1) {
+          // Total mismatch — use the server total
+          await supabase.from('orders').update({ total_amount: serverTotal }).eq('id', order.id)
+          order = { ...order, total_amount: serverTotal }
+        }
+      }
+
       if (paymentMethod === 'credit') {
         const { error: creditOrderErr } = await supabase
           .from('orders')
