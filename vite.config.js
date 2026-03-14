@@ -18,6 +18,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       devOptions: { enabled: true },
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+      },
       manifest: {
         name: "Beeshop's RestaurantOS",
         short_name: 'BeeshopOS',
