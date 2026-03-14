@@ -16,6 +16,7 @@ import {
   Beer,
   BellOff,
   Bell,
+  CalendarDays,
   Users,
   BookOpen,
   Menu,
@@ -36,6 +37,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
     { label: 'Reports', icon: TrendingUp, path: '/reports' },
     { label: 'Analytics', icon: BarChart2, path: '/analytics' },
     { label: 'Back Office', icon: Settings, path: '/backoffice' },
+    { label: 'Month End', icon: CalendarDays, path: '/month-end' },
     { label: 'Rooms', icon: BedDouble, path: '/apartment' },
   ],
   manager: [
@@ -43,10 +45,12 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
     { label: 'POS', icon: ShoppingBag, path: '/pos' },
     { label: 'Reports', icon: TrendingUp, path: '/reports' },
     { label: 'Inventory', icon: Package, path: '/backoffice' },
+    { label: 'Month End', icon: CalendarDays, path: '/month-end' },
   ],
   accountant: [
     { label: 'Accounting', icon: BookOpen, path: '/accounting' },
     { label: 'Reports', icon: TrendingUp, path: '/reports' },
+    { label: 'Month End', icon: CalendarDays, path: '/month-end' },
   ],
   apartment_manager: [{ label: 'Rooms', icon: BedDouble, path: '/apartment' }],
 }

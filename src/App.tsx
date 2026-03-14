@@ -34,6 +34,7 @@ const RoomManagement = lazy(() => import('./pages/rooms/RoomManagement'))
 // Misc
 const SupervisorDashboard = lazy(() => import('./pages/supervisor/SupervisorDashboard'))
 const ApartmentDashboard = lazy(() => import('./pages/apartment/ApartmentDashboard'))
+const MonthEnd = lazy(() => import('./pages/monthend/MonthEnd'))
 // Public customer pages
 const TableView = lazy(() => import('./pages/customer/TableView'))
 const ReceiptView = lazy(() => import('./pages/customer/ReceiptView'))
@@ -334,6 +335,19 @@ function AppRoutes() {
                 <RoleGuard allowed={['owner', 'apartment_manager']}>
                   <EB title="Apartment dashboard error">
                     <ApartmentDashboard />
+                  </EB>
+                </RoleGuard>
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/month-end"
+            element={
+              <PrivateRoute>
+                <RoleGuard allowed={['owner', 'manager', 'accountant']}>
+                  <EB title="Month End error">
+                    <MonthEnd />
                   </EB>
                 </RoleGuard>
               </PrivateRoute>
