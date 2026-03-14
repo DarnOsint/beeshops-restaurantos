@@ -85,7 +85,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const doSignOut = useCallback(async (reason: 'timeout' | 'manual' = 'timeout') => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
     setMfaVerifiedState(false)
-    localStorage.removeItem('mfa_verified')
+    // Only clear MFA on explicit sign-out — timeout re-login should not re-trigger OTP
+    if (reason === 'manual') {
+      localStorage.removeItem('mfa_verified')
+    }
 
     const pinSession = localStorage.getItem('pin_session')
     if (pinSession) {
@@ -190,4 +193,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext)

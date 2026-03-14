@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { Hash, Mail, Eye, EyeOff, Delete } from 'lucide-react'
+import { Eye, EyeOff, Delete } from 'lucide-react'
 
 const EMAIL_MAX = 5
 const EMAIL_LOCK_MS = 15 * 60 * 1000
@@ -87,7 +87,7 @@ function LockedOut({ mode, time }: { mode: 'email' | 'pin'; time: number }) {
 }
 
 export default function Login() {
-  const [mode, setMode] = useState<'email' | 'pin'>('email')
+  const [mode, setMode] = useState<'email' | 'pin'>('pin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [pin, setPin] = useState('')
@@ -231,29 +231,33 @@ export default function Login() {
           </div>
         )}
 
-        <div className="flex bg-gray-900 border border-gray-800 rounded-2xl p-1 mb-6">
-          {(['email', 'pin'] as const).map((m) => (
+        {mode === 'pin' ? (
+          <p className="text-center text-xs text-gray-600 mb-4">
+            Manager or Owner?{' '}
             <button
-              key={m}
               onClick={() => {
-                setMode(m)
+                setMode('email')
                 setError(null)
                 setPin('')
               }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${mode === m ? 'bg-amber-500 text-black' : 'text-gray-400 hover:text-white'}`}
+              className="text-amber-500 hover:text-amber-400 underline"
             >
-              {m === 'email' ? (
-                <>
-                  <Mail size={15} /> Email Login
-                </>
-              ) : (
-                <>
-                  <Hash size={15} /> PIN Login
-                </>
-              )}
+              Sign in with email
             </button>
-          ))}
-        </div>
+          </p>
+        ) : (
+          <p className="text-center text-xs text-gray-600 mb-4">
+            <button
+              onClick={() => {
+                setMode('pin')
+                setError(null)
+              }}
+              className="text-amber-500 hover:text-amber-400 underline"
+            >
+              ← Use PIN instead
+            </button>
+          </p>
+        )}
 
         <div className="bg-gray-900 rounded-2xl p-8 shadow-2xl border border-gray-800">
           {error && (

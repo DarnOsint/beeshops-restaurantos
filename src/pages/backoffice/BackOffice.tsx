@@ -38,7 +38,8 @@ export default function BackOffice() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' })
+    const _ms = document.getElementById('main-scroll')
+    if (_ms) _ms.scrollTop = 0
   }, [activeSection])
 
   const sections: Section[] = [

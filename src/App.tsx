@@ -28,7 +28,13 @@ import type { Role } from './types'
 function ScrollToTop() {
   const { pathname } = useLocation()
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' })
+    // AppShell's <main> is the scroll container — window.scrollTo has no effect
+    const main = document.getElementById('main-scroll')
+    if (main) {
+      main.scrollTop = 0
+    } else {
+      window.scrollTo({ top: 0, behavior: 'instant' })
+    }
   }, [pathname])
   return null
 }

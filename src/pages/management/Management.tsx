@@ -141,7 +141,8 @@ export default function Management() {
   }, [])
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'instant' })
+    const _ms = document.getElementById('main-scroll')
+    if (_ms) _ms.scrollTop = 0
   }, [activeTab])
 
   useEffect(() => {

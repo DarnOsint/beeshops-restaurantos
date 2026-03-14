@@ -5,6 +5,7 @@ import { HelpTooltip } from '../../components/HelpTooltip'
 import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
 import { useAuth } from '../../context/AuthContext'
+import KitchenStock from '../backoffice/KitchenStock'
 import ErrorBoundary from '../../components/ErrorBoundary'
 import { ChefHat, Clock, LogOut, RefreshCw, CheckCircle } from 'lucide-react'
 import type { KdsOrder } from './types'
@@ -73,6 +74,7 @@ function getNextStatus(status: string): string | null {
 function KitchenKDSInner() {
   const { profile, signOut } = useAuth()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
+  const [tab, setTab] = useState<'orders' | 'stock'>('orders')
   const [orders, setOrders] = useState<KdsOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
@@ -198,9 +200,25 @@ function KitchenKDSInner() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={fetchOrders} className="text-gray-400 hover:text-white">
-            <RefreshCw size={16} />
-          </button>
+          <div className="flex bg-gray-800 rounded-xl p-0.5">
+            <button
+              onClick={() => setTab('orders')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${tab === 'orders' ? 'bg-red-500 text-white' : 'text-gray-400 hover:text-white'}`}
+            >
+              Orders
+            </button>
+            <button
+              onClick={() => setTab('stock')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${tab === 'stock' ? 'bg-red-500 text-white' : 'text-gray-400 hover:text-white'}`}
+            >
+              Stock Register
+            </button>
+          </div>
+          {tab === 'orders' && (
+            <button onClick={fetchOrders} className="text-gray-400 hover:text-white">
+              <RefreshCw size={16} />
+            </button>
+          )}
           <p className="text-gray-400 text-sm">{profile?.full_name}</p>
           <HelpTooltip storageKey="kitchen-kds" tips={HELP_TIPS} />
           <button onClick={signOut} className="text-gray-400 hover:text-white">
@@ -209,80 +227,88 @@ function KitchenKDSInner() {
         </div>
       </nav>
 
-      <div className="flex-1 p-4 overflow-y-auto">
-        {orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mb-4">
-              <ChefHat size={32} className="text-gray-600" />
-            </div>
-            <p className="text-gray-400 text-lg font-medium">No pending kitchen orders</p>
-            <p className="text-gray-600 text-sm mt-1">New orders will appear here automatically</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {orders.map((order) => (
-              <div
-                key={order.id}
-                className={`rounded-2xl border-2 p-4 flex flex-col gap-3 transition-colors ${getUrgencyColor(order.created_at)}`}
-              >
-                <div className="flex items-center justify-between">
-                  <h2 className="text-white font-bold text-lg">{order.tables?.name}</h2>
-                  <div className="flex items-center gap-1 text-gray-400 text-xs">
-                    <Clock size={12} />
-                    <span className={getTimerColor(order.created_at)}>
-                      {getElapsed(order.created_at)}
-                    </span>
-                  </div>
-                </div>
-                {order.notes && (
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                    <p className="text-amber-400 text-xs">📝 {order.notes}</p>
-                  </div>
-                )}
-                <div className="flex flex-col gap-2 flex-1">
-                  {order.order_items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between bg-gray-800 rounded-xl px-3 py-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-amber-400 font-bold text-lg w-6">
-                          {item.quantity}x
-                        </span>
-                        <span className="text-white text-sm">{item.menu_items?.name}</span>
-                      </div>
-                      <button
-                        onClick={() => updateItemStatus(item.id, item.status, order.id)}
-                        disabled={item.status === 'ready'}
-                        className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${getStatusColor(item.status)}`}
-                      >
-                        {item.status === 'pending'
-                          ? 'Pending'
-                          : item.status === 'preparing'
-                            ? 'Preparing'
-                            : '✓ Ready'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                {order.order_items.some((i) => i.status !== 'ready') && (
-                  <button
-                    onClick={() => markAllReady(order)}
-                    className="w-full bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl py-2.5 flex items-center justify-center gap-2 transition-colors"
-                  >
-                    <CheckCircle size={16} /> All Ready
-                  </button>
-                )}
-                {order.order_items.every((i) => i.status === 'ready') && (
-                  <div className="text-center text-green-400 text-xs font-bold py-1">
-                    ✅ All items ready — waiter notified
-                  </div>
-                )}
+      {tab === 'stock' ? (
+        <div className="flex-1 overflow-y-auto">
+          <KitchenStock onBack={() => setTab('orders')} />
+        </div>
+      ) : (
+        <div className="flex-1 p-4 overflow-y-auto">
+          {orders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                <ChefHat size={32} className="text-gray-600" />
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+              <p className="text-gray-400 text-lg font-medium">No pending kitchen orders</p>
+              <p className="text-gray-600 text-sm mt-1">
+                New orders will appear here automatically
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {orders.map((order) => (
+                <div
+                  key={order.id}
+                  className={`rounded-2xl border-2 p-4 flex flex-col gap-3 transition-colors ${getUrgencyColor(order.created_at)}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-white font-bold text-lg">{order.tables?.name}</h2>
+                    <div className="flex items-center gap-1 text-gray-400 text-xs">
+                      <Clock size={12} />
+                      <span className={getTimerColor(order.created_at)}>
+                        {getElapsed(order.created_at)}
+                      </span>
+                    </div>
+                  </div>
+                  {order.notes && (
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                      <p className="text-amber-400 text-xs">📝 {order.notes}</p>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-2 flex-1">
+                    {order.order_items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between bg-gray-800 rounded-xl px-3 py-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-amber-400 font-bold text-lg w-6">
+                            {item.quantity}x
+                          </span>
+                          <span className="text-white text-sm">{item.menu_items?.name}</span>
+                        </div>
+                        <button
+                          onClick={() => updateItemStatus(item.id, item.status, order.id)}
+                          disabled={item.status === 'ready'}
+                          className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${getStatusColor(item.status)}`}
+                        >
+                          {item.status === 'pending'
+                            ? 'Pending'
+                            : item.status === 'preparing'
+                              ? 'Preparing'
+                              : '✓ Ready'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {order.order_items.some((i) => i.status !== 'ready') && (
+                    <button
+                      onClick={() => markAllReady(order)}
+                      className="w-full bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl py-2.5 flex items-center justify-center gap-2 transition-colors"
+                    >
+                      <CheckCircle size={16} /> All Ready
+                    </button>
+                  )}
+                  {order.order_items.every((i) => i.status === 'ready') && (
+                    <div className="text-center text-green-400 text-xs font-bold py-1">
+                      ✅ All items ready — waiter notified
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

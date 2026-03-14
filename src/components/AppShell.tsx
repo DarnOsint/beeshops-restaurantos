@@ -238,7 +238,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden">
+        <main id="main-scroll" className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="md:hidden flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 sticky top-0 z-30">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center">
