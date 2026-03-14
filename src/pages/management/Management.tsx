@@ -13,6 +13,7 @@ import {
   Trash2,
   RefreshCw,
   UtensilsCrossed,
+  Shield,
 } from 'lucide-react'
 import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
