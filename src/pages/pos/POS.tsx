@@ -174,7 +174,9 @@ export default function POS() {
     const directIds = (directTables || []).map((t: { id: string }) => t.id)
 
     if (!zoneData || zoneData.length === 0) {
-      setAssignedTableIds(directIds.length > 0 ? directIds : [])
+      // No zone assignments set by manager — give access to directly assigned
+      // tables, or null (all tables) if none are directly assigned either.
+      setAssignedTableIds(directIds.length > 0 ? directIds : null)
       return
     }
 
