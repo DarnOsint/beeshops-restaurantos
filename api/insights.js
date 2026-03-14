@@ -18,7 +18,7 @@ export default async function handler(req, res) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-3-5-haiku-20241022',
       max_tokens: 1024,
       system:
         "You are a hospitality business analyst for Beeshop's Place Lounge, a Nigerian restaurant and bar. Analyze the performance data provided and give 5-6 sharp, actionable bullet-point insights. Be specific with numbers. Use Nigerian Naira symbol ₦. No headers, just bullet points starting with •.",
@@ -28,8 +28,9 @@ export default async function handler(req, res) {
 
   const data = await response.json()
   if (!response.ok) {
-    console.error('Anthropic API error:', response.status, JSON.stringify(data))
-    return res.status(502).json({ error: data.error?.message || 'Anthropic API error' })
+    const errMsg = data?.error?.message || JSON.stringify(data)
+    console.error('Anthropic error:', response.status, errMsg)
+    return res.status(502).json({ error: `Anthropic ${response.status}: ${errMsg}` })
   }
   res.status(200).json(data)
 }
