@@ -117,16 +117,20 @@ export default function StaffTab({ waitronStats, timesheet }: Props) {
                     <td className="py-3 pr-4 text-gray-400 capitalize">{entry.role}</td>
                     <td className="py-3 pr-4 text-gray-400">{entry.date}</td>
                     <td className="py-3 pr-4 text-gray-300">
-                      {new Date(entry.clock_in).toLocaleTimeString([], {
+                      {new Date(entry.clock_in).toLocaleTimeString('en-NG', {
+                        timeZone: 'Africa/Lagos',
                         hour: '2-digit',
                         minute: '2-digit',
+                        hour12: true,
                       })}
                     </td>
                     <td className="py-3 pr-4 text-gray-300">
                       {entry.clock_out ? (
-                        new Date(entry.clock_out).toLocaleTimeString([], {
+                        new Date(entry.clock_out).toLocaleTimeString('en-NG', {
+                          timeZone: 'Africa/Lagos',
                           hour: '2-digit',
                           minute: '2-digit',
+                          hour12: true,
                         })
                       ) : (
                         <span className="text-green-400 text-xs">Still on shift</span>

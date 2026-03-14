@@ -109,6 +109,7 @@ export default function Executive() {
   })
 
   const fetchStats = useCallback(async () => {
+    void supabase.rpc('free_orphaned_tables')
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const [ordersRes, tablesRes, roomsRes, shiftsRes, stockRes, recentRes, revenueRes, trendRes] =

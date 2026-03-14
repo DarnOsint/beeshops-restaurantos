@@ -37,7 +37,14 @@ interface WaitronEntry {
 
 const fmt = (n: number) => `₦${n.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
 const fmtTime = (ts?: string | null) =>
-  ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'
+  ts
+    ? new Date(ts).toLocaleTimeString({
+        timeZone: 'Africa/Lagos',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      })
+    : '—'
 const fmtDur = (min: number | null) => {
   if (!min) return '—'
   const h = Math.floor(min / 60),
