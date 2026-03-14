@@ -59,7 +59,7 @@ interface OrderEntry {
   order_type?: string
   closed_at?: string
   created_at: string
-  tables?: { name?: string; zone?: string } | null
+  tables?: { name?: string; table_categories?: { name?: string } | null } | null
   order_items?: OrderItemEntry[]
 }
 interface SummaryData {
@@ -106,12 +106,12 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
       supabase
         .from('orders')
         .select(
-          'id, total_amount, payment_method, order_type, closed_at, created_at, tables(name, zone), order_items(id, quantity, unit_price, total_price, void_qty, menu_items(name, destination))'
+          'id, total_amount, payment_method, order_type, closed_at, created_at, tables(name, table_categories(name)), order_items(id, quantity, unit_price, total_price, void_qty, menu_items(name, destination))'
         )
         .eq('staff_id', shift.staff_id)
         .eq('status', 'paid')
-        .gte('created_at', shift.clock_in)
-        .lte('created_at', clockOutTime.toISOString())
+        .gte('closed_at', shift.clock_in)
+        .lte('closed_at', clockOutTime.toISOString())
         .order('closed_at', { ascending: true }),
       supabase
         .from('void_log')
