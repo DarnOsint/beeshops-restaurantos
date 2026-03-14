@@ -119,16 +119,16 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
       (clockOutTime.getTime() - new Date(shift.clock_in).getTime()) / 60000
     )
 
-    // Use a wide window: from midnight before clock_in to midnight after clock_out
-    // This avoids timezone edge cases where closed_at might fall just outside the shift window
+    // Normalise ALL timestamps to Z-format UTC — PostgREST rejects mixed +00:00 vs Z formats
+    const clockInUTC = new Date(shift.clock_in).toISOString()
     const dayStart = new Date(shift.clock_in)
-    dayStart.setHours(0, 0, 0, 0)
+    dayStart.setUTCHours(0, 0, 0, 0)
+    const dayStartUTC = dayStart.toISOString()
     const dayEnd = new Date(clockOutTime)
-    dayEnd.setHours(23, 59, 59, 999)
+    dayEnd.setUTCHours(23, 59, 59, 999)
+    const dayEndUTC = dayEnd.toISOString()
+    const clockOutUTC = clockOutTime.toISOString()
 
-    // Query 1: paid orders where closed_at falls in the day window
-    // Query 2: paid orders where closed_at is null but created_at is in window (edge case)
-    // Merge both result sets and deduplicate by id
     const [ordersRes, ordersNullClosedRes, voidsRes, callsRes] = await Promise.all([
       supabase
         .from('orders')
@@ -137,8 +137,8 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
         )
         .eq('staff_id', shift.staff_id)
         .eq('status', 'paid')
-        .gte('closed_at', dayStart.toISOString())
-        .lte('closed_at', dayEnd.toISOString())
+        .gte('closed_at', dayStartUTC)
+        .lte('closed_at', dayEndUTC)
         .order('closed_at', { ascending: true }),
       supabase
         .from('orders')
@@ -148,20 +148,20 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
         .eq('staff_id', shift.staff_id)
         .eq('status', 'paid')
         .is('closed_at', null)
-        .gte('created_at', dayStart.toISOString())
-        .lte('created_at', dayEnd.toISOString()),
+        .gte('created_at', dayStartUTC)
+        .lte('created_at', dayEndUTC),
       supabase
         .from('void_log')
         .select('id, total_value, menu_item_name, void_type, approved_by_name, created_at')
         .eq('approved_by', shift.staff_id)
-        .gte('created_at', shift.clock_in)
-        .lte('created_at', clockOutTime.toISOString()),
+        .gte('created_at', clockInUTC)
+        .lte('created_at', clockOutUTC),
       supabase
         .from('waiter_calls')
         .select('id, resolved_at, table_name')
         .eq('waitron_id', shift.staff_id)
-        .gte('created_at', shift.clock_in)
-        .lte('created_at', clockOutTime.toISOString())
+        .gte('created_at', clockInUTC)
+        .lte('created_at', clockOutUTC)
         .not('resolved_at', 'is', null),
     ])
 
@@ -179,17 +179,6 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
     ) as OrderEntry[]
     const voidsArr = (voidsRes.data || []) as VoidEntry[]
     const callsArr = callsRes.data || []
-    console.log('ShiftSummary debug:', {
-      staff_id: shift.staff_id,
-      clock_in: shift.clock_in,
-      dayStart: dayStart.toISOString(),
-      dayEnd: dayEnd.toISOString(),
-      ordersWithClosedAt: ordersRes.data?.length ?? 0,
-      ordersWithNullClosedAt: ordersNullClosedRes.data?.length ?? 0,
-      totalMerged: ordersArr.length,
-      total: ordersArr.reduce((s, o) => s + (o.total_amount || 0), 0),
-      ordersError: ordersRes.error?.message,
-    })
 
     const totalSales = ordersArr.reduce((s, o) => s + (o.total_amount || 0), 0)
     const totalVoided = voidsArr.reduce((s, v) => s + (v.total_value || 0), 0)

@@ -141,6 +141,7 @@ export default function OrderPanel({
   const [notes, setNotes] = useState('')
   const [voidRequest, setVoidRequest] = useState<VoidRequest | null>(null)
   const [modifierItem, setModifierItem] = useState<OrderItemLocal | null>(null)
+  const isSubmitting = useRef(false)
   const [modifierNotes, setModifierNotes] = useState('')
   const [modifierCharge, setModifierCharge] = useState('')
 
@@ -296,14 +297,20 @@ export default function OrderPanel({
   )
 
   const handlePlaceOrder = async () => {
-    if (orderItems.length === 0) return
-    const newItems = orderItems.filter((i) => !i._existing)
-    if (newItems.length === 0 && activeOrder) {
-      await onPlaceOrder({ table, items: [], notes, total: 0 })
-      return
+    if (isSubmitting.current) return
+    isSubmitting.current = true
+    try {
+      if (orderItems.length === 0) return
+      const newItems = orderItems.filter((i) => !i._existing)
+      if (newItems.length === 0 && activeOrder) {
+        await onPlaceOrder({ table, items: [], notes, total: 0 })
+        return
+      }
+      const newTotal = newItems.reduce((sum, i) => sum + (i.total || 0), 0)
+      await onPlaceOrder({ table, items: newItems, notes, total: newTotal })
+    } finally {
+      isSubmitting.current = false
     }
-    const newTotal = newItems.reduce((sum, i) => sum + (i.total || 0), 0)
-    await onPlaceOrder({ table, items: newItems, notes, total: newTotal })
   }
 
   return (
@@ -498,7 +505,7 @@ export default function OrderPanel({
           </div>
           <button
             onClick={handlePlaceOrder}
-            disabled={orderItems.length === 0}
+            disabled={orderItems.length === 0 || isSubmitting.current}
             className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold rounded-xl py-3 flex items-center justify-center gap-2 transition-colors"
           >
             <Send size={16} /> Confirm Order

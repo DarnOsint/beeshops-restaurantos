@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
-import { usePushNotifications, requestPushPermission } from '../../hooks/usePushNotifications'
+import { usePushNotifications } from '../../hooks/usePushNotifications'
 import {
   LogOut,
   Beer,
@@ -370,7 +370,10 @@ export default function POS() {
     setPendingTable(null)
   }
 
+  const placingOrderRef = useRef(false)
   const handlePlaceOrder = async ({ table, items, notes, total }: OrderPayload) => {
+    if (placingOrderRef.current) return
+    placingOrderRef.current = true
     try {
       if (activeOrder) {
         const newTotal = (activeOrder.total_amount || 0) + total
@@ -515,6 +518,8 @@ export default function POS() {
     } catch (err) {
       console.error('handlePlaceOrder error:', err)
       toast.error('Error', 'Order failed: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      placingOrderRef.current = false
     }
   }
 
