@@ -13,6 +13,7 @@ import {
   BookOpen,
   Shield,
   TrendingUp,
+  Monitor,
 } from 'lucide-react'
 
 import Debtors from './Debtors'
