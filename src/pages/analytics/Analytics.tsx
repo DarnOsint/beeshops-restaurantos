@@ -221,7 +221,7 @@ export default function Analytics() {
       _tables: unknown[]
     ) => {
       const paid = orders.filter((o) => o.status === 'paid')
-      const cancelled = orders.filter((o) => o.status === 'cancelled')
+      const cancelled = orders.filter((o) => o.status === 'void')
       const totalOrders = paid.length
       const totalRevenue = paid.reduce((s, o) => s + ((o.total_amount as number) || 0), 0)
       const avgOrder = totalOrders ? Math.round(totalRevenue / totalOrders) : 0
@@ -242,8 +242,14 @@ export default function Analytics() {
       const hourMapRaw: Record<string, number> = {}
       paid.forEach((o) => {
         const d = new Date(o.created_at as string)
-        const day = d.toLocaleDateString('en-US', { weekday: 'short' })
-        const hour = d.getHours()
+        const day = d.toLocaleDateString('en-NG', { timeZone: 'Africa/Lagos', weekday: 'short' })
+        const hour = parseInt(
+          d.toLocaleTimeString('en-NG', {
+            timeZone: 'Africa/Lagos',
+            hour: 'numeric',
+            hour12: false,
+          })
+        )
         hourMapRaw[`${day}-${hour}`] = (hourMapRaw[`${day}-${hour}`] || 0) + 1
       })
       const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -258,7 +264,13 @@ export default function Analytics() {
 
       const hourlyMap: Record<number, { hour: number; orders: number; revenue: number }> = {}
       paid.forEach((o) => {
-        const h = new Date(o.created_at as string).getHours()
+        const h = parseInt(
+          new Date(o.created_at as string).toLocaleTimeString('en-NG', {
+            timeZone: 'Africa/Lagos',
+            hour: 'numeric',
+            hour12: false,
+          })
+        )
         if (!hourlyMap[h]) hourlyMap[h] = { hour: h, orders: 0, revenue: 0 }
         hourlyMap[h].orders++
         hourlyMap[h].revenue += (o.total_amount as number) || 0
@@ -304,7 +316,8 @@ export default function Analytics() {
 
       const staffMap: Record<string, StaffStat> = {}
       paid.forEach((o) => {
-        const name = (o.waitron_name as string) || 'Unknown'
+        const prof = o.profiles as { full_name?: string } | null
+        const name = prof?.full_name || 'Unknown'
         if (!staffMap[name]) staffMap[name] = { name, orders: 0, revenue: 0 }
         staffMap[name].orders++
         staffMap[name].revenue += (o.total_amount as number) || 0
@@ -312,13 +325,15 @@ export default function Analytics() {
 
       const zoneMap: Record<string, number> = {}
       paid.forEach((o) => {
-        const zone = (o.table_zone as string) || 'Unknown'
+        const tbl = o.tables as { table_categories?: { name?: string } | null } | null
+        const zone = tbl?.table_categories?.name || 'Unknown'
         zoneMap[zone] = (zoneMap[zone] || 0) + ((o.total_amount as number) || 0)
       })
 
       const dayMap: Record<string, ChartPoint> = {}
       paid.forEach((o) => {
-        const day = new Date(o.created_at as string).toLocaleDateString('en-US', {
+        const day = new Date(o.created_at as string).toLocaleDateString('en-NG', {
+          timeZone: 'Africa/Lagos',
           month: 'short',
           day: 'numeric',
         })
@@ -366,7 +381,7 @@ export default function Analytics() {
     const { data: orders } = await supabase
       .from('orders')
       .select(
-        'id, status, total_amount, payment_method, created_at, order_type, customer_phone, table_id, staff_id'
+        'id, status, total_amount, payment_method, created_at, closed_at, order_type, customer_phone, table_id, staff_id, profiles(full_name), tables(name, table_categories(name))'
       )
       .gte('created_at', from)
       .lte('created_at', to)
@@ -393,7 +408,6 @@ export default function Analytics() {
   }, [range, custom, processData])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchData()
   }, [fetchData])
 
@@ -430,12 +444,17 @@ Categories: ${d.categorySplit
         },
         body: JSON.stringify({ prompt }),
       })
-      const result = await response.json()
-      setAiInsight(
-        result.content?.find((b: { type: string; text?: string }) => b.type === 'text')?.text ||
-          'No insights returned.'
-      )
-    } catch {
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+      const result = (await response.json()) as {
+        content?: { type: string; text?: string }[]
+        error?: string
+      }
+      if (result.error) throw new Error(result.error)
+      setAiInsight(result.content?.find((b) => b.type === 'text')?.text || 'No insights returned.')
+    } catch (err) {
+      console.error('AI insights error:', err)
       setAiError(true)
     }
     setAiLoading(false)
