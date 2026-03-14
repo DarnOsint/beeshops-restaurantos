@@ -68,7 +68,12 @@ export default function OpenOrdersTab() {
               <div className="text-right flex flex-col items-end gap-1.5">
                 <p className="text-amber-400 font-bold">₦{order.total_amount?.toLocaleString()}</p>
                 <p className="text-gray-500 text-xs">
-                  {new Date(order.created_at).toLocaleTimeString()}
+                  {new Date(order.created_at).toLocaleTimeString('en-NG', {
+                    timeZone: 'Africa/Lagos',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true,
+                  })}
                 </p>
                 <button
                   onClick={async () => {

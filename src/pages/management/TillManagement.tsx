@@ -76,6 +76,8 @@ export default function TillManagement({ onClose }: Props) {
     category: 'general',
   })
   const [loading, setLoading] = useState(true)
+  const [openingFloat, setOpeningFloat] = useState('')
+  const [showOpenTill, setShowOpenTill] = useState(false)
 
   const fetchSessions = async () => {
     const { data } = await supabase
@@ -86,24 +88,38 @@ export default function TillManagement({ onClose }: Props) {
     if (data) setSessions(data)
   }
   const fetchPayouts = async () => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
     const { data } = await supabase
       .from('payouts')
       .select('*, profiles!payouts_staff_id_fkey(full_name)')
-      .gte('created_at', today.toISOString())
+      .gte(
+        'created_at',
+        new Date(
+          new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) + 'T00:00:00+01:00'
+        ).toISOString()
+      )
       .order('created_at', { ascending: false })
     if (data) setPayouts(data)
   }
   const fetchTodayStats = async () => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
     const [ordersRes, payoutsRes] = await Promise.all([
       supabase
         .from('orders')
         .select('total_amount, payment_method, payment_status')
-        .gte('created_at', today.toISOString()),
-      supabase.from('payouts').select('amount').gte('created_at', today.toISOString()),
+        .gte(
+          'created_at',
+          new Date(
+            new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) + 'T00:00:00+01:00'
+          ).toISOString()
+        ),
+      supabase
+        .from('payouts')
+        .select('amount')
+        .gte(
+          'created_at',
+          new Date(
+            new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) + 'T00:00:00+01:00'
+          ).toISOString()
+        ),
     ])
     const paidOrders = (ordersRes.data || []).filter(
       (o: { payment_status: string }) => o.payment_status === 'paid'
@@ -137,6 +153,29 @@ export default function TillManagement({ onClose }: Props) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchAll()
   }, [fetchAll])
+
+  const openSession = async () => {
+    const float = parseFloat(openingFloat)
+    if (isNaN(float) || float < 0) {
+      toast.warning('Required', 'Enter a valid opening float amount')
+      return
+    }
+    const { error } = await supabase.from('till_sessions').insert({
+      id: crypto.randomUUID(),
+      staff_id: profile?.id,
+      opened_at: new Date().toISOString(),
+      opening_float: float,
+      status: 'open',
+    })
+    if (error) {
+      toast.error('Error', error.message)
+      return
+    }
+    setOpeningFloat('')
+    setShowOpenTill(false)
+    toast.success('Till Opened', `Opening float ₦${float.toLocaleString()} recorded`)
+    fetchSessions()
+  }
 
   const closeSession = async (session: TillSession) => {
     if (!window.confirm(`Close shift for ${session.profiles?.full_name}?`)) return
@@ -291,7 +330,13 @@ export default function TillManagement({ onClose }: Props) {
                         {session.profiles?.full_name}
                       </p>
                       <p className="text-gray-400 text-xs flex items-center gap-1">
-                        <Clock size={10} /> Since {new Date(session.opened_at).toLocaleTimeString()}
+                        <Clock size={10} /> Since{' '}
+                        {new Date(session.opened_at).toLocaleTimeString('en-NG', {
+                          timeZone: 'Africa/Lagos',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true,
+                        })}
                       </p>
                     </div>
                   </div>
@@ -311,6 +356,39 @@ export default function TillManagement({ onClose }: Props) {
       {activeTab === 'sessions' && (
         <div className="space-y-2">
           <p className="text-gray-400 text-sm mb-3">All shifts today</p>
+          <div className="flex justify-end mb-3">
+            {!showOpenTill ? (
+              <button
+                onClick={() => setShowOpenTill(true)}
+                className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black text-sm font-bold px-4 py-2 rounded-xl transition-colors"
+              >
+                <DollarSign size={14} /> Open Till
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 w-full">
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="Opening float (₦)"
+                  value={openingFloat}
+                  onChange={(e) => setOpeningFloat(e.target.value)}
+                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                />
+                <button
+                  onClick={openSession}
+                  className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-xl text-sm"
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() => setShowOpenTill(false)}
+                  className="text-gray-400 hover:text-white px-2"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+          </div>
           {sessions.length === 0 ? (
             <div className="text-center py-6 text-gray-500 text-sm">No shifts recorded today</div>
           ) : (
@@ -332,9 +410,25 @@ export default function TillManagement({ onClose }: Props) {
                   )}
                 </div>
                 <div className="flex gap-4 mt-2 text-xs text-gray-500">
-                  <span>In: {new Date(session.opened_at).toLocaleTimeString()}</span>
+                  <span>
+                    In:{' '}
+                    {new Date(session.opened_at).toLocaleTimeString('en-NG', {
+                      timeZone: 'Africa/Lagos',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: true,
+                    })}
+                  </span>
                   {session.closed_at && (
-                    <span>Out: {new Date(session.closed_at).toLocaleTimeString()}</span>
+                    <span>
+                      Out:{' '}
+                      {new Date(session.closed_at).toLocaleTimeString('en-NG', {
+                        timeZone: 'Africa/Lagos',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true,
+                      })}
+                    </span>
                   )}
                 </div>
               </div>

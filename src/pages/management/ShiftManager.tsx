@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { todayWAT } from '../../lib/wat'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { audit } from '../../lib/audit'
@@ -86,7 +87,7 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
     }
   }
   const fetchTodayLog = async () => {
-    const today = new Date().toISOString().split('T')[0]
+    const today = todayWAT()
     const { data } = await supabase
       .from('attendance')
       .select('*')
@@ -125,7 +126,7 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
       staff_name: member.full_name,
       role: member.role,
       clock_in: new Date().toISOString(),
-      date: new Date().toISOString().split('T')[0],
+      date: todayWAT(),
       recorded_by: profile?.id,
       recorded_by_name: profile?.full_name,
       pos_machine: posMachine,
@@ -222,7 +223,14 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
     return h > 0 ? `${h}h ${m}m` : `${m}m`
   }
   const formatTime = (ts?: string | null) =>
-    ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'
+    ts
+      ? new Date(ts).toLocaleTimeString('en-NG', {
+          timeZone: 'Africa/Lagos',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        })
+      : '—'
 
   if (loading)
     return (

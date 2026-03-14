@@ -4,7 +4,7 @@ import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
 import { X, Banknote, CreditCard, Smartphone, CheckCircle, Clock, Beer } from 'lucide-react'
 import ReceiptModal from './ReceiptModal'
-import type { Order, OrderItem, Table, Profile } from '../../types'
+import type { Table, Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
 
 interface OrderItemExtended {
@@ -366,10 +366,20 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         .update({ status: 'available', assigned_staff: null })
         .eq('id', table.id)
       await depleteInventory(order.id)
-      setPaidOrder({ ...order, payment_method: paymentMethod } as any)
+      await audit({
+        action: 'ORDER_PAID',
+        entity: 'order',
+        entityId: order.id,
+        entityName: 'Order #' + (order.id || '').slice(0, 8),
+        newValue: { total: order.total_amount, payment_method: paymentMethod },
+        performer: profile as Profile,
+      })
+      setPaidOrder({ ...order, payment_method: paymentMethod } as typeof order)
       setSuccess(true)
-    } catch {
-      toast.error('Error', 'Payment failed. Try again.')
+    } catch (err) {
+      const msg = (err as { message?: string })?.message || String(err)
+      toast.error('Payment Failed', msg || 'Please try again.')
+      console.error('Payment error:', err)
     } finally {
       setProcessing(false)
     }

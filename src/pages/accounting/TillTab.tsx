@@ -20,7 +20,9 @@ export default function TillTab({ tillSessions }: Props) {
                   {session.profiles?.full_name || 'Unknown'}
                 </p>
                 <p className="text-gray-500 text-xs">
-                  {new Date(session.opened_at).toLocaleString('en-NG')}
+                  {new Date(session.opened_at).toLocaleString('en-NG', {
+                    timeZone: 'Africa/Lagos',
+                  })}
                 </p>
               </div>
               <span

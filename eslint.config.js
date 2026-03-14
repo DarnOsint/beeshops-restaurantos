@@ -18,6 +18,7 @@ const REACT_RULES = {
   ...reactHooks.configs.recommended.rules,
   'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
   // Suppress non-standard rule names that cause lint errors
+  'react-hooks/set-state-in-effect': 'warn',
 }
 
 export default [

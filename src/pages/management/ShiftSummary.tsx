@@ -5,10 +5,18 @@ import { X, Printer, User, CheckCircle, Loader2 } from 'lucide-react'
 const fmt = (n: number | null | undefined) =>
   `₦${Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
 const fmtTime = (ts?: string | null) =>
-  ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'
+  ts
+    ? new Date(ts).toLocaleTimeString('en-NG', {
+        timeZone: 'Africa/Lagos',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      })
+    : '—'
 const fmtDate = (ts?: string | null) =>
   ts
     ? new Date(ts).toLocaleDateString('en-NG', {
+        timeZone: 'Africa/Lagos',
         weekday: 'short',
         day: 'numeric',
         month: 'short',

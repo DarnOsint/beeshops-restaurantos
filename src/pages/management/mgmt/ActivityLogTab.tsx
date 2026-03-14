@@ -57,6 +57,7 @@ function fmtAction(action: string) {
 
 function fmtTime(ts: string) {
   return new Date(ts).toLocaleString('en-NG', {
+    timeZone: 'Africa/Lagos',
     day: '2-digit',
     month: 'short',
     hour: '2-digit',
@@ -113,11 +114,10 @@ export default function ActivityLogTab({ dateRange }: Props) {
     setEntries((data || []) as LogEntry[])
     setPage(0)
     setLoading(false)
-  }, [dateRange, group])
+  }, [dateRange.start, dateRange.end, group])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchLog()
+    void fetchLog()
   }, [fetchLog])
 
   const filtered = entries.filter((e) => {
