@@ -148,6 +148,7 @@ export default function POS() {
 
   const fetchAssignedTables = async (role: string, staffId: string) => {
     if (['owner', 'manager', 'accountant'].includes(role)) {
+      console.log('[ASSIGN] owner/manager: null')
       setAssignedTableIds(null)
       setIsClockedIn(true)
       return
@@ -182,6 +183,7 @@ export default function POS() {
 
     // Only direct table assignments
     if (!zoneData || zoneData.length === 0) {
+      console.log('[ASSIGN] direct only:', directIds.length)
       setAssignedTableIds(directIds)
       return
     }

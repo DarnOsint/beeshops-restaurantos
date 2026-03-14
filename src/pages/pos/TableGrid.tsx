@@ -72,6 +72,12 @@ export default function TableGrid({
   assignedTableIds,
 }: TableGridProps) {
   const [activeCategory, setActiveCategory] = useState<string>('All')
+  console.log(
+    '[GRID] assignedTableIds:',
+    assignedTableIds === null ? 'null(all)' : assignedTableIds?.length,
+    'tables:',
+    tables.length
+  )
 
   const filtered =
     activeCategory === 'All'
