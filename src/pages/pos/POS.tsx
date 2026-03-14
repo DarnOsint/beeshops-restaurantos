@@ -339,21 +339,26 @@ export default function POS() {
   }
 
   const handleSelectTable = async (table: Table) => {
-    if (table.status === 'occupied') {
-      const { data } = await supabase
-        .from('orders')
-        .select('*, order_items(*, menu_items(name))')
-        .eq('table_id', table.id)
-        .eq('status', 'open')
-        .limit(1)
-      if (data && data.length > 0) {
-        setActiveOrder(data[0])
-        setSelectedTable(table)
-        setShowPayment(false)
-        return
+    // Always check DB for open orders — don't trust table.status alone
+    // (table may be 'available' but have an orphaned open order, or vice versa)
+    const { data: openOrders } = await supabase
+      .from('orders')
+      .select('*, order_items(*, menu_items(name))')
+      .eq('table_id', table.id)
+      .eq('status', 'open')
+      .order('created_at', { ascending: false })
+      .limit(1)
+    if (openOrders && openOrders.length > 0) {
+      // Heal table status if it was wrong
+      if (table.status !== 'occupied') {
+        void supabase.from('tables').update({ status: 'occupied' }).eq('id', table.id)
       }
+      setActiveOrder(openOrders[0])
+      setSelectedTable(table)
+      setShowPayment(false)
+      return
     }
-    // New table — ask for covers before opening
+    // No open order — new table, ask for covers
     setActiveOrder(null)
     setShowPayment(false)
     setPendingTable(table)
@@ -419,6 +424,19 @@ export default function POS() {
           .eq('id', activeOrder.id)
           .single()
         if (refreshed) setActiveOrder(refreshed)
+        setShowPayment(true)
+        return
+      }
+
+      // Last-chance DB check — prevent duplicate open orders on same table
+      const { data: existingOpen } = await supabase
+        .from('orders')
+        .select('*, order_items(*, menu_items(name))')
+        .eq('table_id', table.id)
+        .eq('status', 'open')
+        .limit(1)
+      if (existingOpen && existingOpen.length > 0) {
+        setActiveOrder(existingOpen[0])
         setShowPayment(true)
         return
       }
