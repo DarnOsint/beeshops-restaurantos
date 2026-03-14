@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import SyncIndicator from './SyncIndicator'
+import { requestPushPermission } from '../hooks/usePushNotifications'
 import OfflineBanner from './OfflineBanner'
 import { supabase } from '../lib/supabase'
 import {
@@ -13,6 +14,8 @@ import {
   Settings,
   LogOut,
   Beer,
+  BellOff,
+  Bell,
   Users,
   BookOpen,
   Menu,
@@ -125,6 +128,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
+    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+  )
+
+  const handleEnableNotifications = async () => {
+    if (!profile?.id) return
+    const granted = await requestPushPermission(profile.id)
+    setNotifPermission(granted ? 'granted' : 'denied')
+  }
   const [tables, setTables] = useState<TableRow[]>([])
 
   useEffect(() => {
@@ -192,6 +204,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           )}
           <div className="px-3 py-3 border-t border-gray-800 space-y-2">
             <SyncIndicator />
+            {notifPermission !== 'granted' && (
+              <button
+                onClick={handleEnableNotifications}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 transition-colors text-xs"
+              >
+                <BellOff size={13} />
+                <span>Enable notifications</span>
+              </button>
+            )}
             <div className="flex items-center gap-2 px-3 py-2">
               <div className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0">
                 <Users size={14} className="text-gray-300" />
@@ -200,9 +221,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <p className="text-white text-xs font-medium truncate">{profile.full_name}</p>
                 <p className="text-amber-500 text-xs capitalize">{profile.role}</p>
               </div>
-              <button onClick={signOut} className="text-gray-500 hover:text-white p-1">
-                <LogOut size={14} />
-              </button>
+              <div className="flex items-center gap-1">
+                {notifPermission === 'granted' && (
+                  <Bell size={12} className="text-green-400" title="Notifications enabled" />
+                )}
+                <button onClick={signOut} className="text-gray-500 hover:text-white p-1">
+                  <LogOut size={14} />
+                </button>
+              </div>
             </div>
           </div>
         </aside>

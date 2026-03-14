@@ -18,10 +18,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       devOptions: { enabled: true },
-      workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
-      },
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw-custom.ts',
       manifest: {
         name: "Beeshop's RestaurantOS",
         short_name: 'BeeshopOS',

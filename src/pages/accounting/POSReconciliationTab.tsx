@@ -62,9 +62,23 @@ export default function POSReconciliationTab({ timesheet, orders, dateLabel }: P
   timesheet.forEach((entry) => {
     const machine = (entry as TimesheetEntry & { pos_machine?: string | null }).pos_machine
     const staffId = (entry as TimesheetEntry & { staff_id?: string }).staff_id || ''
-    const staffOrders = orders.filter(
-      (o) => (o as Order & { staff_id?: string }).staff_id === staffId && o.status === 'paid'
-    )
+    // Filter orders to this specific shift window only
+    const shiftClockIn = new Date(
+      (entry as TimesheetEntry & { clock_in?: string }).clock_in || 0
+    ).getTime()
+    const shiftClockOut = (entry as TimesheetEntry & { clock_out?: string | null }).clock_out
+      ? new Date((entry as TimesheetEntry & { clock_out?: string }).clock_out!).getTime()
+      : new Date(new Date().setHours(23, 59, 59, 999)).getTime()
+
+    const staffOrders = orders.filter((o) => {
+      if ((o as Order & { staff_id?: string }).staff_id !== staffId) return false
+      if (o.status !== 'paid') return false
+      // Use closed_at if available, fall back to created_at
+      const orderTime = new Date(
+        (o as Order & { closed_at?: string | null }).closed_at || o.created_at
+      ).getTime()
+      return orderTime >= shiftClockIn && orderTime <= shiftClockOut
+    })
 
     const waitronEntry: WaitronEntry = {
       staffId,

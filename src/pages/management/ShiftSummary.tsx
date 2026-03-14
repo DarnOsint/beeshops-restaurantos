@@ -105,30 +105,18 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
     if (!shift) return
     setLoading(true)
 
-    // Use clock_out if already saved, otherwise use end-of-today WAT
-    // This ensures orders paid AFTER the summary opens are still counted
-    const clockOutTime = shift.clock_out
-      ? new Date(shift.clock_out)
-      : (() => {
-          const eod = new Date()
-          eod.setHours(23, 59, 59, 999)
-          return eod
-        })()
+    // Use exact clock_in → clock_out of THIS session only
+    // If not clocked out yet, use current time (live summary during active shift)
+    const clockInUTC = new Date(shift.clock_in).toISOString()
+    const clockOutTime = shift.clock_out ? new Date(shift.clock_out) : new Date()
+    const clockOutUTC = clockOutTime.toISOString()
 
     const durationMinutes = Math.round(
       (clockOutTime.getTime() - new Date(shift.clock_in).getTime()) / 60000
     )
 
-    // Normalise ALL timestamps to Z-format UTC — PostgREST rejects mixed +00:00 vs Z formats
-    const clockInUTC = new Date(shift.clock_in).toISOString()
-    const dayStart = new Date(shift.clock_in)
-    dayStart.setUTCHours(0, 0, 0, 0)
-    const dayStartUTC = dayStart.toISOString()
-    const dayEnd = new Date(clockOutTime)
-    dayEnd.setUTCHours(23, 59, 59, 999)
-    const dayEndUTC = dayEnd.toISOString()
-    const clockOutUTC = clockOutTime.toISOString()
-
+    // Query orders closed within this exact shift window — no day-wide fallback
+    // This prevents orders from other shifts or days leaking in
     const [ordersRes, ordersNullClosedRes, voidsRes, callsRes] = await Promise.all([
       supabase
         .from('orders')
@@ -137,8 +125,8 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
         )
         .eq('staff_id', shift.staff_id)
         .eq('status', 'paid')
-        .gte('closed_at', dayStartUTC)
-        .lte('closed_at', dayEndUTC)
+        .gte('closed_at', clockInUTC)
+        .lte('closed_at', clockOutUTC)
         .order('closed_at', { ascending: true }),
       supabase
         .from('orders')
@@ -148,8 +136,8 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
         .eq('staff_id', shift.staff_id)
         .eq('status', 'paid')
         .is('closed_at', null)
-        .gte('created_at', dayStartUTC)
-        .lte('created_at', dayEndUTC),
+        .gte('created_at', clockInUTC)
+        .lte('created_at', clockOutUTC),
       supabase
         .from('void_log')
         .select('id, total_value, menu_item_name, void_type, approved_by_name, created_at')
