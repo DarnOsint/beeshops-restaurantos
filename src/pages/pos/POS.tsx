@@ -141,10 +141,10 @@ export default function POS() {
   }, [])
 
   useEffect(() => {
-    if (!profile) return
+    if (!profile || tables.length === 0) return
     fetchAssignedTables(profile.role, profile.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.id])
+  }, [profile?.id, tables.length])
 
   const fetchAssignedTables = async (role: string, staffId: string) => {
     if (['owner', 'manager', 'accountant'].includes(role)) {
