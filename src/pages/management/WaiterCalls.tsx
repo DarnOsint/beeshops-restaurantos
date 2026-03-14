@@ -56,7 +56,14 @@ export default function WaiterCalls() {
   }
 
   const dismiss = async (id: string) => {
-    await supabase.from('waiter_calls').update({ status: 'dismissed' }).eq('id', id)
+    const { error } = await supabase
+      .from('waiter_calls')
+      .update({ status: 'dismissed' })
+      .eq('id', id)
+    if (error) {
+      alert('Failed to dismiss call: ' + error.message)
+      return
+    }
     fetchCalls()
   }
 

@@ -107,7 +107,14 @@ function KitchenKDSInner() {
   const updateItemStatus = async (itemId: string, currentStatus: string, orderId: string) => {
     const nextStatus = getNextStatus(currentStatus)
     if (!nextStatus) return // already ready — do nothing
-    await supabase.from('order_items').update({ status: nextStatus }).eq('id', itemId)
+    const { error } = await supabase
+      .from('order_items')
+      .update({ status: nextStatus })
+      .eq('id', itemId)
+    if (error) {
+      alert('Failed to update item: ' + error.message)
+      return
+    }
     if (nextStatus === 'ready') {
       const order = orders.find((o) => o.id === orderId)
       if (order?.staff_id) {
@@ -130,7 +137,14 @@ function KitchenKDSInner() {
       )
       .map((i) => i.id)
     if (!kitchenItemIds.length) return
-    await supabase.from('order_items').update({ status: 'ready' }).in('id', kitchenItemIds)
+    const { error: kaErr } = await supabase
+      .from('order_items')
+      .update({ status: 'ready' })
+      .in('id', kitchenItemIds)
+    if (kaErr) {
+      alert('Failed to mark all ready: ' + kaErr.message)
+      return
+    }
     if (order.staff_id)
       await sendPushToStaff(
         order.staff_id,

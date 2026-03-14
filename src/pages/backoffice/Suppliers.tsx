@@ -91,6 +91,7 @@ export default function Suppliers({ onBack }: Props) {
   const [pos, setPOs] = useState<PurchaseOrder[]>([])
   const [inventory, setInventory] = useState<InventoryRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [showSupplierModal, setShowSupplierModal] = useState(false)
   const [showPOModal, setShowPOModal] = useState(false)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
@@ -136,33 +137,44 @@ export default function Suppliers({ onBack }: Props) {
   }, [])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll()
   }, [fetchAll])
 
   const saveSupplier = async () => {
     if (!supplierForm.name.trim()) return alert('Supplier name is required')
-    if (editingSupplier) {
-      await supabase.from('suppliers').update(supplierForm).eq('id', editingSupplier.id)
-      await audit({
-        action: 'SUPPLIER_UPDATED',
-        entity: 'supplier',
-        entityId: editingSupplier.id,
-        entityName: supplierForm.name,
-        performer: profile,
-      })
-    } else {
-      await supabase.from('suppliers').insert(supplierForm)
-      await audit({
-        action: 'SUPPLIER_CREATED',
-        entity: 'supplier',
-        entityName: supplierForm.name,
-        performer: profile,
-      })
+    setSaving(true)
+    try {
+      if (editingSupplier) {
+        const { error } = await supabase
+          .from('suppliers')
+          .update(supplierForm)
+          .eq('id', editingSupplier.id)
+        if (error) throw error
+        await audit({
+          action: 'SUPPLIER_UPDATED',
+          entity: 'supplier',
+          entityId: editingSupplier.id,
+          entityName: supplierForm.name,
+          performer: profile,
+        })
+      } else {
+        const { error } = await supabase.from('suppliers').insert(supplierForm)
+        if (error) throw error
+        await audit({
+          action: 'SUPPLIER_CREATED',
+          entity: 'supplier',
+          entityName: supplierForm.name,
+          performer: profile,
+        })
+      }
+      setShowSupplierModal(false)
+      setEditingSupplier(null)
+      fetchAll()
+    } catch (err) {
+      alert('Failed to save supplier: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
     }
-    setShowSupplierModal(false)
-    setEditingSupplier(null)
-    fetchAll()
   }
 
   const openEditSupplier = (s: Supplier) => {
@@ -182,7 +194,11 @@ export default function Suppliers({ onBack }: Props) {
 
   const deactivateSupplier = async (id: string) => {
     if (!window.confirm('Remove this supplier?')) return
-    await supabase.from('suppliers').update({ is_active: false }).eq('id', id)
+    const { error } = await supabase.from('suppliers').update({ is_active: false }).eq('id', id)
+    if (error) {
+      alert('Failed to deactivate supplier: ' + error.message)
+      return
+    }
     fetchAll()
   }
 
@@ -594,9 +610,10 @@ export default function Suppliers({ onBack }: Props) {
               </button>
               <button
                 onClick={saveSupplier}
-                className="py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold"
+                disabled={saving}
+                className="py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-400 text-black font-bold"
               >
-                Save
+                {saving ? 'Saving…' : 'Save'}
               </button>
             </div>
           </div>

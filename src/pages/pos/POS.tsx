@@ -386,7 +386,7 @@ export default function POS() {
           .select('*, order_items(*, menu_items(name))')
           .eq('id', activeOrder.id)
           .single()
-        setActiveOrder(refreshed)
+        if (refreshed) setActiveOrder(refreshed)
         setShowPayment(true)
         return
       }

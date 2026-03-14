@@ -15,14 +15,20 @@ export default function SettingsTab({ threshold, setThreshold }: Props) {
     const val = parseInt(editThreshold)
     if (!val || val < 1) return
     setSaving(true)
-    await supabase.from('settings').upsert({
-      id: 'order_alert_threshold',
-      value: String(val),
-      updated_at: new Date().toISOString(),
-    })
-    setThreshold(val)
-    setEditThreshold('')
-    setSaving(false)
+    try {
+      const { error } = await supabase.from('settings').upsert({
+        id: 'order_alert_threshold',
+        value: String(val),
+        updated_at: new Date().toISOString(),
+      })
+      if (error) throw error
+      setThreshold(val)
+      setEditThreshold('')
+    } catch (err) {
+      alert('Failed to save setting: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (

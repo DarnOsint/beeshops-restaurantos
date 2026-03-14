@@ -310,20 +310,18 @@ export default function KitchenStock({ onBack }: Props) {
       return
     }
     setSaving(true)
-    const { error } = await supabase
-      .from('kitchen_stock')
-      .insert({
-        date,
-        item_name: form.item_name.trim(),
-        unit: form.unit,
-        opening_qty: parseFloat(form.opening_qty) || 0,
-        received_qty: parseFloat(form.received_qty) || 0,
-        sold_qty: soldMap[form.item_name] || 0,
-        void_qty: parseFloat(form.void_qty) || 0,
-        closing_qty: parseFloat(form.closing_qty) || 0,
-        note: form.note.trim() || null,
-        recorded_by: profile?.id,
-      })
+    const { error } = await supabase.from('kitchen_stock').insert({
+      date,
+      item_name: form.item_name.trim(),
+      unit: form.unit,
+      opening_qty: parseFloat(form.opening_qty) || 0,
+      received_qty: parseFloat(form.received_qty) || 0,
+      sold_qty: soldMap[form.item_name] || 0,
+      void_qty: parseFloat(form.void_qty) || 0,
+      closing_qty: parseFloat(form.closing_qty) || 0,
+      note: form.note.trim() || null,
+      recorded_by: profile?.id,
+    })
     setSaving(false)
     if (error) {
       setFormError(error.message)
@@ -371,7 +369,11 @@ export default function KitchenStock({ onBack }: Props) {
 
   const deleteEntry = async (id: string) => {
     if (!confirm('Delete this stock entry?')) return
-    await supabase.from('kitchen_stock').delete().eq('id', id)
+    const { error } = await supabase.from('kitchen_stock').delete().eq('id', id)
+    if (error) {
+      alert('Failed to delete item: ' + error.message)
+      return
+    }
     loadEntries(date)
   }
 
@@ -391,21 +393,19 @@ export default function KitchenStock({ onBack }: Props) {
     if (!bmForm.expected_yield) return
     const itemName = showBenchmarkFor === '__new__' ? bmForm.item_name : showBenchmarkFor
     if (!itemName) return
-    await supabase
-      .from('kitchen_stock_benchmarks')
-      .upsert(
-        {
-          item_name: itemName,
-          expected_yield: parseFloat(bmForm.expected_yield),
-          tolerance_pct: parseFloat(bmForm.tolerance_pct) || 5,
-          raw_unit: bmForm.raw_unit,
-          cooked_unit: bmForm.cooked_unit,
-          note: bmForm.note || null,
-          set_by: profile?.id,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'item_name' }
-      )
+    await supabase.from('kitchen_stock_benchmarks').upsert(
+      {
+        item_name: itemName,
+        expected_yield: parseFloat(bmForm.expected_yield),
+        tolerance_pct: parseFloat(bmForm.tolerance_pct) || 5,
+        raw_unit: bmForm.raw_unit,
+        cooked_unit: bmForm.cooked_unit,
+        note: bmForm.note || null,
+        set_by: profile?.id,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'item_name' }
+    )
     setShowBenchmarkFor(null)
     loadBenchmarks()
     loadEntries(date)
@@ -413,7 +413,11 @@ export default function KitchenStock({ onBack }: Props) {
 
   const deleteBenchmark = async (itemName: string) => {
     if (!confirm(`Remove benchmark for ${itemName}?`)) return
-    await supabase.from('kitchen_stock_benchmarks').delete().eq('item_name', itemName)
+    const { error: bErr } = await supabase
+      .from('kitchen_stock_benchmarks')
+      .delete()
+      .eq('item_name', itemName)
+    if (bErr) console.error('Failed to delete benchmark:', bErr.message)
     loadBenchmarks()
     loadEntries(date)
   }
@@ -574,8 +578,9 @@ export default function KitchenStock({ onBack }: Props) {
                         </p>
                         <p className="text-gray-500 text-xs mt-0.5">
                           In: {(entry.opening_qty + entry.received_qty).toFixed(1)} {entry.unit}
-                          &nbsp;·&nbsp;Sold: {entry.effective_sold.toFixed(1)}&nbsp;·&nbsp;Left:{' '}
-                          {entry.closing_qty.toFixed(1)}
+                          &nbsp;·&nbsp;Sold: {entry.effective_sold.toFixed(
+                            1
+                          )}&nbsp;·&nbsp;Left: {entry.closing_qty.toFixed(1)}
                         </p>
                       </div>
                       <div className="text-right shrink-0 mr-1">

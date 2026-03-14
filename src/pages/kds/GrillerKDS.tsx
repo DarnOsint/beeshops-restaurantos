@@ -144,8 +144,15 @@ function GrillerKDSInner() {
 
   const markItemReady = async (item: GrillerItem, ticket: GrillerTicket) => {
     setCompleting((p) => ({ ...p, [item.id]: true }))
-    await supabase.from('order_items').update({ status: 'ready' }).eq('id', item.id)
+    const { error: iErr } = await supabase
+      .from('order_items')
+      .update({ status: 'ready' })
+      .eq('id', item.id)
     setCompleting((p) => ({ ...p, [item.id]: false }))
+    if (iErr) {
+      alert('Failed to mark item ready: ' + iErr.message)
+      return
+    }
     if (ticket.staffId)
       await sendPushToStaff(
         ticket.staffId,
@@ -158,8 +165,15 @@ function GrillerKDSInner() {
   const markAllReady = async (ticket: GrillerTicket) => {
     const ids = ticket.items.map((i) => i.id)
     ids.forEach((id) => setCompleting((p) => ({ ...p, [id]: true })))
-    await supabase.from('order_items').update({ status: 'ready' }).in('id', ids)
+    const { error: gaErr } = await supabase
+      .from('order_items')
+      .update({ status: 'ready' })
+      .in('id', ids)
     ids.forEach((id) => setCompleting((p) => ({ ...p, [id]: false })))
+    if (gaErr) {
+      alert('Failed to mark all ready: ' + gaErr.message)
+      return
+    }
     if (ticket.staffId)
       await sendPushToStaff(
         ticket.staffId,

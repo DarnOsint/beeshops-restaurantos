@@ -103,7 +103,6 @@ export default function ApartmentDashboard() {
     setLoading(false)
   }, [])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     fetchAll()
   }, [fetchAll])
@@ -148,66 +147,92 @@ export default function ApartmentDashboard() {
   async function handleCheckIn() {
     if (!showCheckIn || !checkInForm.guest_name || !checkInForm.check_out_date) return
     setSaving(true)
-    const nights = Math.max(
-      0,
-      Math.ceil(
-        (new Date(checkInForm.check_out_date).getTime() -
-          new Date(checkInForm.check_in_date).getTime()) /
-          86400000
+    try {
+      const nights = Math.max(
+        0,
+        Math.ceil(
+          (new Date(checkInForm.check_out_date).getTime() -
+            new Date(checkInForm.check_in_date).getTime()) /
+            86400000
+        )
       )
-    )
-    const totalDue = nights * (showCheckIn.rate_per_night || 0)
-    await supabase.from('room_stays').insert({
-      room_id: showCheckIn.id,
-      guest_name: checkInForm.guest_name,
-      guest_phone: checkInForm.guest_phone,
-      guest_email: checkInForm.guest_email,
-      guest_id_number: checkInForm.guest_id_number,
-      check_in_date: checkInForm.check_in_date,
-      check_out_date: checkInForm.check_out_date,
-      adults: checkInForm.adults,
-      children: checkInForm.children,
-      total_amount: totalDue,
-      amount_paid: parseFloat(checkInForm.amount_paid) || totalDue,
-      payment_method: checkInForm.payment_method,
-      notes: checkInForm.notes,
-      status: 'active',
-      checked_in_by: profile?.id,
-    })
-    await supabase.from('rooms').update({ status: 'occupied' }).eq('id', showCheckIn.id)
-    setShowCheckIn(null)
-    setCheckInForm(DEFAULT_FORM)
-    setSaving(false)
-    fetchAll()
+      const totalDue = nights * (showCheckIn.rate_per_night || 0)
+      const { error: stayErr } = await supabase.from('room_stays').insert({
+        room_id: showCheckIn.id,
+        guest_name: checkInForm.guest_name,
+        guest_phone: checkInForm.guest_phone,
+        guest_email: checkInForm.guest_email,
+        guest_id_number: checkInForm.guest_id_number,
+        check_in_date: checkInForm.check_in_date,
+        check_out_date: checkInForm.check_out_date,
+        adults: checkInForm.adults,
+        children: checkInForm.children,
+        total_amount: totalDue,
+        amount_paid: parseFloat(checkInForm.amount_paid) || totalDue,
+        payment_method: checkInForm.payment_method,
+        notes: checkInForm.notes,
+        status: 'active',
+        checked_in_by: profile?.id,
+      })
+      if (stayErr) throw stayErr
+      const { error: roomErr } = await supabase
+        .from('rooms')
+        .update({ status: 'occupied' })
+        .eq('id', showCheckIn.id)
+      if (roomErr) throw roomErr
+      setShowCheckIn(null)
+      setCheckInForm(DEFAULT_FORM)
+      fetchAll()
+    } catch (err) {
+      alert('Check-in failed: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function confirmCheckOut() {
     if (!showCheckOut) return
     setSaving(true)
-    await supabase
-      .from('room_stays')
-      .update({ status: 'checked_out', actual_check_out: new Date().toISOString() })
-      .eq('id', showCheckOut.id)
-    await supabase.from('rooms').update({ status: 'available' }).eq('id', showCheckOut.room_id)
-    setShowCheckOut(null)
-    setSaving(false)
-    fetchAll()
+    try {
+      const { error: stayErr } = await supabase
+        .from('room_stays')
+        .update({ status: 'checked_out', actual_check_out: new Date().toISOString() })
+        .eq('id', showCheckOut.id)
+      if (stayErr) throw stayErr
+      const { error: roomErr } = await supabase
+        .from('rooms')
+        .update({ status: 'available' })
+        .eq('id', showCheckOut.room_id)
+      if (roomErr) throw roomErr
+      setShowCheckOut(null)
+      fetchAll()
+    } catch (err) {
+      alert('Check-out failed: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function recordPayment() {
     if (!showPayment || !payForm.amount) return
     setSaving(true)
-    await supabase
-      .from('room_stays')
-      .update({
-        amount_paid: (showPayment.amount_paid || 0) + parseFloat(payForm.amount),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', showPayment.id)
-    setShowPayment(null)
-    setPayForm({ amount: '', method: 'cash', reference: '' })
-    setSaving(false)
-    fetchAll()
+    try {
+      const { error } = await supabase
+        .from('room_stays')
+        .update({
+          amount_paid: (showPayment.amount_paid || 0) + parseFloat(payForm.amount),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', showPayment.id)
+      if (error) throw error
+      setShowPayment(null)
+      setPayForm({ amount: '', method: 'cash', reference: '' })
+      fetchAll()
+    } catch (err) {
+      alert('Payment failed: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function updateRoomStatus(roomId: string, status: Room['status']) {

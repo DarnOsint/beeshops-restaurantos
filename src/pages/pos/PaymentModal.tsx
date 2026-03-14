@@ -193,20 +193,18 @@ export default function PaymentModal({ order, table, onSuccess, onClose }: Props
           .from('inventory')
           .update({ current_stock: after, updated_at: new Date().toISOString() })
           .eq('id', inv.id)
-        await supabase
-          .from('inventory_log')
-          .insert({
-            inventory_id: inv.id,
-            menu_item_id: inv.menu_item_id,
-            item_name: inv.item_name,
-            order_id: orderId,
-            change_type: 'deduction',
-            quantity_change: -qty,
-            stock_before: before,
-            stock_after: after,
-            notes: 'Auto-deducted on payment',
-            created_by: profile?.id,
-          })
+        await supabase.from('inventory_log').insert({
+          inventory_id: inv.id,
+          menu_item_id: inv.menu_item_id,
+          item_name: inv.item_name,
+          order_id: orderId,
+          change_type: 'deduction',
+          quantity_change: -qty,
+          stock_before: before,
+          stock_after: after,
+          notes: 'Auto-deducted on payment',
+          created_by: profile?.id,
+        })
       }
     } catch (e) {
       console.error('Inventory depletion error:', e)
@@ -258,6 +256,7 @@ export default function PaymentModal({ order, table, onSuccess, onClose }: Props
         })
         setPaidOrder({ ...order, payment_method: 'credit' })
         setSuccess(true)
+        setProcessing(false)
         return
       }
       await offlineUpdate('orders', order.id, {
@@ -272,6 +271,7 @@ export default function PaymentModal({ order, table, onSuccess, onClose }: Props
       setSuccess(true)
     } catch {
       alert('Payment failed. Try again.')
+    } finally {
       setProcessing(false)
     }
   }

@@ -106,7 +106,14 @@ function BarKDSInner() {
   const updateItemStatus = async (itemId: string, currentStatus: string, orderId: string) => {
     const nextStatus = getNextStatus(currentStatus)
     if (!nextStatus) return
-    await supabase.from('order_items').update({ status: nextStatus }).eq('id', itemId)
+    const { error } = await supabase
+      .from('order_items')
+      .update({ status: nextStatus })
+      .eq('id', itemId)
+    if (error) {
+      alert('Failed to update item: ' + error.message)
+      return
+    }
     if (nextStatus === 'ready') {
       const order = orders.find((o) => o.id === orderId)
       if (order?.staff_id) {
@@ -127,7 +134,14 @@ function BarKDSInner() {
       .filter((i) => i.menu_items?.menu_categories?.destination === 'bar' && i.status !== 'ready')
       .map((i) => i.id)
     if (!barItemIds.length) return
-    await supabase.from('order_items').update({ status: 'ready' }).in('id', barItemIds)
+    const { error: baErr } = await supabase
+      .from('order_items')
+      .update({ status: 'ready' })
+      .in('id', barItemIds)
+    if (baErr) {
+      alert('Failed to mark all ready: ' + baErr.message)
+      return
+    }
     if (order.staff_id)
       await sendPushToStaff(
         order.staff_id,
