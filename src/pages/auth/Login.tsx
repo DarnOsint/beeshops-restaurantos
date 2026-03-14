@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { verifyPin, hashPin, isPinHashed } from '../../lib/pinHash'
 import { Eye, EyeOff, Delete } from 'lucide-react'
 
 const EMAIL_MAX = 5
@@ -166,13 +167,24 @@ export default function Login() {
     }
     setLoading(true)
     setError(null)
-    const { data, error: err } = await supabase
+    // Fetch all active staff with PINs, then verify client-side (supports hashed PINs)
+    const { data: allStaff, error: err } = await supabase
       .from('profiles')
       .select('*')
-      .eq('pin', entered)
       .eq('is_active', true)
-      .single()
-    if (err || !data) {
+      .not('pin', 'is', null)
+
+    let data = null
+    if (!err && allStaff) {
+      for (const staff of allStaff) {
+        if (staff.pin && (await verifyPin(entered, staff.pin))) {
+          data = staff
+          break
+        }
+      }
+    }
+
+    if (!data) {
       const ns = recordAttempt('rl_pin', PIN_MAX)
       if (ns.attempts >= PIN_MAX) {
         const rem = getRemaining(ns, PIN_LOCK_MS)
@@ -187,6 +199,14 @@ export default function Login() {
       return
     }
     resetAttempts('rl_pin')
+
+    // Auto-upgrade plain-text PIN to PBKDF2 hash on successful login
+    if (data.pin && !isPinHashed(data.pin)) {
+      void hashPin(entered).then((hashed) => {
+        supabase.from('profiles').update({ pin: hashed }).eq('id', data.id)
+      })
+    }
+
     void supabase.from('audit_log').insert({
       action: 'LOGIN_PIN',
       entity: 'auth',

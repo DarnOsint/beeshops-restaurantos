@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { hashPin } from '../../lib/pinHash'
 import {
   ArrowLeft,
   Plus,
@@ -151,9 +152,9 @@ export default function StaffManagement({ onBack }: Props) {
           notes: form.notes,
           is_active: form.is_active,
         }
-        if (form.pin) updates.pin = form.pin
+        if (form.pin) updates.pin = await hashPin(form.pin)
         if (['owner', 'manager'].includes(form.role) && form.approval_pin)
-          updates.approval_pin = form.approval_pin
+          updates.approval_pin = await hashPin(form.approval_pin)
         const { error } = await supabase.from('profiles').update(updates).eq('id', editingStaff.id)
         if (error) throw error
       } else if (isFloorRole(form.role)) {
@@ -163,7 +164,7 @@ export default function StaffManagement({ onBack }: Props) {
           email: form.email || null,
           phone: form.phone,
           role: form.role,
-          pin: form.pin,
+          pin: await hashPin(form.pin),
           hire_date: form.hire_date,
           emergency_contact: form.emergency_contact,
           notes: form.notes,

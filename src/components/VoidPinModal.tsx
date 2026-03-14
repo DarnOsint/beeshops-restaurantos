@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { verifyPin, hashPin, isPinHashed } from '../lib/pinHash'
 import { sendPushToStaff } from '../hooks/usePushNotifications'
 import { ShieldAlert } from 'lucide-react'
 
@@ -39,18 +40,34 @@ export default function VoidPinModal({ onApproved, onCancel, voidDescription }: 
     if (pin.length !== 4) return
     setChecking(true)
     setError('')
-    const { data, error: err } = await supabase
+    // Fetch all manager/owner approval PINs and verify client-side (supports hashing)
+    const { data: managers, error: err } = await supabase
       .from('profiles')
       .select('id, full_name, role, approval_pin')
       .in('role', ['owner', 'manager'])
-      .eq('approval_pin', pin)
       .eq('is_active', true)
-      .maybeSingle()
+      .not('approval_pin', 'is', null)
+
+    let data = null
+    if (!err && managers) {
+      for (const m of managers) {
+        if (m.approval_pin && (await verifyPin(pin, m.approval_pin))) {
+          data = m
+          break
+        }
+      }
+    }
     setChecking(false)
     if (err || !data) {
       setError('Invalid PIN. Manager approval required.')
       setPin('')
       return
+    }
+    // Auto-upgrade plain-text approval_pin to PBKDF2 on successful use
+    if (data.approval_pin && !isPinHashed(data.approval_pin)) {
+      void hashPin(pin).then((hashed) => {
+        supabase.from('profiles').update({ approval_pin: hashed }).eq('id', data.id)
+      })
     }
     onApproved({ id: data.id, name: data.full_name, role: data.role })
   }
