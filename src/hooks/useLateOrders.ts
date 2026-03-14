@@ -27,25 +27,32 @@ export function useLateOrders() {
   }, [])
 
   useEffect(() => {
+    let active = true
     const check = async () => {
-      const cutoff = new Date(Date.now() - threshold * 60 * 1000).toISOString()
-      const { data } = await supabase
-        .from('orders')
-        .select(
-          'id, order_number, order_type, customer_name, created_at, tables(name), order_items(id, status, destination)'
+      try {
+        const cutoff = new Date(Date.now() - threshold * 60 * 1000).toISOString()
+        const { data, error } = await supabase
+          .from('orders')
+          .select(
+            'id, order_number, order_type, customer_name, created_at, tables(name), order_items(id, status, destination)'
+          )
+          .eq('status', 'open')
+          .lte('created_at', cutoff)
+        if (!active || error || !data) return
+        const late = (data as unknown as LateOrder[]).filter((o) =>
+          o.order_items?.some((i) => i.status === 'pending')
         )
-        .eq('status', 'open')
-        .lte('created_at', cutoff)
-
-      if (!data) return
-      const late = (data as unknown as LateOrder[]).filter((o) =>
-        o.order_items?.some((i) => i.status === 'pending')
-      )
-      setLateOrders(late)
+        setLateOrders(late)
+      } catch {
+        // Network error — silently skip this poll cycle
+      }
     }
     check()
-    const interval = setInterval(check, 30_000)
-    return () => clearInterval(interval)
+    const interval = setInterval(check, 90_000) // 90s — less noisy than 30s
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
   }, [threshold])
 
   const markDelivered = async (orderId: string): Promise<void> => {

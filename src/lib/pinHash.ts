@@ -7,20 +7,24 @@ import { supabase } from './supabase'
 
 // ── bcrypt via Supabase RPC ───────────────────────────────────────────────────
 
-/** Hash a PIN using bcrypt server-side. Returns the bcrypt hash string. */
+/** Hash a PIN for storage using PBKDF2 (client-side Web Crypto). */
 export async function hashPin(pin: string): Promise<string> {
-  const { data, error } = await supabase.rpc('hash_pin', { pin_text: pin })
-  if (error || !data) {
-    // Fallback: if RPC unavailable, return plain text — will be hashed on next login
-    console.warn('hashPin RPC failed, storing plain text temporarily:', error?.message)
-    return pin
-  }
-  return data as string
+  // Use PBKDF2 — verified client-side for hashed PINs,
+  // or DB RPC for plain-text PINs (instant)
+  const salt = randomSaltHex()
+  const hash = await pbkdf2Derive(pin, salt)
+  return `pbkdf2:${PBKDF2_ITERATIONS}:${salt}:${hash}`
+}
+
+function randomSaltHex(): string {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  return bytesToHex(bytes)
 }
 
 /** Verify a PIN server-side. Returns the matching profile or null. */
 export async function verifyPinServer(pin: string): Promise<Record<string, unknown> | null> {
-  const { data, error } = await supabase.rpc('verify_pin_and_get_profile_v2', {
+  const { data, error } = await supabase.rpc('verify_pin_and_get_profile', {
     entered_pin: pin,
   })
   if (error) {
