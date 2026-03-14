@@ -19,7 +19,7 @@ const supabase = createClient(
 )
 const resend = new Resend(process.env.RESEND_API_KEY)
 const OWNER_EMAIL = process.env.REPORT_EMAIL || 'seventeenkay@proton.me'
-const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET
+const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET || process.env.VITE_INTERNAL_API_SECRET
 
 function fmt(n) {
   return `₦${Number(n || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`
