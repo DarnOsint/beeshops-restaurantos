@@ -356,74 +356,91 @@ export default function OrderPanel({
           </div>
         </div>
 
-        {/* Unified order panel — existing + new items, sticky above menu */}
-        {orderItems.length > 0 && (
-          <div className="border-b border-gray-800 bg-gray-900 px-3 py-2 max-h-56 overflow-y-auto space-y-1">
-            {/* Existing on-table items */}
-            {orderItems.filter((i) => i._existing).map((item) => {
-              const dbId = item._dbId || dbIdMap[item.id]
-              return (
-                <div key={item._newId || item.id} className="flex items-center gap-2 py-0.5">
-                  <span className="text-gray-500 text-xs w-5 text-center">{item.quantity}×</span>
-                  <span className="flex-1 text-gray-400 text-sm truncate">{item.name}</span>
-                  <span className="text-gray-500 text-xs">₦{item.total.toFixed(0)}</span>
-                  <button
-                    onClick={() => { if (dbId && !servedItems[dbId]) markServed(item) }}
-                    className={`transition-colors ${dbId && servedItems[dbId] ? 'text-green-400' : 'text-gray-600 hover:text-green-400'}`}
-                    title={dbId && servedItems[dbId] ? 'Served' : 'Mark as served'}
-                  >
-                    {dbId && servedItems[dbId] ? <CheckCircle2 size={14} /> : <Circle size={14} />}
-                  </button>
-                  <button onClick={() => deleteItem(item)} className="text-red-400 hover:text-red-300" title="Void">
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              )
-            })}
-            {/* Divider between existing and new items */}
-            {orderItems.some((i) => i._existing) && orderItems.some((i) => !i._existing) && (
-              <div className="border-t border-amber-500/20 my-1" />
-            )}
-            {/* New items being added */}
-            {orderItems.filter((i) => !i._existing).map((item) => {
-              return (
-                <div key={item._newId || item.id} className="flex items-center gap-2 py-0.5">
-                  <div className="flex items-center gap-1">
+        {/* ── Zone 1: On-table items (existing) — fixed, max 3 rows ── */}
+        {orderItems.some((i) => i._existing) && (
+          <div className="border-b border-gray-800 bg-gray-950 px-3 pt-1.5 pb-1 max-h-28 overflow-y-auto space-y-0.5 shrink-0">
+            <p className="text-gray-600 text-[10px] uppercase tracking-widest mb-0.5">On Table</p>
+            {orderItems
+              .filter((i) => i._existing)
+              .map((item) => {
+                const dbId = item._dbId || dbIdMap[item.id]
+                return (
+                  <div key={item._newId || item.id} className="flex items-center gap-2 py-0.5">
+                    <span className="text-gray-500 text-xs w-5 text-center shrink-0">
+                      {item.quantity}×
+                    </span>
+                    <span className="flex-1 text-gray-400 text-sm truncate">{item.name}</span>
+                    <span className="text-gray-500 text-xs shrink-0">₦{item.total.toFixed(0)}</span>
+                    <button
+                      onClick={() => {
+                        if (dbId && !servedItems[dbId]) markServed(item)
+                      }}
+                      className={`transition-colors shrink-0 ${dbId && servedItems[dbId] ? 'text-green-400' : 'text-gray-600 hover:text-green-400'}`}
+                      title={dbId && servedItems[dbId] ? 'Served' : 'Mark as served'}
+                    >
+                      {dbId && servedItems[dbId] ? (
+                        <CheckCircle2 size={14} />
+                      ) : (
+                        <Circle size={14} />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => deleteItem(item)}
+                      className="text-red-400 hover:text-red-300 shrink-0"
+                      title="Void"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                )
+              })}
+          </div>
+        )}
+
+        {/* ── Zone 2: New items being added — fixed, visible always ── */}
+        {orderItems.some((i) => !i._existing) && (
+          <div className="border-b border-amber-500/20 bg-gray-900 px-3 pt-1.5 pb-1 max-h-36 overflow-y-auto space-y-0.5 shrink-0">
+            <p className="text-amber-500/60 text-[10px] uppercase tracking-widest mb-0.5">Adding</p>
+            {orderItems
+              .filter((i) => !i._existing)
+              .map((item) => (
+                <div key={item._newId || item.id} className="flex items-center gap-1.5 py-0.5">
+                  <div className="flex items-center gap-0.5 shrink-0">
                     <button
                       onClick={() => removeItem(item._newId || item.id)}
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-white bg-gray-700 hover:bg-gray-600"
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-white bg-gray-700 hover:bg-gray-600"
                     >
-                      <Minus size={10} />
+                      <Minus size={9} />
                     </button>
                     <span className="text-white text-sm w-5 text-center">{item.quantity}</span>
                     <button
                       onClick={() => addItem(item)}
-                      className="w-6 h-6 rounded-full flex items-center justify-center text-white bg-gray-700 hover:bg-gray-600"
+                      className="w-5 h-5 rounded-full flex items-center justify-center text-white bg-gray-700 hover:bg-gray-600"
                     >
-                      <Plus size={10} />
+                      <Plus size={9} />
                     </button>
                   </div>
                   <div className="flex-1 min-w-0">
                     <button onClick={() => openModifier(item)} className="text-left w-full">
-                      <p className="text-sm text-white truncate">{item.name}</p>
+                      <p className="text-sm text-amber-100 truncate">{item.name}</p>
                       {item.modifier_notes && (
                         <p className="text-amber-400 text-xs truncate">{item.modifier_notes}</p>
                       )}
-                      {(item.extra_charge || 0) > 0 && (
-                        <p className="text-green-400 text-xs">+₦{item.extra_charge!.toLocaleString()}</p>
-                      )}
                     </button>
                   </div>
-                  <span className="text-white text-sm">₦{item.total.toFixed(0)}</span>
-                  <button onClick={() => deleteItem(item)} className="text-red-400 hover:text-red-300">
-                    <Trash2 size={14} />
+                  <span className="text-amber-400 text-sm shrink-0">₦{item.total.toFixed(0)}</span>
+                  <button
+                    onClick={() => deleteItem(item)}
+                    className="text-red-400 hover:text-red-300 shrink-0"
+                  >
+                    <Trash2 size={13} />
                   </button>
                 </div>
-              )
-            })}
+              ))}
           </div>
         )}
 
+        {/* ── Zone 3: Menu grid — scrolls freely ── */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-3">
             {filteredMenu.length === 0 ? (
@@ -456,9 +473,6 @@ export default function OrderPanel({
               </div>
             )}
           </div>
-
-
-
           <div className="px-3 pb-3">
             <input
               type="text"
