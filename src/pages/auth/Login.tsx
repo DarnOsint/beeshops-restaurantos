@@ -328,7 +328,7 @@ export default function Login() {
           </p>
         )}
 
-        <div className="bg-gray-900 rounded-2xl p-8 shadow-2xl border border-gray-800">
+        <div className="bg-gray-800 rounded-2xl p-8 shadow-2xl border border-gray-700">
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg p-3 mb-6 text-sm">
               {error}
@@ -338,24 +338,24 @@ export default function Login() {
           {mode === 'email' && (
             <>
               <h2 className="text-xl font-semibold text-white mb-2">Sign in</h2>
-              <p className="text-gray-500 text-sm mb-6">For managers, owners and accountants</p>
+              <p className="text-gray-400 text-sm mb-6">For managers, owners and accountants</p>
               {emailLocked ? (
                 <LockedOut mode="email" time={emailRem} />
               ) : (
                 <form onSubmit={handleEmailLogin} className="space-y-5">
                   <div>
-                    <label className="block text-sm text-gray-400 mb-2">Email Address</label>
+                    <label className="block text-sm text-gray-300 mb-2">Email Address</label>
                     <input
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@beeshops.com"
                       required
-                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
+                      className="w-full bg-gray-700 border border-gray-600 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-400 mb-2">Password</label>
+                    <label className="block text-sm text-gray-300 mb-2">Password</label>
                     <div className="relative">
                       <input
                         type={showPw ? 'text' : 'password'}
@@ -363,7 +363,7 @@ export default function Login() {
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
                         required
-                        className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 pr-11 focus:outline-none focus:border-amber-500"
+                        className="w-full bg-gray-700 border border-gray-600 text-white rounded-xl px-4 py-3 pr-11 focus:outline-none focus:border-amber-500"
                       />
                       <button
                         type="button"
@@ -424,8 +424,8 @@ export default function Login() {
                               digit === ''
                                 ? 'opacity-0 pointer-events-none'
                                 : digit === 'del'
-                                  ? 'bg-gray-800 border border-gray-700 text-gray-400 hover:bg-gray-700 hover:text-white active:scale-95'
-                                  : 'bg-gray-800 border border-gray-700 text-white hover:bg-gray-700 hover:border-amber-500/50 active:scale-95'
+                                  ? 'bg-gray-700 border border-gray-600 text-gray-400 hover:bg-gray-600 hover:text-white active:scale-95'
+                                  : 'bg-gray-700 border border-gray-600 text-white hover:bg-gray-600 hover:border-amber-500/50 active:scale-95'
                             }`}
                           >
                             {digit === 'del' ? <Delete size={20} className="mx-auto" /> : digit}
