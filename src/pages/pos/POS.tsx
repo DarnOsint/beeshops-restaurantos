@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
-import { usePushNotifications } from '../../hooks/usePushNotifications'
+import { usePushNotifications, requestPushPermission } from '../../hooks/usePushNotifications'
 import {
   LogOut,
   Beer,

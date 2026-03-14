@@ -260,12 +260,11 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       // Prevents client-side total manipulation
       const { data: serverItems } = await supabase
         .from('order_items')
-        .select('total_price, extra_charge')
+        .select('total_price')
         .eq('order_id', order.id)
       if (serverItems && serverItems.length > 0) {
         const serverTotal = serverItems.reduce(
-          (s: number, i: { total_price: number; extra_charge?: number }) =>
-            s + (i.total_price || 0) + (i.extra_charge || 0),
+          (s: number, i: { total_price: number }) => s + (i.total_price || 0),
           0
         )
         if (Math.abs(serverTotal - order.total_amount) > 1) {

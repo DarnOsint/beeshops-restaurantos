@@ -14,10 +14,11 @@ export function usePushNotifications(staffId: string | undefined): void {
   useEffect(() => {
     if (!staffId || !('serviceWorker' in navigator) || !('PushManager' in window)) return
 
-    async function register() {
+    // Only register if permission already granted — don't auto-request
+    // Permission must be requested from a user gesture (see requestPushPermission)
+    async function registerIfGranted() {
       try {
-        const permission = await Notification.requestPermission()
-        if (permission !== 'granted') return
+        if (Notification.permission !== 'granted') return
 
         const reg = await navigator.serviceWorker.ready
         const existing = await reg.pushManager.getSubscription()
@@ -43,8 +44,42 @@ export function usePushNotifications(staffId: string | undefined): void {
       }
     }
 
-    register()
+    void registerIfGranted()
   }, [staffId])
+}
+
+/**
+ * Call this from a button click handler to request push permission.
+ * Must be triggered by a user gesture — cannot be called automatically.
+ */
+export async function requestPushPermission(staffId: string): Promise<boolean> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false
+  try {
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') return false
+
+    const reg = await navigator.serviceWorker.ready
+    const existing = await reg.pushManager.getSubscription()
+    const sub =
+      existing ??
+      (await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as unknown as BufferSource,
+      }))
+
+    await supabase.from('push_subscriptions').upsert(
+      {
+        staff_id: staffId,
+        subscription: sub.toJSON(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'staff_id,subscription' }
+    )
+    return true
+  } catch (e) {
+    console.error('Push permission failed:', e)
+    return false
+  }
 }
 
 export async function sendPushToStaff(
