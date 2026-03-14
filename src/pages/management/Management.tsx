@@ -31,6 +31,7 @@ import CctvTab from './mgmt/CctvTab'
 import VoidsTab from './mgmt/VoidsTab'
 import SyncTab from './mgmt/SyncTab'
 import SettingsTab from './mgmt/SettingsTab'
+import ActivityLogTab from './mgmt/ActivityLogTab'
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
