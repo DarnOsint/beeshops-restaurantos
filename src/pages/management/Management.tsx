@@ -72,10 +72,13 @@ export default function Management() {
   const { lateOrders, threshold, setThreshold, markDelivered } = useLateOrders()
 
   // Memoized — stable reference, won't cause ActivityLogTab to re-fetch on every render
-  const todayRange = useMemo(() => ({
-    start: new Date(new Date().setHours(0, 0, 0, 0)).toISOString(),
-    end: new Date(new Date().setHours(23, 59, 59, 999)).toISOString(),
-  }), [])
+  const todayRange = useMemo(
+    () => ({
+      start: new Date(new Date().setHours(0, 0, 0, 0)).toISOString(),
+      end: new Date(new Date().setHours(23, 59, 59, 999)).toISOString(),
+    }),
+    []
+  )
   const { status: syncStatus, pendingCount, lastSynced, manualSync } = useSyncStatus()
 
   const [syncQueue, setSyncQueue] = useState<SyncQueueEntry[]>([])
@@ -101,6 +104,7 @@ export default function Management() {
   const [cvData, setCvData] = useState<CvData>({ alerts: [], shelfAlerts: [], occupancy: 0 })
 
   const fetchStats = useCallback(async () => {
+    void supabase.rpc('free_orphaned_tables')
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const [ordersRes, tablesRes, roomsRes, staffRes, revenueRes] = await Promise.all([
@@ -445,9 +449,7 @@ export default function Management() {
             onManualSync={manualSync}
           />
         )}
-        {activeTab === 'activity' && (
-          <ActivityLogTab dateRange={todayRange} />
-        )}
+        {activeTab === 'activity' && <ActivityLogTab dateRange={todayRange} />}
         {activeTab === 'settings' && (
           <SettingsTab threshold={threshold} setThreshold={setThreshold} />
         )}
