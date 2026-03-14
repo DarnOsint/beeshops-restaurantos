@@ -186,7 +186,10 @@ export default function POS() {
       .select('id')
       .in('category_id', categoryIds)
     const zoneIds = (tableData || []).map((t: { id: string }) => t.id)
-    setAssignedTableIds([...new Set([...zoneIds, ...directIds])])
+    const combined = [...new Set([...zoneIds, ...directIds])]
+    // Safety: if zone assignments exist but resolve to no tables, grant full access
+    // This prevents stale/orphaned zone assignments locking waitrons out
+    setAssignedTableIds(combined.length > 0 ? combined : null)
   }
 
   const activeOrderRef = useRef<typeof activeOrder>(null)
