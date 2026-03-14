@@ -75,7 +75,8 @@ export default function TableAssignment({ onClose }: Props) {
   }
 
   const fetchActiveStaff = async () => {
-    const today = new Date().toISOString().split('T')[0]
+    // Use WAT date to match how attendance.date is stored (via todayWAT())
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
     const { data: attendance } = await supabase
       .from('attendance')
       .select('staff_id')
