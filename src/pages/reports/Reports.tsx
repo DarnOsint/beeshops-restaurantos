@@ -946,32 +946,40 @@ export default function Reports() {
             {report.topItems.length > 0 && (
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
                 <h3 className="text-white font-semibold mb-4">Top Selling Items</h3>
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-800">
-                      <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">#</th>
-                      <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">Item</th>
-                      <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">Qty</th>
-                      <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
-                        Revenue
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.topItems.map((item, i) => (
-                      <tr key={item.name} className="border-b border-gray-800 last:border-0">
-                        <td className="px-3 py-2.5 text-gray-500 text-sm">{i + 1}</td>
-                        <td className="px-3 py-2.5 text-white text-sm font-medium">{item.name}</td>
-                        <td className="px-3 py-2.5 text-right text-amber-400 font-bold">
-                          {item.quantity}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-white text-sm">
-                          NGN {item.revenue.toLocaleString()}
-                        </td>
+                <div className="overflow-x-auto -mx-2">
+                  <table className="w-full min-w-[280px]">
+                    <thead>
+                      <tr className="border-b border-gray-800">
+                        <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">#</th>
+                        <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">
+                          Item
+                        </th>
+                        <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
+                          Qty
+                        </th>
+                        <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
+                          Revenue
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {report.topItems.map((item, i) => (
+                        <tr key={item.name} className="border-b border-gray-800 last:border-0">
+                          <td className="px-3 py-2.5 text-gray-500 text-sm">{i + 1}</td>
+                          <td className="px-3 py-2.5 text-white text-sm font-medium">
+                            {item.name}
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-amber-400 font-bold">
+                            {item.quantity}
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-white text-sm">
+                            NGN {item.revenue.toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
@@ -980,69 +988,81 @@ export default function Reports() {
                 <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
                   <Users size={16} className="text-amber-400" /> Staff Performance
                 </h3>
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-800">
-                      <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">Staff</th>
-                      <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
-                        Orders
-                      </th>
-                      <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
-                        Revenue
-                      </th>
-                      <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
-                        Avg/Order
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.staffPerformance.map((s, i) => (
-                      <tr key={s.name} className="border-b border-gray-800 last:border-0">
-                        <td className="px-3 py-2.5 text-white text-sm font-medium">
-                          <span className="text-amber-400 mr-2">#{i + 1}</span>
-                          {s.name}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-gray-400 text-sm">{s.orders}</td>
-                        <td className="px-3 py-2.5 text-right text-white font-bold text-sm">
-                          NGN {s.revenue.toLocaleString()}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-gray-400 text-sm">
-                          NGN {Math.round(s.revenue / s.orders).toLocaleString()}
-                        </td>
+                <div className="overflow-x-auto -mx-2">
+                  <table className="w-full min-w-[320px]">
+                    <thead>
+                      <tr className="border-b border-gray-800">
+                        <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">
+                          Staff
+                        </th>
+                        <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
+                          Ord
+                        </th>
+                        <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
+                          Revenue
+                        </th>
+                        <th className="text-right text-gray-500 text-xs uppercase px-3 py-2 hidden sm:table-cell">
+                          Avg
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {report.staffPerformance.map((s, i) => (
+                        <tr key={s.name} className="border-b border-gray-800 last:border-0">
+                          <td className="px-3 py-2.5 text-white text-sm font-medium max-w-[120px]">
+                            <span className="text-amber-400 mr-1 text-xs">#{i + 1}</span>
+                            <span className="truncate block">{s.name}</span>
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-gray-400 text-sm whitespace-nowrap">
+                            {s.orders}
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-white font-bold text-sm whitespace-nowrap">
+                            ₦{s.revenue.toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-gray-400 text-sm whitespace-nowrap hidden sm:table-cell">
+                            ₦{Math.round(s.revenue / s.orders).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
             {report.tableStats.length > 0 && (
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
                 <h3 className="text-white font-semibold mb-4">Top Tables by Revenue</h3>
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-800">
-                      <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">Table</th>
-                      <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
-                        Orders
-                      </th>
-                      <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
-                        Revenue
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.tableStats.map((t) => (
-                      <tr key={t.table} className="border-b border-gray-800 last:border-0">
-                        <td className="px-3 py-2.5 text-white text-sm">{t.table}</td>
-                        <td className="px-3 py-2.5 text-right text-gray-400 text-sm">{t.orders}</td>
-                        <td className="px-3 py-2.5 text-right text-amber-400 font-bold text-sm">
-                          NGN {t.revenue.toLocaleString()}
-                        </td>
+                <div className="overflow-x-auto -mx-2">
+                  <table className="w-full min-w-[260px]">
+                    <thead>
+                      <tr className="border-b border-gray-800">
+                        <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">
+                          Table
+                        </th>
+                        <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
+                          Ord
+                        </th>
+                        <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
+                          Revenue
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {report.tableStats.map((t) => (
+                        <tr key={t.table} className="border-b border-gray-800 last:border-0">
+                          <td className="px-3 py-2.5 text-white text-sm">{t.table}</td>
+                          <td className="px-3 py-2.5 text-right text-gray-400 text-sm whitespace-nowrap">
+                            {t.orders}
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-amber-400 font-bold text-sm whitespace-nowrap">
+                            ₦{t.revenue.toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
@@ -1086,48 +1106,52 @@ export default function Reports() {
             {report.payouts.length > 0 && (
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
                 <h3 className="text-white font-semibold mb-4">Expenses & Payouts</h3>
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-800">
-                      <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">Date</th>
-                      <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">
-                        Reason
-                      </th>
-                      <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">
-                        Category
-                      </th>
-                      <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
-                        Amount
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.payouts.map((p) => (
-                      <tr key={p.id} className="border-b border-gray-800 last:border-0">
-                        <td className="px-3 py-2.5 text-gray-500 text-xs">
-                          {new Date(p.created_at).toLocaleDateString('en-NG')}
+                <div className="overflow-x-auto -mx-2">
+                  <table className="w-full min-w-[300px]">
+                    <thead>
+                      <tr className="border-b border-gray-800">
+                        <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">
+                          Date
+                        </th>
+                        <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">
+                          Reason
+                        </th>
+                        <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">
+                          Category
+                        </th>
+                        <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
+                          Amount
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {report.payouts.map((p) => (
+                        <tr key={p.id} className="border-b border-gray-800 last:border-0">
+                          <td className="px-3 py-2.5 text-gray-500 text-xs">
+                            {new Date(p.created_at).toLocaleDateString('en-NG')}
+                          </td>
+                          <td className="px-3 py-2.5 text-white text-sm">{p.reason}</td>
+                          <td className="px-3 py-2.5">
+                            <span className="text-xs px-2 py-0.5 rounded-lg bg-red-500/20 text-red-400 capitalize">
+                              {p.category}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5 text-right text-red-400 font-bold text-sm">
+                            NGN {p.amount?.toLocaleString()}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="border-t-2 border-gray-700">
+                        <td colSpan={3} className="px-3 py-2.5 text-white font-bold">
+                          Total Expenses
                         </td>
-                        <td className="px-3 py-2.5 text-white text-sm">{p.reason}</td>
-                        <td className="px-3 py-2.5">
-                          <span className="text-xs px-2 py-0.5 rounded-lg bg-red-500/20 text-red-400 capitalize">
-                            {p.category}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-red-400 font-bold text-sm">
-                          NGN {p.amount?.toLocaleString()}
+                        <td className="px-3 py-2.5 text-right text-red-400 font-bold">
+                          NGN {report.totalExpenses.toLocaleString()}
                         </td>
                       </tr>
-                    ))}
-                    <tr className="border-t-2 border-gray-700">
-                      <td colSpan={3} className="px-3 py-2.5 text-white font-bold">
-                        Total Expenses
-                      </td>
-                      <td className="px-3 py-2.5 text-right text-red-400 font-bold">
-                        NGN {report.totalExpenses.toLocaleString()}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
