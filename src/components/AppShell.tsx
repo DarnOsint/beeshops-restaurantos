@@ -324,7 +324,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 )
               })}
             </nav>
-            <div className="px-3 pb-6">
+            <div className="px-3 pb-6 space-y-2">
+              {notifPermission !== 'granted' && (
+                <button
+                  onClick={async () => {
+                    setDrawerOpen(false)
+                    await handleEnableNotifications()
+                  }}
+                  className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 active:bg-amber-500/20"
+                >
+                  <BellOff size={20} className="flex-shrink-0" />
+                  <span className="font-medium">Enable notifications</span>
+                </button>
+              )}
+              {notifPermission === 'granted' && (
+                <div className="flex items-center gap-4 px-4 py-3.5 rounded-xl bg-green-500/10 border border-green-500/20">
+                  <Bell size={20} className="text-green-400 flex-shrink-0" />
+                  <span className="text-green-400 font-medium text-sm">Notifications enabled</span>
+                </div>
+              )}
               <button
                 onClick={signOut}
                 className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-red-400 active:bg-red-950/30"
