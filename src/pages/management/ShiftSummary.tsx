@@ -119,6 +119,13 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
       (clockOutTime.getTime() - new Date(shift.clock_in).getTime()) / 60000
     )
 
+    // Use a wide window: from midnight before clock_in to midnight after clock_out
+    // This avoids timezone edge cases where closed_at might fall just outside the shift window
+    const dayStart = new Date(shift.clock_in)
+    dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(clockOutTime)
+    dayEnd.setHours(23, 59, 59, 999)
+
     const [ordersRes, voidsRes, callsRes] = await Promise.all([
       supabase
         .from('orders')
@@ -127,8 +134,8 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
         )
         .eq('staff_id', shift.staff_id)
         .eq('status', 'paid')
-        .gte('closed_at', shift.clock_in)
-        .lte('closed_at', clockOutTime.toISOString())
+        .gte('closed_at', dayStart.toISOString())
+        .lte('closed_at', dayEnd.toISOString())
         .order('closed_at', { ascending: true }),
       supabase
         .from('void_log')
