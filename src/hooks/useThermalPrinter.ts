@@ -47,10 +47,13 @@ export interface ReceiptData {
   total: number
 }
 
-function buildReceipt(data: ReceiptData): Uint8Array {
+export function buildReceipt(data: ReceiptData): Uint8Array {
   const { order, items, table, staffName, orderRef, subtotal, vatAmount, total } = data
   const bytes: number[] = []
-  const push = (...chunks: number[][]) => chunks.forEach((c) => bytes.push(...c))
+  const push = (...chunks: (number | number[] | readonly number[])[]) =>
+    chunks.forEach((c) =>
+      Array.isArray(c) ? bytes.push(...(c as number[])) : bytes.push(c as number)
+    )
 
   const fmtDate = (d: string) =>
     new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -61,36 +64,36 @@ function buildReceipt(data: ReceiptData): Uint8Array {
   push(cmd.alignCenter)
   push(cmd.doubleSize, ...text("BEESHOP'S PLACE\n"), cmd.normalSize)
   push(cmd.bold, ...text('Lounge & Restaurant\n'), cmd.boldOff)
-  push(...text('--------------------------------\n'))
+  push(text('--------------------------------\n'))
   push(cmd.alignLeft)
-  push(...row('Ref:', orderRef))
-  push(...row('Date:', fmtDate(order.created_at)))
-  push(...row('Time:', fmtTime(order.created_at)))
-  push(...row('Table:', table?.name ?? (order.order_type === 'takeaway' ? 'Takeaway' : 'Counter')))
-  push(...row('Served by:', staffName ?? ''))
-  push(...row('Payment:', (order.payment_method ?? '').toUpperCase()))
-  push(...text('--------------------------------\n'))
+  push(row('Ref:', orderRef))
+  push(row('Date:', fmtDate(order.created_at)))
+  push(row('Time:', fmtTime(order.created_at)))
+  push(row('Table:', table?.name ?? (order.order_type === 'takeaway' ? 'Takeaway' : 'Counter')))
+  push(row('Served by:', staffName ?? ''))
+  push(row('Payment:', (order.payment_method ?? '').toUpperCase()))
+  push(text('--------------------------------\n'))
   push(cmd.bold, ...text('ITEM             QTY    TOTAL\n'), cmd.boldOff)
-  push(...text('--------------------------------\n'))
+  push(text('--------------------------------\n'))
 
   items.forEach((item) => {
     const name = (item.menu_items?.name ?? item.name ?? '').substring(0, 16).padEnd(16)
     const qty = String(item.quantity).padStart(3)
     const tot = ('\u20A6' + (item.total_price ?? 0).toLocaleString()).padStart(10)
-    push(...text(`${name} ${qty} ${tot}\n`))
-    if (item.modifier_notes) push(...text(`  > ${item.modifier_notes.substring(0, 28)}\n`))
+    push(text(`${name} ${qty} ${tot}\n`))
+    if (item.modifier_notes) push(text(`  > ${item.modifier_notes.substring(0, 28)}\n`))
   })
 
-  push(...text('================================\n'))
-  push(...row('Subtotal:', '\u20A6' + subtotal.toLocaleString()))
+  push(text('================================\n'))
+  push(row('Subtotal:', '\u20A6' + subtotal.toLocaleString()))
   push(
-    ...row(
+    row(
       'VAT (7.5%):',
       '\u20A6' +
         vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     )
   )
-  push(...text('--------------------------------\n'))
+  push(text('--------------------------------\n'))
   push(
     cmd.bold,
     cmd.doubleHeight,
@@ -102,14 +105,14 @@ function buildReceipt(data: ReceiptData): Uint8Array {
     cmd.normalSize,
     cmd.boldOff
   )
-  push(...text('VAT Reg: [Your TIN]\n'))
-  push(...text('--------------------------------\n'))
+  push(text('VAT Reg: [Your TIN]\n'))
+  push(text('--------------------------------\n'))
   push(cmd.alignCenter)
-  push(...text('Thank you for visiting!\n'))
-  push(...text('Please come again\n\n'))
-  push(...text('Powered by RestaurantOS\n'))
-  push(...cmd.feed(4))
-  push(...cmd.cut)
+  push(text('Thank you for visiting!\n'))
+  push(text('Please come again\n\n'))
+  push(text('Powered by RestaurantOS\n'))
+  push(cmd.feed(4))
+  push(cmd.cut)
 
   return new Uint8Array(bytes)
 }
