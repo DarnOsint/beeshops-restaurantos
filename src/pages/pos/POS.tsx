@@ -378,13 +378,16 @@ export default function POS() {
       const orderId = crypto.randomUUID()
       // Use direct Supabase call — offlineInsert's .single() can fail silently
       // leaving the order in the sync queue instead of the DB
+      const hireFeeAmt =
+        (table as unknown as { table_categories?: { hire_fee?: number | null } }).table_categories
+          ?.hire_fee || 0
       const { error: orderError } = await supabase.from('orders').insert({
         id: orderId,
         table_id: table.id,
         staff_id: profile!.id,
         order_type: 'table',
         status: 'open',
-        total_amount: total,
+        total_amount: total + hireFeeAmt,
         notes,
         created_at: new Date().toISOString(),
       })
@@ -395,19 +398,45 @@ export default function POS() {
       }
       const newOrder = { id: orderId } as Order
 
-      const orderItemRows = items.map((item) => ({
-        id: crypto.randomUUID(),
-        order_id: (newOrder as Order).id,
-        menu_item_id: item.id,
-        quantity: item.quantity,
-        unit_price: item.price,
-        total_price: item.total,
-        status: 'pending',
-        destination: item.menu_categories?.destination || 'bar',
-        modifier_notes: item.modifier_notes || null,
-        extra_charge: item.extra_charge || 0,
-        created_at: new Date().toISOString(),
-      }))
+      // Auto-add hire fee as first line item if this zone charges one
+      const hireFee = (table as unknown as { table_categories?: { hire_fee?: number | null } })
+        .table_categories?.hire_fee
+      const baseItems =
+        hireFee && hireFee > 0
+          ? [
+              {
+                id: crypto.randomUUID(),
+                order_id: orderId,
+                menu_item_id: null,
+                quantity: 1,
+                unit_price: hireFee,
+                total_price: hireFee,
+                status: 'delivered', // hire fee is charged immediately, not a kitchen item
+                destination: 'bar',
+                modifier_notes: `Zone hire fee — ${table.table_categories?.name || 'The Nook'}`,
+                extra_charge: 0,
+                created_at: new Date().toISOString(),
+                is_hire_fee: true,
+              },
+            ]
+          : []
+
+      const orderItemRows = [
+        ...baseItems,
+        ...items.map((item) => ({
+          id: crypto.randomUUID(),
+          order_id: (newOrder as Order).id,
+          menu_item_id: item.id,
+          quantity: item.quantity,
+          unit_price: item.price,
+          total_price: item.total,
+          status: 'pending',
+          destination: item.menu_categories?.destination || 'bar',
+          modifier_notes: item.modifier_notes || null,
+          extra_charge: item.extra_charge || 0,
+          created_at: new Date().toISOString(),
+        })),
+      ]
       for (const item of orderItemRows) {
         const { error } = await supabase.from('order_items').insert(item)
         if (error) {

@@ -25,6 +25,7 @@ import TrendsTab from './TrendsTab'
 import VoidsTab from './VoidsTab'
 import LedgerTab from './LedgerTab'
 import AuditTab from './AuditTab'
+import POSReconciliationTab from './POSReconciliationTab'
 
 import type {
   AccountingSummary,
@@ -53,6 +54,7 @@ const TABS = [
   { id: 'voids', label: 'Voids', icon: Trash2 },
   { id: 'ledger', label: 'Ledger', icon: BookOpen },
   { id: 'audit', label: 'Audit', icon: Shield },
+  { id: 'pos', label: 'POS Recon', icon: Monitor },
 ] as const
 
 export default function Accounting() {
@@ -460,6 +462,13 @@ export default function Accounting() {
           <LedgerTab ledgerEntries={ledgerEntries} dateRange={dateRange} />
         )}
         {activeTab === 'audit' && <AuditTab auditLog={auditLog} dateRange={dateRange} />}
+        {activeTab === 'pos' && (
+          <POSReconciliationTab
+            timesheet={timesheet}
+            orders={orders}
+            dateLabel={dateRange === 'Custom' ? `${customStart} – ${customEnd}` : dateRange}
+          />
+        )}
       </div>
     </div>
   )

@@ -59,12 +59,14 @@ export interface TillSession {
 
 export interface TimesheetEntry {
   id: string
+  staff_id: string
   staff_name: string
   role: string
   date: string
   clock_in: string
   clock_out: string | null
   duration_minutes: number | null
+  pos_machine?: string | null
 }
 
 export interface AuditEntry {
