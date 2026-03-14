@@ -195,6 +195,16 @@ export default function POS() {
 
     const combined = [...new Set([...zoneTableIds, ...directIds])]
     // If resolution yields nothing (tables not loaded yet), grant full access
+    console.log(
+      '[ASSIGN] tables.length:',
+      tables.length,
+      'categoryIds:',
+      [...categoryIds],
+      'zoneTableIds:',
+      zoneTableIds.length,
+      'combined:',
+      combined.length
+    )
     setAssignedTableIds(combined.length > 0 ? combined : null)
   }
 
