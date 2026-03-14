@@ -502,7 +502,7 @@ export default function MonthEnd() {
                     </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-4 gap-2 mt-3 pt-3 border-t border-gray-700">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 pt-3 border-t border-gray-700">
                   {[
                     { label: 'Cash', value: revenuePreview.cash },
                     { label: 'Card', value: revenuePreview.card },
@@ -525,7 +525,7 @@ export default function MonthEnd() {
                   <p className="text-amber-400 text-xs uppercase tracking-wide mb-3 font-medium">
                     Debtors
                   </p>
-                  <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                     {[
                       { label: 'Closing Balance', value: debtorPreview.closingBalance },
                       { label: 'New Credit', value: debtorPreview.newCredit },
@@ -654,7 +654,7 @@ export default function MonthEnd() {
                           </div>
                         ))}
                       </div>
-                      <div className="grid grid-cols-4 gap-2 mt-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
                         {[
                           { label: 'Cash', value: period.cash_revenue },
                           { label: 'Card', value: period.card_revenue },
@@ -674,7 +674,7 @@ export default function MonthEnd() {
                       <p className="text-gray-500 text-xs uppercase tracking-wide mb-2 flex items-center gap-1.5">
                         <Users size={11} /> Debtors
                       </p>
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {[
                           { label: 'Closing Balance', value: period.closing_debtors },
                           { label: 'New Credit', value: period.new_credit_issued },

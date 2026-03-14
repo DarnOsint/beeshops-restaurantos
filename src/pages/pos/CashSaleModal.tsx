@@ -253,7 +253,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
           {paymentMethod === 'cash' && change > 0 && (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
               <p className="text-amber-400 text-xs mb-1">Change to return</p>
-              <p className="text-white text-3xl font-bold">₦{change.toLocaleString()}</p>
+              <p className="text-white text-2xl font-bold break-all">₦{change.toLocaleString()}</p>
             </div>
           )}
           <div className="flex gap-2">

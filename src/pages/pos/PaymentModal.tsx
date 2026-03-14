@@ -554,7 +554,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           {paymentMethod === 'cash' && change > 0 && (
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mt-4">
               <p className="text-amber-400 text-xs mb-1">Change to return</p>
-              <p className="text-white text-3xl font-bold">₦{change.toLocaleString()}</p>
+              <p className="text-white text-xl font-bold break-all break-all">
+                ₦{change.toLocaleString()}
+              </p>
             </div>
           )}
           <div className="flex gap-3 mt-6">
@@ -616,7 +618,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
             </div>
             <div className="border-t border-gray-700 pt-3 flex justify-between items-center">
               <span className="text-white font-bold">Total</span>
-              <span className="text-amber-400 font-bold text-2xl">₦{total.toLocaleString()}</span>
+              <span className="text-amber-400 font-bold text-xl break-all">
+                ₦{total.toLocaleString()}
+              </span>
             </div>
           </div>
 
@@ -671,13 +675,15 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
               {cashTendered && parseFloat(cashTendered) >= total && (
                 <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3">
                   <p className="text-green-400 text-xs">Change to return</p>
-                  <p className="text-white text-2xl font-bold">₦{change.toLocaleString()}</p>
+                  <p className="text-white text-xl font-bold break-all">
+                    ₦{change.toLocaleString()}
+                  </p>
                 </div>
               )}
               {cashTendered && parseFloat(cashTendered) < total && (
                 <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
                   <p className="text-red-400 text-xs">Short by</p>
-                  <p className="text-white text-2xl font-bold">
+                  <p className="text-white text-xl font-bold break-all">
                     ₦{(total - parseFloat(cashTendered)).toLocaleString()}
                   </p>
                 </div>

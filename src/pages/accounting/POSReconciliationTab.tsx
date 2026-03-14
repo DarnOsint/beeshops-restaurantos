@@ -153,7 +153,7 @@ export default function POSReconciliationTab({ timesheet, orders, dateLabel }: P
       {/* Header summary */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
         <p className="text-gray-400 text-xs uppercase tracking-wide mb-3">Period: {dateLabel}</p>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <div>
             <p className="text-gray-500 text-xs">Total Revenue</p>
             <p className="text-amber-400 font-bold text-lg">{fmt(grandTotal)}</p>
@@ -208,7 +208,7 @@ export default function POSReconciliationTab({ timesheet, orders, dateLabel }: P
           {expanded[m.machine] && (
             <div className="border-t border-gray-800">
               {/* Payment breakdown */}
-              <div className="grid grid-cols-4 gap-0 border-b border-gray-800">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 border-b border-gray-800">
                 {[
                   { label: 'Cash', value: m.cashSales, color: 'text-green-400' },
                   { label: 'Card/POS', value: m.cardSales, color: 'text-blue-400' },

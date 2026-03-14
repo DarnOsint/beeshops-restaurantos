@@ -329,7 +329,7 @@ export default function Debtors({ onBack, embedded = false }: Props) {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-3 p-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4">
         {(['outstanding', 'partial', 'paid'] as const).map((s) => (
           <div key={s} className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
             <p className={`text-2xl font-bold ${statusConfig[s].color}`}>

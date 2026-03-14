@@ -462,7 +462,7 @@ export default function ApartmentDashboard() {
       )}
 
       {/* KPI strip */}
-      <div className="grid grid-cols-4 gap-px bg-gray-800 mx-4 mt-3 rounded-2xl overflow-hidden">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-gray-800 mx-4 mt-3 rounded-2xl overflow-hidden">
         {[
           { label: 'Available', value: available, color: 'text-green-400' },
           { label: 'Occupied', value: `${occupied}/${rooms.length}`, color: 'text-amber-400' },

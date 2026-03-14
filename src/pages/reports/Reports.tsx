@@ -1153,7 +1153,7 @@ export default function Reports() {
 
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
               <h3 className="text-white font-semibold mb-4">Till Reconciliation</h3>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div className="bg-gray-800 rounded-xl p-4">
                   <p className="text-gray-400 text-xs">Sessions</p>
                   <p className="text-white font-bold text-2xl">{report.tillSessions.length}</p>

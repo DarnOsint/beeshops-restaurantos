@@ -58,7 +58,9 @@ export default function PayoutsTab({ payouts, totalPayouts, onRefresh }: Props) 
       <div className="flex items-center justify-between">
         <div>
           <p className="text-gray-400 text-sm">Total expenses this period</p>
-          <p className="text-red-400 font-bold text-2xl">₦{totalPayouts.toLocaleString()}</p>
+          <p className="text-red-400 font-bold text-xl break-all">
+            ₦{totalPayouts.toLocaleString()}
+          </p>
         </div>
         <button
           onClick={() => setShowModal(true)}
@@ -136,7 +138,7 @@ export default function PayoutsTab({ payouts, totalPayouts, onRefresh }: Props) 
                 <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
                   Category
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   {CATEGORIES.map((cat) => (
                     <button
                       key={cat}

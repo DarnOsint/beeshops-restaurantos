@@ -227,7 +227,9 @@ export default function CheckInModal({
                 {form.nights} night{parseInt(form.nights) > 1 ? 's' : ''} × ₦
                 {room.rate_per_night?.toLocaleString()}
               </p>
-              <p className="text-white font-bold text-2xl mt-0.5">₦{total.toLocaleString()}</p>
+              <p className="text-white font-bold text-xl break-all mt-0.5">
+                ₦{total.toLocaleString()}
+              </p>
             </div>
             <CheckCircle size={28} className="text-amber-500" />
           </div>

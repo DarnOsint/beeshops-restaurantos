@@ -31,7 +31,7 @@ export default function TillTab({ tillSessions }: Props) {
                 {session.status}
               </span>
             </div>
-            <div className="grid grid-cols-3 gap-3 mt-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
               {[
                 { label: 'Opening Float', value: session.opening_float },
                 { label: 'Closing Float', value: session.closing_float },

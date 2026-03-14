@@ -316,7 +316,7 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
                   )}
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {[
                   { label: 'Clock In', value: fmtTime(data.clockIn) },
                   { label: 'Clock Out', value: fmtTime(data.clockOut) },
@@ -336,7 +336,9 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-amber-500 rounded-2xl p-4">
-                  <p className="text-black font-black text-2xl">{fmt(data.totalSales)}</p>
+                  <p className="text-black font-black text-xl leading-tight break-all">
+                    {fmt(data.totalSales)}
+                  </p>
                   <p className="text-black/70 text-xs font-semibold mt-1">Total Sales</p>
                 </div>
                 <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
@@ -344,13 +346,17 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
                   <p className="text-gray-500 text-xs font-semibold mt-1">Orders Served</p>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3 mt-3">
+              <div className="grid grid-cols-3 gap-2 mt-3">
                 <div className="bg-gray-900 border border-gray-800 rounded-2xl p-3 text-center">
-                  <p className="text-green-400 font-bold text-lg">{fmt(data.cashSales)}</p>
+                  <p className="text-green-400 font-bold text-base break-all">
+                    {fmt(data.cashSales)}
+                  </p>
                   <p className="text-gray-500 text-xs mt-0.5">Cash</p>
                 </div>
                 <div className="bg-gray-900 border border-gray-800 rounded-2xl p-3 text-center">
-                  <p className="text-blue-400 font-bold text-lg">{fmt(data.creditSales)}</p>
+                  <p className="text-blue-400 font-bold text-base break-all">
+                    {fmt(data.creditSales)}
+                  </p>
                   <p className="text-gray-500 text-xs mt-0.5">Credit</p>
                 </div>
                 <div className="bg-gray-900 border border-gray-800 rounded-2xl p-3 text-center">
@@ -423,7 +429,7 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
                   Items Sold
                 </p>
                 <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-                  <div className="grid grid-cols-3 bg-gray-800 px-4 py-2">
+                  <div className="grid grid-cols-3 bg-gray-800 px-3 py-2">
                     <p className="text-gray-400 text-xs font-semibold">Item</p>
                     <p className="text-gray-400 text-xs font-semibold text-center">Qty</p>
                     <p className="text-gray-400 text-xs font-semibold text-right">Amount</p>
@@ -431,9 +437,9 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
                   {data.topItems.map(([name, stats], i) => (
                     <div
                       key={name}
-                      className={`grid grid-cols-3 px-4 py-2.5 ${i !== 0 ? 'border-t border-gray-800' : ''}`}
+                      className={`grid grid-cols-3 px-3 py-2.5 ${i !== 0 ? 'border-t border-gray-800' : ''}`}
                     >
-                      <p className="text-white text-xs truncate">{name}</p>
+                      <p className="text-white text-xs truncate max-w-[120px]">{name}</p>
                       <p className="text-gray-300 text-xs text-center">{stats.qty}</p>
                       <p className="text-amber-400 text-xs text-right font-medium">
                         {fmt(stats.total)}

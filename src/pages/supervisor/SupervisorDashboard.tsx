@@ -276,7 +276,7 @@ function SupervisorDashboardInner() {
       </header>
 
       {/* KPI strip */}
-      <div className="grid grid-cols-4 gap-px bg-gray-800 border-b border-gray-800">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-gray-800 border-b border-gray-800">
         {[
           { label: 'Open', value: orders.length, color: 'text-white' },
           {
