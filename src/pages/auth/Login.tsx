@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { verifyPin, hashPin, isPinHashed } from '../../lib/pinHash'
 import { Eye, EyeOff, Delete } from 'lucide-react'
@@ -103,7 +103,6 @@ export default function Login() {
     const s = getRateState('rl_pin')
     return isLockedOut(s, PIN_LOCK_MS) ? getRemaining(s, PIN_LOCK_MS) : 0
   })
-  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const sessionExpired = searchParams.get('reason') === 'timeout'
   const emailLocked = emailRem > 0
@@ -152,7 +151,9 @@ export default function Login() {
         entity_name: email,
         new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
       })
-      navigate('/dashboard')
+      // Don't navigate manually — let onAuthStateChange in AuthContext handle it.
+      // Calling navigate() here races with the profile fetch and causes the
+      // partial-login flicker. setLoading stays true until RoleRoute redirects.
     }
   }
 
