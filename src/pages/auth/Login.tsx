@@ -168,38 +168,52 @@ export default function Login() {
     }
     setLoading(true)
     setError(null)
-    // SECURITY: fetch only id + pin for comparison — no names, roles, or emails.
-    // Full profile is fetched only after a match is confirmed.
-    // This prevents all staff data from being exposed to the browser.
-    const { data: pinRows, error: err } = await supabase
-      .from('profiles')
-      .select('id, pin')
-      .eq('is_active', true)
-      .not('pin', 'is', null)
 
-    let matchedId: string | null = null
-    if (!err && pinRows) {
-      for (const row of pinRows) {
-        if (row.pin && (await verifyPin(entered, row.pin))) {
-          matchedId = row.id
-          break
+    // Step 1: Try server-side RPC for plain-text PINs (instant — no client loop)
+    let data: Record<string, unknown> | null = null
+    const { data: rpcResult } = await supabase.rpc('verify_pin_and_get_profile', {
+      entered_pin: entered,
+    })
+    if (rpcResult) {
+      data = rpcResult as Record<string, unknown>
+    }
+
+    // Step 2: If no match, check PBKDF2-hashed PINs client-side
+    // (only staff who have already had their PIN hashed will reach this path)
+    if (!data) {
+      const { data: hashedRows } = await supabase
+        .from('profiles')
+        .select('id, pin')
+        .eq('is_active', true)
+        .like('pin', 'pbkdf2:%')
+
+      if (hashedRows) {
+        for (const row of hashedRows) {
+          if (row.pin && (await verifyPin(entered, row.pin))) {
+            // Fetch full profile after confirmed match
+            const { data: fullProfile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', row.id)
+              .eq('is_active', true)
+              .single()
+            data = fullProfile as Record<string, unknown>
+            break
+          }
         }
       }
     }
 
-    // Fetch full profile only after confirmed match
-    let data = null
-    if (matchedId) {
-      const { data: fullProfile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', matchedId)
-        .eq('is_active', true)
-        .single()
-      data = fullProfile
-    }
+    // Cast to typed profile after verification
+    const profile = data as {
+      id: string
+      full_name: string
+      role: string
+      email?: string
+      pin?: string
+    } | null
 
-    if (!data) {
+    if (!profile) {
       const ns = recordAttempt('rl_pin', PIN_MAX)
       if (ns.attempts >= PIN_MAX) {
         const rem = getRemaining(ns, PIN_LOCK_MS)
@@ -216,28 +230,28 @@ export default function Login() {
     resetAttempts('rl_pin')
 
     // Auto-upgrade plain-text PIN to PBKDF2 hash on successful login
-    if (data.pin && !isPinHashed(data.pin)) {
+    if (profile.pin && !isPinHashed(profile.pin)) {
       void hashPin(entered).then((hashed) => {
-        supabase.from('profiles').update({ pin: hashed }).eq('id', data.id)
+        supabase.from('profiles').update({ pin: hashed }).eq('id', profile.id)
       })
     }
 
     void supabase.from('audit_log').insert({
       action: 'LOGIN_PIN',
       entity: 'auth',
-      entity_name: data.full_name,
-      performed_by: data.id,
-      performed_by_name: data.full_name,
-      performed_by_role: data.role,
+      entity_name: profile.full_name,
+      performed_by: profile.id,
+      performed_by_name: profile.full_name,
+      performed_by_role: profile.role,
       new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
     })
     localStorage.setItem(
       'pin_session',
       JSON.stringify({
-        id: data.id,
-        full_name: data.full_name,
-        role: data.role,
-        email: data.email,
+        id: profile.id,
+        full_name: profile.full_name,
+        role: profile.role,
+        email: profile.email,
         // PIN intentionally excluded from localStorage for security
         logged_in_at: new Date().toISOString(),
       })
