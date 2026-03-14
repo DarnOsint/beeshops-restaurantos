@@ -41,14 +41,15 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
     0
   )
   const vatRate = 0.075
-  // Use the order's actual charged total — no VAT displayed on receipt
+  const vatAmount = subtotal * vatRate
+  // Total is order.total_amount (what was actually charged)
   const total = (order as unknown as { total_amount?: number }).total_amount || subtotal
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`${window.location.origin}/receipt/${order.id}`)}&color=000000&bgcolor=ffffff`
 
   const handleThermalPrint = async () => {
     setPrinting(true)
     await printReceipt(
-      { order, items, table, staffName, orderRef, subtotal, vatAmount: 0, total } as Parameters<
+      { order, items, table, staffName, orderRef, subtotal, vatAmount, total } as Parameters<
         typeof printReceipt
       >[0],
       () => handlePrint('customer')
@@ -235,7 +236,7 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
                   </div>
                 ))}
                 <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-                {[['Subtotal', `₦${subtotal.toLocaleString()}`]].map(([l, v]) => (
+                {[['Subtotal (VAT incl.)', `₦${subtotal.toLocaleString()}`]].map(([l, v]) => (
                   <div
                     key={l}
                     style={{
@@ -387,7 +388,7 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
                   </div>
                 ))}
                 <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-                {[['Subtotal', `₦${subtotal.toLocaleString()}`]].map(([l, v]) => (
+                {[['Subtotal (VAT incl.)', `₦${subtotal.toLocaleString()}`]].map(([l, v]) => (
                   <div
                     key={l}
                     style={{
