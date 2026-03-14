@@ -141,10 +141,10 @@ export default function POS() {
   }, [])
 
   useEffect(() => {
-    if (!profile) return
+    if (!profile || tables.length === 0) return
     fetchAssignedTables(profile.role, profile.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.id])
+  }, [profile?.id, tables.length])
 
   const fetchAssignedTables = async (role: string, staffId: string) => {
     if (['owner', 'manager', 'accountant'].includes(role)) {
@@ -162,34 +162,39 @@ export default function POS() {
       .limit(1)
     setIsClockedIn(attendance !== null && attendance.length > 0)
 
-    const { data: zoneData, error: zoneErr } = await supabase
-      .from('zone_assignments')
-      .select('category_id')
-      .eq('staff_id', staffId)
-      .eq('is_active', true)
-    const { data: directTables } = await supabase
-      .from('tables')
-      .select('id')
-      .eq('assigned_staff', staffId)
-    const directIds = (directTables || []).map((t: { id: string }) => t.id)
+    const [zoneRes, directRes] = await Promise.all([
+      supabase
+        .from('zone_assignments')
+        .select('category_id')
+        .eq('staff_id', staffId)
+        .eq('is_active', true),
+      supabase.from('tables').select('id').eq('assigned_staff', staffId),
+    ])
 
-    console.log('[POS] zoneData:', zoneData, 'err:', zoneErr)
+    const zoneData = zoneRes.data
+    const directIds = (directRes.data || []).map((t: { id: string }) => t.id)
 
-    if (!zoneData || zoneData.length === 0) {
-      setAssignedTableIds(directIds.length > 0 ? directIds : null)
+    // No assignments at all — full access
+    if ((!zoneData || zoneData.length === 0) && directIds.length === 0) {
+      setAssignedTableIds(null)
       return
     }
 
-    const categoryIds = zoneData.map((z: { category_id: string }) => z.category_id)
-    console.log('[POS] categoryIds:', categoryIds)
-    const { data: tableData, error: tableErr } = await supabase
-      .from('tables')
-      .select('id')
-      .in('category_id', categoryIds)
-    console.log('[POS] tableData:', tableData, 'err:', tableErr)
-    const zoneIds = (tableData || []).map((t: { id: string }) => t.id)
-    const combined = [...new Set([...zoneIds, ...directIds])]
-    console.log('[POS] combined assignedTableIds:', combined.length)
+    // Only direct table assignments
+    if (!zoneData || zoneData.length === 0) {
+      setAssignedTableIds(directIds)
+      return
+    }
+
+    // Resolve zone category IDs to table IDs using the already-loaded tables state
+    // This avoids a second DB round-trip and the timing/RLS issues it can cause
+    const categoryIds = new Set(zoneData.map((z: { category_id: string }) => z.category_id))
+    const zoneTableIds = tables
+      .filter((t) => t.category_id && categoryIds.has(t.category_id))
+      .map((t) => t.id)
+
+    const combined = [...new Set([...zoneTableIds, ...directIds])]
+    // If resolution yields nothing (tables not loaded yet), grant full access
     setAssignedTableIds(combined.length > 0 ? combined : null)
   }
 
