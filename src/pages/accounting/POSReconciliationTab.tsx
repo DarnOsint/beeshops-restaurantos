@@ -1,7 +1,7 @@
 import { Monitor, CheckCircle, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 import { useState } from 'react'
 import type { TimesheetEntry } from './types'
-import type { Order } from './types'
+import type { Order } from '../../types'
 
 interface Props {
   timesheet: TimesheetEntry[]

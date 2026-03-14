@@ -99,3 +99,16 @@ export interface PayoutForm {
   category: string
   paid_to: string
 }
+
+export interface Order {
+  id: string
+  status: string
+  total_amount: number
+  payment_method: string
+  order_type: string
+  created_at: string
+  closed_at?: string | null
+  staff_id?: string
+  profiles?: { full_name: string } | null
+  tables?: { name: string } | null
+}

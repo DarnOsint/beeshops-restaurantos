@@ -52,7 +52,18 @@ interface ShiftStats {
   recentOrders: ShiftOrder[]
 }
 
-interface HistoryOrder extends Order {
+interface HistoryOrder {
+  id: string
+  total_amount: number
+  payment_method?: string | null
+  status: string
+  order_type: string
+  created_at: string
+  closed_at?: string | null
+  customer_name?: string | null
+  staff_id?: string | null
+  table_id?: string | null
+  notes?: string | null
   tables?: { name: string } | null
   order_items?: (OrderItem & { menu_items?: { name: string } | null })[]
 }
@@ -222,7 +233,7 @@ export default function POS() {
         .gte('closed_at', new Date(today).toISOString()),
     ])
     const attendance = attendanceRes.data?.[0] as { clock_in: string } | undefined
-    const orders = (ordersRes.data || []) as ShiftOrder[]
+    const orders = (ordersRes.data || []) as unknown as ShiftOrder[]
     const totalSales = orders.reduce((s, o) => s + (o.total_amount || 0), 0)
     const totalItems = orders.reduce(
       (s, o) => s + o.order_items.reduce((ss, i) => ss + (i.quantity || 0), 0),
@@ -890,7 +901,7 @@ export default function POS() {
 
       {reprintOrder && (
         <ReceiptModal
-          order={reprintOrder}
+          order={reprintOrder as unknown as import('../../types').Order}
           table={
             reprintOrder.tables
               ? (reprintOrder.tables as unknown as import('../../types').Table)

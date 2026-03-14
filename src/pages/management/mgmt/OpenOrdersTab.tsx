@@ -3,7 +3,24 @@ import { ShoppingBag, XCircle } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 
 export default function OpenOrdersTab() {
-  const [orders, setOrders] = useState<Record<string, unknown>[]>([])
+  const [orders, setOrders] = useState<
+    Array<{
+      id: string
+      table_id?: string
+      total_amount?: number
+      created_at: string
+      order_type?: string
+      tables?: { name: string } | null
+      profiles?: { full_name: string } | null
+      order_items?: Array<{
+        id: string
+        quantity: number
+        total_price: number
+        status: string
+        menu_items?: { name: string } | null
+      }>
+    }>
+  >([])
   const [loading, setLoading] = useState(true)
 
   const fetchOrders = useCallback(async () => {
@@ -85,11 +102,10 @@ export default function OpenOrdersTab() {
               </div>
             </div>
             <div className="space-y-1">
-              {order.order_items?.map((item: Record<string, unknown>) => (
-                <div key={item.id} className="flex justify-between text-sm">
+              {order.order_items?.map((item) => (
+                <div key={String(item.id)} className="flex justify-between text-sm">
                   <span className="text-gray-300">
-                    {item.quantity as number}x{' '}
-                    {(item.menu_items as Record<string, unknown>)?.name as string}
+                    {item.quantity}x {item.menu_items?.name}
                   </span>
                   <span className="text-gray-400">
                     ₦{(item.total_price as number)?.toLocaleString()}

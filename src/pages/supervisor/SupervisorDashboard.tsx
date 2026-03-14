@@ -155,7 +155,7 @@ function SupervisorDashboardInner() {
         .order('created_at', { ascending: false })
         .limit(30),
     ])
-    setOrders((oR.data || []) as OpenOrder[])
+    setOrders((oR.data || []) as unknown as OpenOrder[])
     setShifts((sR.data || []) as ActiveShift[])
     setCalls((cR.data || []) as WaiterCall[])
     setVoids((vR.data || []) as VoidEntry[])

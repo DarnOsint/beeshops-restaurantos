@@ -13,7 +13,14 @@ export type Role =
 
 export type OrderStatus = 'open' | 'paid' | 'voided' | 'pending'
 export type OrderType = 'table' | 'cash_sale' | 'takeaway'
-export type PaymentMethod = 'cash' | 'bank_pos' | 'bank_transfer' | 'credit'
+export type PaymentMethod =
+  | 'cash'
+  | 'bank_pos'
+  | 'bank_transfer'
+  | 'credit'
+  | 'card'
+  | 'transfer'
+  | 'split'
 export type ItemDestination = 'kitchen' | 'bar' | 'griller'
 export type ItemStatus = 'pending' | 'preparing' | 'ready' | 'delivered'
 export type TableStatus = 'available' | 'occupied' | 'reserved'
@@ -71,12 +78,15 @@ export interface OrderItem {
   quantity: number
   unit_price: number
   total_price: number
-  status: ItemStatus
-  destination: ItemDestination
+  status?: ItemStatus
+  destination?: ItemDestination
   modifier_notes?: string | null
   extra_charge?: number
   created_at: string
-  menu_items?: Pick<MenuItem, 'name' | 'price'> & { menu_categories?: MenuCategory }
+  menu_items?:
+    | (Pick<MenuItem, 'name' | 'price'> & { menu_categories?: MenuCategory })
+    | { name: string; price?: number; menu_categories?: MenuCategory }
+    | null
 }
 
 export interface Order {
@@ -93,7 +103,10 @@ export interface Order {
   created_at: string
   closed_at?: string | null
   updated_at?: string | null
-  tables?: Pick<Table, 'id' | 'name'> | null
+  tables?:
+    | Pick<Table, 'id' | 'name'>
+    | { name: string; table_categories?: { name: string } | null }
+    | null
   order_items?: OrderItem[]
 }
 
@@ -141,7 +154,7 @@ export interface Room {
   name: string
   room_type: string
   floor: number
-  capacity: number
+  capacity?: number
   rate_per_night: number
   status: RoomStatus
   amenities?: string

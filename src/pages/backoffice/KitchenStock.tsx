@@ -262,10 +262,12 @@ export default function KitchenStock({ onBack }: Props) {
       )
       .eq('destination', 'kitchen')
     const map: Record<string, number> = {}
-    ;(items || []).forEach((i: { quantity: number; menu_items?: { name?: string } | null }) => {
-      const n = i.menu_items?.name
-      if (n) map[n] = (map[n] || 0) + i.quantity
-    })
+    ;(items || ([] as any[])).forEach(
+      (i: { quantity: number; menu_items?: { name?: string } | null }) => {
+        const n = i.menu_items?.name
+        if (n) map[n] = (map[n] || 0) + i.quantity
+      }
+    )
     setSoldMap(map)
   }, [])
 

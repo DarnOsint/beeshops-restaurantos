@@ -22,6 +22,7 @@ import WaiterCalls from './WaiterCalls'
 import KitchenStock from '../backoffice/KitchenStock'
 import { useLateOrders } from '../../hooks/useLateOrders'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
+import type { SyncQueueEntry } from '../../lib/db'
 import { getPendingQueue } from '../../lib/db'
 import { HelpTooltip } from '../../components/HelpTooltip'
 
@@ -71,9 +72,17 @@ export default function Management() {
   const { lateOrders, threshold, setThreshold, markDelivered } = useLateOrders()
   const { status: syncStatus, pendingCount, lastSynced, manualSync } = useSyncStatus()
 
-  const [syncQueue, setSyncQueue] = useState<Record<string, unknown>[]>([])
-  const [serviceLog, setServiceLog] = useState<Record<string, unknown>[]>([])
-  const [voidLog, setVoidLog] = useState<Record<string, unknown>[]>([])
+  const [syncQueue, setSyncQueue] = useState<SyncQueueEntry[]>([])
+  const [serviceLog, setServiceLog] = useState<
+    Array<{
+      id: string
+      item_name: string
+      table_name: string
+      waitron_name: string
+      served_at: string
+    }>
+  >([])
+  const [voidLog, setVoidLog] = useState<any[]>([])
   const [voidLoading, setVoidLoading] = useState(false)
   const [serviceLogLoading, setServiceLogLoading] = useState(false)
   const [stats, setStats] = useState<Stats>({
@@ -219,7 +228,7 @@ export default function Management() {
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'service_log' },
-        (payload) => setServiceLog((prev) => [payload.new, ...prev])
+        (payload) => setServiceLog((prev) => [payload.new as any, ...prev])
       )
       .subscribe()
     return () => {
@@ -415,8 +424,8 @@ export default function Management() {
         {activeTab === 'cctv' && (
           <CctvTab
             occupancy={cvData.occupancy}
-            alerts={cvData.alerts}
-            shelfAlerts={cvData.shelfAlerts}
+            alerts={cvData.alerts as any}
+            shelfAlerts={cvData.shelfAlerts as any}
             onResolve={resolveAlert}
           />
         )}
@@ -455,7 +464,7 @@ export default function Management() {
                 No service events recorded today
               </p>
             )}
-            {serviceLog.map((e: Record<string, unknown>) => (
+            {serviceLog.map((e) => (
               <div
                 key={e.id}
                 className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3 flex items-center justify-between"

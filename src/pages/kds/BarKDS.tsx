@@ -90,7 +90,7 @@ function BarKDSInner() {
       .order('created_at', { ascending: true })
 
     if (!error && data) {
-      const bar = (data as KdsOrder[])
+      const bar = (data as unknown as KdsOrder[])
         .map((o) => ({
           ...o,
           order_items: o.order_items.filter(

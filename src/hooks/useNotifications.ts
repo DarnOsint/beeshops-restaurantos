@@ -5,25 +5,25 @@ import type { Profile } from '../types'
 export type ToastColor = 'green' | 'amber' | 'blue' | 'red'
 
 export interface Toast {
-  id: number
-  type: string
+  id: string
+  type: 'ready' | 'stock' | 'call'
   title: string
   message: string
-  color: ToastColor
+  color: 'green' | 'amber' | 'blue'
 }
 
 export function useNotifications(profile: Profile | null) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
   const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
-    const id = Date.now() + Math.random()
+    const id = String(Date.now() + Math.random())
     setToasts((prev) => [...prev, { ...toast, id }])
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id))
     }, 6_000)
   }, [])
 
-  const dismiss = useCallback((id: number) => {
+  const dismiss = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
 

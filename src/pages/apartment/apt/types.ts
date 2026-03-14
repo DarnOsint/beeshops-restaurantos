@@ -89,12 +89,6 @@ export const STATUS_CONFIG = {
     text: 'text-blue-400',
     dot: 'bg-blue-400',
   },
-  reserved: {
-    bg: 'bg-blue-500/15',
-    border: 'border-blue-500/30',
-    text: 'text-blue-400',
-    dot: 'bg-blue-400',
-  },
 } as const
 
 export const PAYMENT_METHODS = [

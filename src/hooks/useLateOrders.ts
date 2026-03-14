@@ -38,7 +38,7 @@ export function useLateOrders() {
         .lte('created_at', cutoff)
 
       if (!data) return
-      const late = (data as LateOrder[]).filter((o) =>
+      const late = (data as unknown as LateOrder[]).filter((o) =>
         o.order_items?.some((i) => i.status === 'pending')
       )
       setLateOrders(late)

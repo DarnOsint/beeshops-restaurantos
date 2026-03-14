@@ -4,18 +4,26 @@ import VoidPinModal from '../../components/VoidPinModal'
 import { Plus, Minus, Trash2, Send, X, CheckCircle2, Circle, Search } from 'lucide-react'
 import type { Table, MenuItem, Order, OrderItem, Profile } from '../../types'
 
-interface OrderItemLocal extends Omit<OrderItem, 'id'> {
+interface OrderItemLocal {
   id: string
+  order_id?: string
+  menu_item_id?: string
+  quantity: number
+  unit_price?: number
+  total_price?: number
+  status?: string
+  destination?: string
+  created_at?: string
+  modifier_notes?: string | null
+  extra_charge?: number
   _dbId?: string
   _newId?: string
   _existing?: boolean
   name: string
   price: number
   total: number
-  modifier_notes?: string
-  extra_charge?: number
   menu_categories?: { name?: string; destination?: string } | null
-  status?: string
+  menu_items?: { name: string } | null
 }
 
 interface VoidRequest {

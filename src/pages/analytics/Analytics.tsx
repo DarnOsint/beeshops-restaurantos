@@ -29,6 +29,7 @@ import {
   Star,
   MapPin,
 } from 'lucide-react'
+import { HelpTooltip } from '../../components/HelpTooltip'
 
 const AMBER = '#f59e0b',
   GREEN = '#10b981',

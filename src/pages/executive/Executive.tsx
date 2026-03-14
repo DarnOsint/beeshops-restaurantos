@@ -360,7 +360,9 @@ export default function Executive() {
         <StatCards stats={stats} />
         <RevenueChart trendData={trendData} />
         <QuickActions />
-        <RecentOrders orders={recentOrders as Parameters<typeof RecentOrders>[0]['orders']} />
+        <RecentOrders
+          orders={recentOrders as unknown as Parameters<typeof RecentOrders>[0]['orders']}
+        />
       </div>
     </div>
   )

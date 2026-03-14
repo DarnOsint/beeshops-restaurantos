@@ -9,7 +9,8 @@ interface TableCategory {
 interface Table {
   id: string
   name: string
-  capacity: number
+  capacity?: number
+  category_id?: string
   status: 'available' | 'occupied' | string
   table_categories?: TableCategory
 }

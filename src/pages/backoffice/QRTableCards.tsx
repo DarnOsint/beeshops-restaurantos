@@ -69,7 +69,7 @@ export default function QRTableCards() {
             height: 160,
             colorDark: '#000000',
             colorLight: '#ffffff',
-            correctLevel: window.QRCode.CorrectLevel.H,
+            correctLevel: (window.QRCode as any).CorrectLevel.H,
           })
         } catch {
           /* intentional */

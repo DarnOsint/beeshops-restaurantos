@@ -35,6 +35,7 @@ export interface GrillerItem {
   status: 'pending' | 'preparing' | 'ready' | 'delivered'
   notes?: string | null
   order_id: string
+  created_at?: string
   menu_items?: { name: string; menu_categories?: { destination: string } | null } | null
   orders?: {
     id: string

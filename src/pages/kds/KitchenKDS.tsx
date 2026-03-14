@@ -104,7 +104,7 @@ function KitchenKDSInner() {
       .order('created_at', { ascending: true })
 
     if (!error && data) {
-      const kitchen = (data as KdsOrder[])
+      const kitchen = (data as unknown as KdsOrder[])
         .map((o) => ({
           ...o,
           order_items: o.order_items.filter(

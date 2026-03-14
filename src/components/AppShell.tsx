@@ -134,7 +134,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         .from('tables')
         .select('id, name, status, category_id, table_categories(name)')
         .order('name')
-      if (data) setTables(data as TableRow[])
+      if (data) setTables(data as unknown as TableRow[])
     }
     fetchTables()
     const ch = supabase

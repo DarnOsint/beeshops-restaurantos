@@ -6,14 +6,35 @@ import { X, Banknote, CreditCard, Smartphone, CheckCircle, Clock, Beer } from 'l
 import ReceiptModal from './ReceiptModal'
 import type { Order, OrderItem, Table, Profile } from '../../types'
 
-interface OrderItemExtended extends OrderItem {
-  menu_items?: { name: string } | null
+interface OrderItemExtended {
+  id: string
+  order_id?: string
+  menu_item_id?: string
+  quantity: number
+  unit_price?: number
+  total_price: number
+  status?: string
+  destination?: string
+  modifier_notes?: string | null
   extra_charge?: number
+  created_at?: string
+  menu_items?: { name: string } | null
 }
-interface OrderExtended extends Order {
+interface OrderExtended {
+  id: string
+  table_id?: string | null
+  total_amount: number
+  payment_method?: string | null
+  status: string
+  order_type: string
+  created_at: string
+  closed_at?: string | null
+  notes?: string | null
   order_items?: OrderItemExtended[]
   customer_name?: string
   customer_phone?: string
+  tables?: { name: string } | null
+  profiles?: { full_name: string } | null
 }
 interface SplitPayment {
   person: number
@@ -37,7 +58,7 @@ interface Props {
 
 export default function PaymentModal({ order, table, onSuccess, onClose }: Props) {
   const { profile } = useAuth()
-  const [paymentMethod, setPaymentMethod] = useState('cash')
+  const [paymentMethod, setPaymentMethod] = useState<string>('cash')
   const [cashTendered, setCashTendered] = useState('')
   const [processing, setProcessing] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -308,7 +329,7 @@ export default function PaymentModal({ order, table, onSuccess, onClose }: Props
         .update({ status: 'available', assigned_staff: null })
         .eq('id', table.id)
       await depleteInventory(order.id)
-      setPaidOrder({ ...order, payment_method: paymentMethod })
+      setPaidOrder({ ...order, payment_method: paymentMethod } as any)
       setSuccess(true)
     } catch {
       alert('Payment failed. Try again.')
@@ -511,7 +532,7 @@ export default function PaymentModal({ order, table, onSuccess, onClose }: Props
   if (showReceipt && paidOrder)
     return (
       <ReceiptModal
-        order={paidOrder}
+        order={paidOrder as unknown as import('../../types').Order}
         table={table}
         items={(order.order_items || []) as import('../../types').OrderItem[]}
         staffName={profile?.full_name || 'Staff'}

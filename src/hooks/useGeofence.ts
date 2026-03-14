@@ -7,11 +7,13 @@ type GeofenceStatus = 'checking' | 'inside' | 'outside' | 'error' | 'unsupported
 interface TargetCoords {
   lat: number
   lng: number
+  latitude: number
+  longitude: number
 }
 
 const FALLBACK: Record<LocKey, TargetCoords> = {
-  main: { lat: 7.350834, lng: 3.84078 },
-  apartment: { lat: 7.349545, lng: 3.83969 },
+  main: { lat: 7.350834, lng: 3.84078, latitude: 7.350834, longitude: 3.84078 },
+  apartment: { lat: 7.349545, lng: 3.83969, latitude: 7.349545, longitude: 3.83969 },
 }
 const DEFAULT_RADIUS: Record<LocKey, number> = { main: 400, apartment: 200 }
 
@@ -34,52 +36,53 @@ export function useGeofence(locKey: LocKey = 'main') {
   const [target, setTarget] = useState<TargetCoords | null>(null)
 
   useEffect(() => {
-    supabase
-      .from('settings')
-      .select('id, value')
-      .in('id', [
-        'geofence_enabled',
-        'geofence_radius_main',
-        'geofence_radius_apartment',
-        'geofence_lat_main',
-        'geofence_lng_main',
-        'geofence_lat_apartment',
-        'geofence_lng_apartment',
-      ])
-      .then(({ data }) => {
-        const fallback = FALLBACK[locKey]
-        if (!data) {
-          setEnabled(true)
-          setRadius(DEFAULT_RADIUS[locKey])
-          setTarget(fallback)
-          return
-        }
-        const map = Object.fromEntries(data.map((r) => [r.id, r.value]))
-        setEnabled(map['geofence_enabled'] === 'true')
+    Promise.resolve(
+      supabase
+        .from('settings')
+        .select('id, value')
+        .in('id', [
+          'geofence_enabled',
+          'geofence_radius_main',
+          'geofence_radius_apartment',
+          'geofence_lat_main',
+          'geofence_lng_main',
+          'geofence_lat_apartment',
+          'geofence_lng_apartment',
+        ])
+        .then(({ data }) => {
+          const fallback = FALLBACK[locKey]
+          if (!data) {
+            setEnabled(true)
+            setRadius(DEFAULT_RADIUS[locKey])
+            setTarget(fallback)
+            return
+          }
+          const map = Object.fromEntries(data.map((r) => [r.id, r.value]))
+          setEnabled(map['geofence_enabled'] === 'true')
 
-        const r =
-          locKey === 'apartment'
-            ? parseInt(map['geofence_radius_apartment'] ?? String(DEFAULT_RADIUS.apartment))
-            : parseInt(map['geofence_radius_main'] ?? String(DEFAULT_RADIUS.main))
-        setRadius(r)
+          const r =
+            locKey === 'apartment'
+              ? parseInt(map['geofence_radius_apartment'] ?? String(DEFAULT_RADIUS.apartment))
+              : parseInt(map['geofence_radius_main'] ?? String(DEFAULT_RADIUS.main))
+          setRadius(r)
 
-        const lat = parseFloat(
-          locKey === 'apartment'
-            ? (map['geofence_lat_apartment'] ?? String(fallback.lat))
-            : (map['geofence_lat_main'] ?? String(fallback.lat))
-        )
-        const lng = parseFloat(
-          locKey === 'apartment'
-            ? (map['geofence_lng_apartment'] ?? String(fallback.lng))
-            : (map['geofence_lng_main'] ?? String(fallback.lng))
-        )
-        setTarget({ lat, lng })
-      })
-      .catch(() => {
-        setEnabled(false)
-        setRadius(DEFAULT_RADIUS[locKey])
-        setTarget(FALLBACK[locKey])
-      })
+          const lat = parseFloat(
+            locKey === 'apartment'
+              ? (map['geofence_lat_apartment'] ?? String(fallback.lat))
+              : (map['geofence_lat_main'] ?? String(fallback.lat))
+          )
+          const lng = parseFloat(
+            locKey === 'apartment'
+              ? (map['geofence_lng_apartment'] ?? String(fallback.lng))
+              : (map['geofence_lng_main'] ?? String(fallback.lng))
+          )
+          setTarget({ lat, lng, latitude: lat, longitude: lng })
+        })
+    ).catch(() => {
+      setEnabled(false)
+      setRadius(DEFAULT_RADIUS[locKey])
+      setTarget(FALLBACK[locKey])
+    })
   }, [locKey])
 
   useEffect(() => {
@@ -100,7 +103,7 @@ export function useGeofence(locKey: LocKey = 'main') {
 
     const check = (pos: GeolocationPosition) => {
       const { latitude: lat, longitude: lng } = pos.coords
-      setLocation({ lat, lng })
+      setLocation({ lat, lng, latitude: lat, longitude: lng })
       const dist = getDistance(lat, lng, target.lat, target.lng)
       setDistance(Math.round(dist))
       setStatus(dist <= radius ? 'inside' : 'outside')
