@@ -356,44 +356,71 @@ export default function OrderPanel({
           </div>
         </div>
 
-        {/* Existing on-table items — sticky, always visible */}
-        {orderItems.some((i) => i._existing) && (
-          <div className="border-b border-gray-800 bg-gray-900/80 px-3 py-2 space-y-2 max-h-40 overflow-y-auto">
-            <p className="text-gray-500 text-xs font-medium uppercase tracking-wide mb-1">
-              On Table
-            </p>
-            {orderItems
-              .filter((i) => i._existing)
-              .map((item) => {
-                const dbId = item._dbId || dbIdMap[item.id]
-                return (
-                  <div key={item._newId || item.id} className="flex items-center gap-2">
-                    <span className="text-gray-400 text-xs w-5 text-center">{item.quantity}×</span>
-                    <span className="flex-1 text-gray-300 text-sm truncate">{item.name}</span>
-                    <span className="text-gray-500 text-xs">₦{item.total.toFixed(0)}</span>
+        {/* Unified order panel — existing + new items, sticky above menu */}
+        {orderItems.length > 0 && (
+          <div className="border-b border-gray-800 bg-gray-900 px-3 py-2 max-h-56 overflow-y-auto space-y-1">
+            {/* Existing on-table items */}
+            {orderItems.filter((i) => i._existing).map((item) => {
+              const dbId = item._dbId || dbIdMap[item.id]
+              return (
+                <div key={item._newId || item.id} className="flex items-center gap-2 py-0.5">
+                  <span className="text-gray-500 text-xs w-5 text-center">{item.quantity}×</span>
+                  <span className="flex-1 text-gray-400 text-sm truncate">{item.name}</span>
+                  <span className="text-gray-500 text-xs">₦{item.total.toFixed(0)}</span>
+                  <button
+                    onClick={() => { if (dbId && !servedItems[dbId]) markServed(item) }}
+                    className={`transition-colors ${dbId && servedItems[dbId] ? 'text-green-400' : 'text-gray-600 hover:text-green-400'}`}
+                    title={dbId && servedItems[dbId] ? 'Served' : 'Mark as served'}
+                  >
+                    {dbId && servedItems[dbId] ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+                  </button>
+                  <button onClick={() => deleteItem(item)} className="text-red-400 hover:text-red-300" title="Void">
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              )
+            })}
+            {/* Divider between existing and new items */}
+            {orderItems.some((i) => i._existing) && orderItems.some((i) => !i._existing) && (
+              <div className="border-t border-amber-500/20 my-1" />
+            )}
+            {/* New items being added */}
+            {orderItems.filter((i) => !i._existing).map((item) => {
+              return (
+                <div key={item._newId || item.id} className="flex items-center gap-2 py-0.5">
+                  <div className="flex items-center gap-1">
                     <button
-                      onClick={() => {
-                        if (dbId && !servedItems[dbId]) markServed(item)
-                      }}
-                      className={`transition-colors ${dbId && servedItems[dbId] ? 'text-green-400' : 'text-gray-600 hover:text-green-400'}`}
-                      title={dbId && servedItems[dbId] ? 'Served' : 'Mark as served'}
+                      onClick={() => removeItem(item._newId || item.id)}
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-white bg-gray-700 hover:bg-gray-600"
                     >
-                      {dbId && servedItems[dbId] ? (
-                        <CheckCircle2 size={14} />
-                      ) : (
-                        <Circle size={14} />
-                      )}
+                      <Minus size={10} />
                     </button>
+                    <span className="text-white text-sm w-5 text-center">{item.quantity}</span>
                     <button
-                      onClick={() => deleteItem(item)}
-                      className="text-red-400 hover:text-red-300"
-                      title="Void item"
+                      onClick={() => addItem(item)}
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-white bg-gray-700 hover:bg-gray-600"
                     >
-                      <Trash2 size={12} />
+                      <Plus size={10} />
                     </button>
                   </div>
-                )
-              })}
+                  <div className="flex-1 min-w-0">
+                    <button onClick={() => openModifier(item)} className="text-left w-full">
+                      <p className="text-sm text-white truncate">{item.name}</p>
+                      {item.modifier_notes && (
+                        <p className="text-amber-400 text-xs truncate">{item.modifier_notes}</p>
+                      )}
+                      {(item.extra_charge || 0) > 0 && (
+                        <p className="text-green-400 text-xs">+₦{item.extra_charge!.toLocaleString()}</p>
+                      )}
+                    </button>
+                  </div>
+                  <span className="text-white text-sm">₦{item.total.toFixed(0)}</span>
+                  <button onClick={() => deleteItem(item)} className="text-red-400 hover:text-red-300">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -430,84 +457,7 @@ export default function OrderPanel({
             )}
           </div>
 
-          {orderItems.some((i) => !i._existing) && (
-            <div className="border-t border-gray-800 p-3 space-y-2 max-h-48 overflow-y-auto">
-              {orderItems
-                .filter((i) => !i._existing)
-                .map((item) => {
-                  const dbId = item._dbId || dbIdMap[item.id]
-                  return (
-                    <div key={item._newId || item.id} className="flex items-center gap-2">
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => !item._existing && removeItem(item._newId || item.id)}
-                          disabled={item._existing}
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${item._existing ? 'bg-gray-800 cursor-not-allowed' : 'bg-gray-700'}`}
-                        >
-                          <Minus size={10} />
-                        </button>
-                        <span className="text-white text-sm w-5 text-center">{item.quantity}</span>
-                        <button
-                          onClick={() => !item._existing && addItem(item)}
-                          disabled={item._existing}
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-white ${item._existing ? 'bg-gray-800 cursor-not-allowed' : 'bg-gray-700'}`}
-                        >
-                          <Plus size={10} />
-                        </button>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <button
-                          onClick={() => !item._existing && openModifier(item)}
-                          className="text-left w-full"
-                          disabled={item._existing}
-                        >
-                          <p
-                            className={`text-sm ${item._existing ? 'text-gray-500' : 'text-gray-300'}`}
-                          >
-                            {item.name}
-                          </p>
-                          {item.modifier_notes && (
-                            <p className="text-amber-400 text-xs truncate">{item.modifier_notes}</p>
-                          )}
-                          {(item.extra_charge || 0) > 0 && (
-                            <p className="text-green-400 text-xs">
-                              +₦{item.extra_charge!.toLocaleString()}
-                            </p>
-                          )}
-                        </button>
-                      </div>
-                      <span
-                        className={`text-sm ${item._existing ? 'text-gray-500' : 'text-white'}`}
-                      >
-                        ₦{item.total.toFixed(2)}
-                      </span>
-                      {item._existing && (
-                        <button
-                          onClick={() => {
-                            if (dbId && !servedItems[dbId]) markServed(item)
-                          }}
-                          className={`transition-colors ${dbId && servedItems[dbId] ? 'text-green-400' : 'text-gray-600 hover:text-green-400'}`}
-                          title={dbId && servedItems[dbId] ? 'Served' : 'Mark as served'}
-                        >
-                          {dbId && servedItems[dbId] ? (
-                            <CheckCircle2 size={16} />
-                          ) : (
-                            <Circle size={16} />
-                          )}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => deleteItem(item)}
-                        className="text-red-400 hover:text-red-300 transition-colors"
-                        title={item._existing ? 'Void item' : undefined}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )
-                })}
-            </div>
-          )}
+
 
           <div className="px-3 pb-3">
             <input
