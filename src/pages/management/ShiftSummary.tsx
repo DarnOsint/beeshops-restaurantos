@@ -57,7 +57,7 @@ interface OrderItemEntry {
   quantity?: number
   unit_price?: number
   total_price?: number
-  menu_items?: { name?: string; destination?: string } | null
+  menu_items?: { name?: string } | null
 }
 interface OrderEntry {
   id: string
@@ -133,7 +133,7 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
       supabase
         .from('orders')
         .select(
-          'id, total_amount, payment_method, order_type, closed_at, created_at, tables(name, table_categories(name)), order_items(id, quantity, unit_price, total_price, menu_items(name, destination))'
+          'id, total_amount, payment_method, order_type, closed_at, created_at, tables(name, table_categories(name)), order_items(id, quantity, unit_price, total_price, menu_items(name))'
         )
         .eq('staff_id', shift.staff_id)
         .eq('status', 'paid')
@@ -143,7 +143,7 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
       supabase
         .from('orders')
         .select(
-          'id, total_amount, payment_method, order_type, closed_at, created_at, tables(name, table_categories(name)), order_items(id, quantity, unit_price, total_price, menu_items(name, destination))'
+          'id, total_amount, payment_method, order_type, closed_at, created_at, tables(name, table_categories(name)), order_items(id, quantity, unit_price, total_price, menu_items(name))'
         )
         .eq('staff_id', shift.staff_id)
         .eq('status', 'paid')
