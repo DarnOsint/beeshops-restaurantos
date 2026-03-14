@@ -144,16 +144,15 @@ export default function Login() {
       setLoading(false)
     } else {
       resetAttempts('rl_email')
-      // Audit login — we don't have profile yet so use email
       void supabase.from('audit_log').insert({
         action: 'LOGIN_EMAIL',
         entity: 'auth',
         entity_name: email,
         new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
       })
-      // Don't navigate manually — let onAuthStateChange in AuthContext handle it.
-      // Calling navigate() here races with the profile fetch and causes the
-      // partial-login flicker. setLoading stays true until RoleRoute redirects.
+      // onAuthStateChange in AuthContext handles the redirect.
+      // Add a 10s timeout fallback so the button never hangs forever.
+      setTimeout(() => setLoading(false), 10_000)
     }
   }
 
@@ -379,7 +378,7 @@ export default function Login() {
                     disabled={loading}
                     className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-amber-500/50 text-black font-semibold rounded-xl px-4 py-3 transition-colors"
                   >
-                    {loading ? 'Signing in...' : 'Sign In'}
+                    {loading ? 'Signing in…' : 'Sign In'}
                   </button>
                 </form>
               )}

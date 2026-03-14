@@ -131,7 +131,7 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
       pos_machine: posMachine,
     })
     if (error) {
-      toast.error('Error', error instanceof Error ? error.message : String(error))
+      toast.error('Error', (error as { message?: string })?.message || 'Unknown error')
       return
     }
     setSelectedPos((prev) => {
@@ -186,7 +186,7 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
       .update({ clock_out: clockOutTime.toISOString(), duration_minutes: duration })
       .eq('id', shift.id)
     if (error) {
-      toast.error('Error', error instanceof Error ? error.message : String(error))
+      toast.error('Error', (error as { message?: string })?.message || 'Unknown error')
       return
     }
     void audit({

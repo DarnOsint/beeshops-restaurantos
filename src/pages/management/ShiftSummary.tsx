@@ -27,6 +27,7 @@ interface ShiftIn {
   staff_name: string
   role: string
   clock_in: string
+  clock_out?: string | null
   pos_machine?: string | null
 }
 interface Props {
@@ -499,21 +500,23 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
             >
               <Printer size={16} /> Print Summary
             </button>
-            <button
-              onClick={handleConfirm}
-              disabled={confirming}
-              className="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-400 disabled:opacity-50 text-white font-bold rounded-2xl py-3 text-sm transition-colors"
-            >
-              {confirming ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" /> Clocking out…
-                </>
-              ) : (
-                <>
-                  <CheckCircle size={16} /> Confirm Clock Out
-                </>
-              )}
-            </button>
+            {!shift?.clock_out && (
+              <button
+                onClick={handleConfirm}
+                disabled={confirming}
+                className="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-400 disabled:opacity-50 text-white font-bold rounded-2xl py-3 text-sm transition-colors"
+              >
+                {confirming ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" /> Clocking out…
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle size={16} /> Confirm Clock Out
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
       </div>
