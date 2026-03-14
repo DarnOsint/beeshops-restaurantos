@@ -278,18 +278,18 @@ export default function Login() {
   )
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-white flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-amber-500 mb-4">
             <span className="text-3xl">🍺</span>
           </div>
-          <h1 className="text-3xl font-bold text-white">Beeshop's Place</h1>
-          <p className="text-gray-400 mt-1">Restaurant Operating System</p>
+          <h1 className="text-3xl font-bold text-gray-900">Beeshop's Place</h1>
+          <p className="text-gray-500 mt-1">Restaurant Operating System</p>
         </div>
 
         {sessionExpired && (
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3 mb-6 flex items-center gap-3">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-6 flex items-center gap-3">
             <span className="text-amber-400 text-lg">⏱</span>
             <div>
               <p className="text-amber-400 text-sm font-medium">Session expired</p>
@@ -328,7 +328,7 @@ export default function Login() {
           </p>
         )}
 
-        <div className="bg-gray-800 rounded-2xl p-8 shadow-2xl border border-gray-700">
+        <div className="bg-white rounded-2xl p-8 shadow-xl border border-gray-200">
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg p-3 mb-6 text-sm">
               {error}
@@ -337,25 +337,27 @@ export default function Login() {
 
           {mode === 'email' && (
             <>
-              <h2 className="text-xl font-semibold text-white mb-2">Sign in</h2>
-              <p className="text-gray-400 text-sm mb-6">For managers, owners and accountants</p>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Sign in</h2>
+              <p className="text-gray-500 text-sm mb-6">For managers, owners and accountants</p>
               {emailLocked ? (
                 <LockedOut mode="email" time={emailRem} />
               ) : (
                 <form onSubmit={handleEmailLogin} className="space-y-5">
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Email Address</label>
+                    <label className="block text-sm text-gray-700 font-medium mb-2">
+                      Email Address
+                    </label>
                     <input
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@beeshops.com"
                       required
-                      className="w-full bg-gray-700 border border-gray-600 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
+                      className="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-300 mb-2">Password</label>
+                    <label className="block text-sm text-gray-700 font-medium mb-2">Password</label>
                     <div className="relative">
                       <input
                         type={showPw ? 'text' : 'password'}
@@ -363,7 +365,7 @@ export default function Login() {
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
                         required
-                        className="w-full bg-gray-700 border border-gray-600 text-white rounded-xl px-4 py-3 pr-11 focus:outline-none focus:border-amber-500"
+                        className="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-xl px-4 py-3 pr-11 focus:outline-none focus:border-amber-500"
                       />
                       <button
                         type="button"
@@ -400,7 +402,7 @@ export default function Login() {
                     {[0, 1, 2, 3].map((i) => (
                       <div
                         key={i}
-                        className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center transition-all ${pin.length > i ? 'border-amber-500 bg-amber-500/10' : 'border-gray-700 bg-gray-800'}`}
+                        className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center transition-all ${pin.length > i ? 'border-amber-500 bg-amber-500/10' : 'border-gray-300 bg-gray-100'}`}
                       >
                         {pin.length > i && <div className="w-4 h-4 rounded-full bg-amber-500" />}
                       </div>
@@ -424,8 +426,8 @@ export default function Login() {
                               digit === ''
                                 ? 'opacity-0 pointer-events-none'
                                 : digit === 'del'
-                                  ? 'bg-gray-700 border border-gray-600 text-gray-400 hover:bg-gray-600 hover:text-white active:scale-95'
-                                  : 'bg-gray-700 border border-gray-600 text-white hover:bg-gray-600 hover:border-amber-500/50 active:scale-95'
+                                  ? 'bg-gray-100 border border-gray-300 text-gray-500 hover:bg-gray-200 hover:text-gray-700 active:scale-95'
+                                  : 'bg-white border border-gray-300 text-gray-900 font-semibold hover:bg-amber-50 hover:border-amber-400 active:scale-95'
                             }`}
                           >
                             {digit === 'del' ? <Delete size={20} className="mx-auto" /> : digit}
