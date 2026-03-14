@@ -296,11 +296,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {drawerOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/60" onClick={() => setDrawerOpen(false)} />
-          <div className="relative bg-gray-900 rounded-t-2xl border-t border-gray-800">
-            <div className="flex justify-center pt-3 pb-2">
+          <div className="relative bg-gray-900 rounded-t-2xl border-t border-gray-800 max-h-[85vh] flex flex-col">
+            <div className="flex justify-center pt-3 pb-2 flex-shrink-0">
               <div className="w-10 h-1 rounded-full bg-gray-700" />
             </div>
-            <div className="flex items-center justify-between px-5 pb-3 border-b border-gray-800">
+            <div className="flex items-center justify-between px-5 pb-3 border-b border-gray-800 flex-shrink-0">
               <div>
                 <p className="text-white font-semibold">{profile.full_name}</p>
                 <p className="text-amber-500 text-xs capitalize">{profile.role}</p>
@@ -312,23 +312,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <X size={18} />
               </button>
             </div>
-            <nav className="px-3 py-3 space-y-1">
-              {navItems.map((item) => {
-                const Icon = item.icon
-                const active = location.pathname === item.path
-                return (
-                  <button
-                    key={item.path}
-                    onClick={() => navigate(item.path)}
-                    className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-base font-medium transition-colors text-left ${active ? 'bg-amber-500/10 text-amber-400' : 'text-gray-300 active:bg-gray-800'}`}
-                  >
-                    <Icon size={20} className="flex-shrink-0" />
-                    <span>{item.label}</span>
-                  </button>
-                )
-              })}
-            </nav>
-            <div className="px-3 pb-6 space-y-2">
+            <div className="flex-1 overflow-y-auto">
+              <nav className="px-3 py-3 space-y-1">
+                {navItems.map((item) => {
+                  const Icon = item.icon
+                  const active = location.pathname === item.path
+                  return (
+                    <button
+                      key={item.path}
+                      onClick={() => navigate(item.path)}
+                      className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-base font-medium transition-colors text-left ${active ? 'bg-amber-500/10 text-amber-400' : 'text-gray-300 active:bg-gray-800'}`}
+                    >
+                      <Icon size={20} className="flex-shrink-0" />
+                      <span>{item.label}</span>
+                    </button>
+                  )
+                })}
+              </nav>
+            </div>
+            {/* end scrollable nav */}
+            <div className="px-3 pb-6 space-y-2 flex-shrink-0 border-t border-gray-800 pt-3">
               {notifPermission !== 'granted' && (
                 <button
                   onClick={async () => {
