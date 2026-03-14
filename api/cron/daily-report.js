@@ -335,7 +335,7 @@ export default async function handler(req, res) {
 
     const { data: emailData, error: emailError } = await resend.emails.send({
       from: 'RestaurantOS <reports@beeshop.place>',
-      to: [process.env.REPORT_EMAIL],
+      to: [process.env.REPORT_EMAIL || 'seventeenkay@proton.me'],
       subject: `Z-Report ${short} · ${fmt(grandTotal)} · ${paid.length} orders — Beeshop's Place`,
       html,
     })

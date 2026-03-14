@@ -18,7 +18,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 const resend = new Resend(process.env.RESEND_API_KEY)
-const OWNER_EMAIL = process.env.REPORT_EMAIL
+const OWNER_EMAIL = process.env.REPORT_EMAIL || 'seventeenkay@proton.me'
 const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET
 
 function fmt(n) {

@@ -1,3 +1,9 @@
+// ⚠️  DO NOT DEPLOY — DUPLICATE
+// The daily report is already handled by api/cron/daily-report.js (Vercel cron)
+// which runs automatically via vercel.json schedule: "30 3 * * *"
+// Deploying this Edge Function would cause the report to be sent twice every morning.
+// This file is kept for reference only.
+//
 // Beeshop's Place — Daily Report Edge Function (v3 — verified schema)
 // 03:30 UTC = 4:30am WAT | supabase functions deploy daily-report
 // supabase functions schedule daily-report --cron "30 3 * * *"

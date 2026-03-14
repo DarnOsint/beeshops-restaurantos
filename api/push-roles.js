@@ -11,7 +11,7 @@ import webpush from 'web-push'
 import { createClient } from '@supabase/supabase-js'
 
 webpush.setVapidDetails(
-  'mailto:gideonajose26@gmail.com',
+  'mailto:seventeenkay@proton.me',
   process.env.VITE_VAPID_PUBLIC_KEY,
   process.env.VAPID_PRIVATE_KEY
 )
