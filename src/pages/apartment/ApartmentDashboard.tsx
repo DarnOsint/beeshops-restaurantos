@@ -12,6 +12,7 @@ import {
   Clock,
   RefreshCw,
   Loader2,
+  BookOpen,
 } from 'lucide-react'
 
 import RoomsTab from './apt/RoomsTab'
@@ -32,6 +33,7 @@ const TABS = [
   { id: 'calendar', label: 'Calendar', icon: Calendar },
   { id: 'roomservice', label: 'Room Service', icon: ShoppingBag },
   { id: 'revenue', label: 'Revenue', icon: TrendingUp },
+  { id: 'reservations', label: 'Reservations', icon: BookOpen },
   { id: 'staff', label: 'Staff', icon: Users },
 ] as const
 
@@ -67,6 +69,18 @@ export default function ApartmentDashboard() {
 
   const [checkInForm, setCheckInForm] = useState<CheckInForm>(DEFAULT_FORM)
   const [payForm, setPayForm] = useState<PayForm>({ amount: '', method: 'cash', reference: '' })
+
+  // Reservation modal
+  const [showReserve, setShowReserve] = useState(false)
+  const [reserveForm, setReserveForm] = useState({
+    room_id: '',
+    guest_name: '',
+    guest_phone: '',
+    check_in_date: todayStr(),
+    check_in_time: '14:00',
+    check_out_date: '',
+    notes: '',
+  })
 
   const [calStart, setCalStart] = useState<Date>(() => {
     const d = new Date()
@@ -124,7 +138,7 @@ export default function ApartmentDashboard() {
   }, [fetchAll])
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const activeStays = stays.filter((s) => s.status === 'active')
+  const activeStays = stays.filter((s) => s.status === 'active' || s.status === 'reserved')
   const overstays = activeStays.filter((s) => new Date(s.check_out_date) < new Date())
   const dueToday = activeStays.filter((s) => {
     const d = new Date(s.check_out_date),
@@ -230,6 +244,83 @@ export default function ApartmentDashboard() {
       fetchAll()
     } catch (err) {
       alert('Payment failed: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleReserve() {
+    if (
+      !reserveForm.room_id ||
+      !reserveForm.guest_name ||
+      !reserveForm.check_in_date ||
+      !reserveForm.check_out_date
+    ) {
+      return alert('Please fill in room, guest name, check-in date and check-out date.')
+    }
+    setSaving(true)
+    try {
+      // Check for conflicts
+      const { data: conflicts } = await supabase
+        .from('room_stays')
+        .select('id')
+        .eq('room_id', reserveForm.room_id)
+        .in('status', ['active', 'reserved'])
+        .lt('check_in_date', reserveForm.check_out_date)
+        .gt('check_out_date', reserveForm.check_in_date)
+      if (conflicts && conflicts.length > 0) {
+        alert('This room already has an active booking or reservation overlapping those dates.')
+        return
+      }
+      const { error } = await supabase.from('room_stays').insert({
+        room_id: reserveForm.room_id,
+        guest_name: reserveForm.guest_name,
+        guest_phone: reserveForm.guest_phone || null,
+        check_in_date: reserveForm.check_in_date,
+        check_out_date: reserveForm.check_out_date,
+        check_in_time: reserveForm.check_in_time,
+        adults: 1,
+        children: 0,
+        total_amount: 0,
+        amount_paid: 0,
+        payment_method: 'cash',
+        notes: reserveForm.notes || null,
+        status: 'reserved',
+        checked_in_by: profile?.id,
+      })
+      if (error) throw error
+      await supabase.from('rooms').update({ status: 'reserved' }).eq('id', reserveForm.room_id)
+      setShowReserve(false)
+      setReserveForm({
+        room_id: '',
+        guest_name: '',
+        guest_phone: '',
+        check_in_date: todayStr(),
+        check_in_time: '14:00',
+        check_out_date: '',
+        notes: '',
+      })
+      fetchAll()
+    } catch (err) {
+      alert('Reservation failed: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function cancelReservation(stay: RoomStay) {
+    if (!confirm(`Cancel reservation for ${stay.guest_name}?`)) return
+    setSaving(true)
+    try {
+      const { error } = await supabase
+        .from('room_stays')
+        .update({ status: 'checked_out' })
+        .eq('id', stay.id)
+      if (error) throw error
+      await supabase.from('rooms').update({ status: 'available' }).eq('id', stay.room_id)
+      fetchAll()
+    } catch (err) {
+      alert('Failed to cancel: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
       setSaving(false)
     }
@@ -385,6 +476,76 @@ export default function ApartmentDashboard() {
           {tab === 'revenue' && (
             <RevenueTab stays={stays} serviceOrders={serviceOrders} rooms={rooms} />
           )}
+          {tab === 'reservations' && (
+            <div className="space-y-3">
+              <button
+                onClick={() => setShowReserve(true)}
+                className="w-full flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-400 text-white font-bold rounded-2xl py-3 text-sm transition-colors"
+              >
+                <BookOpen size={16} /> New Reservation
+              </button>
+              {stays.filter((s) => s.status === 'reserved').length === 0 ? (
+                <div className="text-center py-12 text-gray-500 text-sm">
+                  No upcoming reservations
+                </div>
+              ) : (
+                stays
+                  .filter((s) => s.status === 'reserved')
+                  .map((stay) => {
+                    const room = rooms.find((r) => r.id === stay.room_id)
+                    return (
+                      <div
+                        key={stay.id}
+                        className="bg-gray-900 border border-blue-500/30 rounded-2xl p-4"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="text-white font-bold">{stay.guest_name}</p>
+                            <p className="text-blue-400 text-xs mt-0.5">
+                              Room {room?.room_number} · {room?.room_type}
+                            </p>
+                            <p className="text-gray-500 text-xs mt-1">
+                              Check-in: <span className="text-white">{stay.check_in_date}</span>
+                              {(stay as RoomStay & { check_in_time?: string }).check_in_time && (
+                                <span className="text-amber-400">
+                                  {' '}
+                                  @ {(stay as RoomStay & { check_in_time?: string }).check_in_time}
+                                </span>
+                              )}
+                            </p>
+                            <p className="text-gray-500 text-xs">
+                              Check-out: <span className="text-white">{stay.check_out_date}</span>
+                            </p>
+                            {stay.guest_phone && (
+                              <p className="text-gray-500 text-xs">{stay.guest_phone}</p>
+                            )}
+                            {stay.notes && (
+                              <p className="text-gray-600 text-xs italic mt-1">{stay.notes}</p>
+                            )}
+                          </div>
+                          <div className="flex flex-col gap-2 shrink-0 ml-3">
+                            <button
+                              onClick={() => {
+                                setShowCheckIn(rooms.find((r) => r.id === stay.room_id) || null)
+                              }}
+                              className="text-xs bg-green-500/20 hover:bg-green-500/30 text-green-400 px-3 py-1.5 rounded-xl font-medium"
+                            >
+                              Check In
+                            </button>
+                            <button
+                              onClick={() => cancelReservation(stay)}
+                              className="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-1.5 rounded-xl font-medium"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+              )}
+            </div>
+          )}
           {tab === 'staff' && <StaffTab staff={staff} />}
         </div>
       )}
@@ -419,6 +580,119 @@ export default function ApartmentDashboard() {
         />
       )}
       {showDetails && <DetailsModal stay={showDetails} onClose={() => setShowDetails(null)} />}
+
+      {/* Reservation Modal */}
+      {showReserve && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0">
+          <div className="bg-gray-900 border border-gray-700 rounded-3xl w-full max-w-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+              <h2 className="text-white font-bold">New Reservation</h2>
+              <button
+                onClick={() => setShowReserve(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-5 space-y-3 max-h-[70vh] overflow-y-auto">
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">Room *</label>
+                <select
+                  value={reserveForm.room_id}
+                  onChange={(e) => setReserveForm((p) => ({ ...p, room_id: e.target.value }))}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Select room…</option>
+                  {rooms
+                    .filter((r) => r.status === 'available')
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>
+                        Room {r.room_number} — {r.room_type}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">Guest Name *</label>
+                <input
+                  value={reserveForm.guest_name}
+                  onChange={(e) => setReserveForm((p) => ({ ...p, guest_name: e.target.value }))}
+                  placeholder="Full name"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">Phone</label>
+                <input
+                  value={reserveForm.guest_phone}
+                  onChange={(e) => setReserveForm((p) => ({ ...p, guest_phone: e.target.value }))}
+                  placeholder="080xxxxxxxx"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">Check-in Date *</label>
+                  <input
+                    type="date"
+                    value={reserveForm.check_in_date}
+                    onChange={(e) =>
+                      setReserveForm((p) => ({ ...p, check_in_date: e.target.value }))
+                    }
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">Expected Time</label>
+                  <input
+                    type="time"
+                    value={reserveForm.check_in_time}
+                    onChange={(e) =>
+                      setReserveForm((p) => ({ ...p, check_in_time: e.target.value }))
+                    }
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">Check-out Date *</label>
+                <input
+                  type="date"
+                  value={reserveForm.check_out_date}
+                  onChange={(e) =>
+                    setReserveForm((p) => ({ ...p, check_out_date: e.target.value }))
+                  }
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">Notes</label>
+                <input
+                  value={reserveForm.notes}
+                  onChange={(e) => setReserveForm((p) => ({ ...p, notes: e.target.value }))}
+                  placeholder="Special requests…"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </div>
+            <div className="px-5 pb-5 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setShowReserve(false)}
+                className="py-3 rounded-xl bg-gray-800 text-gray-300 text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReserve}
+                disabled={saving}
+                className="py-3 rounded-xl bg-blue-500 hover:bg-blue-400 disabled:bg-gray-700 text-white font-bold text-sm"
+              >
+                {saving ? 'Saving…' : 'Confirm Reservation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

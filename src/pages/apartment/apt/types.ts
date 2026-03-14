@@ -21,7 +21,7 @@ export interface RoomStay {
   amount_paid: number
   payment_method: string
   notes: string | null
-  status: 'active' | 'checked_out'
+  status: 'active' | 'checked_out' | 'reserved'
   created_at: string
   rooms?: { room_number: number; room_type: string; rate_per_night: number } | null
 }
@@ -82,6 +82,12 @@ export const STATUS_CONFIG = {
     border: 'border-red-500/30',
     text: 'text-red-400',
     dot: 'bg-red-400',
+  },
+  reserved: {
+    bg: 'bg-blue-500/15',
+    border: 'border-blue-500/30',
+    text: 'text-blue-400',
+    dot: 'bg-blue-400',
   },
   reserved: {
     bg: 'bg-blue-500/15',

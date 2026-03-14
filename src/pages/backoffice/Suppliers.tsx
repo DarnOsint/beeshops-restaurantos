@@ -92,6 +92,7 @@ export default function Suppliers({ onBack }: Props) {
   const [inventory, setInventory] = useState<InventoryRow[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState('')
   const [showSupplierModal, setShowSupplierModal] = useState(false)
   const [showPOModal, setShowPOModal] = useState(false)
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
@@ -423,54 +424,69 @@ export default function Suppliers({ onBack }: Props) {
           (suppliers.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <Truck size={32} className="mx-auto mb-3 opacity-40" />
-              <p>No suppliers yet. Add your first supplier.</p>
+              <p>No active suppliers.</p>
             </div>
           ) : (
-            suppliers.map((s) => (
-              <div
-                key={s.id}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-start justify-between gap-4"
-              >
-                <div className="flex-1">
-                  <p className="text-white font-bold">{s.name}</p>
-                  {s.contact_name && <p className="text-gray-400 text-sm">{s.contact_name}</p>}
-                  <div className="flex gap-4 mt-1">
-                    {s.phone && (
-                      <span className="text-gray-500 text-xs flex items-center gap-1">
-                        <Phone size={10} />
-                        {s.phone}
-                      </span>
-                    )}
-                    {s.email && (
-                      <span className="text-gray-500 text-xs flex items-center gap-1">
-                        <Mail size={10} />
-                        {s.email}
-                      </span>
-                    )}
+            <>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search suppliers…"
+                className="w-full bg-gray-900 border border-gray-800 text-white text-sm rounded-xl px-4 py-2.5 mb-3 focus:outline-none focus:border-amber-500"
+              />
+              {suppliers
+                .filter(
+                  (s) =>
+                    !search ||
+                    s.name.toLowerCase().includes(search.toLowerCase()) ||
+                    (s.contact_name || '').toLowerCase().includes(search.toLowerCase())
+                )
+                .map((s) => (
+                  <div
+                    key={s.id}
+                    className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-start justify-between gap-4"
+                  >
+                    <div className="flex-1">
+                      <p className="text-white font-bold">{s.name}</p>
+                      {s.contact_name && <p className="text-gray-400 text-sm">{s.contact_name}</p>}
+                      <div className="flex gap-4 mt-1">
+                        {s.phone && (
+                          <span className="text-gray-500 text-xs flex items-center gap-1">
+                            <Phone size={10} />
+                            {s.phone}
+                          </span>
+                        )}
+                        {s.email && (
+                          <span className="text-gray-500 text-xs flex items-center gap-1">
+                            <Mail size={10} />
+                            {s.email}
+                          </span>
+                        )}
+                      </div>
+                      {s.items_supplied && (
+                        <p className="text-gray-500 text-xs mt-1">Supplies: {s.items_supplied}</p>
+                      )}
+                      {s.payment_terms && (
+                        <p className="text-gray-500 text-xs">Terms: {s.payment_terms}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => openEditSupplier(s)}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => deactivateSupplier(s.id)}
+                        className="text-xs px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
-                  {s.items_supplied && (
-                    <p className="text-gray-500 text-xs mt-1">Supplies: {s.items_supplied}</p>
-                  )}
-                  {s.payment_terms && (
-                    <p className="text-gray-500 text-xs">Terms: {s.payment_terms}</p>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => openEditSupplier(s)}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => deactivateSupplier(s.id)}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))
+                ))}
+            </>
           ))}
 
         {tab === 'orders' &&

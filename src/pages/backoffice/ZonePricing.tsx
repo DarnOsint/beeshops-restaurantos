@@ -23,6 +23,7 @@ export default function ZonePricing({ onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [filterCat, setFilterCat] = useState('All')
+  const [search, setSearch] = useState('')
   const [menuCategories, setMenuCategories] = useState<string[]>([])
 
   const fetchAll = async () => {
@@ -87,8 +88,9 @@ export default function ZonePricing({ onBack }: Props) {
     }
   }
 
-  const filtered =
-    filterCat === 'All' ? items : items.filter((i) => i.menu_categories?.name === filterCat)
+  const filtered = items
+    .filter((i) => filterCat === 'All' || i.menu_categories?.name === filterCat)
+    .filter((i) => !search || i.name.toLowerCase().includes(search.toLowerCase()))
 
   if (loading)
     return (
@@ -118,6 +120,12 @@ export default function ZonePricing({ onBack }: Props) {
         </button>
       </div>
       <div className="p-6">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search items…"
+          className="w-full bg-gray-900 border border-gray-800 text-white text-sm rounded-xl px-4 py-2.5 mb-3 focus:outline-none focus:border-amber-500"
+        />
         <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
           {menuCategories.map((cat) => (
             <button

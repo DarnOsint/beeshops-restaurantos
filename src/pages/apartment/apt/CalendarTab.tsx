@@ -31,7 +31,8 @@ export default function CalendarTab({
     const stay = activeStays.find(
       (s) => s.room_id === room.id && ds >= s.check_in_date && ds < s.check_out_date
     )
-    return stay ? { type: 'occupied', stay } : { type: 'available', stay: null }
+    if (!stay) return { type: 'available', stay: null }
+    return { type: stay.status === 'reserved' ? 'reserved' : 'occupied', stay }
   }
 
   return (
@@ -63,6 +64,7 @@ export default function CalendarTab({
         {[
           { dot: 'bg-green-400', label: 'Available' },
           { dot: 'bg-amber-400', label: 'Occupied' },
+          { dot: 'bg-blue-400', label: 'Reserved' },
         ].map((l) => (
           <div key={l.label} className="flex items-center gap-1.5">
             <div className={`w-2 h-2 rounded-full ${l.dot}`} />
@@ -108,7 +110,7 @@ export default function CalendarTab({
                   <div
                     key={d.toISOString()}
                     title={stay ? stay.guest_name : 'Available'}
-                    className={`h-8 rounded border ${type === 'occupied' ? 'bg-amber-500/30 border-amber-500/40' : 'bg-green-500/20 border-green-500/20'} cursor-default`}
+                    className={`h-8 rounded border ${type === 'occupied' ? 'bg-amber-500/30 border-amber-500/40' : type === 'reserved' ? 'bg-blue-500/30 border-blue-500/40' : 'bg-green-500/20 border-green-500/20'} cursor-default`}
                   />
                 )
               })}

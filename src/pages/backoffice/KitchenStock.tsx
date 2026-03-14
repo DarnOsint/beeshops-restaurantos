@@ -205,6 +205,7 @@ export default function KitchenStock({ onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
+  const [entrySearch, setEntrySearch] = useState('')
   const [menuItems, setMenuItems] = useState<string[]>([])
   const [soldMap, setSoldMap] = useState<Record<string, number>>({})
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -545,6 +546,12 @@ export default function KitchenStock({ onBack }: Props) {
             </div>
           )}
 
+          <input
+            value={entrySearch}
+            onChange={(e) => setEntrySearch(e.target.value)}
+            placeholder="Search items…"
+            className="w-full bg-gray-900 border border-gray-800 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-amber-500"
+          />
           {loading ? (
             <div className="text-center py-12 text-gray-500 text-sm">Loading…</div>
           ) : enriched.length === 0 ? (
@@ -555,226 +562,234 @@ export default function KitchenStock({ onBack }: Props) {
             </div>
           ) : (
             <div className="space-y-2">
-              {enriched.map((entry) => {
-                const st = entry.status
-                const expanded = expandedId === entry.id
-                const editing = editingId === entry.id
-                return (
-                  <div
-                    key={entry.id}
-                    className={`bg-gray-900 border rounded-2xl overflow-hidden ${st.border}`}
-                  >
-                    <div className={`px-4 py-1.5 flex items-center justify-between ${st.bg}`}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm">{st.icon}</span>
-                        <span className={`text-xs font-bold ${st.color}`}>{st.label}</span>
+              {enriched
+                .filter(
+                  (e) =>
+                    !entrySearch || e.item_name.toLowerCase().includes(entrySearch.toLowerCase())
+                )
+                .map((entry) => {
+                  const st = entry.status
+                  const expanded = expandedId === entry.id
+                  const editing = editingId === entry.id
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`bg-gray-900 border rounded-2xl overflow-hidden ${st.border}`}
+                    >
+                      <div className={`px-4 py-1.5 flex items-center justify-between ${st.bg}`}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">{st.icon}</span>
+                          <span className={`text-xs font-bold ${st.color}`}>{st.label}</span>
+                        </div>
+                        {entry.benchmark && (
+                          <span className="text-gray-500 text-[10px]">
+                            Benchmark: {entry.benchmark.expected_yield}{' '}
+                            {entry.benchmark.cooked_unit}/{entry.benchmark.raw_unit} ±
+                            {entry.benchmark.tolerance_pct}%
+                          </span>
+                        )}
                       </div>
-                      {entry.benchmark && (
-                        <span className="text-gray-500 text-[10px]">
-                          Benchmark: {entry.benchmark.expected_yield} {entry.benchmark.cooked_unit}/
-                          {entry.benchmark.raw_unit} ±{entry.benchmark.tolerance_pct}%
-                        </span>
+                      <button
+                        className="w-full px-4 py-3 flex items-center gap-3 text-left"
+                        onClick={() => setExpandedId(expanded ? null : entry.id)}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white text-sm font-semibold truncate">
+                            {entry.item_name}
+                          </p>
+                          <p className="text-gray-500 text-xs mt-0.5">
+                            In: {(entry.opening_qty + entry.received_qty).toFixed(1)} {entry.unit}
+                            &nbsp;·&nbsp;Sold: {entry.effective_sold.toFixed(
+                              1
+                            )}&nbsp;·&nbsp;Left: {entry.closing_qty.toFixed(1)}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0 mr-1">
+                          <p className={`text-sm font-bold ${st.color}`}>
+                            {entry.computed_variance > 0 ? '+' : ''}
+                            {entry.computed_variance.toFixed(1)}
+                          </p>
+                          <p className="text-gray-600 text-xs">variance</p>
+                        </div>
+                        {expanded ? (
+                          <ChevronUp size={16} className="text-gray-500 shrink-0" />
+                        ) : (
+                          <ChevronDown size={16} className="text-gray-500 shrink-0" />
+                        )}
+                      </button>
+                      {expanded && (
+                        <div className="border-t border-gray-800 px-4 py-4 space-y-3">
+                          <div
+                            className={`rounded-xl px-3 py-2.5 text-xs font-medium ${st.bg} ${st.color} ${st.border} border`}
+                          >
+                            {st.icon} {st.remark}
+                          </div>
+                          {editing && canManage ? (
+                            <div className="space-y-2">
+                              <p className="text-amber-400 text-xs font-semibold">
+                                Editing entry — all fields unlocked
+                              </p>
+                              <div className="grid grid-cols-2 gap-2">
+                                {(
+                                  [
+                                    ['Opening Stock', 'opening_qty'],
+                                    ['Received Today', 'received_qty'],
+                                    ['Void / Wastage', 'void_qty'],
+                                    ['Closing Count', 'closing_qty'],
+                                  ] as const
+                                ).map(([label, key]) => (
+                                  <div key={key}>
+                                    <label className="text-gray-500 text-xs block mb-1">
+                                      {label} ({entry.unit})
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.5"
+                                      value={String(editVals[key])}
+                                      onChange={(e) =>
+                                        setEditVals((p) => ({ ...p, [key]: e.target.value }))
+                                      }
+                                      className="w-full bg-gray-800 border border-amber-500/50 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                              <div>
+                                <label className="text-gray-500 text-xs block mb-1">Note</label>
+                                <input
+                                  type="text"
+                                  value={editVals.note}
+                                  onChange={(e) =>
+                                    setEditVals((p) => ({ ...p, note: e.target.value }))
+                                  }
+                                  placeholder="Reason for edit…"
+                                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
+                                />
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => saveEdit(entry.id)}
+                                  className="flex-1 flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl py-2 text-xs transition-colors"
+                                >
+                                  <Save size={13} /> Save Changes
+                                </button>
+                                <button
+                                  onClick={() => setEditingId(null)}
+                                  className="px-4 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl py-2 text-xs transition-colors"
+                                >
+                                  <X size={13} />
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                {[
+                                  ['Opening Stock', `${entry.opening_qty} ${entry.unit}`],
+                                  ['Received Today', `${entry.received_qty} ${entry.unit}`],
+                                  ['Sold (from POS)', `${entry.auto_sold} ${entry.unit}`],
+                                  ['Void / Wastage', `${entry.void_qty} ${entry.unit}`],
+                                  ['Closing Count', `${entry.closing_qty} ${entry.unit}`],
+                                  [
+                                    'Total Available',
+                                    `${(entry.opening_qty + entry.received_qty).toFixed(1)} ${entry.unit}`,
+                                  ],
+                                ].map(([label, val]) => (
+                                  <div key={label} className="bg-gray-800 rounded-xl px-3 py-2">
+                                    <p className="text-gray-500 text-xs">{label}</p>
+                                    <p className="text-white font-semibold mt-0.5">{val}</p>
+                                  </div>
+                                ))}
+                              </div>
+                              {entry.benchmark &&
+                                entry.received_qty > 0 &&
+                                (() => {
+                                  const bm = entry.benchmark
+                                  const expectedSold = entry.received_qty * bm.expected_yield
+                                  const yieldPct =
+                                    expectedSold > 0
+                                      ? ((entry.effective_sold / expectedSold) * 100).toFixed(1)
+                                      : '—'
+                                  return (
+                                    <div className="bg-gray-800 rounded-xl px-3 py-3 space-y-1.5">
+                                      <p className="text-gray-400 text-xs font-semibold mb-2">
+                                        Yield Analysis
+                                      </p>
+                                      {[
+                                        ['Raw Input', `${entry.received_qty} ${bm.raw_unit}`],
+                                        [
+                                          'Expected Output',
+                                          `${expectedSold.toFixed(1)} ${bm.cooked_unit}`,
+                                        ],
+                                        [
+                                          'Actual Output',
+                                          `${entry.effective_sold} ${bm.cooked_unit}`,
+                                        ],
+                                        ['Yield %', `${yieldPct}%`],
+                                      ].map(([l, v]) => (
+                                        <div key={l} className="flex justify-between text-xs">
+                                          <span className="text-gray-500">{l}</span>
+                                          <span
+                                            className={`font-semibold ${l === 'Yield %' ? st.color : 'text-white'}`}
+                                          >
+                                            {v}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )
+                                })()}
+                              <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-500 font-mono">
+                                ({entry.opening_qty} + {entry.received_qty}) −{' '}
+                                {entry.effective_sold} − {entry.void_qty} − {entry.closing_qty}
+                                {' = '}
+                                <span className={st.color}>
+                                  {entry.computed_variance.toFixed(1)}
+                                </span>
+                              </div>
+                              {entry.note && (
+                                <p className="text-gray-500 text-xs italic">Note: {entry.note}</p>
+                              )}
+                            </>
+                          )}
+                          {!editing && (
+                            <div className="flex gap-2 pt-1">
+                              <button
+                                onClick={() => syncSold(entry)}
+                                className="flex-1 text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-xl py-2 font-medium"
+                              >
+                                Sync POS Sales
+                              </button>
+                              {canManage && (
+                                <>
+                                  <button
+                                    onClick={() => openBenchmark(entry.item_name)}
+                                    className="flex items-center gap-1 text-xs bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl px-3 py-2 font-medium"
+                                  >
+                                    <Settings size={12} /> Benchmark
+                                  </button>
+                                  <button
+                                    onClick={() => startEdit(entry)}
+                                    className="flex items-center gap-1 text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded-xl px-3 py-2"
+                                  >
+                                    <Edit3 size={12} /> Edit
+                                  </button>
+                                  <button
+                                    onClick={() => deleteEntry(entry.id)}
+                                    className="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
-                    <button
-                      className="w-full px-4 py-3 flex items-center gap-3 text-left"
-                      onClick={() => setExpandedId(expanded ? null : entry.id)}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white text-sm font-semibold truncate">
-                          {entry.item_name}
-                        </p>
-                        <p className="text-gray-500 text-xs mt-0.5">
-                          In: {(entry.opening_qty + entry.received_qty).toFixed(1)} {entry.unit}
-                          &nbsp;·&nbsp;Sold: {entry.effective_sold.toFixed(
-                            1
-                          )}&nbsp;·&nbsp;Left: {entry.closing_qty.toFixed(1)}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0 mr-1">
-                        <p className={`text-sm font-bold ${st.color}`}>
-                          {entry.computed_variance > 0 ? '+' : ''}
-                          {entry.computed_variance.toFixed(1)}
-                        </p>
-                        <p className="text-gray-600 text-xs">variance</p>
-                      </div>
-                      {expanded ? (
-                        <ChevronUp size={16} className="text-gray-500 shrink-0" />
-                      ) : (
-                        <ChevronDown size={16} className="text-gray-500 shrink-0" />
-                      )}
-                    </button>
-                    {expanded && (
-                      <div className="border-t border-gray-800 px-4 py-4 space-y-3">
-                        <div
-                          className={`rounded-xl px-3 py-2.5 text-xs font-medium ${st.bg} ${st.color} ${st.border} border`}
-                        >
-                          {st.icon} {st.remark}
-                        </div>
-                        {editing && canManage ? (
-                          <div className="space-y-2">
-                            <p className="text-amber-400 text-xs font-semibold">
-                              Editing entry — all fields unlocked
-                            </p>
-                            <div className="grid grid-cols-2 gap-2">
-                              {(
-                                [
-                                  ['Opening Stock', 'opening_qty'],
-                                  ['Received Today', 'received_qty'],
-                                  ['Void / Wastage', 'void_qty'],
-                                  ['Closing Count', 'closing_qty'],
-                                ] as const
-                              ).map(([label, key]) => (
-                                <div key={key}>
-                                  <label className="text-gray-500 text-xs block mb-1">
-                                    {label} ({entry.unit})
-                                  </label>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.5"
-                                    value={String(editVals[key])}
-                                    onChange={(e) =>
-                                      setEditVals((p) => ({ ...p, [key]: e.target.value }))
-                                    }
-                                    className="w-full bg-gray-800 border border-amber-500/50 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                            <div>
-                              <label className="text-gray-500 text-xs block mb-1">Note</label>
-                              <input
-                                type="text"
-                                value={editVals.note}
-                                onChange={(e) =>
-                                  setEditVals((p) => ({ ...p, note: e.target.value }))
-                                }
-                                placeholder="Reason for edit…"
-                                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
-                              />
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => saveEdit(entry.id)}
-                                className="flex-1 flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl py-2 text-xs transition-colors"
-                              >
-                                <Save size={13} /> Save Changes
-                              </button>
-                              <button
-                                onClick={() => setEditingId(null)}
-                                className="px-4 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl py-2 text-xs transition-colors"
-                              >
-                                <X size={13} />
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              {[
-                                ['Opening Stock', `${entry.opening_qty} ${entry.unit}`],
-                                ['Received Today', `${entry.received_qty} ${entry.unit}`],
-                                ['Sold (from POS)', `${entry.auto_sold} ${entry.unit}`],
-                                ['Void / Wastage', `${entry.void_qty} ${entry.unit}`],
-                                ['Closing Count', `${entry.closing_qty} ${entry.unit}`],
-                                [
-                                  'Total Available',
-                                  `${(entry.opening_qty + entry.received_qty).toFixed(1)} ${entry.unit}`,
-                                ],
-                              ].map(([label, val]) => (
-                                <div key={label} className="bg-gray-800 rounded-xl px-3 py-2">
-                                  <p className="text-gray-500 text-xs">{label}</p>
-                                  <p className="text-white font-semibold mt-0.5">{val}</p>
-                                </div>
-                              ))}
-                            </div>
-                            {entry.benchmark &&
-                              entry.received_qty > 0 &&
-                              (() => {
-                                const bm = entry.benchmark
-                                const expectedSold = entry.received_qty * bm.expected_yield
-                                const yieldPct =
-                                  expectedSold > 0
-                                    ? ((entry.effective_sold / expectedSold) * 100).toFixed(1)
-                                    : '—'
-                                return (
-                                  <div className="bg-gray-800 rounded-xl px-3 py-3 space-y-1.5">
-                                    <p className="text-gray-400 text-xs font-semibold mb-2">
-                                      Yield Analysis
-                                    </p>
-                                    {[
-                                      ['Raw Input', `${entry.received_qty} ${bm.raw_unit}`],
-                                      [
-                                        'Expected Output',
-                                        `${expectedSold.toFixed(1)} ${bm.cooked_unit}`,
-                                      ],
-                                      [
-                                        'Actual Output',
-                                        `${entry.effective_sold} ${bm.cooked_unit}`,
-                                      ],
-                                      ['Yield %', `${yieldPct}%`],
-                                    ].map(([l, v]) => (
-                                      <div key={l} className="flex justify-between text-xs">
-                                        <span className="text-gray-500">{l}</span>
-                                        <span
-                                          className={`font-semibold ${l === 'Yield %' ? st.color : 'text-white'}`}
-                                        >
-                                          {v}
-                                        </span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )
-                              })()}
-                            <div className="bg-gray-800 rounded-xl px-3 py-2 text-xs text-gray-500 font-mono">
-                              ({entry.opening_qty} + {entry.received_qty}) − {entry.effective_sold}{' '}
-                              − {entry.void_qty} − {entry.closing_qty}
-                              {' = '}
-                              <span className={st.color}>{entry.computed_variance.toFixed(1)}</span>
-                            </div>
-                            {entry.note && (
-                              <p className="text-gray-500 text-xs italic">Note: {entry.note}</p>
-                            )}
-                          </>
-                        )}
-                        {!editing && (
-                          <div className="flex gap-2 pt-1">
-                            <button
-                              onClick={() => syncSold(entry)}
-                              className="flex-1 text-xs bg-blue-500/10 border border-blue-500/30 text-blue-400 rounded-xl py-2 font-medium"
-                            >
-                              Sync POS Sales
-                            </button>
-                            {canManage && (
-                              <>
-                                <button
-                                  onClick={() => openBenchmark(entry.item_name)}
-                                  className="flex items-center gap-1 text-xs bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl px-3 py-2 font-medium"
-                                >
-                                  <Settings size={12} /> Benchmark
-                                </button>
-                                <button
-                                  onClick={() => startEdit(entry)}
-                                  className="flex items-center gap-1 text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded-xl px-3 py-2"
-                                >
-                                  <Edit3 size={12} /> Edit
-                                </button>
-                                <button
-                                  onClick={() => deleteEntry(entry.id)}
-                                  className="p-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+                  )
+                })}
             </div>
           )}
 
@@ -911,12 +926,19 @@ export default function KitchenStock({ onBack }: Props) {
           )}
 
           {!showAdd && (
-            <button
-              onClick={() => setShowAdd(true)}
-              className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-2xl py-4 text-sm transition-colors"
-            >
-              <Plus size={18} /> Add Stock Entry
-            </button>
+            <>
+              <button
+                onClick={() => setShowAdd(true)}
+                className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-2xl py-4 text-sm transition-colors"
+              >
+                <Plus size={18} /> Add Stock Entry
+              </button>
+              {!canManage && (
+                <p className="text-center text-gray-600 text-xs">
+                  Entries are locked once submitted — contact a manager to make corrections.
+                </p>
+              )}
+            </>
           )}
 
           <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3 space-y-2">

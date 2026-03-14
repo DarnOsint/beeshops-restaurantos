@@ -62,6 +62,7 @@ export default function TableAssignment({ onClose }: Props) {
   const [assignments, setAssignments] = useState<Record<string, Assignment[]>>({})
   const [selectedStaff, setSelectedStaff] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
+  const [staffSearch, setStaffSearch] = useState('')
 
   const fetchCategories = async () => {
     const { data } = await supabase
@@ -177,89 +178,107 @@ export default function TableAssignment({ onClose }: Props) {
         </div>
       )}
 
+      <input
+        value={staffSearch}
+        onChange={(e) => setStaffSearch(e.target.value)}
+        placeholder="Search staff or zone…"
+        className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-xl px-4 py-2.5 mb-4 focus:outline-none focus:border-amber-500"
+      />
       <div className="space-y-4">
-        {categories.map((category) => {
-          const colors = categoryColors[category.name] || {
-            card: 'bg-gray-800 border-gray-700',
-            text: 'text-gray-400',
-            badge: 'bg-gray-700 text-gray-300',
-          }
-          const totalTables = category.tables?.length || 0
-          const occupiedTables = category.tables?.filter((t) => t.status === 'occupied').length || 0
-          const zoneAssignments = assignments[category.id] || []
-          const available = getAvailableStaff(category.id)
-
-          return (
-            <div key={category.id} className={`rounded-xl border p-4 ${colors.card}`}>
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h4 className={`font-semibold ${colors.text}`}>{category.name}</h4>
-                  <p className="text-gray-500 text-xs">
-                    {occupiedTables}/{totalTables} tables occupied
-                  </p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Users size={14} className={colors.text} />
-                  <span className={`text-xs font-medium ${colors.text}`}>
-                    {zoneAssignments.length} assigned
-                  </span>
-                </div>
-              </div>
-
-              {zoneAssignments.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {zoneAssignments.map((assignment) => (
-                    <div
-                      key={assignment.id}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${colors.badge}`}
-                    >
-                      <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                      {assignment.profiles?.full_name}
-                      <button
-                        onClick={() => removeStaffFromZone(assignment.id)}
-                        className="ml-1 opacity-60 hover:opacity-100 transition-opacity"
-                      >
-                        <UserMinus size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {staff.length > 0 && available.length > 0 && (
-                <div className="flex gap-2">
-                  <select
-                    value={selectedStaff[category.id] || ''}
-                    onChange={(e) =>
-                      setSelectedStaff((prev) => ({ ...prev, [category.id]: e.target.value }))
-                    }
-                    className="flex-1 bg-black/20 text-white text-sm rounded-lg px-3 py-1.5 border border-white/10 focus:outline-none focus:border-white/30"
-                  >
-                    <option value="">-- Add waitron --</option>
-                    {available.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.full_name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => addStaffToZone(category.id)}
-                    disabled={!selectedStaff[category.id]}
-                    className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white rounded-lg px-3 py-1.5 text-sm transition-colors"
-                  >
-                    <UserPlus size={14} /> Add
-                  </button>
-                </div>
-              )}
-
-              {staff.length > 0 && available.length === 0 && zoneAssignments.length > 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  All on-shift waitrons assigned to this zone
-                </p>
-              )}
-            </div>
+        {categories
+          .filter(
+            (cat) =>
+              !staffSearch ||
+              cat.name.toLowerCase().includes(staffSearch.toLowerCase()) ||
+              (assignments[cat.id] || []).some((a) =>
+                (a.profiles as { full_name: string } | null)?.full_name
+                  ?.toLowerCase()
+                  .includes(staffSearch.toLowerCase())
+              )
           )
-        })}
+          .map((category) => {
+            const colors = categoryColors[category.name] || {
+              card: 'bg-gray-800 border-gray-700',
+              text: 'text-gray-400',
+              badge: 'bg-gray-700 text-gray-300',
+            }
+            const totalTables = category.tables?.length || 0
+            const occupiedTables =
+              category.tables?.filter((t) => t.status === 'occupied').length || 0
+            const zoneAssignments = assignments[category.id] || []
+            const available = getAvailableStaff(category.id)
+
+            return (
+              <div key={category.id} className={`rounded-xl border p-4 ${colors.card}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h4 className={`font-semibold ${colors.text}`}>{category.name}</h4>
+                    <p className="text-gray-500 text-xs">
+                      {occupiedTables}/{totalTables} tables occupied
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Users size={14} className={colors.text} />
+                    <span className={`text-xs font-medium ${colors.text}`}>
+                      {zoneAssignments.length} assigned
+                    </span>
+                  </div>
+                </div>
+
+                {zoneAssignments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {zoneAssignments.map((assignment) => (
+                      <div
+                        key={assignment.id}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${colors.badge}`}
+                      >
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                        {assignment.profiles?.full_name}
+                        <button
+                          onClick={() => removeStaffFromZone(assignment.id)}
+                          className="ml-1 opacity-60 hover:opacity-100 transition-opacity"
+                        >
+                          <UserMinus size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {staff.length > 0 && available.length > 0 && (
+                  <div className="flex gap-2">
+                    <select
+                      value={selectedStaff[category.id] || ''}
+                      onChange={(e) =>
+                        setSelectedStaff((prev) => ({ ...prev, [category.id]: e.target.value }))
+                      }
+                      className="flex-1 bg-black/20 text-white text-sm rounded-lg px-3 py-1.5 border border-white/10 focus:outline-none focus:border-white/30"
+                    >
+                      <option value="">-- Add waitron --</option>
+                      {available.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.full_name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => addStaffToZone(category.id)}
+                      disabled={!selectedStaff[category.id]}
+                      className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white rounded-lg px-3 py-1.5 text-sm transition-colors"
+                    >
+                      <UserPlus size={14} /> Add
+                    </button>
+                  </div>
+                )}
+
+                {staff.length > 0 && available.length === 0 && zoneAssignments.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    All on-shift waitrons assigned to this zone
+                  </p>
+                )}
+              </div>
+            )
+          })}
       </div>
     </div>
   )

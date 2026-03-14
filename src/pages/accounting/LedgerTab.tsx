@@ -10,6 +10,7 @@ interface Props {
 
 export default function LedgerTab({ ledgerEntries, dateRange }: Props) {
   const [selected, setSelected] = useState<LedgerEntry | null>(null)
+  const [search, setSearch] = useState('')
 
   const exportPDF = () => {
     const doc = createPDF('General Ledger', dateRange)
@@ -59,44 +60,66 @@ export default function LedgerTab({ ledgerEntries, dateRange }: Props) {
       </div>
 
       <div className="space-y-2">
-        {ledgerEntries.length === 0 ? (
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search ledger entries…"
+          className="w-full bg-gray-900 border border-gray-800 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-amber-500"
+        />
+        {ledgerEntries.filter(
+          (e) =>
+            !search ||
+            (e.description || '').toLowerCase().includes(search.toLowerCase()) ||
+            (e.ref || '').toLowerCase().includes(search.toLowerCase()) ||
+            (e.type || '').toLowerCase().includes(search.toLowerCase())
+        ).length === 0 ? (
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center text-gray-600">
             No entries for this period
           </div>
         ) : (
-          ledgerEntries.map((entry, i) => (
-            <button
-              key={entry.id + i}
-              onClick={() => setSelected(entry)}
-              className={`w-full bg-gray-900 border rounded-xl px-4 py-3 flex items-center justify-between gap-3 hover:border-gray-600 transition-colors text-left ${entry.type === 'debit' ? 'border-red-500/20' : 'border-gray-800'}`}
-            >
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div
-                  className={`w-2 h-2 rounded-full flex-shrink-0 ${entry.type === 'debit' ? 'bg-red-400' : 'bg-green-400'}`}
-                />
-                <div className="min-w-0">
-                  <p className="text-white text-sm font-medium truncate">{entry.description}</p>
-                  <p className="text-gray-500 text-xs">
-                    {new Date(entry.date).toLocaleDateString('en-NG')} · {entry.staff || 'System'} ·{' '}
-                    <span className="capitalize">{entry.method || '—'}</span>
+          ledgerEntries
+            .filter(
+              (e) =>
+                !search ||
+                (e.description || '').toLowerCase().includes(search.toLowerCase()) ||
+                (e.ref || '').toLowerCase().includes(search.toLowerCase()) ||
+                (e.type || '').toLowerCase().includes(search.toLowerCase())
+            )
+            .map((entry, i) => (
+              <button
+                key={entry.id + i}
+                onClick={() => setSelected(entry)}
+                className={`w-full bg-gray-900 border rounded-xl px-4 py-3 flex items-center justify-between gap-3 hover:border-gray-600 transition-colors text-left ${entry.type === 'debit' ? 'border-red-500/20' : 'border-gray-800'}`}
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div
+                    className={`w-2 h-2 rounded-full flex-shrink-0 ${entry.type === 'debit' ? 'bg-red-400' : 'bg-green-400'}`}
+                  />
+                  <div className="min-w-0">
+                    <p className="text-white text-sm font-medium truncate">{entry.description}</p>
+                    <p className="text-gray-500 text-xs">
+                      {new Date(entry.date).toLocaleDateString('en-NG')} · {entry.staff || 'System'}{' '}
+                      · <span className="capitalize">{entry.method || '—'}</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  {entry.credit > 0 && (
+                    <p className="text-green-400 font-bold text-sm">
+                      +₦{entry.credit.toLocaleString()}
+                    </p>
+                  )}
+                  {entry.debit > 0 && (
+                    <p className="text-red-400 font-bold text-sm">
+                      -₦{entry.debit.toLocaleString()}
+                    </p>
+                  )}
+                  <p className={`text-xs ${entry.balance >= 0 ? 'text-gray-400' : 'text-red-400'}`}>
+                    Bal: ₦{entry.balance.toLocaleString()}
                   </p>
                 </div>
-              </div>
-              <div className="text-right flex-shrink-0">
-                {entry.credit > 0 && (
-                  <p className="text-green-400 font-bold text-sm">
-                    +₦{entry.credit.toLocaleString()}
-                  </p>
-                )}
-                {entry.debit > 0 && (
-                  <p className="text-red-400 font-bold text-sm">-₦{entry.debit.toLocaleString()}</p>
-                )}
-                <p className={`text-xs ${entry.balance >= 0 ? 'text-gray-400' : 'text-red-400'}`}>
-                  Bal: ₦{entry.balance.toLocaleString()}
-                </p>
-              </div>
-            </button>
-          ))
+              </button>
+            ))
         )}
       </div>
 

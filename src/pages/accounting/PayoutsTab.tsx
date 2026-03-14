@@ -22,6 +22,7 @@ export default function PayoutsTab({ payouts, totalPayouts, onRefresh }: Props) 
   const { profile } = useAuth()
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState('')
   const [form, setForm] = useState<PayoutForm>({
     amount: '',
     reason: '',
@@ -70,30 +71,48 @@ export default function PayoutsTab({ payouts, totalPayouts, onRefresh }: Props) 
             No expenses recorded for this period
           </div>
         ) : (
-          payouts.map((payout) => (
-            <div
-              key={payout.id}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between"
-            >
-              <div>
-                <p className="text-white font-medium">{payout.reason}</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span
-                    className={`text-xs px-2 py-0.5 rounded-lg capitalize ${categoryColor[payout.category] ?? 'bg-gray-700 text-gray-400'}`}
-                  >
-                    {payout.category}
-                  </span>
-                  {payout.paid_to && (
-                    <span className="text-gray-500 text-xs">→ {payout.paid_to}</span>
-                  )}
-                  <span className="text-gray-600 text-xs">
-                    {new Date(payout.created_at).toLocaleString('en-NG')}
-                  </span>
+          <>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search payouts…"
+              className="w-full bg-gray-900 border border-gray-800 text-white text-sm rounded-xl px-4 py-2.5 mb-3 focus:outline-none focus:border-amber-500"
+            />
+            {payouts
+              .filter(
+                (p) =>
+                  !search ||
+                  (p.reason || '').toLowerCase().includes(search.toLowerCase()) ||
+                  (p.paid_to || '').toLowerCase().includes(search.toLowerCase()) ||
+                  (p.category || '').toLowerCase().includes(search.toLowerCase())
+              )
+              .map((payout) => (
+                <div
+                  key={payout.id}
+                  className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between"
+                >
+                  <div>
+                    <p className="text-white font-medium">{payout.reason}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-lg capitalize ${categoryColor[payout.category] ?? 'bg-gray-700 text-gray-400'}`}
+                      >
+                        {payout.category}
+                      </span>
+                      {payout.paid_to && (
+                        <span className="text-gray-500 text-xs">→ {payout.paid_to}</span>
+                      )}
+                      <span className="text-gray-600 text-xs">
+                        {new Date(payout.created_at).toLocaleString('en-NG')}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-red-400 font-bold text-lg">
+                    ₦{payout.amount?.toLocaleString()}
+                  </p>
                 </div>
-              </div>
-              <p className="text-red-400 font-bold text-lg">₦{payout.amount?.toLocaleString()}</p>
-            </div>
-          ))
+              ))}
+          </>
         )}
       </div>
 

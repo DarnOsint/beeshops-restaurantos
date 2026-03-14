@@ -29,6 +29,7 @@ export default function ShiftManager({ onClose }: Props) {
   const { profile } = useAuth()
   const [staff, setStaff] = useState<StaffMember[]>([])
   const [activeShifts, setActiveShifts] = useState<Shift[]>([])
+  const [search, setSearch] = useState('')
   const [todayLog, setTodayLog] = useState<Shift[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'active' | 'all' | 'log'>('active')
@@ -203,29 +204,42 @@ export default function ShiftManager({ onClose }: Props) {
 
       {tab === 'all' && (
         <div className="space-y-2">
-          {staff.map((member) => (
-            <div
-              key={member.id}
-              className="flex items-center justify-between bg-gray-800 rounded-xl p-3"
-            >
-              <div>
-                <p className="text-white font-medium">{member.full_name}</p>
-                <p className="text-gray-400 text-xs capitalize">{member.role}</p>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search staff…"
+            className="w-full bg-gray-900 border border-gray-800 text-white text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:border-amber-500"
+          />
+          {staff
+            .filter(
+              (m) =>
+                !search ||
+                m.staff_name.toLowerCase().includes(search.toLowerCase()) ||
+                (m.role || '').toLowerCase().includes(search.toLowerCase())
+            )
+            .map((member) => (
+              <div
+                key={member.id}
+                className="flex items-center justify-between bg-gray-800 rounded-xl p-3"
+              >
+                <div>
+                  <p className="text-white font-medium">{member.full_name}</p>
+                  <p className="text-gray-400 text-xs capitalize">{member.role}</p>
+                </div>
+                {isActive(member.id) ? (
+                  <span className="flex items-center gap-1 text-green-400 text-xs font-medium">
+                    <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" /> On Shift
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => clockIn(member)}
+                    className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg px-3 py-1.5 text-sm transition-colors"
+                  >
+                    <UserCheck size={14} /> Clock In
+                  </button>
+                )}
               </div>
-              {isActive(member.id) ? (
-                <span className="flex items-center gap-1 text-green-400 text-xs font-medium">
-                  <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" /> On Shift
-                </span>
-              ) : (
-                <button
-                  onClick={() => clockIn(member)}
-                  className="flex items-center gap-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg px-3 py-1.5 text-sm transition-colors"
-                >
-                  <UserCheck size={14} /> Clock In
-                </button>
-              )}
-            </div>
-          ))}
+            ))}
         </div>
       )}
 
