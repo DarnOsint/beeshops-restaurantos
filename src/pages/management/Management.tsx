@@ -94,7 +94,7 @@ export default function Management() {
       supabase.from('rooms').select('status'),
       supabase
         .from('attendance')
-        .select('id')
+        .select('staff_id')
         .eq('date', new Date().toISOString().split('T')[0])
         .is('clock_out', null),
       supabase
@@ -107,7 +107,8 @@ export default function Management() {
       openOrders: ordersRes.data?.length || 0,
       occupiedTables: tablesRes.data?.length || 0,
       occupiedRooms: roomsRes.data?.filter((r) => r.status === 'occupied').length || 0,
-      staffOnShift: staffRes.data?.length || 0,
+      staffOnShift: new Set((staffRes.data || []).map((r: { staff_id: string }) => r.staff_id))
+        .size,
       todayRevenue: revenueRes.data?.reduce((s, o) => s + (o.total_amount || 0), 0) || 0,
     })
   }, [])

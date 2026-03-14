@@ -118,7 +118,7 @@ export default function Executive() {
         supabase.from('rooms').select('status'),
         supabase
           .from('attendance')
-          .select('id')
+          .select('staff_id')
           .eq('date', new Date().toISOString().split('T')[0])
           .is('clock_out', null),
         supabase.from('inventory').select('id, current_stock, minimum_stock').eq('is_active', true),
@@ -145,7 +145,8 @@ export default function Executive() {
       openOrders: ordersRes.data?.length || 0,
       occupiedTables: tablesRes.data?.filter((t) => t.status === 'occupied').length || 0,
       occupiedRooms: roomsRes.data?.filter((r) => r.status === 'occupied').length || 0,
-      staffOnDuty: shiftsRes.data?.length || 0,
+      staffOnDuty: new Set((shiftsRes.data || []).map((r: { staff_id: string }) => r.staff_id))
+        .size,
       lowStock: stockRes.data?.filter((i) => i.current_stock <= i.minimum_stock).length || 0,
     })
     setRecentOrders((recentRes.data || []) as Record<string, unknown>[])

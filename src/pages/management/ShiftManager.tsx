@@ -69,7 +69,18 @@ export default function ShiftManager({ onClose }: Props) {
       .select('*')
       .is('clock_out', null)
       .order('clock_in', { ascending: true })
-    if (data) setActiveShifts(data)
+    if (data) {
+      // Deduplicate by staff_id — keep the most recent row per staff
+      // (guards against duplicate clock-ins that slipped through before the live-check fix)
+      const seen = new Map<string, (typeof data)[0]>()
+      for (const row of data) {
+        const existing = seen.get(row.staff_id)
+        if (!existing || new Date(row.clock_in) > new Date(existing.clock_in)) {
+          seen.set(row.staff_id, row)
+        }
+      }
+      setActiveShifts(Array.from(seen.values()))
+    }
   }
   const fetchTodayLog = async () => {
     const today = new Date().toISOString().split('T')[0]
