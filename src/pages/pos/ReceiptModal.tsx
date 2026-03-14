@@ -41,14 +41,14 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
     0
   )
   const vatRate = 0.075
-  const vatAmount = subtotal * vatRate
-  const total = subtotal + vatAmount
+  // Use the order's actual charged total — no VAT displayed on receipt
+  const total = (order as unknown as { total_amount?: number }).total_amount || subtotal
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`${window.location.origin}/receipt/${order.id}`)}&color=000000&bgcolor=ffffff`
 
   const handleThermalPrint = async () => {
     setPrinting(true)
     await printReceipt(
-      { order, items, table, staffName, orderRef, subtotal, vatAmount, total } as Parameters<
+      { order, items, table, staffName, orderRef, subtotal, vatAmount: 0, total } as Parameters<
         typeof printReceipt
       >[0],
       () => handlePrint('customer')
@@ -235,13 +235,7 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
                   </div>
                 ))}
                 <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-                {[
-                  ['Subtotal', `₦${subtotal.toLocaleString()}`],
-                  [
-                    'VAT (7.5%)',
-                    `₦${vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                  ],
-                ].map(([l, v]) => (
+                {[['Subtotal', `₦${subtotal.toLocaleString()}`]].map(([l, v]) => (
                   <div
                     key={l}
                     style={{
@@ -273,9 +267,6 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
                       maximumFractionDigits: 2,
                     })}
                   </span>
-                </div>
-                <div style={{ fontSize: '9px', color: '#666', margin: '2px 0' }}>
-                  VAT Reg: [Your TIN Number]
                 </div>
                 {(order as unknown as { notes?: string }).notes && (
                   <div style={{ fontSize: '10px', marginTop: '6px', color: '#444' }}>
@@ -396,13 +387,7 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
                   </div>
                 ))}
                 <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-                {[
-                  ['Subtotal', `₦${subtotal.toLocaleString()}`],
-                  [
-                    'VAT (7.5%)',
-                    `₦${vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-                  ],
-                ].map(([l, v]) => (
+                {[['Subtotal', `₦${subtotal.toLocaleString()}`]].map(([l, v]) => (
                   <div
                     key={l}
                     style={{

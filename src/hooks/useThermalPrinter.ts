@@ -86,13 +86,7 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
 
   push(text('================================\n'))
   push(row('Subtotal:', '\u20A6' + subtotal.toLocaleString()))
-  push(
-    row(
-      'VAT (7.5%):',
-      '\u20A6' +
-        vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-    )
-  )
+
   push(text('--------------------------------\n'))
   push(
     cmd.bold,
@@ -105,7 +99,6 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
     cmd.normalSize,
     cmd.boldOff
   )
-  push(text('VAT Reg: [Your TIN]\n'))
   push(text('--------------------------------\n'))
   push(cmd.alignCenter)
   push(text('Thank you for visiting!\n'))

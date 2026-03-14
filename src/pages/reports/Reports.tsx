@@ -430,34 +430,30 @@ export default function Reports() {
       ['Generated:', report.generatedAt],
       [],
       ['REVENUE SUMMARY'],
-      ['Gross Revenue (F&B)', 'NGN ' + report.grossRevenue.toLocaleString()],
-      ['Room Revenue', 'NGN ' + report.roomRevenue.toLocaleString()],
-      ['Total Revenue', 'NGN ' + report.totalRevenue.toLocaleString()],
-      ['Total Expenses', 'NGN ' + report.totalExpenses.toLocaleString()],
-      ['Net Revenue', 'NGN ' + report.netRevenue.toLocaleString()],
+      ['Gross Revenue (F&B)', '₦' + report.grossRevenue.toLocaleString()],
+      ['Room Revenue', '₦' + report.roomRevenue.toLocaleString()],
+      ['Total Revenue', '₦' + report.totalRevenue.toLocaleString()],
+      ['Total Expenses', '₦' + report.totalExpenses.toLocaleString()],
+      ['Net Revenue', '₦' + report.netRevenue.toLocaleString()],
       [],
       ['ORDERS'],
       ['Total Orders', report.totalOrders],
       ['Paid Orders', report.paidOrdersCount],
       ['Cancelled Orders', report.cancelledOrders],
-      ['Avg Order Value', 'NGN ' + report.avgOrderValue.toLocaleString()],
+      ['Avg Order Value', '₦' + report.avgOrderValue.toLocaleString()],
       [],
       ['PAYMENT METHODS'],
-      ['Cash', 'NGN ' + report.byPayment.cash.toLocaleString()],
-      ['Bank POS', 'NGN ' + report.byPayment.bank_pos.toLocaleString()],
-      ['Bank Transfer', 'NGN ' + report.byPayment.transfer.toLocaleString()],
+      ['Cash', '₦' + report.byPayment.cash.toLocaleString()],
+      ['Bank POS', '₦' + report.byPayment.bank_pos.toLocaleString()],
+      ['Bank Transfer', '₦' + report.byPayment.transfer.toLocaleString()],
       [],
       ['TOP SELLING ITEMS'],
       ['Item', 'Qty Sold', 'Revenue'],
-      ...report.topItems.map((i) => [i.name, i.quantity, 'NGN ' + i.revenue.toLocaleString()]),
+      ...report.topItems.map((i) => [i.name, i.quantity, '₦' + i.revenue.toLocaleString()]),
       [],
       ['STAFF PERFORMANCE'],
       ['Staff', 'Orders', 'Revenue'],
-      ...report.staffPerformance.map((s) => [
-        s.name,
-        s.orders,
-        'NGN ' + s.revenue.toLocaleString(),
-      ]),
+      ...report.staffPerformance.map((s) => [s.name, s.orders, '₦' + s.revenue.toLocaleString()]),
     ]
     const csv = rows.map((r) => r.join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -678,7 +674,7 @@ export default function Reports() {
                 </div>
                 <div className="text-right">
                   <p className="text-white font-bold text-3xl">
-                    NGN {report.totalRevenue.toLocaleString()}
+                    ₦{report.totalRevenue.toLocaleString()}
                   </p>
                   <p className="text-gray-400 text-sm">Total Revenue</p>
                   <button
@@ -696,25 +692,25 @@ export default function Reports() {
                 [
                   {
                     label: 'Gross F&B Revenue',
-                    value: 'NGN ' + report.grossRevenue.toLocaleString(),
+                    value: '₦' + report.grossRevenue.toLocaleString(),
                     color: 'text-amber-400',
                     icon: TrendingUp,
                   },
                   {
                     label: 'Room Revenue',
-                    value: 'NGN ' + report.roomRevenue.toLocaleString(),
+                    value: '₦' + report.roomRevenue.toLocaleString(),
                     color: 'text-blue-400',
                     icon: Home,
                   },
                   {
                     label: 'Total Expenses',
-                    value: 'NGN ' + report.totalExpenses.toLocaleString(),
+                    value: '₦' + report.totalExpenses.toLocaleString(),
                     color: 'text-red-400',
                     icon: Banknote,
                   },
                   {
                     label: 'Net Revenue',
-                    value: 'NGN ' + report.netRevenue.toLocaleString(),
+                    value: '₦' + report.netRevenue.toLocaleString(),
                     color: 'text-green-400',
                     icon: TrendingUp,
                   },
@@ -738,7 +734,7 @@ export default function Reports() {
                   },
                   {
                     label: 'Avg Order Value',
-                    value: 'NGN ' + report.avgOrderValue.toLocaleString(),
+                    value: '₦' + report.avgOrderValue.toLocaleString(),
                     color: 'text-purple-400',
                     icon: BarChart2,
                   },
@@ -752,7 +748,7 @@ export default function Reports() {
                     label: 'Revenue / Cover',
                     value:
                       report.revenuePerCover > 0
-                        ? 'NGN ' + Math.round(report.revenuePerCover).toLocaleString()
+                        ? '₦' + Math.round(report.revenuePerCover).toLocaleString()
                         : '—',
                     color: 'text-amber-400',
                     icon: Users,
@@ -788,7 +784,7 @@ export default function Reports() {
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-gray-400">{item.label}</span>
                         <span className="text-white font-medium">
-                          NGN {item.value.toLocaleString()} (
+                          ₦{item.value.toLocaleString()} (
                           {report.grossRevenue
                             ? Math.round((item.value / report.grossRevenue) * 100)
                             : 0}
@@ -877,7 +873,7 @@ export default function Reports() {
                         border: '1px solid #374151',
                         borderRadius: '8px',
                       }}
-                      formatter={(v: number) => ['NGN ' + v.toLocaleString(), 'Revenue']}
+                      formatter={(v: number) => ['₦' + v.toLocaleString(), 'Revenue']}
                     />
                     <Bar dataKey="revenue" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -907,7 +903,7 @@ export default function Reports() {
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(v: number) => ['NGN ' + v.toLocaleString(), 'Revenue']}
+                        formatter={(v: number) => ['₦' + v.toLocaleString(), 'Revenue']}
                         contentStyle={{
                           background: '#111827',
                           border: '1px solid #374151',
@@ -934,7 +930,7 @@ export default function Reports() {
                           <span className="text-gray-600 text-xs">{cat.quantity} sold</span>
                         </div>
                         <span className="text-white font-medium text-sm">
-                          NGN {cat.revenue.toLocaleString()}
+                          ₦{cat.revenue.toLocaleString()}
                         </span>
                       </div>
                     ))}
@@ -973,7 +969,7 @@ export default function Reports() {
                             {item.quantity}
                           </td>
                           <td className="px-3 py-2.5 text-right text-white text-sm">
-                            NGN {item.revenue.toLocaleString()}
+                            ₦{item.revenue.toLocaleString()}
                           </td>
                         </tr>
                       ))}
@@ -1079,7 +1075,7 @@ export default function Reports() {
                   <div className="bg-gray-800 rounded-xl p-4">
                     <p className="text-gray-400 text-xs">Revenue</p>
                     <p className="text-amber-400 font-bold text-xl">
-                      NGN {report.roomRevenue.toLocaleString()}
+                      ₦{report.roomRevenue.toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -1096,7 +1092,7 @@ export default function Reports() {
                   <div className="bg-gray-800 rounded-xl p-4">
                     <p className="text-gray-400 text-xs">Outstanding</p>
                     <p className="text-red-400 font-bold text-xl">
-                      NGN {report.totalDebt.toLocaleString()}
+                      ₦{report.totalDebt.toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -1137,7 +1133,7 @@ export default function Reports() {
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-right text-red-400 font-bold text-sm">
-                            NGN {p.amount?.toLocaleString()}
+                            ₦{p.amount?.toLocaleString()}
                           </td>
                         </tr>
                       ))}
@@ -1146,7 +1142,7 @@ export default function Reports() {
                           Total Expenses
                         </td>
                         <td className="px-3 py-2.5 text-right text-red-400 font-bold">
-                          NGN {report.totalExpenses.toLocaleString()}
+                          ₦{report.totalExpenses.toLocaleString()}
                         </td>
                       </tr>
                     </tbody>
@@ -1165,13 +1161,13 @@ export default function Reports() {
                 <div className="bg-gray-800 rounded-xl p-4">
                   <p className="text-gray-400 text-xs">Opening Float</p>
                   <p className="text-blue-400 font-bold text-xl">
-                    NGN {report.totalOpeningFloat.toLocaleString()}
+                    ₦{report.totalOpeningFloat.toLocaleString()}
                   </p>
                 </div>
                 <div className="bg-gray-800 rounded-xl p-4">
                   <p className="text-gray-400 text-xs">Closing Float</p>
                   <p className="text-green-400 font-bold text-xl">
-                    NGN {report.totalClosingFloat.toLocaleString()}
+                    ₦{report.totalClosingFloat.toLocaleString()}
                   </p>
                 </div>
               </div>
