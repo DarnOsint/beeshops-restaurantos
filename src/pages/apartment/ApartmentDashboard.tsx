@@ -26,6 +26,7 @@ import PaymentModal from './apt/PaymentModal'
 import DetailsModal from './apt/DetailsModal'
 
 import { fmtShort, todayStr } from './apt/types'
+import { HelpTooltip } from '../../components/HelpTooltip'
 import type { Room, RoomStay, ServiceOrder, StaffMember, CheckInForm, PayForm } from './apt/types'
 
 const TABS = [
@@ -50,6 +51,57 @@ const DEFAULT_FORM: CheckInForm = {
   amount_paid: '',
   notes: '',
 }
+
+const APARTMENT_HELP_TIPS = [
+  {
+    id: 'apt-rooms',
+    title: 'Rooms Tab',
+    description:
+      'All apartment rooms at a glance — status badges (Available, Occupied, Reserved, Maintenance), current guest name, and check-out date. Tap Check In to register a new guest or Check Out to process a departure. Tap a guest card to see full details or record a payment.',
+  },
+  {
+    id: 'apt-reservations',
+    title: 'Reservations Tab',
+    description:
+      'Book a room in advance with a specific check-in date and expected arrival time. The system checks for date conflicts before saving — it will not let you double-book. Reserved rooms appear as blue blocks on the Calendar. Tap Check In on a reservation card when the guest arrives to convert it to an active stay.',
+  },
+  {
+    id: 'apt-calendar',
+    title: 'Calendar Tab',
+    description:
+      '14-day availability view across all rooms. Green = available, amber = occupied (active stay), blue = reserved (future booking). Navigate forward and backward with the arrow buttons. Hover any block to see the guest name.',
+  },
+  {
+    id: 'apt-roomservice',
+    title: 'Room Service Tab',
+    description:
+      'Pending room service orders from guests. Tap Mark Delivered when the order has been brought to the room. Orders automatically appear here when placed by guests through the system.',
+  },
+  {
+    id: 'apt-revenue',
+    title: 'Revenue Tab',
+    description:
+      'Room revenue for the selected period — total from active stays, average nightly rate, occupancy count, and a breakdown by payment method. Also shows room service revenue separately.',
+  },
+  {
+    id: 'apt-checkin',
+    title: 'Checking In a Guest',
+    description:
+      'Tap Check In on any available room. Fill in guest name, ID number, phone, check-in and check-out dates, number of adults and children, payment method, and amount paid. The room is immediately marked Occupied and blocked on the Calendar.',
+  },
+  {
+    id: 'apt-checkout',
+    title: 'Checking Out',
+    description:
+      'Tap Check Out on an occupied room. Confirm the checkout — the room status resets to Available and the stay is archived in the revenue records. If a guest is still outstanding on payment, record it via the Pay button before checking out.',
+  },
+  {
+    id: 'apt-overstay',
+    title: 'Overstays',
+    description:
+      'Rooms where the check-out date has passed but the guest is still marked as active are automatically flagged as Overstay (shown in red). Contact the guest and process check-out or update the dates.',
+  },
+]
 
 export default function ApartmentDashboard() {
   const { profile, signOut } = useAuth()
@@ -356,6 +408,7 @@ export default function ApartmentDashboard() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <HelpTooltip storageKey="apartment" tips={APARTMENT_HELP_TIPS} />
             <button onClick={fetchAll} className="p-2 rounded-xl hover:bg-gray-800 text-gray-400">
               <RefreshCw size={15} />
             </button>

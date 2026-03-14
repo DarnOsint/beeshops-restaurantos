@@ -347,15 +347,13 @@ export default function TableView() {
     if (waiterCalled || callingWaiter || !table) return
     setCallingWaiter(true)
     const waitronId = table.assigned_staff || table.profiles?.id || null
-    await supabase
-      .from('waiter_calls')
-      .insert({
-        table_id: tableId,
-        table_name: table.name,
-        waitron_id: waitronId,
-        waitron_name: table.profiles?.full_name || null,
-        status: 'pending',
-      })
+    await supabase.from('waiter_calls').insert({
+      table_id: tableId,
+      table_name: table.name,
+      waitron_id: waitronId,
+      waitron_name: table.profiles?.full_name || null,
+      status: 'pending',
+    })
     if (waitronId)
       await sendPushToStaff(
         waitronId,
@@ -430,31 +428,37 @@ export default function TableView() {
                   id: 'tv-browse',
                   title: 'Browsing the Menu',
                   description:
-                    'Scroll through available items and tap any item to add it to your order. Use the category filters at the top to find what you want faster. Tap the ℹ️ icon on any item for more details.',
+                    'Use the category tabs at the top to filter by type, or type in the search bar to find an item by name. Tap any item to add it to your order.',
                 },
                 {
                   id: 'tv-cart',
                   title: 'Your Cart',
                   description:
-                    'Tap the amber basket button in the top right to view your cart at any time. You can adjust quantities or remove items before placing your order.',
+                    'Tap the basket button (top right) to view your cart. Adjust quantities or remove items before placing your order. Your cart stays open — you can keep adding.',
                 },
                 {
                   id: 'tv-order',
                   title: 'Placing Your Order',
                   description:
-                    'When you are ready, tap Place Order from your cart. Your order goes to the waiter for approval before the kitchen or bar starts preparing it. You will see the status update in real time.',
+                    'Tap Place Order from your cart. Your order goes straight to the bar, kitchen, or grill depending on what you ordered. You will see status updates in real time on the My Order tab.',
                 },
                 {
                   id: 'tv-tracking',
                   title: 'Tracking Your Order',
                   description:
-                    'Switch to the My Order tab to see the live status of your items — Waiting, Preparing, Ready, or Served. The progress bar shows how much of your order has been completed.',
+                    'Switch to My Order to see live status per item — Pending, Preparing, Ready, or Served. A progress bar shows how much of your order is complete.',
                 },
                 {
                   id: 'tv-waiter',
                   title: 'Calling the Waiter',
                   description:
-                    'Tap Call Waiter at any time to alert your assigned waiter. They will receive a notification on their device. Use this if you need assistance, want to add more items, or are ready to pay.',
+                    'Tap Call Waiter to send an instant alert to your assigned waitron. Use this if you need help, want to add items, or are ready to pay.',
+                },
+                {
+                  id: 'tv-search',
+                  title: 'Searching the Menu',
+                  description:
+                    'Type any part of an item name in the search bar to filter results instantly. Works together with category tabs — filter to Drinks, then search for what you want.',
                 },
               ]}
             />

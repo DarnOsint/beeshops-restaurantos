@@ -344,67 +344,67 @@ export default function Accounting() {
                 id: 'acc-daterange',
                 title: 'Date Range Filter',
                 description:
-                  'All tabs respect the date range selected at the top — Today, This Week, This Month, or Custom. Change the range first before reading any figures, as all data filters to that period.',
+                  'All tabs respect the date range at the top — Today, This Week, This Month, or Custom. Set the range before reading any figures. The Overview, Orders, Voids, Ledger, and Staff tabs all filter to that period.',
               },
               {
                 id: 'acc-overview',
                 title: 'Overview Tab',
                 description:
-                  'Gross revenue, net revenue (after payouts), and a breakdown by payment method — Cash, Bank POS, and Bank Transfer. Also shows order count and average order value.',
+                  'Gross revenue, net revenue (after payouts), breakdown by payment method (Cash, Bank POS, Transfer, Credit), order count, average order value, and a per-waitron performance table.',
               },
               {
                 id: 'acc-orders',
                 title: 'Orders Tab',
                 description:
-                  'Full list of all orders in the selected period. Filter by status and type. Tap any order row to expand and see every item, the assigned waitron, table, payment method, and exact time.',
+                  'Full order list for the period. Filter by status and type. Expand any order to see every item, the waitron, table, payment method, and exact timestamp. Search by table name or waitron.',
               },
               {
                 id: 'acc-staff',
                 title: 'Staff Tab',
                 description:
-                  "Per-waitron performance breakdown — total revenue generated, number of orders closed, and average order value. Use this at shift close to verify each waitron's accountability.",
+                  "Per-waitron breakdown — total revenue, orders closed, average order value, and POS machine assigned. Use this at shift close to verify each waitron's sales against their POS terminal's expected total.",
               },
               {
                 id: 'acc-till',
                 title: 'Till Tab',
                 description:
-                  'Full log of all till sessions. Each session shows the opening float, total sales collected, payout deductions, expected closing cash, actual closing float, and any shortfall or surplus.',
+                  'Full log of all till sessions — opening float, total sales collected, payout deductions, expected vs actual closing cash, and any shortfall or surplus. Each session is tied to the manager who opened it.',
               },
               {
                 id: 'acc-payouts',
                 title: 'Payouts Tab',
                 description:
-                  'Record any cash paid out of the till — petty cash, supplier payments, staff advances, or other expenses. Each payout requires an amount, a reason, and a category.',
+                  'Record cash paid out of the till — expenses, petty cash, advances, or refunds. Each payout requires amount, reason, and category. Search by recipient, reason, or category. Refunds are also logged here.',
               },
               {
                 id: 'acc-trends',
                 title: 'Trends Tab',
                 description:
-                  'Line and bar charts showing revenue and order count over the selected period. Useful for identifying peak trading days, slow periods, and week-on-week patterns.',
+                  'Revenue and order count charts over the selected period. Identifies peak days, slow periods, and week-on-week patterns.',
               },
               {
                 id: 'acc-debtors',
                 title: 'Debtors Tab',
                 description:
-                  'Manage account customers — corporate clients or individuals who are allowed to run a tab and settle at the end of a period. Record payments and view outstanding balances.',
+                  'Account customers who pay at the end of a period. When a credit payment is made at the POS, the system checks if a debtor already exists for that phone number — if so, it adds to their existing balance instead of creating a duplicate. Record payments and send statements from here.',
               },
               {
                 id: 'acc-voids',
                 title: 'Voids Tab',
                 description:
-                  'A date-filtered log of all items voided. Each entry shows the item name, quantity, value lost, reason given, and which manager PIN approved the void.',
+                  'Date-filtered void log — item name, quantity, value, and which manager PIN authorised it. Each void also deletes the order_items DB row and reduces the order total automatically.',
               },
               {
                 id: 'acc-ledger',
                 title: 'Ledger Tab',
                 description:
-                  'The double-entry general ledger — every financial transaction recorded as a credit or debit with a running balance. Covers sales, payouts, debtor payments, and room charges. Exportable to PDF.',
+                  'Double-entry general ledger — every sale, payout, debtor payment, and room charge recorded as credit or debit with a running balance. Search by description, reference, or type. Exportable to PDF.',
               },
               {
                 id: 'acc-audit',
                 title: 'Audit Log Tab',
                 description:
-                  'A tamper-evident log of every action performed in the system — logins, order changes, voids, menu edits, staff changes, and settings updates.',
+                  'Tamper-evident log of every system action — logins, order changes, voids, menu edits, staff changes, clock-ins, and settings updates. For the full activity log with filters and CSV export, see Management → Activity tab.',
               },
             ]}
           />

@@ -12,34 +12,46 @@ import type { KdsOrder } from './types'
 
 const HELP_TIPS = [
   {
+    id: 'kds-tabs',
+    title: 'Orders & Stock Register',
+    description:
+      'The Kitchen Display has two tabs: Orders (incoming tickets) and Stock Register (daily food accountability). Switch between them using the tab buttons in the header.',
+  },
+  {
     id: 'kds-incoming',
     title: 'Incoming Orders',
     description:
-      'Food orders routed to the kitchen appear here automatically the moment a waitron confirms an order on the POS. Orders are sorted oldest first — always work from the top of the screen down.',
+      'Kitchen-destined items from any table order appear here automatically the moment a waitron confirms on the POS. Orders are sorted oldest first — always work from the top down.',
   },
   {
     id: 'kds-status',
-    title: 'Item Status Buttons',
+    title: 'Item Status',
     description:
-      'Each item has a Pending button. Tap it to move to Preparing (shown in amber) — then tap again when the dish is plated to mark it Ready (shown in green). Update items individually as they are cooked.',
+      'Each item starts as Pending. Tap to move to Preparing (amber), tap again when plated to mark Ready (green). Items move in one direction only — you cannot revert a Ready item.',
+  },
+  {
+    id: 'kds-allready',
+    title: 'All Ready Button',
+    description:
+      'Marks every kitchen item on the ticket ready at once. Hidden when all items are already ready. When tapped, the waitron is notified automatically to come and collect.',
   },
   {
     id: 'kds-urgency',
     title: 'Urgency Colours',
     description:
-      'Order cards change border colour based on wait time — normal (grey, under 10 minutes), getting late (amber, 10–20 minutes), urgent (red, 20+ minutes). Urgency is based on when the order was first placed, not when each item was added.',
+      'Grey = normal (under 10 min). Amber = getting late (10–20 min). Red = urgent (20+ min). Based on when the order was placed, not when items were added.',
   },
   {
     id: 'kds-notify',
     title: 'Waitron Notification',
     description:
-      'When you mark an item Ready, the assigned waitron receives a push notification on their device to come and collect it. You do not need to call out — the system handles it.',
+      'Marking any item or the full order ready sends an automatic push notification to the assigned waitron. No need to call out across the kitchen.',
   },
   {
-    id: 'kds-realtime',
-    title: 'Live Updates',
+    id: 'kds-stockregister',
+    title: 'Stock Register Tab',
     description:
-      'This screen updates automatically whenever a new order is placed or an item status changes. You do not need to refresh manually, but the refresh button in the top bar can be used if the screen ever appears stuck.',
+      'Record what raw ingredients were received at the start of service. The system auto-syncs what was sold from POS and calculates what should remain. Entries are locked once submitted — contact a manager to make corrections. Benchmarks show expected yield so you know immediately if something is off.',
   },
 ]
 

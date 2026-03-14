@@ -14,31 +14,31 @@ const HELP_TIPS = [
     id: 'bar-incoming',
     title: 'Incoming Orders',
     description:
-      'Drink orders from all tables arrive here automatically the moment a waitron confirms an order on the POS. Orders are sorted oldest first — always work top to bottom.',
+      'Drink orders from all tables arrive the moment a waitron confirms on the POS. Sorted oldest first — always work top to bottom. Only bar-destined items appear here.',
   },
   {
     id: 'bar-status',
-    title: 'Item Status Buttons',
+    title: 'Item Status',
     description:
-      'Each drink item has a status button: Pending → tap to mark Preparing → tap again to mark Ready. You can update items individually or use the All Ready button to mark the entire order at once.',
+      'Pending → tap to mark Preparing → tap again to mark Ready. Use All Ready to mark the full order at once when all drinks are poured. Items move one way only.',
   },
   {
     id: 'bar-notify',
     title: 'Waitron Notification',
     description:
-      'When you mark an item or the full order as Ready, the assigned waitron receives a push notification on their device to come and collect. Do not shout across the floor — let the system do it.',
+      'Marking an item or full order ready sends an automatic push notification to the assigned waitron. No shouting across the floor — the system handles it.',
   },
   {
     id: 'bar-urgency',
     title: 'Urgency Colours',
     description:
-      'Order cards change colour based on wait time — grey is normal (under 7 minutes), amber means it is getting late (7–15 minutes), and red means it is critically overdue (15+ minutes). Prioritise red cards first.',
+      'Grey = normal (under 7 min). Amber = getting late (7–15 min). Red = critically overdue (15+ min). Prioritise red cards immediately.',
   },
   {
-    id: 'bar-notes',
-    title: 'Order Notes',
+    id: 'bar-realtime',
+    title: 'Live Updates',
     description:
-      'If a waitron added a special instruction on the order (e.g. no ice, extra lime), it appears as an amber note card at the top of that order. Always check for notes before preparing.',
+      'The screen updates automatically via Supabase realtime — new tickets appear instantly and disappear when all items are marked ready. No need to refresh.',
   },
 ]
 

@@ -530,61 +530,67 @@ export default function POS() {
                   id: 'pos-clockin',
                   title: 'Clock In Required',
                   description:
-                    'You must be clocked in by a manager before you can access the POS. If you see a clock-in screen, contact your shift manager.',
+                    'You must be clocked in by a manager before accessing the POS. If you see a locked screen, contact your shift manager. The manager also assigns you a POS machine terminal at clock-in — this links all your sales to that device for end-of-shift reconciliation.',
                 },
                 {
                   id: 'pos-tables',
                   title: 'Table Grid',
                   description:
-                    'Your assigned tables are shown here. Green = available, amber/coloured = occupied. Tap an occupied table to add items or proceed to payment. Tables outside your assigned zone are greyed out and locked.',
+                    'Your assigned tables are shown here colour-coded by zone. Green = available, amber/coloured = occupied. Tap an occupied table to add more items or proceed to payment. Tables outside your assigned zone are greyed out. Use the zone filter tabs to focus on your area.',
+                },
+                {
+                  id: 'pos-search',
+                  title: 'Menu Search',
+                  description:
+                    'Type any item name in the search bar to filter the menu instantly. Use it together with category tabs — select Drinks first, then type "chap" to find Chapman immediately.',
                 },
                 {
                   id: 'pos-cashsale',
                   title: 'Cash Sale',
                   description:
-                    'For counter walk-ins where the customer pays immediately without sitting at a table. No table selection needed — just pick items and process payment on the spot.',
+                    'For counter walk-ins who pay immediately. No table needed — pick items and process payment on the spot. Inventory is depleted at payment, not at order time.',
                 },
                 {
                   id: 'pos-takeaway',
                   title: 'Takeaway',
                   description:
-                    'For phone-in or walk-in orders to go. You will be prompted to enter the customer name and phone number before selecting items.',
-                },
-                {
-                  id: 'pos-ordering',
-                  title: 'Placing an Order',
-                  description:
-                    'Tap a table → select items from the menu panel → tap Confirm Order. Items are automatically routed to the Kitchen, Bar, or Grill display based on category.',
+                    'For phone-in or walk-in orders to go. Enter the customer name and phone number, select items, and process payment. The order appears on the relevant KDS screens.',
                 },
                 {
                   id: 'pos-zonepricing',
-                  title: 'Zone Pricing',
+                  title: 'Zone Pricing & Hire Fee',
                   description:
-                    'Drink prices vary by table zone — Outdoor, Indoor, VIP Lounge, and The Nook each have their own price tier. Food items are always fixed price. The correct price is applied automatically.',
+                    'Drink prices vary by zone — Outdoor, Indoor, VIP Lounge, and The Nook each have their own tier. Food is always fixed price. The correct price is applied automatically. If a zone has a hire fee (e.g. The Nook), a banner reminds you to add it to the bill.',
                 },
                 {
                   id: 'pos-payment',
                   title: 'Processing Payment',
                   description:
-                    'Open the table and tap Pay. Choose Cash, Bank POS, or Transfer. For Bank Transfer, the venue account details are shown on screen. Run Tab keeps the order open for more items.',
+                    'Tap Pay on any open order. Choose Cash, Bank POS, Transfer, or Credit (runs a tab). Split Bill divides the order between multiple people, each paying separately. Run Tab keeps the order open to add more items later. Inventory is depleted at the point of payment.',
                 },
                 {
                   id: 'pos-void',
                   title: 'Voiding an Item',
                   description:
-                    'To remove an item from an order, use the void option in the order panel. A manager PIN is required to authorise any void — this is logged in the system.',
+                    'Tap the minus/delete button on any existing order item. A manager PIN is required. Once confirmed, the item is deleted from the database, the order total is reduced, and the KDS ticket is updated. Voids cannot be processed while the payment screen is open.',
                 },
                 {
-                  id: 'pos-myorders',
-                  title: 'My Orders Tab',
+                  id: 'pos-split',
+                  title: 'Split Payment',
                   description:
-                    'Shows all orders you have closed today. You can reprint a receipt from here if a customer requests one.',
+                    'Use Split Bill to divide the check between 2–6 people. Assign items to each person, then collect payment from each one in turn using any payment method. All splits must be completed before the order closes.',
+                },
+                {
+                  id: 'pos-credit',
+                  title: 'Credit / Account Payment',
+                  description:
+                    'Selecting Credit creates a debtor record for the customer. If the customer already has an account (matched by phone number), their existing balance is increased rather than creating a duplicate entry.',
                 },
                 {
                   id: 'pos-shift',
                   title: 'My Shift Tab',
                   description:
-                    'Displays your current shift summary — clock-in time, number of orders closed, tables served, items sold, and your total sales for the shift.',
+                    'Your shift summary — clock-in time, POS machine assigned, orders closed, tables served, and total sales. Refreshes in real time. Use this before clocking out to verify your figures match the till.',
                 },
               ]}
             />

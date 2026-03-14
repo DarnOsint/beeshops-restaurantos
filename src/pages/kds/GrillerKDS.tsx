@@ -14,37 +14,31 @@ const HELP_TIPS = [
     id: 'grill-tickets',
     title: 'Grill Tickets',
     description:
-      'Each card is a grill ticket grouping all grillable items from a single order. Tickets arrive automatically when a waitron confirms an order on the POS. They are sorted oldest first — work from the top.',
+      'Each card groups all grillable items from one order. Tickets arrive automatically when a waitron confirms on POS — sorted oldest first, work from the top.',
   },
   {
     id: 'grill-items',
     title: 'Marking Items Done',
     description:
-      'Tap the Done button next to each individual item as it comes off the grill. Once all items on a ticket are marked done, the waitron is automatically notified to collect.',
+      'Tap Done next to each item as it comes off the grill. When every item on a ticket is done, the waitron is notified automatically to collect.',
   },
   {
     id: 'grill-allready',
-    title: 'Ticket Complete Button',
+    title: 'All Done Button',
     description:
-      'Use the All Done — Ticket Complete button at the bottom of a ticket to mark every item ready at once. Use this when the full order is plated and ready to go together.',
+      'Marks every item on the ticket ready at once. Use this when the full order is plated and ready to go together. The button is hidden once all items are complete.',
   },
   {
     id: 'grill-urgency',
     title: 'Urgency Colours',
     description:
-      'Ticket headers change colour based on wait time — grey is normal (under 10 minutes), amber means getting late (10–20 minutes), red with a pulsing icon means critically overdue (20+ minutes).',
+      'Grey = normal (under 10 min). Amber = getting late (10–20 min). Red with pulsing icon = critically overdue (20+ min).',
   },
   {
-    id: 'grill-notes',
-    title: 'Item Notes',
+    id: 'grill-realtime',
+    title: 'Live Updates',
     description:
-      'Special instructions added by the waitron (e.g. well done, no pepper) appear in amber text under the item name. Always read notes before you start cooking.',
-  },
-  {
-    id: 'grill-sound',
-    title: 'New Order Alert',
-    description:
-      'The screen plays a sound when a new ticket arrives while you are on this page. If you do not hear sounds, check that your device volume is turned up.',
+      'Tickets appear and disappear automatically — no manual refresh needed. Tap the refresh button in the header if you ever need to force a reload.',
   },
 ]
 

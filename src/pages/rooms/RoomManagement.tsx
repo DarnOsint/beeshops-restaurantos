@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { HelpTooltip } from '../../components/HelpTooltip'
 import { BedDouble, Users, Clock, Wrench } from 'lucide-react'
 
 import RoomBoardTab from './RoomBoardTab'
@@ -21,6 +22,51 @@ const TABS = [
   { id: 'history', label: 'History', icon: Clock },
   { id: 'settings', label: 'Room Settings', icon: Wrench },
 ] as const
+
+const ROOMS_HELP_TIPS = [
+  {
+    id: 'rooms-board',
+    title: 'Room Board Tab',
+    description:
+      'Visual grid of all rooms — colour-coded by status: green (available), amber (occupied), blue (reserved), red (maintenance/overstay). Tap any room card to check in a new guest, view the current guest, or change the room status.',
+  },
+  {
+    id: 'rooms-checkin',
+    title: 'Checking In',
+    description:
+      'Tap Check In on any available room. Enter guest name, ID type and number, phone, email, number of guests, check-in and check-out dates, rate per night, payment method, and notes. The total amount is calculated automatically from the number of nights.',
+  },
+  {
+    id: 'rooms-checkout',
+    title: 'Checking Out',
+    description:
+      'Tap Check Out on any occupied room. The room status resets to Cleaning and the stay is archived. Ensure payment is fully settled before checking out.',
+  },
+  {
+    id: 'rooms-active',
+    title: 'Active Stays Tab',
+    description:
+      'List of all currently occupied rooms with guest name, check-in date, check-out date, nights remaining, and outstanding balance. Overstays are highlighted in red — contact the guest immediately.',
+  },
+  {
+    id: 'rooms-history',
+    title: 'History Tab',
+    description:
+      'Completed stays — checked-out and overstay records. Includes guest name, room, nights, total amount, and payment method.',
+  },
+  {
+    id: 'rooms-settings',
+    title: 'Settings Tab',
+    description:
+      'Configure room details — room number, type (Standard, Deluxe, Suite, etc.), and nightly rate. Changes take effect immediately for new check-ins.',
+  },
+  {
+    id: 'rooms-overstay',
+    title: 'Overstay Detection',
+    description:
+      'The system automatically checks every 5 minutes for stays where the check-out date has passed. These are flagged as Overstay (red) on the board so you can take action.',
+  },
+]
 
 export default function RoomManagement() {
   const { profile } = useAuth()
@@ -243,7 +289,10 @@ export default function RoomManagement() {
   return (
     <div className="min-h-full bg-gray-950">
       {/* Tabs */}
-      <div className="flex border-b border-gray-800 bg-gray-900 px-4 overflow-x-auto">
+      <div className="flex border-b border-gray-800 bg-gray-900 px-4 overflow-x-auto items-center">
+        <div className="mr-2">
+          <HelpTooltip storageKey="rooms" tips={ROOMS_HELP_TIPS} />
+        </div>
         {TABS.map((tab) => (
           <button
             key={tab.id}

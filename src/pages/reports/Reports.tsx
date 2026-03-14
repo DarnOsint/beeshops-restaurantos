@@ -512,37 +512,37 @@ export default function Reports() {
                   id: 'rep-daily',
                   title: 'Daily Report',
                   description:
-                    'Full trading summary for any selected day — total revenue, cash/POS/transfer breakdown, order count, top-selling menu items, per-waitron sales, void log, room stay revenue, and payout deductions.',
+                    'Full trading summary for any selected day — total and net revenue, cash/POS/transfer breakdown, order count, top-selling items, per-waitron performance (including POS machine assigned), void log, room stay revenue, and payout deductions.',
                 },
                 {
                   id: 'rep-monthly',
                   title: 'Monthly Report',
                   description:
-                    'Aggregated figures for a full calendar month — total and net revenue, orders, average order value, payment method split, and top items.',
+                    'Aggregated figures for a full calendar month — revenue, orders, average order value, payment method split, and top items.',
                 },
                 {
                   id: 'rep-annual',
                   title: 'Annual Report',
                   description:
-                    'Year-level performance summary — total revenue, order volume, revenue by category, and monthly breakdown.',
+                    'Year-level summary — total revenue, order volume, and a month-by-month breakdown.',
                 },
                 {
                   id: 'rep-zreport',
                   title: 'Z-Report',
                   description:
-                    'The end-of-day trading closure report. All staff must be clocked out before it will run.',
+                    'End-of-day closure report. All staff must be clocked out before it runs. Use this to formally close each trading day.',
                 },
                 {
-                  id: 'rep-period',
-                  title: 'Selecting the Period',
+                  id: 'rep-attendance',
+                  title: 'Attendance in Reports',
                   description:
-                    'For daily and Z-Reports, select the specific day, month, and year. For monthly reports, select month and year.',
+                    'Each report includes the attendance log for the period — staff name, role, shift duration, and POS machine assigned. Use this to match each waitron to their terminal for reconciliation.',
                 },
                 {
                   id: 'rep-export',
                   title: 'Exporting to PDF',
                   description:
-                    'After a report is generated, tap Export PDF to download a formatted, printable version.',
+                    'After generating any report, tap Export PDF to download a formatted printable version. Daily email reports are also sent automatically at 4:30am WAT via the scheduled cron job.',
                 },
               ]}
             />

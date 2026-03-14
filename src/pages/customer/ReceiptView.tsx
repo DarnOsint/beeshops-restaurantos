@@ -143,31 +143,25 @@ export default function ReceiptView() {
                   id: 'rv-status',
                   title: 'Order Status',
                   description:
-                    'This page shows whether your order is still in progress or has been marked as paid. The status updates automatically — you do not need to refresh.',
+                    'This page shows whether your order is open or has been settled. The status updates automatically — no need to refresh.',
                 },
                 {
                   id: 'rv-items',
                   title: 'Item Progress',
                   description:
-                    'Each item shows its current stage — Waiting means it has not started yet, Preparing means it is being made, Ready means it is done and on its way to you, and Served means it has been delivered to your table.',
+                    'Each item shows its stage — Pending (not started), Preparing (being made), Ready (on its way to you), or Served (delivered). Once all items are served, the order is complete.',
                 },
                 {
                   id: 'rv-payment',
                   title: 'Paying Your Bill',
                   description:
-                    'Payment is collected by your waiter at the table. Once paid, this receipt will update to show Payment complete and the method used. Do not leave without settling your bill.',
-                },
-                {
-                  id: 'rv-more',
-                  title: 'Adding More Items',
-                  description:
-                    'If your order is still open, tap Add More Items to go back to the menu and add to your order. New items will appear on this receipt automatically.',
+                    'Payment is collected by your waiter at the table — Cash, Bank POS, Bank Transfer, or run a tab for later. Once paid, this receipt will confirm Payment complete and show the method used.',
                 },
                 {
                   id: 'rv-waiter',
-                  title: 'Call Waiter',
+                  title: 'Call the Waiter',
                   description:
-                    'Tap the Call Waiter button at any time if you need assistance. Your waiter will receive a push notification on their device.',
+                    'Tap Call Waiter to send your assigned waitron an instant notification. Use this to ask for anything or signal that you are ready to pay.',
                 },
               ]}
             />

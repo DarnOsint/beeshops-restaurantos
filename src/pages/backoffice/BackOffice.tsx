@@ -169,43 +169,55 @@ export default function BackOffice() {
                 id: 'bo-staff',
                 title: 'Staff Management',
                 description:
-                  "Create and manage staff accounts. Set each person's role (owner, manager, waitron, kitchen, bar, griller) and assign a 4-digit PIN. A staff member cannot log into the system until they have an active account here.",
+                  'Add and manage staff accounts. Assign each person a role (owner, manager, supervisor, accountant, waitron, kitchen, bar, griller) and a 4-digit PIN. A staff member cannot log in until they have an active account. Email + password login is available to owner, manager, and accountant roles; all other roles use PIN only.',
               },
               {
                 id: 'bo-menu',
                 title: 'Menu Management',
                 description:
-                  'Add, edit, disable, or delete menu items. Each item must be assigned a category and a destination — Kitchen, Bar, or Griller. The destination controls which KDS screen the order appears on when placed.',
+                  'Add, edit, or disable menu items. Each item must have a category and a destination — Kitchen, Bar, or Griller. The destination controls which KDS screen the order appears on. Items can be searched by name and filtered by category.',
               },
               {
                 id: 'bo-zone',
                 title: 'Zone Pricing',
                 description:
-                  'Set separate drink prices for each table zone: Outdoor, Indoor, VIP Lounge, and The Nook. Food items always carry a fixed price regardless of zone. Zone prices are applied automatically when a waitron takes an order.',
+                  'Set different drink prices for each zone: Outdoor, Indoor, VIP Lounge, and The Nook. Food is always fixed price. Zone prices are applied automatically at order time. Search items by name to find and edit them quickly.',
               },
               {
                 id: 'bo-tables',
                 title: 'Table Configuration',
                 description:
-                  'Edit table names and assign each table to a zone (table category). These changes are reflected immediately on the POS table grid. Physically label your tables to match the system.',
+                  'Edit table names and assign zones. The Zone Settings section below the table grid lets you set a hire fee per zone — useful for The Nook which is bookable as a private space. The hire fee is shown as a reminder banner in the POS when that zone is selected.',
+              },
+              {
+                id: 'bo-pos',
+                title: 'POS Machines',
+                description:
+                  'Name and manage your physical POS terminals (e.g. POS-1, Counter, Bar Terminal). Once named, the manager can assign a specific machine to each waitron at clock-in. Every sale is then traceable to a terminal for end-of-shift reconciliation.',
               },
               {
                 id: 'bo-inventory',
                 title: 'Drink Inventory',
                 description:
-                  'Track current stock levels for all drinks. Set a minimum stock threshold for each item — when stock drops to or below the threshold, an alert appears on the Executive Dashboard. Log manual restocks here.',
+                  'Track stock levels for all drinks. Set a minimum threshold per item — when stock drops to or below that level, a low stock alert appears on the Executive Dashboard and the manager receives a push notification. Log manual restocks here.',
+              },
+              {
+                id: 'bo-kitchenstock',
+                title: 'Kitchen Stock Register',
+                description:
+                  'Daily food accountability: record what was received, auto-sync what was sold from POS, and calculate what should remain. Managers can set yield benchmarks per ingredient. Variance alarms flag waste or possible theft. Managers can edit entries; kitchen staff can only add.',
               },
               {
                 id: 'bo-suppliers',
                 title: 'Suppliers',
                 description:
-                  'Manage your supplier list and raise purchase orders. When a delivery is marked as received, the received quantity is added automatically to the relevant inventory items.',
+                  'Manage suppliers and raise purchase orders. Mark a delivery received to automatically add quantities to inventory. Search suppliers by name or contact to find them quickly.',
               },
               {
                 id: 'bo-qr',
                 title: 'QR Table Cards',
                 description:
-                  'Generate and print a QR code card for every table. Customers scan the code to view their current order, request a waiter, or see their bill — without needing to flag down staff.',
+                  'Generate and print QR code cards for all tables. Customers scan the code to browse the menu, place orders, track item progress, and call the waiter — all without needing to flag anyone down.',
               },
             ]}
           />

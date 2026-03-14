@@ -26,49 +26,49 @@ const HELP_TIPS = [
     id: 'exec-kpis',
     title: 'Live KPI Cards',
     description:
-      "Six real-time metrics — today's revenue, open orders, occupied tables (out of 60), occupied rooms (out of 20), staff on duty, and low stock item count. Cards auto-refresh every 30 seconds and on any database change.",
+      "Six real-time metrics: today's revenue, open orders, occupied tables, occupied rooms, staff on duty, and low stock count. All cards refresh every 30 seconds and instantly on any database change. Staff on duty is deduplicated — one person always counts as one even if clocked in multiple times.",
   },
   {
     id: 'exec-geofence',
     title: 'Geofence Control',
     description:
-      "Toggle location enforcement for all floor staff and waitrons. When ON, staff can only log in and use the POS from within the restaurant's GPS boundary. Owners and managers are exempt. Use the Radius button to adjust the boundary size for the Main venue and Apartments separately.",
+      "Toggle GPS boundary enforcement for all floor staff. When ON, staff can only use the POS from within the restaurant's physical boundary. Owners and managers are always exempt. Use Radius to set separate boundaries for the Main venue and Apartments. The boundary is off by default — enable it deliberately once your GPS coordinates are configured.",
   },
   {
     id: 'exec-bank',
     title: 'Bank Transfer Details',
     description:
-      "Set the venue's bank name, account number, and account name. These details are shown to waitrons at payment time when a customer selects Bank Transfer as their payment method.",
+      'Set the venue bank name, account number, and account name. These details appear on the POS payment screen whenever a customer selects Bank Transfer — your waitron can show it to the customer for instant transfer.',
   },
   {
     id: 'exec-cctv',
     title: 'CCTV Intelligence',
     description:
-      'Toggle the CCTV panel to see live occupancy, unresolved camera alerts by severity, zone activity heatmaps, till anomalies, and bar shelf stock warnings — all fed from the CV module running on your server.',
+      'Live occupancy, camera alerts by severity, zone heatmaps, till anomalies, and bar shelf warnings — all fed from the CV module on your Raspberry Pi server. Alerts can be resolved directly from this panel. Requires the Pi CV script to be running.',
   },
   {
     id: 'exec-lowstock',
     title: 'Low Stock Alert',
     description:
-      'A red button appears in the controls bar when any inventory item is at or below its minimum stock threshold. Tap it to go directly to the Back Office inventory screen to restock.',
-  },
-  {
-    id: 'exec-trend',
-    title: '7-Day Revenue Chart',
-    description:
-      'A daily revenue bar chart for the last 7 days showing the ₦ value and peak hour above the chart. Tap Full Report to go to the detailed Reports page.',
+      'A red button appears when any inventory item is at or below its minimum threshold. Tap it to jump to Inventory in Back Office to restock. The count updates in real time.',
   },
   {
     id: 'exec-recentorders',
-    title: 'Recent Orders Feed',
+    title: "Today's Orders Feed",
     description:
-      'The 8 most recent orders across all tables and rooms — table name, assigned waitron, time, amount, and status. Status badges show open (amber) or paid (green).',
+      "Shows today's orders — table name, assigned waitron, time, amount, and status badge (open = amber, paid = green). Paid orders from previous days no longer appear here. Tap Full Report to go to detailed Reports.",
   },
   {
     id: 'exec-quickactions',
     title: 'Quick Actions',
     description:
-      'Shortcut buttons to Accounting, Reports, Back Office, Management, and Rooms. Use these to navigate quickly without going through the app menu.',
+      'Shortcut tiles to Accounting, Reports, Back Office, Management, Rooms, and Analytics. Use these instead of navigating through the sidebar.',
+  },
+  {
+    id: 'exec-peak',
+    title: 'Peak Hour',
+    description:
+      'Shows the hour of the day that generated the most revenue over the last 7 days. Use this to plan staffing — ensure your best waitrons are on during peak.',
   },
 ]
 

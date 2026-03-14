@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import ErrorBoundary from '../../components/ErrorBoundary'
+import { HelpTooltip } from '../../components/HelpTooltip'
 import {
   Users,
   ShoppingBag,
@@ -74,6 +75,45 @@ const ROLE_ICON: Record<string, React.ReactNode> = {
   griller: <Flame size={13} className="text-red-400" />,
   waitron: <Users size={13} className="text-amber-400" />,
 }
+
+const SUPERVISOR_TIPS = [
+  {
+    id: 'sup-floor',
+    title: 'Floor Tab',
+    description:
+      'Live view of every open order on the floor. Cards turn amber at 10 minutes and red at 20 minutes — escalate red cards immediately to the kitchen or bar. Use the zone filter (Outdoor, Indoor, VIP Lounge, The Nook) to focus on a specific area. This is a read-only view — use the Management page to take action.',
+  },
+  {
+    id: 'sup-staff',
+    title: 'Staff Tab',
+    description:
+      'Who is currently on shift, their role, and how long they have been on. Use this to quickly verify all positions are covered without calling the manager.',
+  },
+  {
+    id: 'sup-calls',
+    title: 'Calls Tab',
+    description:
+      'Pending waiter calls from customer tables — table name, assigned waitron, and how long the call has been waiting. If a call is unanswered beyond a reasonable time, notify the waitron directly.',
+  },
+  {
+    id: 'sup-voids',
+    title: 'Voids Tab',
+    description:
+      "Today's void log — item name, who authorised it, and when. The total voided value is shown at the top. Unusual void patterns should be escalated to the manager.",
+  },
+  {
+    id: 'sup-kpis',
+    title: 'KPI Strip',
+    description:
+      'Four live counts at a glance: open orders, pending items (not yet started in kitchen/bar), items currently being prepared, and total staff on shift. These update every 30 seconds and in real time via live subscriptions.',
+  },
+  {
+    id: 'sup-alerts',
+    title: 'Alert Badges',
+    description:
+      'The header shows red badge for late orders and amber badge for unanswered waiter calls. These are the two things that need your immediate attention on the floor.',
+  },
+]
 
 function SupervisorDashboardInner() {
   const { profile, signOut } = useAuth()
@@ -225,6 +265,7 @@ function SupervisorDashboardInner() {
               <span className="text-amber-400 text-xs font-bold">{calls.length}</span>
             </div>
           )}
+          <HelpTooltip storageKey="supervisor" tips={SUPERVISOR_TIPS} />
           <button onClick={fetchAll} className="text-gray-400 hover:text-white p-1">
             <RefreshCw size={15} />
           </button>

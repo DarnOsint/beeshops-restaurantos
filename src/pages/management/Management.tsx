@@ -246,61 +246,73 @@ export default function Management() {
       id: 'mgmt-overview',
       title: 'Overview',
       description:
-        "Live dashboard showing open orders, occupied tables, occupied rooms, staff on shift, and today's revenue. All figures update in real time via Supabase subscriptions.",
-    },
-    {
-      id: 'mgmt-lateorders',
-      title: 'Late Order Banner',
-      description:
-        'A red alert banner appears at the top when any order has been pending longer than the configured threshold. It shows the table name, pending item count, which station (Kitchen/Bar/Grill) is holding it, and how long it has waited. Tap Delivered to dismiss.',
+        "Live dashboard: open orders, occupied tables and rooms, staff on shift, and today's revenue — all updating in real time. The late orders banner turns red when any order exceeds the configured alert threshold (set under Settings). Figures are deduplicated so one waitron always counts as one.",
     },
     {
       id: 'mgmt-shifts',
       title: 'Shifts Tab',
       description:
-        'Clock staff in and out for the current shift. A waitron who is not clocked in cannot access the POS — they will see a blocked screen. You can also view who is currently on shift and their clock-in time.',
+        'Clock staff in and out. When clocking in a waitron, assign them a POS machine from the dropdown if you have named terminals — this links every sale to a specific device for reconciliation. The system checks the database live before every clock-in to prevent duplicate entries. Clocking out a waitron with open orders triggers a warning — resolve those orders first.',
     },
     {
       id: 'mgmt-tables',
       title: 'Tables Tab',
       description:
-        'Assign waitrons to table zones (Outdoor, Indoor, VIP Lounge, The Nook). A waitron will only see and serve tables in their assigned zone. You can also assign individual tables directly to a specific waitron.',
+        'Assign waitrons to zones (Outdoor, Indoor, VIP Lounge, The Nook) or to specific individual tables. A waitron only sees and serves tables in their assigned area. You can reassign mid-shift if needed.',
     },
     {
       id: 'mgmt-orders',
       title: 'Orders Tab',
       description:
-        'Live view of all currently open orders across the venue — table name, assigned waitron, items ordered, and total amount. Useful for monitoring floor activity without walking around.',
+        'Live view of all open orders — table, waitron, items, and total. Use Force Close on any order that is stuck as open after payment has already been collected. Force Close marks all items as delivered so the KDS clears, frees the table, and closes the order cleanly.',
     },
     {
       id: 'mgmt-till',
       title: 'Till Tab',
       description:
-        'Open and close till sessions, record the opening float, and log cash payouts. Each session is saved with expected vs actual cash for reconciliation.',
+        'Open and close till sessions with opening float. Log cash payouts (expenses, petty cash, advances) during the session. At close, the system calculates expected cash vs actual and flags any shortfall or surplus.',
+    },
+    {
+      id: 'mgmt-kitchen',
+      title: 'Kitchen Stock Tab',
+      description:
+        'Daily food stock register — records what was received, auto-syncs what was sold from POS, and calculates what should remain. Managers can edit and delete entries; kitchen staff can only add new entries. Variance alarms flag possible theft or waste.',
     },
     {
       id: 'mgmt-service',
       title: 'Service Tab',
       description:
-        'Real-time log of every item marked as served by a waitron today — item name, table, waitron, and timestamp. Useful for verifying service delivery disputes.',
+        'Real-time log of every item marked served by a waitron — item, table, waitron, and timestamp. Use this to resolve customer disputes about whether an item was delivered.',
     },
     {
       id: 'mgmt-voids',
       title: 'Voids Tab',
       description:
-        'Shows all void actions performed today — item name, quantity, value, reason given, and which manager PIN authorised it. Voids require manager approval and cannot be deleted.',
+        'All voids performed today — item name, quantity, value, and which manager PIN authorised it. Every void also deletes the order_items row and reduces the order total in real time. Cannot be reversed.',
+    },
+    {
+      id: 'mgmt-activity',
+      title: 'Activity Log Tab',
+      description:
+        'Complete audit trail of everything that has happened: logins (email and PIN, with device type), clock-ins and outs, orders placed and paid, voids, supplier actions, and settings changes. Filter by group (Login, Sales, Voids, Shifts, BackOffice) or search by staff name or action. Exportable to CSV.',
     },
     {
       id: 'mgmt-cctv',
       title: 'CCTV Tab',
       description:
-        'Live occupancy count, unresolved camera alerts, bar shelf stock warnings, and zone activity heatmaps fed from the CV intelligence module. Alerts are colour-coded by severity.',
+        'Live occupancy, camera alerts, and heatmaps from the CV module. Resolve alerts directly from this tab — they are also surfaced on the Executive Dashboard.',
     },
     {
       id: 'mgmt-settings',
       title: 'Settings Tab',
       description:
-        'Configure the late order alert threshold — the number of minutes an order must be pending before it triggers the red alert banner. Applies across all order types including takeaway.',
+        'Configure the late order alert threshold — how many minutes before an unfulfilled order triggers a warning banner for management and the Supervisor.',
+    },
+    {
+      id: 'mgmt-sync',
+      title: 'Sync Tab',
+      description:
+        'Shows the offline sync queue — any writes that could not reach Supabase while offline are queued here and retried automatically when connectivity is restored. Tap Manual Sync to force an immediate retry.',
     },
   ]
 
