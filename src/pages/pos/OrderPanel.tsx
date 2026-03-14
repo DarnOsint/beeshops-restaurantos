@@ -74,7 +74,16 @@ export default function OrderPanel({
     const dbId = item._dbId || dbIdMap[item.id]
     if (!dbId) return
     setServedItems((prev) => ({ ...prev, [dbId]: true }))
-    await supabase.from('order_items').update({ status: 'delivered' }).eq('id', dbId)
+    const { error } = await supabase
+      .from('order_items')
+      .update({ status: 'delivered' })
+      .eq('id', dbId)
+    if (error) {
+      setServedItems((prev) => ({ ...prev, [dbId]: false }))
+      alert('Failed to mark item served: ' + error.message)
+      return
+    }
+    // service_log is best-effort — don't block on failure
     await supabase.from('service_log').insert({
       order_id: activeOrder.id,
       order_item_id: dbId,
@@ -199,7 +208,8 @@ export default function OrderPanel({
 
   const confirmVoid = async (approver: { name: string; id: string }) => {
     const item = orderItems.find((i) => i.id === voidRequest!.itemId)
-    await supabase.from('void_log').insert({
+    // void_log is audit trail — best-effort, don't block on failure
+    const { error: voidErr } = await supabase.from('void_log').insert({
       menu_item_name: voidRequest!.itemName,
       quantity: voidRequest!.quantity,
       unit_price: item?.price || 0,
@@ -208,6 +218,7 @@ export default function OrderPanel({
       approved_by_name: approver.name,
       approved_by: approver.id,
     })
+    if (voidErr) console.error('void_log insert failed:', voidErr.message)
     setOrderItems((prev) => prev.filter((i) => i.id !== voidRequest!.itemId))
     setVoidRequest(null)
   }

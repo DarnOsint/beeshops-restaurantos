@@ -135,7 +135,11 @@ export default function TableAssignment({ onClose }: Props) {
   }
 
   const removeStaffFromZone = async (assignmentId: string) => {
-    await supabase.from('zone_assignments').delete().eq('id', assignmentId)
+    const { error } = await supabase.from('zone_assignments').delete().eq('id', assignmentId)
+    if (error) {
+      alert('Failed to remove assignment: ' + error.message)
+      return
+    }
     fetchAssignments()
   }
 

@@ -258,55 +258,67 @@ export default function Suppliers({ onBack }: Props) {
 
   const receivePO = async (po: PurchaseOrder) => {
     if (!window.confirm('Mark this order as received? This will update inventory stock.')) return
-    for (const item of po.items) {
-      if (item.inventory_id) {
-        const { data: inv } = await supabase
-          .from('inventory')
-          .select('current_stock')
-          .eq('id', item.inventory_id)
-          .single()
-        if (inv) {
-          await supabase
+    try {
+      for (const item of po.items) {
+        if (item.inventory_id) {
+          const { data: inv, error: invErr } = await supabase
             .from('inventory')
-            .update({
-              current_stock: (inv as { current_stock: number }).current_stock + item.quantity,
-              updated_at: new Date().toISOString(),
-            })
+            .select('current_stock')
             .eq('id', item.inventory_id)
-          await supabase.from('restock_log').insert({
-            inventory_id: item.inventory_id,
-            change_amount: item.quantity,
-            reason: 'purchase_order',
-            recorded_by: profile?.id,
-            notes: 'PO received from ' + po.supplier_name,
-          })
+            .single()
+          if (invErr) throw invErr
+          if (inv) {
+            const { error: updErr } = await supabase
+              .from('inventory')
+              .update({
+                current_stock: (inv as { current_stock: number }).current_stock + item.quantity,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', item.inventory_id)
+            if (updErr) throw updErr
+            // restock_log is best-effort
+            await supabase.from('restock_log').insert({
+              inventory_id: item.inventory_id,
+              change_amount: item.quantity,
+              reason: 'purchase_order',
+              recorded_by: profile?.id,
+              notes: 'PO received from ' + po.supplier_name,
+            })
+          }
         }
       }
-    }
-    await supabase
-      .from('purchase_orders')
-      .update({
-        status: 'received',
-        received_by: profile?.id,
-        received_by_name: profile?.full_name,
-        received_date: new Date().toISOString().split('T')[0],
+      const { error: poErr } = await supabase
+        .from('purchase_orders')
+        .update({
+          status: 'received',
+          received_by: profile?.id,
+          received_by_name: profile?.full_name,
+          received_date: new Date().toISOString().split('T')[0],
+        })
+        .eq('id', po.id)
+      if (poErr) throw poErr
+      await audit({
+        action: 'PO_RECEIVED',
+        entity: 'purchase_order',
+        entityId: po.id,
+        entityName: po.supplier_name,
+        performer: profile,
       })
-      .eq('id', po.id)
-    await audit({
-      action: 'PO_RECEIVED',
-      entity: 'purchase_order',
-      entityId: po.id,
-      entityName: po.supplier_name,
-      performer: profile,
-    })
-    fetchAll()
+      fetchAll()
+    } catch (err) {
+      alert('Failed to receive PO: ' + (err instanceof Error ? err.message : String(err)))
+    }
   }
 
   const markPaid = async (po: PurchaseOrder) => {
-    await supabase
+    const { error } = await supabase
       .from('purchase_orders')
       .update({ payment_status: 'paid', payment_date: new Date().toISOString().split('T')[0] })
       .eq('id', po.id)
+    if (error) {
+      alert('Failed to mark paid: ' + error.message)
+      return
+    }
     fetchAll()
   }
 

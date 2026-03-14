@@ -13,7 +13,8 @@ export default function RoomHistory() {
       .in('status', ['checked_out', 'overstay'])
       .order('actual_checkout_at', { ascending: false })
       .limit(50)
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) console.error('RoomHistory fetch error:', error.message)
         setHistory((data as StayRow[]) || [])
         setLoading(false)
       })
