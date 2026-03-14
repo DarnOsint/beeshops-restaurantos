@@ -126,7 +126,10 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
     const dayEnd = new Date(clockOutTime)
     dayEnd.setHours(23, 59, 59, 999)
 
-    const [ordersRes, voidsRes, callsRes] = await Promise.all([
+    // Query 1: paid orders where closed_at falls in the day window
+    // Query 2: paid orders where closed_at is null but created_at is in window (edge case)
+    // Merge both result sets and deduplicate by id
+    const [ordersRes, ordersNullClosedRes, voidsRes, callsRes] = await Promise.all([
       supabase
         .from('orders')
         .select(
@@ -137,6 +140,16 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
         .gte('closed_at', dayStart.toISOString())
         .lte('closed_at', dayEnd.toISOString())
         .order('closed_at', { ascending: true }),
+      supabase
+        .from('orders')
+        .select(
+          'id, total_amount, payment_method, order_type, closed_at, created_at, tables(name, table_categories(name)), order_items(id, quantity, unit_price, total_price, menu_items(name, destination))'
+        )
+        .eq('staff_id', shift.staff_id)
+        .eq('status', 'paid')
+        .is('closed_at', null)
+        .gte('created_at', dayStart.toISOString())
+        .lte('created_at', dayEnd.toISOString()),
       supabase
         .from('void_log')
         .select('id, total_value, menu_item_name, void_type, approved_by_name, created_at')
@@ -154,14 +167,28 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
 
     if (ordersRes.error) console.error('ShiftSummary orders error:', ordersRes.error)
     if (voidsRes.error) console.error('ShiftSummary voids error:', voidsRes.error)
-    const ordersArr = (ordersRes.data || []) as OrderEntry[]
+
+    // Merge and deduplicate orders from both queries
+    const seen = new Set<string>()
+    const ordersArr = [...(ordersRes.data || []), ...(ordersNullClosedRes.data || [])].filter(
+      (o) => {
+        if (seen.has(o.id)) return false
+        seen.add(o.id)
+        return true
+      }
+    ) as OrderEntry[]
     const voidsArr = (voidsRes.data || []) as VoidEntry[]
     const callsArr = callsRes.data || []
-    console.log('ShiftSummary:', {
+    console.log('ShiftSummary debug:', {
       staff_id: shift.staff_id,
       clock_in: shift.clock_in,
-      orders: ordersArr.length,
+      dayStart: dayStart.toISOString(),
+      dayEnd: dayEnd.toISOString(),
+      ordersWithClosedAt: ordersRes.data?.length ?? 0,
+      ordersWithNullClosedAt: ordersNullClosedRes.data?.length ?? 0,
+      totalMerged: ordersArr.length,
       total: ordersArr.reduce((s, o) => s + (o.total_amount || 0), 0),
+      ordersError: ordersRes.error?.message,
     })
 
     const totalSales = ordersArr.reduce((s, o) => s + (o.total_amount || 0), 0)
