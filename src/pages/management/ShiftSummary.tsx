@@ -104,7 +104,17 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
   const loadSummary = async () => {
     if (!shift) return
     setLoading(true)
-    const clockOutTime = new Date()
+
+    // Use clock_out if already saved, otherwise use end-of-today WAT
+    // This ensures orders paid AFTER the summary opens are still counted
+    const clockOutTime = shift.clock_out
+      ? new Date(shift.clock_out)
+      : (() => {
+          const eod = new Date()
+          eod.setHours(23, 59, 59, 999)
+          return eod
+        })()
+
     const durationMinutes = Math.round(
       (clockOutTime.getTime() - new Date(shift.clock_in).getTime()) / 60000
     )
@@ -135,9 +145,17 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
         .not('resolved_at', 'is', null),
     ])
 
+    if (ordersRes.error) console.error('ShiftSummary orders error:', ordersRes.error)
+    if (voidsRes.error) console.error('ShiftSummary voids error:', voidsRes.error)
     const ordersArr = (ordersRes.data || []) as OrderEntry[]
     const voidsArr = (voidsRes.data || []) as VoidEntry[]
     const callsArr = callsRes.data || []
+    console.log('ShiftSummary:', {
+      staff_id: shift.staff_id,
+      clock_in: shift.clock_in,
+      orders: ordersArr.length,
+      total: ordersArr.reduce((s, o) => s + (o.total_amount || 0), 0),
+    })
 
     const totalSales = ordersArr.reduce((s, o) => s + (o.total_amount || 0), 0)
     const totalVoided = voidsArr.reduce((s, v) => s + (v.total_value || 0), 0)
