@@ -31,7 +31,7 @@ interface MfaStorage {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TIMEOUT_MS = 30 * 60 * 1000 // 30 minutes
+const TIMEOUT_MS = 60 * 60 * 1000 // 60 minutes
 const ACTIVITY_EVENTS = [
   'mousedown',
   'mousemove',

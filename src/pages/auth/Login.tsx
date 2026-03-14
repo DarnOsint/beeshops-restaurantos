@@ -203,7 +203,7 @@ export default function Login() {
         full_name: data.full_name,
         role: data.role,
         email: data.email,
-        pin: data.pin,
+        // PIN intentionally excluded from localStorage for security
         logged_in_at: new Date().toISOString(),
       })
     )
@@ -249,7 +249,7 @@ export default function Login() {
             <div>
               <p className="text-amber-400 text-sm font-medium">Session expired</p>
               <p className="text-amber-400/70 text-xs">
-                You were signed out after 30 minutes of inactivity.
+                You were signed out after 60 minutes of inactivity.
               </p>
             </div>
           </div>

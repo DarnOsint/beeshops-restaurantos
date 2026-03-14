@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { HelpTooltip } from '../../components/HelpTooltip'
-import { offlineInsert, offlineUpdate } from '../../lib/offlineWrite'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
 import { usePushNotifications } from '../../hooks/usePushNotifications'
@@ -259,7 +258,7 @@ export default function POS() {
   const fetchTables = async () => {
     const { data, error } = await supabase
       .from('tables')
-      .select('*, table_categories(id, name)')
+      .select('*, table_categories(id, name, hire_fee)')
       .order('name')
     if (!error) setTables(data || [])
     setLoading(false)
@@ -326,32 +325,18 @@ export default function POS() {
     setSelectedTable(table)
   }
 
-  const depleteInventory = async (items: OrderPayload['items']) => {
-    for (const item of items) {
-      if (!item.id) continue
-      const { data: inv } = await supabase
-        .from('inventory')
-        .select('id, current_stock')
-        .eq('menu_item_id', item.id)
-        .maybeSingle()
-      if (!inv) continue
-      const newStock = Math.max(0, (inv as { current_stock: number }).current_stock - item.quantity)
-      await supabase
-        .from('inventory')
-        .update({ current_stock: newStock, updated_at: new Date().toISOString() })
-        .eq('id', (inv as { id: string }).id)
-    }
-  }
-
   const handlePlaceOrder = async ({ table, items, notes, total }: OrderPayload) => {
     try {
       if (activeOrder) {
         const newTotal = (activeOrder.total_amount || 0) + total
-        await offlineUpdate('orders', activeOrder.id, {
-          total_amount: newTotal,
-          notes: notes || activeOrder.notes,
-          updated_at: new Date().toISOString(),
-        })
+        await supabase
+          .from('orders')
+          .update({
+            total_amount: newTotal,
+            notes: notes || activeOrder.notes,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', activeOrder.id)
         const newItems = items.map((item) => ({
           id: crypto.randomUUID(),
           order_id: activeOrder.id,
@@ -366,13 +351,12 @@ export default function POS() {
           created_at: new Date().toISOString(),
         }))
         for (const item of newItems) {
-          const { error } = await offlineInsert('order_items', item)
+          const { error } = await supabase.from('order_items').insert(item)
           if (error) {
             alert('Error adding items: ' + error.message)
             return
           }
         }
-        await depleteInventory(items)
         await audit({
           action: 'ORDER_UPDATED',
           entity: 'order',
@@ -425,13 +409,12 @@ export default function POS() {
         created_at: new Date().toISOString(),
       }))
       for (const item of orderItemRows) {
-        const { error } = await offlineInsert('order_items', item)
+        const { error } = await supabase.from('order_items').insert(item)
         if (error) {
           alert('Error adding items: ' + error.message)
           return
         }
       }
-      await depleteInventory(items)
       await audit({
         action: 'ORDER_CREATED',
         entity: 'order',
@@ -829,6 +812,7 @@ export default function POS() {
             <OrderPanel
               table={selectedTable}
               menuItems={getMenuItemsWithZonePrices(selectedTable) as MenuItem[]}
+              paymentInProgress={showPayment}
               profile={profile}
               onPlaceOrder={handlePlaceOrder}
               activeOrder={activeOrder}

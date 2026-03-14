@@ -103,6 +103,7 @@ interface AttendanceEntry {
   staff_name?: string
   role?: string
   duration_minutes?: number
+  pos_machine?: string | null
 }
 interface PaidOrder {
   id: string
@@ -1243,7 +1244,7 @@ export default function Reports() {
                         (report.attendance || []).map((a, i) => (
                           <div key={i} className="flex justify-between my-1 text-xs">
                             <span>
-                              {a.staff_name} ({a.role})
+                              {a.staff_name} ({a.role}){a.pos_machine ? ` — ${a.pos_machine}` : ''}
                             </span>
                             <span>
                               {a.duration_minutes

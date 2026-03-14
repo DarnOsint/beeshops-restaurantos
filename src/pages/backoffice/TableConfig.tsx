@@ -5,6 +5,8 @@ import { ArrowLeft, Edit2, X, Save } from 'lucide-react'
 interface Zone {
   id: string
   name: string
+  hire_fee?: number | null
+  min_spend?: number | null
 }
 
 interface Table {
@@ -12,7 +14,7 @@ interface Table {
   name: string
   capacity: number
   category_id: string
-  table_categories?: { id: string; name: string }
+  table_categories?: { id: string; name: string; hire_fee?: number | null }
 }
 
 interface TableForm {
@@ -32,6 +34,67 @@ const zoneColorMap: Record<string, string> = {
   'The Nook': 'bg-amber-500/20 text-amber-400',
 }
 
+interface ZoneHireFeeFormProps {
+  zone: Zone
+  onSaved: () => void
+}
+
+function ZoneHireForm({ zone, onSaved }: ZoneHireFeeFormProps) {
+  const [hireFee, setHireFee] = useState(zone.hire_fee != null ? String(zone.hire_fee) : '')
+  const [saving, setSaving] = useState(false)
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const { error } = await supabase
+        .from('table_categories')
+        .update({ hire_fee: hireFee ? parseFloat(hireFee) : null })
+        .eq('id', zone.id)
+      if (error) throw error
+      onSaved()
+    } catch (err) {
+      alert('Failed: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <p className="text-white font-semibold text-sm mb-3">{zone.name}</p>
+      <div className="flex gap-2 items-center">
+        <div className="flex-1">
+          <label className="text-gray-500 text-xs block mb-1">
+            Hire Fee (₦) — leave blank if none
+          </label>
+          <input
+            type="number"
+            min="0"
+            value={hireFee}
+            onChange={(e) => setHireFee(e.target.value)}
+            placeholder="e.g. 5000"
+            className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+          />
+        </div>
+        <button
+          onClick={save}
+          disabled={saving}
+          className="mt-5 px-3 py-2 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black font-bold rounded-xl text-sm"
+        >
+          {saving ? '…' : 'Save'}
+        </button>
+      </div>
+      {zone.hire_fee ? (
+        <p className="text-amber-400 text-xs mt-2">
+          Current: ₦{zone.hire_fee.toLocaleString()} hire fee
+        </p>
+      ) : (
+        <p className="text-gray-600 text-xs mt-2">No hire fee — free to sit</p>
+      )}
+    </div>
+  )
+}
+
 export default function TableConfig({ onBack }: Props) {
   const [tables, setTables] = useState<Table[]>([])
   const [zones, setZones] = useState<Zone[]>([])
@@ -44,7 +107,7 @@ export default function TableConfig({ onBack }: Props) {
   const fetchAll = async () => {
     const [tablesRes, zonesRes] = await Promise.all([
       supabase.from('tables').select('*, table_categories(id, name)').order('name'),
-      supabase.from('table_categories').select('*').order('name'),
+      supabase.from('table_categories').select('id, name, hire_fee, min_spend').order('name'),
     ])
     if (tablesRes.data) setTables(tablesRes.data as Table[])
     if (zonesRes.data) setZones(zonesRes.data as Zone[])
@@ -147,10 +210,25 @@ export default function TableConfig({ onBack }: Props) {
                 </div>
                 <p className="text-white font-semibold text-sm">{table.name}</p>
                 <p className="text-gray-500 text-xs">👥 {table.capacity} seats</p>
+                {table.table_categories?.hire_fee ? (
+                  <p className="text-amber-400 text-xs font-semibold">
+                    Hire: ₦{table.table_categories.hire_fee.toLocaleString()}
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>
         )}
+      </div>
+
+      {/* Zone Settings — hire fees */}
+      <div className="px-6 pb-6">
+        <h2 className="text-white font-bold text-sm mb-3">Zone Settings</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {zones.map((zone) => (
+            <ZoneHireForm key={zone.id} zone={zone} onSaved={fetchAll} />
+          ))}
+        </div>
       </div>
 
       {editing && (

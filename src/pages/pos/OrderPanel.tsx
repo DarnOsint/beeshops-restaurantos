@@ -35,6 +35,7 @@ interface Props {
     total: number
   }) => Promise<void>
   onClose: () => void
+  paymentInProgress?: boolean
   activeOrder?:
     | (Order & {
         order_items?: (OrderItem & {
@@ -53,6 +54,7 @@ export default function OrderPanel({
   menuItems,
   onPlaceOrder,
   onClose,
+  paymentInProgress = false,
   activeOrder,
   profile,
 }: Props) {
@@ -195,6 +197,10 @@ export default function OrderPanel({
   }
 
   const deleteItem = (item: OrderItemLocal) => {
+    if (paymentInProgress) {
+      alert('Cannot void items while payment is in progress. Close the payment screen first.')
+      return
+    }
     if (!activeOrder || !item._existing) {
       setOrderItems((prev) => prev.filter((i) => (i._newId || i.id) !== (item._newId || item.id)))
       return
@@ -208,19 +214,37 @@ export default function OrderPanel({
   }
 
   const confirmVoid = async (approver: { name: string; id: string }) => {
-    const item = orderItems.find((i) => i.id === voidRequest!.itemId)
-    // void_log is audit trail — best-effort, don't block on failure
+    if (!voidRequest || !activeOrder) return
+    const item = orderItems.find((i) => i.id === voidRequest.itemId)
+    const dbId = item?._dbId
+
+    // 1. Delete the order_item row from Supabase
+    if (dbId) {
+      const { error: delErr } = await supabase.from('order_items').delete().eq('id', dbId)
+      if (delErr) {
+        alert('Failed to void item: ' + delErr.message)
+        return
+      }
+    }
+
+    // 2. Reduce the order total in Supabase
+    const newTotal = Math.max(0, (activeOrder.total_amount || 0) - voidRequest.value)
+    await supabase.from('orders').update({ total_amount: newTotal }).eq('id', activeOrder.id)
+
+    // 3. Log to void_log (best-effort audit trail)
     const { error: voidErr } = await supabase.from('void_log').insert({
-      menu_item_name: voidRequest!.itemName,
-      quantity: voidRequest!.quantity,
+      menu_item_name: voidRequest.itemName,
+      quantity: voidRequest.quantity,
       unit_price: item?.price || 0,
-      total_value: voidRequest!.value,
+      total_value: voidRequest.value,
       void_type: 'item',
       approved_by_name: approver.name,
       approved_by: approver.id,
     })
     if (voidErr) console.error('void_log insert failed:', voidErr.message)
-    setOrderItems((prev) => prev.filter((i) => i.id !== voidRequest!.itemId))
+
+    // 4. Update local state
+    setOrderItems((prev) => prev.filter((i) => i.id !== voidRequest.itemId))
     setVoidRequest(null)
   }
 
@@ -277,6 +301,16 @@ export default function OrderPanel({
                   ?.name
               }
             </p>
+            {(() => {
+              const hireFee = (
+                table as unknown as { table_categories?: { hire_fee?: number | null } }
+              ).table_categories?.hire_fee
+              return hireFee ? (
+                <p className="text-amber-400 text-xs font-semibold mt-0.5">
+                  🏷 Hire fee: ₦{hireFee.toLocaleString()} — add to bill manually
+                </p>
+              ) : null
+            })()}
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             <X size={20} />

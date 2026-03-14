@@ -67,6 +67,11 @@ export default function OpenOrdersTab() {
                       alert('Failed: ' + error.message)
                       return
                     }
+                    // Mark all items delivered so KDS clears and shift summary is accurate
+                    await supabase
+                      .from('order_items')
+                      .update({ status: 'delivered' })
+                      .eq('order_id', order.id)
                     await supabase
                       .from('tables')
                       .update({ status: 'available', assigned_staff: null })

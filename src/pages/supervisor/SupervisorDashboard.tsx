@@ -21,7 +21,7 @@ interface OpenOrder {
   id: string
   created_at: string
   order_type: string
-  tables?: { name: string } | null
+  tables?: { name: string; table_categories?: { name: string } | null } | null
   profiles?: { full_name: string } | null
   order_items?: Array<{
     id: string
@@ -83,6 +83,7 @@ function SupervisorDashboardInner() {
   const [voids, setVoids] = useState<VoidEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'floor' | 'staff' | 'calls' | 'voids'>('floor')
+  const [zoneFilter, setZoneFilter] = useState('All')
   const [lateCount, setLateCount] = useState(0)
 
   const fetchAll = useCallback(async () => {
@@ -275,59 +276,93 @@ function SupervisorDashboardInner() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {tab === 'floor' &&
-          (orders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-600">
-              <CheckCircle size={36} className="mb-3 text-green-500/40" />
-              <p className="font-medium">All clear — no open orders</p>
-            </div>
-          ) : (
-            orders.map((order) => {
-              const pending = order.order_items?.filter((i) => i.status === 'pending') || []
-              const preparing = order.order_items?.filter((i) => i.status === 'preparing') || []
-              const ready = order.order_items?.filter((i) => i.status === 'ready') || []
-              return (
-                <div
-                  key={order.id}
-                  className={`rounded-2xl border-2 p-3 ${urgencyBorder(order.created_at)}`}
+        {tab === 'floor' && (
+          <>
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {['All', 'Outdoor', 'Indoor', 'VIP Lounge', 'The Nook'].map((z) => (
+                <button
+                  key={z}
+                  onClick={() => setZoneFilter(z)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${zoneFilter === z ? 'bg-amber-500 text-black' : 'bg-gray-900 border border-gray-800 text-gray-400 hover:text-white'}`}
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <p className="text-white font-bold">
-                        {order.tables?.name || order.order_type}
-                      </p>
-                      {order.profiles?.full_name && (
-                        <span className="text-gray-500 text-xs">· {order.profiles.full_name}</span>
+                  {z}
+                </button>
+              ))}
+            </div>
+            {(zoneFilter === 'All'
+              ? orders
+              : orders.filter(
+                  (o) =>
+                    (o.tables as { table_categories?: { name?: string } | null } | null)
+                      ?.table_categories?.name === zoneFilter
+                )
+            ).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-gray-600">
+                <CheckCircle size={36} className="mb-3 text-green-500/40" />
+                <p className="font-medium">
+                  {zoneFilter === 'All'
+                    ? 'All clear — no open orders'
+                    : `No open orders in ${zoneFilter}`}
+                </p>
+              </div>
+            ) : (
+              (zoneFilter === 'All'
+                ? orders
+                : orders.filter(
+                    (o) =>
+                      (o.tables as { table_categories?: { name?: string } | null } | null)
+                        ?.table_categories?.name === zoneFilter
+                  )
+              ).map((order) => {
+                const pending = order.order_items?.filter((i) => i.status === 'pending') || []
+                const preparing = order.order_items?.filter((i) => i.status === 'preparing') || []
+                const ready = order.order_items?.filter((i) => i.status === 'ready') || []
+                return (
+                  <div
+                    key={order.id}
+                    className={`rounded-2xl border-2 p-3 ${urgencyBorder(order.created_at)}`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <p className="text-white font-bold">
+                          {order.tables?.name || order.order_type}
+                        </p>
+                        {order.profiles?.full_name && (
+                          <span className="text-gray-500 text-xs">
+                            · {order.profiles.full_name}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Clock size={11} className="text-gray-500" />
+                        <span className={`text-xs ${urgencyText(order.created_at)}`}>
+                          {elapsed(order.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 text-xs flex-wrap">
+                      {pending.length > 0 && (
+                        <span className="bg-gray-700 text-gray-300 rounded-lg px-2 py-0.5">
+                          {pending.length} pending
+                        </span>
+                      )}
+                      {preparing.length > 0 && (
+                        <span className="bg-amber-500/20 text-amber-400 rounded-lg px-2 py-0.5">
+                          {preparing.length} cooking
+                        </span>
+                      )}
+                      {ready.length > 0 && (
+                        <span className="bg-green-500/20 text-green-400 rounded-lg px-2 py-0.5">
+                          {ready.length} ready
+                        </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Clock size={11} className="text-gray-500" />
-                      <span className={`text-xs ${urgencyText(order.created_at)}`}>
-                        {elapsed(order.created_at)}
-                      </span>
-                    </div>
                   </div>
-                  <div className="flex gap-2 text-xs flex-wrap">
-                    {pending.length > 0 && (
-                      <span className="bg-gray-700 text-gray-300 rounded-lg px-2 py-0.5">
-                        {pending.length} pending
-                      </span>
-                    )}
-                    {preparing.length > 0 && (
-                      <span className="bg-amber-500/20 text-amber-400 rounded-lg px-2 py-0.5">
-                        {preparing.length} cooking
-                      </span>
-                    )}
-                    {ready.length > 0 && (
-                      <span className="bg-green-500/20 text-green-400 rounded-lg px-2 py-0.5">
-                        {ready.length} ready
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )
-            })
-          ))}
+                )
+              })
+            )}
+          </>
+        )}
 
         {tab === 'staff' &&
           (shifts.length === 0 ? (

@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { offlineInsert } from '../../lib/offlineWrite'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
 import { X, Banknote, CreditCard, Smartphone, CheckCircle, Clock, Beer } from 'lucide-react'
@@ -235,23 +234,49 @@ export default function PaymentModal({ order, table, onSuccess, onClose }: Props
           .from('tables')
           .update({ status: 'available', assigned_staff: null })
           .eq('id', table.id)
-        await offlineInsert('debtors', {
-          id: crypto.randomUUID(),
-          created_at: new Date().toISOString(),
-          name: debtorName,
-          phone: debtorPhone,
-          debt_type: 'table_order',
-          order_id: order.id,
-          credit_limit: total,
-          current_balance: total,
-          amount_paid: 0,
-          status: 'outstanding',
-          is_active: true,
-          due_date: dueDate || null,
-          notes: 'Auto-created from POS - ' + (table?.name || ''),
-          recorded_by: profile?.id,
-          recorded_by_name: profile?.full_name,
-        })
+        // Deduplicate debtors — match by phone first, then name
+        const { data: existingDebtors } = await (debtorPhone
+          ? supabase
+              .from('debtors')
+              .select('id, current_balance')
+              .eq('phone', debtorPhone)
+              .eq('is_active', true)
+              .limit(1)
+          : supabase
+              .from('debtors')
+              .select('id, current_balance')
+              .ilike('name', debtorName)
+              .eq('is_active', true)
+              .limit(1))
+        const existing = existingDebtors?.[0] as { id: string; current_balance: number } | undefined
+        if (existing) {
+          await supabase
+            .from('debtors')
+            .update({
+              current_balance: existing.current_balance + total,
+              status: 'outstanding',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id)
+        } else {
+          await supabase.from('debtors').insert({
+            id: crypto.randomUUID(),
+            created_at: new Date().toISOString(),
+            name: debtorName,
+            phone: debtorPhone,
+            debt_type: 'table_order',
+            order_id: order.id,
+            credit_limit: total,
+            current_balance: total,
+            amount_paid: 0,
+            status: 'outstanding',
+            is_active: true,
+            due_date: dueDate || null,
+            notes: 'Auto-created from POS - ' + (table?.name || ''),
+            recorded_by: profile?.id,
+            recorded_by_name: profile?.full_name,
+          })
+        }
         await depleteInventory(order.id)
         await audit({
           action: 'ORDER_PAID',
