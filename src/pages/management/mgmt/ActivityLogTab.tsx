@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { Search, Filter, Download, RefreshCw } from 'lucide-react'
 
@@ -91,10 +91,12 @@ export default function ActivityLogTab({ dateRange }: Props) {
   const [search, setSearch] = useState('')
   const [group, setGroup] = useState('All')
   const [page, setPage] = useState(0)
+  const [newCount, setNewCount] = useState(0)
   const PAGE_SIZE = 50
+  const latestIdRef = useRef<string | null>(null)
 
-  const fetchLog = useCallback(async () => {
-    setLoading(true)
+  const fetchLog = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     const q = supabase
       .from('audit_log')
       .select(
@@ -111,14 +113,47 @@ export default function ActivityLogTab({ dateRange }: Props) {
     }
 
     const { data } = await q
-    setEntries((data || []) as LogEntry[])
+    const rows = (data || []) as LogEntry[]
+    setEntries(rows)
     setPage(0)
-    setLoading(false)
+    setNewCount(0)
+    if (rows.length > 0) latestIdRef.current = rows[0].id
+    if (!silent) setLoading(false)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dateRange.start, dateRange.end, group])
 
+  // Initial load
   useEffect(() => {
-    void fetchLog()
+    void fetchLog() // eslint-disable-line react-hooks/set-state-in-effect
   }, [fetchLog])
+
+  // Real-time: new audit_log rows arrive → prepend silently, show badge
+  useEffect(() => {
+    const channel = supabase
+      .channel('activity-log-rt')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'audit_log' },
+        (payload) => {
+          const newEntry = payload.new as LogEntry
+          // Only add if within current date range and group filter
+          const inRange =
+            newEntry.created_at >= dateRange.start && newEntry.created_at <= dateRange.end
+          const actions = ACTION_GROUPS[group]
+          const inGroup = !actions || actions.length === 0 || actions.includes(newEntry.action)
+          if (!inRange || !inGroup) return
+          setEntries((prev) => {
+            // Deduplicate
+            if (prev.some((e) => e.id === newEntry.id)) return prev
+            return [newEntry, ...prev]
+          })
+          // Only show badge if user is not on page 0 (i.e. scrolled away)
+          setNewCount((n) => n + 1)
+        }
+      )
+      .subscribe()
+    return () => { void supabase.removeChannel(channel) }
+  }, [dateRange.start, dateRange.end, group])
 
   const filtered = entries.filter((e) => {
     if (!search) return true
@@ -175,10 +210,16 @@ export default function ActivityLogTab({ dateRange }: Props) {
           />
         </div>
         <button
-          onClick={fetchLog}
-          className="p-2 bg-gray-900 border border-gray-800 rounded-xl text-gray-400 hover:text-white"
+          onClick={() => void fetchLog()}
+          className="relative p-2 bg-gray-900 border border-gray-800 rounded-xl text-gray-400 hover:text-white"
+          title="Refresh log"
         >
           <RefreshCw size={15} />
+          {newCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-amber-500 text-black text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+              {newCount > 9 ? '9+' : newCount}
+            </span>
+          )}
         </button>
         <button
           onClick={exportCSV}

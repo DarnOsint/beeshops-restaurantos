@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import {
@@ -70,6 +70,12 @@ export default function Management() {
   useAuth() // profile/signOut available via context when needed
   const [activeTab, setActiveTab] = useState<TabId>('overview')
   const { lateOrders, threshold, setThreshold, markDelivered } = useLateOrders()
+
+  // Memoized — stable reference, won't cause ActivityLogTab to re-fetch on every render
+  const todayRange = useMemo(() => ({
+    start: new Date(new Date().setHours(0, 0, 0, 0)).toISOString(),
+    end: new Date(new Date().setHours(23, 59, 59, 999)).toISOString(),
+  }), [])
   const { status: syncStatus, pendingCount, lastSynced, manualSync } = useSyncStatus()
 
   const [syncQueue, setSyncQueue] = useState<SyncQueueEntry[]>([])
@@ -440,12 +446,7 @@ export default function Management() {
           />
         )}
         {activeTab === 'activity' && (
-          <ActivityLogTab
-            dateRange={{
-              start: new Date(new Date().setHours(0, 0, 0, 0)).toISOString(),
-              end: new Date(new Date().setHours(23, 59, 59, 999)).toISOString(),
-            }}
-          />
+          <ActivityLogTab dateRange={todayRange} />
         )}
         {activeTab === 'settings' && (
           <SettingsTab threshold={threshold} setThreshold={setThreshold} />
