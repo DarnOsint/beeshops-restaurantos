@@ -953,6 +953,15 @@ export default function POS() {
           onClose={() => setReprintOrder(null)}
         />
       )}
+
+      {/* Covers modal — shown when waitron selects an available table */}
+      {pendingTable && (
+        <CoversModal
+          tableName={pendingTable.name}
+          onConfirm={handleCoversConfirmed}
+          onCancel={handleCoversCancel}
+        />
+      )}
     </div>
   )
 }
