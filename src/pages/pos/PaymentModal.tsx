@@ -178,6 +178,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       await depleteInventory(order.id)
       setPaidOrder({ ...order, payment_method: 'split' })
       setSuccess(true)
+      setShowReceipt(true)
     } else {
       const nextPerson = allPeople.find((p) => !paidPeople.includes(p))!
       setCurrentSplitPerson(nextPerson - 1)
@@ -345,6 +346,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         })
         setPaidOrder({ ...order, payment_method: 'credit' })
         setSuccess(true)
+        setShowReceipt(true)
         setProcessing(false)
         return
       }
@@ -375,6 +377,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       })
       setPaidOrder({ ...order, payment_method: paymentMethod } as typeof order)
       setSuccess(true)
+      setShowReceipt(true)
     } catch (err) {
       const msg = (err as { message?: string })?.message || String(err)
       toast.error('Payment Failed', msg || 'Please try again.')

@@ -18,7 +18,15 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
   const [printing, setPrinting] = useState(false)
   const [activeTab, setActiveTab] = useState<'customer' | 'waiter'>('customer')
 
-  useEffect(() => {}, [])
+  // Auto-trigger thermal print when receipt opens
+  const hasPrinted = useRef(false)
+  useEffect(() => {
+    if (hasPrinted.current) return
+    if (!isSupported) return
+    hasPrinted.current = true
+    void handleThermalPrint()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const formatDate = (date: string) =>
     new Date(date).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
