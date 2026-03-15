@@ -209,7 +209,11 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
         .eq('staff_id', shift.staff_id)
       if (zErr) console.error('Failed to clear zone assignments:', zErr.message)
     }
-    setSummaryShift(null)
+    // Update the summary shift with the actual clock_out time
+    // so the summary reloads with the correct session window
+    setSummaryShift((prev) =>
+      prev ? { ...prev, clock_out: clockOutTime.toISOString(), duration_minutes: duration } : null
+    )
     fetchAll()
     onRefreshStats?.()
   }

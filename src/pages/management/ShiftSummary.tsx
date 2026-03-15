@@ -31,6 +31,7 @@ const fmtDuration = (minutes?: number | null) => {
 }
 
 interface ShiftIn {
+  id?: string
   staff_id: string
   staff_name: string
   role: string
