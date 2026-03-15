@@ -120,10 +120,16 @@ export function useThermalPrinter() {
   const connect = async (): Promise<boolean> => {
     if (!isSupported) return false
     try {
+      // Try different baud rates — some printers use 115200
       port = await (
         navigator as Navigator & { serial: { requestPort: () => Promise<SerialPort> } }
       ).serial.requestPort()
-      await port.open({ baudRate: 9600 })
+      // Try 9600 first, then 115200 if that fails
+      try {
+        await port.open({ baudRate: 9600 })
+      } catch {
+        await port.open({ baudRate: 115200 })
+      }
       writer = port.writable!.getWriter()
       return true
     } catch (e) {
