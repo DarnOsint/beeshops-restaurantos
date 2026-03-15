@@ -278,14 +278,14 @@ export default function Login() {
   )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-900 via-gray-900 to-gray-950 flex items-center justify-center p-4">
+    <div className="min-h-full bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-amber-500 mb-4">
             <span className="text-3xl">🍺</span>
           </div>
-          <h1 className="text-3xl font-bold text-amber-400">Beeshop's Place</h1>
-          <p className="text-gray-300 mt-1">Restaurant Operating System</p>
+          <h1 className="text-3xl font-bold text-white">Beeshop's Place</h1>
+          <p className="text-gray-400 mt-1">Restaurant Operating System</p>
         </div>
 
         {sessionExpired && (
@@ -328,7 +328,7 @@ export default function Login() {
           </p>
         )}
 
-        <div className="bg-gray-800/90 backdrop-blur rounded-2xl p-8 shadow-2xl border border-amber-500/20">
+        <div className="bg-gray-900 rounded-2xl p-8 shadow-2xl border border-gray-800">
           {error && (
             <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg p-3 mb-6 text-sm">
               {error}
@@ -351,7 +351,7 @@ export default function Login() {
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@beeshops.com"
                       required
-                      className="w-full bg-gray-700 border border-gray-500 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
+                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
                     />
                   </div>
                   <div>
@@ -363,7 +363,7 @@ export default function Login() {
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
                         required
-                        className="w-full bg-gray-700 border border-gray-500 text-white rounded-xl px-4 py-3 pr-11 focus:outline-none focus:border-amber-500"
+                        className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 pr-11 focus:outline-none focus:border-amber-500"
                       />
                       <button
                         type="button"
@@ -400,7 +400,7 @@ export default function Login() {
                     {[0, 1, 2, 3].map((i) => (
                       <div
                         key={i}
-                        className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center transition-all ${pin.length > i ? 'border-amber-500 bg-amber-500/10' : 'border-gray-500 bg-gray-700'}`}
+                        className={`w-14 h-14 rounded-2xl border-2 flex items-center justify-center transition-all ${pin.length > i ? 'border-amber-500 bg-amber-500/10' : 'border-gray-700 bg-gray-800'}`}
                       >
                         {pin.length > i && <div className="w-4 h-4 rounded-full bg-amber-500" />}
                       </div>
@@ -424,8 +424,8 @@ export default function Login() {
                               digit === ''
                                 ? 'opacity-0 pointer-events-none'
                                 : digit === 'del'
-                                  ? 'bg-gray-700 border border-gray-500 text-gray-300 hover:bg-gray-600 hover:text-white active:scale-95'
-                                  : 'bg-gray-700 border border-gray-500 text-white font-bold hover:bg-amber-500/20 hover:border-amber-500 active:scale-95'
+                                  ? 'bg-gray-800 border border-gray-700 text-gray-400 hover:bg-gray-700 hover:text-white active:scale-95'
+                                  : 'bg-gray-800 border border-gray-700 text-white hover:bg-gray-700 hover:border-amber-500/50 active:scale-95'
                             }`}
                           >
                             {digit === 'del' ? <Delete size={20} className="mx-auto" /> : digit}
