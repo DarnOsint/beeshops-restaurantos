@@ -138,20 +138,59 @@ export function useThermalPrinter() {
       return
     }
     try {
-      if (!port || !writer) {
+      // Always get a fresh writer — release previous lock first if held
+      if (writer) {
+        try {
+          writer.releaseLock()
+        } catch (_e) {
+          /* already released */
+        }
+        writer = null
+      }
+      // Connect if no port or port is closed
+      if (!port) {
+        // Try to auto-reconnect to a previously permitted port first
+        try {
+          const serial = (
+            navigator as Navigator & { serial: { getPorts: () => Promise<SerialPort[]> } }
+          ).serial
+          const ports = await serial.getPorts()
+          if (ports.length > 0) {
+            port = ports[0]
+            await port.open({ baudRate: 9600 })
+          }
+        } catch (_e) {
+          /* no saved port */
+        }
+      }
+      // If still no port, ask user to select one
+      if (!port) {
         const connected = await connect()
         if (!connected) {
           fallbackFn?.()
           return
         }
       }
-      await writer!.write(buildReceipt(data))
+      // Get a fresh writer, write, then immediately release
+      writer = port!.writable!.getWriter()
+      await writer.write(buildReceipt(data))
+      writer.releaseLock()
+      writer = null
     } catch (e) {
       console.warn('Thermal print failed, falling back:', e)
       try {
-        writer?.releaseLock()
-        writer = null
-        port = null
+        if (writer) {
+          writer.releaseLock()
+          writer = null
+        }
+        if (port) {
+          try {
+            await port.close()
+          } catch (_e) {
+            /* ignore */
+          }
+          port = null
+        }
       } catch (_e) {
         /* intentional */
       }
