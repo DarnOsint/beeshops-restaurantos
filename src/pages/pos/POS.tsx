@@ -581,7 +581,7 @@ export default function POS() {
     )
 
   return (
-    <div className="fixed inset-0 bg-gray-950 flex flex-col" style={{ zIndex: 10 }}>
+    <div className="fixed inset-0 bg-gray-950 flex flex-col">
       <WaiterCalls />
       <CustomerOrderAlerts profile={profile} assignedTableIds={assignedTableIds || []} />
 

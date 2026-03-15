@@ -75,7 +75,7 @@ export default function VoidPinModal({ onApproved, onCancel, voidDescription }: 
   const digits = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫']
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
       <div className="bg-gray-900 border border-red-500/30 rounded-2xl w-full max-w-xs p-6 space-y-5">
         <div className="text-center space-y-1">
           <div className="flex justify-center">

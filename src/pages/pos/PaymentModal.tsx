@@ -401,7 +401,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
 
   if (splitMode && !success)
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-2">
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] flex items-center justify-center p-2">
         <div className="bg-gray-950 rounded-2xl w-full max-w-lg border border-gray-800 flex flex-col max-h-[95vh]">
           <div className="flex items-center justify-between p-4 border-b border-gray-800">
             <div>
@@ -539,7 +539,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
 
   if (success && !showReceipt)
     return (
-      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-4">
         <div className="bg-gray-900 rounded-2xl p-8 text-center max-w-sm w-full border border-gray-800">
           <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle size={32} className="text-green-400" />
@@ -592,7 +592,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     )
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-4">
       <div className="bg-gray-900 rounded-2xl w-full max-w-md border border-gray-800 overflow-y-auto max-h-[90vh]">
         <div className="flex items-center justify-between p-5 border-b border-gray-800">
           <div>

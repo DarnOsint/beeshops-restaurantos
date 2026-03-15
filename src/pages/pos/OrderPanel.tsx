@@ -514,7 +514,7 @@ export default function OrderPanel({
       </div>
 
       {modifierItem && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end justify-center p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-end justify-center p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-white font-bold">Modify Item</h3>
