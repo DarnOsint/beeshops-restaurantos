@@ -181,18 +181,25 @@ export default function StaffManagement({ onBack }: Props) {
           options: { data: { full_name: form.full_name } },
         })
         if (signUpError) throw signUpError
-        const { error: upsertError } = await supabase.from('profiles').upsert({
-          id: signUpData.user!.id,
+        // When email confirmation is enabled, signUpData.user is null until confirmed.
+        // Fall back to session user or a new UUID so the profile is still created.
+        const userId = signUpData.user?.id ?? signUpData.session?.user?.id ?? crypto.randomUUID()
+        const profileData: Record<string, unknown> = {
+          id: userId,
           full_name: form.full_name,
           email: form.email,
           phone: form.phone,
           role: form.role,
-          pin: form.pin,
+          pin: await hashPin(form.pin),
           hire_date: form.hire_date,
           emergency_contact: form.emergency_contact,
           notes: form.notes,
           is_active: true,
-        })
+        }
+        if (['owner', 'manager'].includes(form.role) && form.approval_pin) {
+          profileData.approval_pin = await hashPin(form.approval_pin)
+        }
+        const { error: upsertError } = await supabase.from('profiles').upsert(profileData)
         if (upsertError) throw upsertError
       }
       await fetchStaff()
