@@ -122,6 +122,7 @@ function RoleRoute() {
       />
     )
   if (profile.role === 'owner') return <Navigate to="/executive" />
+  if (profile.role === 'executive') return <Navigate to="/executive" />
   if (profile.role === 'manager') return <Navigate to="/management" />
   if (profile.role === 'accountant') return <Navigate to="/accounting" />
   if (profile.role === 'waitron') return <Navigate to="/pos" />
