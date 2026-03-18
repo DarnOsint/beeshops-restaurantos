@@ -298,7 +298,7 @@ function AppRoutes() {
             path="/reports"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager']}>
+                <RoleGuard allowed={['owner', 'manager', 'accountant']}>
                   <EB title="Reports error">
                     <Reports />
                   </EB>
@@ -310,7 +310,7 @@ function AppRoutes() {
             path="/analytics"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager']}>
+                <RoleGuard allowed={['owner', 'manager', 'accountant']}>
                   <EB title="Analytics error">
                     <Analytics />
                   </EB>
