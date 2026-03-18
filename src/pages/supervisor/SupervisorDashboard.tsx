@@ -3,6 +3,8 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import ErrorBoundary from '../../components/ErrorBoundary'
 import { HelpTooltip } from '../../components/HelpTooltip'
+import ShiftManager from '../management/ShiftManager'
+import TableAssignment from '../management/TableAssignment'
 import {
   Users,
   ShoppingBag,
@@ -16,6 +18,8 @@ import {
   Wine,
   Flame,
   Bell,
+  UserCheck,
+  LayoutGrid,
 } from 'lucide-react'
 
 interface OpenOrder {
@@ -122,7 +126,7 @@ function SupervisorDashboardInner() {
   const [calls, setCalls] = useState<WaiterCall[]>([])
   const [voids, setVoids] = useState<VoidEntry[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'floor' | 'staff' | 'calls' | 'voids'>('floor')
+  const [tab, setTab] = useState<'floor' | 'staff' | 'calls' | 'voids' | 'shift' | 'tables'>('floor')
   const [zoneFilter, setZoneFilter] = useState('All')
   const [lateCount, setLateCount] = useState(0)
 
@@ -230,6 +234,8 @@ function SupervisorDashboardInner() {
       badge: voids.length,
       badgeRed: false,
     },
+    { id: 'shift' as const, label: 'Shift', icon: UserCheck, badge: 0, badgeRed: false },
+    { id: 'tables' as const, label: 'Tables', icon: LayoutGrid, badge: 0, badgeRed: false },
   ]
 
   if (loading)
@@ -494,6 +500,14 @@ function SupervisorDashboardInner() {
               ))}
             </>
           ))}
+
+        {tab === 'shift' && (
+          <ShiftManager />
+        )}
+
+        {tab === 'tables' && (
+          <TableAssignment />
+        )}
       </div>
     </div>
   )

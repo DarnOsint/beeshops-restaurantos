@@ -57,7 +57,6 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
   apartment_manager: [{ label: 'Rooms', icon: BedDouble, path: '/apartment' }],
   supervisor: [
     { label: 'Supervisor', icon: LayoutDashboard, path: '/supervisor' },
-    { label: 'POS', icon: ShoppingBag, path: '/pos' },
   ],
 }
 
