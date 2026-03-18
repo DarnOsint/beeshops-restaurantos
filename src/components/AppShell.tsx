@@ -50,6 +50,8 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
   accountant: [
     { label: 'Accounting', icon: BookOpen, path: '/accounting' },
     { label: 'Reports', icon: TrendingUp, path: '/reports' },
+    { label: 'Analytics', icon: BarChart2, path: '/analytics' },
+    { label: 'Debtors', icon: Package, path: '/debtors' },
     { label: 'Month End', icon: CalendarDays, path: '/month-end' },
   ],
   apartment_manager: [{ label: 'Rooms', icon: BedDouble, path: '/apartment' }],
