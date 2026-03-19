@@ -20,6 +20,7 @@ const GrillerKDS = lazy(() => import('./pages/kds/GrillerKDS'))
 const Management = lazy(() => import('./pages/management/Management'))
 // Executive — owner only
 const Executive = lazy(() => import('./pages/executive/Executive'))
+const CVDashboard = lazy(() => import('./pages/cv/CVDashboard'))
 // Accounting suite
 const Accounting = lazy(() => import('./pages/accounting/Accounting'))
 const Debtors = lazy(() => import('./pages/accounting/Debtors'))
@@ -314,6 +315,18 @@ function AppRoutes() {
                 <RoleGuard allowed={['owner', 'manager', 'accountant']}>
                   <EB title="Analytics error">
                     <Analytics />
+                  </EB>
+                </RoleGuard>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/cv"
+            element={
+              <PrivateRoute>
+                <RoleGuard allowed={['owner', 'manager']}>
+                  <EB title="CV Dashboard error">
+                    <CVDashboard />
                   </EB>
                 </RoleGuard>
               </PrivateRoute>
