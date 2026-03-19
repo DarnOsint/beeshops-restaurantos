@@ -190,7 +190,7 @@ function KitchenKDSInner() {
     }
   }, [fetchOrders])
 
-  if (geoStatus !== 'inside')
+  if (geoStatus === 'outside' || geoStatus === 'error' || geoStatus === 'unsupported')
     return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   if (loading)
     return (

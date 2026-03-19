@@ -200,7 +200,7 @@ function GrillerKDSInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (geoStatus !== 'inside')
+  if (geoStatus === 'outside' || geoStatus === 'error' || geoStatus === 'unsupported')
     return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   if (loading)
     return (
