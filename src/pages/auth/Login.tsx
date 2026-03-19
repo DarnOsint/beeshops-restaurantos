@@ -145,12 +145,16 @@ export default function Login() {
       setLoading(false)
     } else {
       resetAttempts('rl_email')
-      void supabase.from('audit_log').insert({
-        action: 'LOGIN_EMAIL',
-        entity: 'auth',
-        entity_name: email,
-        new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
-      })
+      void fetch('https://api.ipify.org?format=json')
+        .then((r) => r.json())
+        .catch(() => ({ ip: 'unknown' }))
+        .then(({ ip }) => supabase.from('audit_log').insert({
+          action: 'LOGIN_EMAIL',
+          entity: 'auth',
+          entity_name: email,
+          ip_address: ip,
+          new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
+        }))
       // Navigate immediately — AuthContext will fetch profile in the background.
       // PrivateRoute waits for profile before rendering, so no flicker.
       navigate('/dashboard')
@@ -232,15 +236,19 @@ export default function Login() {
       })
     }
 
-    void supabase.from('audit_log').insert({
-      action: 'LOGIN_PIN',
-      entity: 'auth',
-      entity_name: profile.full_name,
-      performed_by: profile.id,
-      performed_by_name: profile.full_name,
-      performed_by_role: profile.role,
-      new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
-    })
+    void fetch('https://api.ipify.org?format=json')
+      .then((r) => r.json())
+      .catch(() => ({ ip: 'unknown' }))
+      .then(({ ip }) => supabase.from('audit_log').insert({
+        action: 'LOGIN_PIN',
+        entity: 'auth',
+        entity_name: profile.full_name,
+        performed_by: profile.id,
+        performed_by_name: profile.full_name,
+        performed_by_role: profile.role,
+        ip_address: ip,
+        new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
+      }))
     localStorage.setItem(
       'pin_session',
       JSON.stringify({
