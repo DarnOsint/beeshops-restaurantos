@@ -139,7 +139,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       <!DOCTYPE html><html>
       <head><title>Receipt — ${table.name}</title>
       <style>
-        body{font-family:Arial,sans-serif;font-size:13px;margin:20px;color:#000;max-width:320px}
+        body{font-family:Arial,sans-serif;font-size:13px;margin:20px;color:#000;max-width:380px}
         h2{font-size:16px;text-align:center;margin:0 0 2px}
         .sub{text-align:center;color:#555;font-size:11px;margin-bottom:12px}
         table{width:100%;border-collapse:collapse}

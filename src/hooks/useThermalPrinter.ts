@@ -23,7 +23,7 @@ function text(str: string): number[] {
   return Array.from(new TextEncoder().encode(str))
 }
 
-function row(left: string, right: string, width = 32): number[] {
+function row(left: string, right: string, width = 48): number[] {
   const space = width - left.length - right.length
   if (space <= 0) return text(left.substring(0, width - right.length - 1) + ' ' + right + '\n')
   return text(left + ' '.repeat(space) + right + '\n')
@@ -77,7 +77,7 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
   push(cmd.alignCenter)
   push(cmd.doubleSize, ...text("BEESHOP'S PLACE\n"), cmd.normalSize)
   push(cmd.bold, ...text('Lounge & Restaurant\n'), cmd.boldOff)
-  push(text('--------------------------------\n'))
+  push(text('------------------------------------------------\n'))
   push(cmd.alignLeft)
   push(row('Ref:', orderRef))
   push(row('Date:', fmtDate(order.created_at)))
@@ -85,22 +85,22 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
   push(row('Table:', table?.name ?? (order.order_type === 'takeaway' ? 'Takeaway' : 'Counter')))
   push(row('Served by:', staffName ?? ''))
   push(row('Payment:', (order.payment_method ?? '').toUpperCase()))
-  push(text('--------------------------------\n'))
-  push(cmd.bold, ...text('ITEM             QTY    TOTAL\n'), cmd.boldOff)
-  push(text('--------------------------------\n'))
+  push(text('------------------------------------------------\n'))
+  push(cmd.bold, ...text('ITEM                     QTY    TOTAL\n'), cmd.boldOff)
+  push(text('------------------------------------------------\n'))
 
   items.forEach((item) => {
-    const name = (item.menu_items?.name ?? item.name ?? '').substring(0, 16).padEnd(16)
+    const name = (item.menu_items?.name ?? item.name ?? '').substring(0, 24).padEnd(24)
     const qty = String(item.quantity).padStart(3)
     const tot = ('\u20A6' + (item.total_price ?? 0).toLocaleString()).padStart(10)
     push(text(`${name} ${qty} ${tot}\n`))
     if (item.modifier_notes) push(text(`  > ${item.modifier_notes.substring(0, 28)}\n`))
   })
 
-  push(text('================================\n'))
+  push(text('================================================\n'))
   push(row('Subtotal (VAT incl.):', '\u20A6' + subtotal.toLocaleString()))
 
-  push(text('--------------------------------\n'))
+  push(text('------------------------------------------------\n'))
   push(
     cmd.bold,
     cmd.doubleHeight,
@@ -114,7 +114,7 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
   )
   if (tipAmount > 0) {
     const received = amountReceived > 0 ? amountReceived : total + tipAmount
-    push(text('--------------------------------\n'))
+    push(text('------------------------------------------------\n'))
     push(
       row(
         'Amt Received:',
@@ -133,7 +133,7 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
       )
     )
   }
-  push(text('--------------------------------\n'))
+  push(text('------------------------------------------------\n'))
   push(cmd.alignCenter)
   push(text('Thank you for visiting!\n'))
   push(text('Please come again\n\n'))
