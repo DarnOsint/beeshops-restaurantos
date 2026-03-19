@@ -7,9 +7,10 @@ import GeofenceBlock from '../../components/GeofenceBlock'
 import { useAuth } from '../../context/AuthContext'
 import KitchenStock from '../backoffice/KitchenStock'
 import ErrorBoundary from '../../components/ErrorBoundary'
-import { ChefHat, Clock, LogOut, RefreshCw, CheckCircle } from 'lucide-react'
+import { ChefHat, Clock, LogOut, RefreshCw, CheckCircle, BarChart2 } from 'lucide-react'
 import type { KdsOrder } from './types'
 import { useToast } from '../../context/ToastContext'
+import DailySummaryTab from './DailySummaryTab'
 
 const HELP_TIPS = [
   {
@@ -88,7 +89,7 @@ function KitchenKDSInner() {
   const { profile, signOut } = useAuth()
   const toast = useToast()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
-  const [tab, setTab] = useState<'orders' | 'stock'>('orders')
+  const [tab, setTab] = useState<'orders' | 'stock' | 'summary'>('orders')
   const [orders, setOrders] = useState<KdsOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
@@ -227,6 +228,12 @@ function KitchenKDSInner() {
             >
               Stock Register
             </button>
+            <button
+              onClick={() => setTab('summary')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${tab === 'summary' ? 'bg-red-500 text-white' : 'text-gray-400 hover:text-white'}`}
+            >
+              Today
+            </button>
           </div>
           {tab === 'orders' && (
             <button onClick={fetchOrders} className="text-gray-400 hover:text-white">
@@ -241,7 +248,13 @@ function KitchenKDSInner() {
         </div>
       </nav>
 
-      {tab === 'stock' ? (
+      {tab === 'summary' ? (
+        <DailySummaryTab
+          destination="kitchen"
+          icon={<ChefHat size={24} className="text-red-400" />}
+          color="text-red-400"
+        />
+      ) : tab === 'stock' ? (
         <div className="flex-1 overflow-y-auto">
           <KitchenStock onBack={() => setTab('orders')} />
         </div>

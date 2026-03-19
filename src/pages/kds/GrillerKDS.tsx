@@ -9,6 +9,7 @@ import ErrorBoundary from '../../components/ErrorBoundary'
 import { LogOut, RefreshCw, Flame, CheckCircle, AlertTriangle } from 'lucide-react'
 import type { GrillerTicket, GrillerItem } from './types'
 import { useToast } from '../../context/ToastContext'
+import DailySummaryTab from './DailySummaryTab'
 
 const HELP_TIPS = [
   {
@@ -92,6 +93,7 @@ function GrillerKDSInner() {
   const [completing, setCompleting] = useState<Record<string, boolean>>({})
   const [, setTick] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [activeTab, setActiveTab] = useState<'orders' | 'summary'>('orders')
 
   const fetchTickets = async (isRealtime = false) => {
     const { data, error } = await supabase
@@ -255,124 +257,153 @@ function GrillerKDSInner() {
         ))}
       </div>
 
-      <div className="flex-1 p-4 overflow-auto">
-        {tickets.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center py-20">
-            <div className="w-20 h-20 bg-gray-900 rounded-full flex items-center justify-center mb-4 border border-gray-800">
-              <Flame size={36} className="text-gray-700" />
+      {/* Tab bar */}
+      <div className="flex border-b border-gray-800 bg-gray-900">
+        <button
+          onClick={() => setActiveTab('orders')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'orders' ? 'border-orange-500 text-orange-400' : 'border-transparent text-gray-400 hover:text-white'}`}
+        >
+          <Flame size={14} /> Orders
+          {tickets.length > 0 && (
+            <span className="bg-orange-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+              {tickets.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('summary')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'summary' ? 'border-orange-500 text-orange-400' : 'border-transparent text-gray-400 hover:text-white'}`}
+        >
+          Today's Summary
+        </button>
+      </div>
+
+      {activeTab === 'summary' ? (
+        <DailySummaryTab
+          destination="griller"
+          icon={<Flame size={24} className="text-orange-400" />}
+          color="text-orange-400"
+        />
+      ) : (
+        <div className="flex-1 p-4 overflow-auto">
+          {tickets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center py-20">
+              <div className="w-20 h-20 bg-gray-900 rounded-full flex items-center justify-center mb-4 border border-gray-800">
+                <Flame size={36} className="text-gray-700" />
+              </div>
+              <p className="text-white font-bold text-lg">Grill is clear</p>
+              <p className="text-gray-500 text-sm mt-1">No active grill tickets</p>
             </div>
-            <p className="text-white font-bold text-lg">Grill is clear</p>
-            <p className="text-gray-500 text-sm mt-1">No active grill tickets</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {tickets.map((ticket) => {
-              const urgency = getUrgency(ticket.createdAt)
-              const styles = URGENCY_STYLES[urgency]
-              const elapsed = getElapsed(ticket.createdAt)
-              return (
-                <div
-                  key={ticket.orderId}
-                  className={`border rounded-xl overflow-hidden font-mono ${styles.border}`}
-                >
-                  <div className={`${styles.header} px-3 py-2 border-b ${styles.border}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Flame size={14} className={styles.flame} />
-                        <span className="text-white font-bold text-sm">{ticket.tableName}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {urgency === 'critical' && (
-                          <AlertTriangle size={13} className="text-red-400 animate-pulse" />
-                        )}
-                        <span className={`text-xs font-bold ${styles.time}`}>{elapsed}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className="text-gray-500 text-xs capitalize">
-                        {ticket.orderType?.replace('_', ' ') || 'table'}
-                      </span>
-                      <span className="text-gray-600 text-xs">
-                        #{ticket.orderId.slice(-4).toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="px-3 py-1 border-b border-dashed border-gray-700">
-                    <p className="text-gray-600 text-xs text-center tracking-widest">
-                      — GRILL ORDER —
-                    </p>
-                  </div>
-
-                  <div className="bg-gray-950 divide-y divide-gray-800/50">
-                    {ticket.items.map((item) => (
-                      <div
-                        key={item.id}
-                        className={`px-3 py-2.5 flex items-center justify-between gap-2 ${item.status === 'ready' ? 'opacity-40' : ''}`}
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-white font-bold text-sm">x{item.quantity}</span>
-                            <span className="text-white text-sm">{item.menu_items?.name}</span>
-                          </div>
-                          {item.notes && (
-                            <p className="text-amber-400 text-xs mt-0.5">⚠ {item.notes}</p>
-                          )}
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {tickets.map((ticket) => {
+                const urgency = getUrgency(ticket.createdAt)
+                const styles = URGENCY_STYLES[urgency]
+                const elapsed = getElapsed(ticket.createdAt)
+                return (
+                  <div
+                    key={ticket.orderId}
+                    className={`border rounded-xl overflow-hidden font-mono ${styles.border}`}
+                  >
+                    <div className={`${styles.header} px-3 py-2 border-b ${styles.border}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Flame size={14} className={styles.flame} />
+                          <span className="text-white font-bold text-sm">{ticket.tableName}</span>
                         </div>
-                        <div className="shrink-0">
-                          {item.status === 'ready' ? (
-                            <span className="flex items-center gap-1 text-green-400 text-xs">
-                              <CheckCircle size={13} /> Ready
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => markItemReady(item, ticket)}
-                              disabled={completing[item.id]}
-                              className="bg-orange-500 hover:bg-orange-400 disabled:bg-gray-700 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1"
-                            >
-                              {completing[item.id] ? (
-                                <RefreshCw size={11} className="animate-spin" />
-                              ) : (
-                                <CheckCircle size={11} />
-                              )}
-                              Done
-                            </button>
+                        <div className="flex items-center gap-1.5">
+                          {urgency === 'critical' && (
+                            <AlertTriangle size={13} className="text-red-400 animate-pulse" />
                           )}
+                          <span className={`text-xs font-bold ${styles.time}`}>{elapsed}</span>
                         </div>
                       </div>
-                    ))}
-                  </div>
-
-                  <div className="px-3 py-1 border-t border-dashed border-gray-700 bg-gray-950">
-                    <p className="text-gray-600 text-xs text-center tracking-widest">
-                      ————————————
-                    </p>
-                  </div>
-
-                  {ticket.items.some((i) => i.status !== 'ready') && (
-                    <div className="bg-gray-900 px-3 py-2">
-                      <button
-                        onClick={() => markAllReady(ticket)}
-                        className="w-full bg-green-600 hover:bg-green-500 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
-                      >
-                        <CheckCircle size={13} /> All Done — Ticket Complete
-                      </button>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-gray-500 text-xs capitalize">
+                          {ticket.orderType?.replace('_', ' ') || 'table'}
+                        </span>
+                        <span className="text-gray-600 text-xs">
+                          #{ticket.orderId.slice(-4).toUpperCase()}
+                        </span>
+                      </div>
                     </div>
-                  )}
 
-                  {ticket.items.every((i) => i.status === 'ready') && (
-                    <div className="bg-green-500/10 px-3 py-2 text-center">
-                      <p className="text-green-400 text-xs font-bold">
-                        ✅ Ticket Complete — Waiter Notified
+                    <div className="px-3 py-1 border-b border-dashed border-gray-700">
+                      <p className="text-gray-600 text-xs text-center tracking-widest">
+                        — GRILL ORDER —
                       </p>
                     </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
+
+                    <div className="bg-gray-950 divide-y divide-gray-800/50">
+                      {ticket.items.map((item) => (
+                        <div
+                          key={item.id}
+                          className={`px-3 py-2.5 flex items-center justify-between gap-2 ${item.status === 'ready' ? 'opacity-40' : ''}`}
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-bold text-sm">x{item.quantity}</span>
+                              <span className="text-white text-sm">{item.menu_items?.name}</span>
+                            </div>
+                            {item.notes && (
+                              <p className="text-amber-400 text-xs mt-0.5">⚠ {item.notes}</p>
+                            )}
+                          </div>
+                          <div className="shrink-0">
+                            {item.status === 'ready' ? (
+                              <span className="flex items-center gap-1 text-green-400 text-xs">
+                                <CheckCircle size={13} /> Ready
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => markItemReady(item, ticket)}
+                                disabled={completing[item.id]}
+                                className="bg-orange-500 hover:bg-orange-400 disabled:bg-gray-700 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                              >
+                                {completing[item.id] ? (
+                                  <RefreshCw size={11} className="animate-spin" />
+                                ) : (
+                                  <CheckCircle size={11} />
+                                )}
+                                Done
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="px-3 py-1 border-t border-dashed border-gray-700 bg-gray-950">
+                      <p className="text-gray-600 text-xs text-center tracking-widest">
+                        ————————————
+                      </p>
+                    </div>
+
+                    {ticket.items.some((i) => i.status !== 'ready') && (
+                      <div className="bg-gray-900 px-3 py-2">
+                        <button
+                          onClick={() => markAllReady(ticket)}
+                          className="w-full bg-green-600 hover:bg-green-500 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                        >
+                          <CheckCircle size={13} /> All Done — Ticket Complete
+                        </button>
+                      </div>
+                    )}
+
+                    {ticket.items.every((i) => i.status === 'ready') && (
+                      <div className="bg-green-500/10 px-3 py-2 text-center">
+                        <p className="text-green-400 text-xs font-bold">
+                          ✅ Ticket Complete — Waiter Notified
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { useAuth } from '../../context/AuthContext'
 import ErrorBoundary from '../../components/ErrorBoundary'
 import { Beer, Clock, LogOut, RefreshCw, CheckCircle, BarChart2 } from 'lucide-react'
 import type { KdsOrder } from './types'
+import DailySummaryTab from './DailySummaryTab'
 import { useToast } from '../../context/ToastContext'
 
 const HELP_TIPS = [
@@ -79,65 +80,6 @@ function BarKDSInner() {
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
   const [activeTab, setActiveTab] = useState<'orders' | 'summary'>('orders')
-  const [summary, setSummary] = useState<{ name: string; quantity: number; tables: string[] }[]>([])
-  const [summaryLoading, setSummaryLoading] = useState(false)
-  const [totalDrinks, setTotalDrinks] = useState(0)
-
-  const fetchSummary = useCallback(async () => {
-    setSummaryLoading(true)
-    const todayWAT = new Date()
-    todayWAT.setHours(0, 0, 0, 0)
-    // WAT is UTC+1 — adjust for Lagos timezone
-    const startUTC = new Date(todayWAT.getTime() - 60 * 60 * 1000).toISOString()
-
-    const { data } = await supabase
-      .from('order_items')
-      .select(
-        `
-        quantity,
-        menu_items(name, menu_categories(destination)),
-        orders(created_at, tables(name))
-      `
-      )
-      .gte('orders.created_at', startUTC)
-      .eq('status', 'ready')
-
-    if (data) {
-      const barItems = (
-        data as unknown as {
-          quantity: number
-          menu_items: { name: string; menu_categories: { destination: string } } | null
-          orders: { created_at: string; tables: { name: string } | null } | null
-        }[]
-      ).filter((i) => i.menu_items?.menu_categories?.destination === 'bar' && i.orders)
-
-      // Aggregate by drink name
-      const map = new Map<string, { quantity: number; tables: Set<string> }>()
-      for (const item of barItems) {
-        const name = item.menu_items?.name || 'Unknown'
-        const table = item.orders?.tables?.name || 'Unknown'
-        const existing = map.get(name)
-        if (existing) {
-          existing.quantity += item.quantity
-          existing.tables.add(table)
-        } else {
-          map.set(name, { quantity: item.quantity, tables: new Set([table]) })
-        }
-      }
-
-      const sorted = Array.from(map.entries())
-        .map(([name, { quantity, tables }]) => ({
-          name,
-          quantity,
-          tables: Array.from(tables),
-        }))
-        .sort((a, b) => b.quantity - a.quantity)
-
-      setSummary(sorted)
-      setTotalDrinks(sorted.reduce((s, i) => s + i.quantity, 0))
-    }
-    setSummaryLoading(false)
-  }, [])
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -233,10 +175,6 @@ function BarKDSInner() {
     }
   }, [fetchOrders])
 
-  useEffect(() => {
-    if (activeTab === 'summary') fetchSummary()
-  }, [activeTab, fetchSummary])
-
   if (geoStatus === 'outside' || geoStatus === 'error' || geoStatus === 'unsupported')
     return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   if (loading)
@@ -261,10 +199,7 @@ function BarKDSInner() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={activeTab === 'orders' ? fetchOrders : fetchSummary}
-            className="text-gray-400 hover:text-white"
-          >
+          <button onClick={fetchOrders} className="text-gray-400 hover:text-white">
             <RefreshCw size={16} />
           </button>
           <p className="text-gray-400 text-sm">{profile?.full_name}</p>
@@ -298,46 +233,11 @@ function BarKDSInner() {
 
       {/* Summary Tab */}
       {activeTab === 'summary' && (
-        <div className="flex-1 p-4 overflow-y-auto">
-          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 mb-4 flex items-center justify-between">
-            <div>
-              <p className="text-gray-400 text-xs">Total drinks served today</p>
-              <p className="text-white text-2xl font-bold">{totalDrinks}</p>
-            </div>
-            <Beer size={28} className="text-amber-400" />
-          </div>
-          {summaryLoading ? (
-            <div className="text-amber-500 text-center py-8">Loading...</div>
-          ) : summary.length === 0 ? (
-            <div className="text-center py-12">
-              <Beer size={32} className="text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400">No drinks served yet today</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {summary.map((item, i) => (
-                <div
-                  key={item.name}
-                  className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center gap-3"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-sm">
-                    {i + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-semibold text-sm truncate">{item.name}</p>
-                    <p className="text-gray-500 text-xs truncate">
-                      Tables: {item.tables.join(', ')}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-amber-400 font-bold text-lg">{item.quantity}</p>
-                    <p className="text-gray-500 text-xs">served</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <DailySummaryTab
+          destination="bar"
+          icon={<Beer size={24} className="text-amber-400" />}
+          color="text-amber-400"
+        />
       )}
 
       {/* Orders Tab */}
