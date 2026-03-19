@@ -63,12 +63,10 @@ function getTimerColor(createdAt: string): string {
 }
 function getStatusColor(status: string): string {
   if (status === 'ready') return 'bg-green-500/20 text-green-400 cursor-default'
-  if (status === 'preparing') return 'bg-amber-500/20 text-amber-400'
   return 'bg-gray-700 text-gray-400'
 }
 function getNextStatus(status: string): string | null {
-  if (status === 'pending') return 'preparing'
-  if (status === 'preparing') return 'ready'
+  if (status === 'pending') return 'ready'
   return null
 }
 
@@ -291,11 +289,7 @@ function BarKDSInner() {
                           disabled={item.status === 'ready'}
                           className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${getStatusColor(item.status)}`}
                         >
-                          {item.status === 'pending'
-                            ? 'Pending'
-                            : item.status === 'preparing'
-                              ? 'Preparing'
-                              : '✓ Ready'}
+                          {item.status === 'pending' ? 'Mark Ready' : '✓ Served'}
                         </button>
                       </div>
                     ))}

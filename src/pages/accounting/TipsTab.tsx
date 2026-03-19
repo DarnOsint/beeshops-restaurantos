@@ -52,26 +52,33 @@ export default function TipsTab({ dateRange }: Props) {
       .order('created_at', { ascending: false })
 
     if (data) {
-      const tipData = data as Tip[]
+      // Cast numeric fields — Supabase returns numerics as strings
+      const tipData = (data as Tip[]).map((t) => ({
+        ...t,
+        tip_amount: Number(t.tip_amount),
+        order_total: Number(t.order_total),
+        amount_received: Number(t.amount_received),
+      }))
       setTips(tipData)
 
       // Aggregate by waitron
       const map = new Map<string, WaitronSummary>()
       for (const tip of tipData) {
+        const tipAmt = Number(tip.tip_amount)
         const existing = map.get(tip.waitron_id)
         if (existing) {
-          existing.total_tips += tip.tip_amount
+          existing.total_tips += tipAmt
           existing.tip_count++
-          if (tip.status === 'pending') existing.pending += tip.tip_amount
-          else existing.disbursed += tip.tip_amount
+          if (tip.status === 'pending') existing.pending += tipAmt
+          else if (tip.status === 'disbursed') existing.disbursed += tipAmt
         } else {
           map.set(tip.waitron_id, {
             waitron_id: tip.waitron_id,
             waitron_name: tip.waitron_name,
-            total_tips: tip.tip_amount,
+            total_tips: tipAmt,
             tip_count: 1,
-            pending: tip.status === 'pending' ? tip.tip_amount : 0,
-            disbursed: tip.status === 'disbursed' ? tip.tip_amount : 0,
+            pending: tip.status === 'pending' ? tipAmt : 0,
+            disbursed: tip.status === 'disbursed' ? tipAmt : 0,
           })
         }
       }

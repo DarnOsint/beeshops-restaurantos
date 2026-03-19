@@ -45,10 +45,23 @@ export interface ReceiptData {
   subtotal: number
   vatAmount: number
   total: number
+  tipAmount?: number
+  amountReceived?: number
 }
 
 export function buildReceipt(data: ReceiptData): Uint8Array {
-  const { order, items, table, staffName, orderRef, subtotal, vatAmount, total } = data
+  const {
+    order,
+    items,
+    table,
+    staffName,
+    orderRef,
+    subtotal,
+    vatAmount,
+    total,
+    tipAmount = 0,
+    amountReceived = 0,
+  } = data
   const bytes: number[] = []
   const push = (...chunks: (number | number[] | readonly number[])[]) =>
     chunks.forEach((c) =>
@@ -99,6 +112,27 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
     cmd.normalSize,
     cmd.boldOff
   )
+  if (tipAmount > 0) {
+    const received = amountReceived > 0 ? amountReceived : total + tipAmount
+    push(text('--------------------------------\n'))
+    push(
+      row(
+        'Amt Received:',
+        '\u20A6' +
+          received.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      )
+    )
+    push(
+      row(
+        'Tip (Thank you!):',
+        '\u20A6' +
+          tipAmount.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })
+      )
+    )
+  }
   push(text('--------------------------------\n'))
   push(cmd.alignCenter)
   push(text('Thank you for visiting!\n'))

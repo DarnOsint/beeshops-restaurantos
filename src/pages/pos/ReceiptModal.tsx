@@ -68,9 +68,18 @@ export default function ReceiptModal({
     setPrinting(true)
     let thermalSuccess = false
     await printReceipt(
-      { order, items, table, staffName, orderRef, subtotal, vatAmount, total } as Parameters<
-        typeof printReceipt
-      >[0],
+      {
+        order,
+        items,
+        table,
+        staffName,
+        orderRef,
+        subtotal,
+        vatAmount,
+        total,
+        tipAmount,
+        amountReceived,
+      } as Parameters<typeof printReceipt>[0],
       () => {
         // Thermal failed — use browser print fallback
         handlePrint('customer')
