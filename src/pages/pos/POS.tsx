@@ -973,6 +973,7 @@ export default function POS() {
           }
           items={(reprintOrder.order_items || []) as import('../../types').OrderItem[]}
           staffName={profile?.full_name || ''}
+          autoPrint={false}
           onClose={() => setReprintOrder(null)}
         />
       )}

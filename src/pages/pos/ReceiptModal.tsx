@@ -10,6 +10,7 @@ interface Props {
   staffName: string
   tipAmount?: number
   amountReceived?: number
+  autoPrint?: boolean
   onClose: () => void
 }
 
@@ -20,6 +21,7 @@ export default function ReceiptModal({
   staffName,
   tipAmount = 0,
   amountReceived = 0,
+  autoPrint = true,
   onClose,
 }: Props) {
   const customerRef = useRef<HTMLDivElement>(null)
@@ -185,9 +187,10 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
     setTimeout(onClose, 500)
   }
 
-  // Auto-trigger print when receipt opens — placed after function declaration when receipt opens — placed after function declaration
+  // Auto-trigger print when receipt opens — only when autoPrint is true (post-payment flow)
   const hasPrinted = useRef(false)
   useEffect(() => {
+    if (!autoPrint) return
     if (hasPrinted.current) return
     hasPrinted.current = true
     void handleThermalPrint()
@@ -329,6 +332,29 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
             <X size={20} />
           </button>
         </div>
+
+        {/* Print choice — shown when opened from My Orders (not auto-print) */}
+        {!autoPrint && (
+          <div className="px-6 py-4 bg-amber-50 border-b border-amber-200 shrink-0">
+            <p className="text-amber-800 text-sm font-semibold mb-3">Select which copy to print:</p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleThermalPrint}
+                disabled={printing}
+                className="flex-1 flex items-center justify-center gap-2 bg-black text-white font-semibold py-3 rounded-xl hover:bg-gray-800 disabled:opacity-50 transition-colors text-sm"
+              >
+                <Printer size={15} /> {printing ? 'Printing...' : 'Customer Copy'}
+              </button>
+              <button
+                onClick={() => handlePrint('waiter')}
+                disabled={printing}
+                className="flex-1 flex items-center justify-center gap-2 bg-amber-500 text-black font-semibold py-3 rounded-xl hover:bg-amber-400 disabled:opacity-50 transition-colors text-sm"
+              >
+                <Printer size={15} /> Waiter Copy
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="flex md:hidden border-b border-gray-200 bg-gray-50 shrink-0">
           <button
