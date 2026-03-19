@@ -237,7 +237,6 @@ export default function Executive() {
         if (map['geofence_lng_main']) setLngMain(map['geofence_lng_main'])
         if (map['geofence_lat_apartment']) setLatApartment(map['geofence_lat_apartment'])
         if (map['geofence_lng_apartment']) setLngApartment(map['geofence_lng_apartment'])
-        if (map['bank_account_number'] !== undefined)
       })
     const iv = setInterval(fetchStats, 30000)
     const ch = supabase
