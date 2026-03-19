@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { useThermalPrinter } from '../../hooks/useThermalPrinter'
 import { X, Printer, Download } from 'lucide-react'
 import type { Order, OrderItem, Table } from '../../types'
 
@@ -24,19 +23,8 @@ export default function ReceiptModal({
 }: Props) {
   const customerRef = useRef<HTMLDivElement>(null)
   const waiterRef = useRef<HTMLDivElement>(null)
-  const { isSupported, printReceipt } = useThermalPrinter()
   const [printing, setPrinting] = useState(false)
   const [activeTab, setActiveTab] = useState<'customer' | 'waiter'>('customer')
-
-  // Auto-trigger thermal print when receipt opens
-  const hasPrinted = useRef(false)
-  useEffect(() => {
-    if (hasPrinted.current) return
-    if (!isSupported) return
-    hasPrinted.current = true
-    void handleThermalPrint()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
 
   const formatDate = (date: string) =>
     new Date(date).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -58,70 +46,266 @@ export default function ReceiptModal({
       ((i as unknown as { extra_charge?: number }).extra_charge || 0),
     0
   )
-  const vatAmount = 0
   // Total is order.total_amount (what was actually charged)
   const total = (order as unknown as { total_amount?: number }).total_amount || subtotal
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`${window.location.origin}/receipt/${order.id}`)}&color=000000&bgcolor=ffffff`
 
-  const handleThermalPrint = async () => {
+  const handleThermalPrint = () => {
     setPrinting(true)
-    let usedFallback = false
-    await printReceipt(
-      {
-        order,
-        items,
-        table,
-        staffName,
-        orderRef,
-        subtotal,
-        vatAmount,
-        total,
-        tipAmount,
-        amountReceived,
-      } as Parameters<typeof printReceipt>[0],
-      () => {
-        // Thermal failed — use browser print fallback
-        usedFallback = true
-        handlePrint('customer')
-        setTimeout(onClose, 2000)
-      }
+
+    const W = 40
+    const fmtRow = (left: string, right: string) => {
+      const l = left.substring(0, W - right.length - 1)
+      const spaces = W - l.length - right.length
+      return l + ' '.repeat(Math.max(1, spaces)) + right
+    }
+    const divider = '-'.repeat(W)
+    const solidDivider = '='.repeat(W)
+    const centre = (str: string) => {
+      const pad = Math.max(0, Math.floor((W - str.length) / 2))
+      return ' '.repeat(pad) + str
+    }
+
+    const pmRaw = (order.payment_method ?? '').toLowerCase()
+    const pmLabel = pmRaw.startsWith('transfer:')
+      ? `TRANSFER - ${pmRaw.replace('transfer:', '').toUpperCase()}`
+      : pmRaw === 'cash'
+        ? 'CASH'
+        : pmRaw === 'card'
+          ? 'BANK POS'
+          : pmRaw === 'credit'
+            ? 'PAY LATER (DEBT)'
+            : pmRaw.toUpperCase()
+
+    const itemLines = items
+      .map((item) => {
+        const name = `${item.quantity}x ${(item as unknown as { menu_items?: { name: string } }).menu_items?.name || 'Item'}`
+        const price = `N${((item as unknown as { total_price?: number }).total_price || 0).toLocaleString()}`
+        return fmtRow(name, price)
+      })
+      .join('\n')
+
+    const tipLines =
+      tipAmount > 0
+        ? [
+            divider,
+            fmtRow(
+              'Amt Received:',
+              `N${(amountReceived > 0 ? amountReceived : total + tipAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            ),
+            fmtRow(
+              'Tip (Thank you!):',
+              `N${tipAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            ),
+          ]
+        : []
+
+    const receiptLines = [
+      '',
+      centre("BEESHOP'S PLACE"),
+      centre('Lounge & Restaurant'),
+      divider,
+      fmtRow('Ref:', orderRef),
+      fmtRow('Table:', table?.name ?? 'N/A'),
+      fmtRow(
+        'Date:',
+        new Date(order.created_at).toLocaleDateString('en-NG', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        })
+      ),
+      fmtRow(
+        'Time:',
+        new Date(order.created_at).toLocaleTimeString('en-NG', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        })
+      ),
+      fmtRow('Served by:', staffName || 'Staff'),
+      fmtRow('Payment:', pmLabel),
+      divider,
+      fmtRow('ITEM', 'AMOUNT'),
+      divider,
+      itemLines,
+      solidDivider,
+      fmtRow(
+        'TOTAL:',
+        `N${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      ),
+      ...tipLines,
+      solidDivider,
+      '',
+      centre('** PAYMENT CONFIRMED **'),
+      '',
+      centre('Thank you for visiting'),
+      centre("Beeshop's Place"),
+      '',
+    ].join('\n')
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Receipt</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; background: #fff; width: 80mm; padding: 4mm; white-space: pre; }
+    @media print { body { width: 80mm; } @page { margin: 0; size: 80mm auto; } }
+  </style>
+</head>
+<body>${receiptLines}</body>
+</html>`
+
+    const win = window.open(
+      '',
+      '_blank',
+      'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
     )
-    setPrinting(false)
-    // Only auto-close if thermal succeeded (no fallback used)
-    if (!usedFallback) {
-      setTimeout(onClose, 1500)
+    if (!win) {
+      setPrinting(false)
+      return
+    }
+    win.document.open('text/html', 'replace')
+    win.document.write(html)
+    win.document.close()
+    win.onload = () => {
+      setTimeout(() => {
+        win.print()
+        win.close()
+        setPrinting(false)
+        setTimeout(onClose, 500)
+      }, 200)
     }
   }
 
-  const buildReceiptHtml = (type: 'customer' | 'waiter', bodyHtml: string) => `
-    <html><head><title>${type === 'customer' ? 'Customer Receipt' : 'Waiter Copy'} - ${orderRef}</title>
-    <style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #000; background: #fff; width: 80mm; padding: 4mm; }
-    .center { text-align: center; } .bold { font-weight: bold; } .large { font-size: 15px; } .xlarge { font-size: 18px; } .small { font-size: 10px; }
-    .divider { border-top: 1px dashed #000; margin: 6px 0; } .divider-solid { border-top: 2px solid #000; margin: 6px 0; }
-    .row { display: flex; justify-content: space-between; margin: 3px 0; } .total-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; margin: 4px 0; }
-    @media print { body { width: 80mm; } @page { margin: 0; size: 80mm auto; } }</style></head>
-    <body>${bodyHtml}</body></html>`
+  // Auto-trigger print when receipt opens — placed after function declaration
+  const hasPrinted = useRef(false)
+  useEffect(() => {
+    if (hasPrinted.current) return
+    hasPrinted.current = true
+    void handleThermalPrint()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const buildMonoReceipt = (type: 'customer' | 'waiter') => {
+    const W = 40
+    const fmtRow = (left: string, right: string) => {
+      const l = left.substring(0, W - right.length - 1)
+      const spaces = W - l.length - right.length
+      return l + ' '.repeat(Math.max(1, spaces)) + right
+    }
+    const divider = '-'.repeat(W)
+    const solidDivider = '='.repeat(W)
+    const centre = (str: string) => {
+      const pad = Math.max(0, Math.floor((W - str.length) / 2))
+      return ' '.repeat(pad) + str
+    }
+
+    const pmRaw = (order.payment_method ?? '').toLowerCase()
+    const pmLabel = pmRaw.startsWith('transfer:')
+      ? `TRANSFER - ${pmRaw.replace('transfer:', '').toUpperCase()}`
+      : pmRaw === 'cash'
+        ? 'CASH'
+        : pmRaw === 'card'
+          ? 'BANK POS'
+          : pmRaw === 'credit'
+            ? 'PAY LATER (DEBT)'
+            : pmRaw.toUpperCase()
+
+    const itemLines = items
+      .map((item) => {
+        const iName = `${item.quantity}x ${(item as unknown as { menu_items?: { name: string } }).menu_items?.name || 'Item'}`
+        const iPrice = `N${((item as unknown as { total_price?: number }).total_price || 0).toLocaleString()}`
+        return fmtRow(iName, iPrice)
+      })
+      .join('\n')
+
+    const tipLines =
+      tipAmount > 0
+        ? [
+            divider,
+            fmtRow(
+              'Amt Received:',
+              `N${(amountReceived > 0 ? amountReceived : total + tipAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            ),
+            fmtRow(
+              'Tip (Thank you!):',
+              `N${tipAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            ),
+          ]
+        : []
+
+    const isWaiter = type === 'waiter'
+
+    const lines = [
+      '',
+      centre("BEESHOP'S PLACE"),
+      centre('Lounge & Restaurant'),
+      isWaiter ? centre('-- WAITER COPY --') : '',
+      divider,
+      fmtRow('Ref:', orderRef),
+      fmtRow('Table:', table?.name ?? 'N/A'),
+      fmtRow('Date:', formatDate(order.created_at)),
+      fmtRow('Time:', formatTime(order.created_at)),
+      fmtRow('Served by:', staffName || 'Staff'),
+      fmtRow('Payment:', pmLabel),
+      divider,
+      fmtRow('ITEM', 'AMOUNT'),
+      divider,
+      itemLines,
+      solidDivider,
+      fmtRow(
+        'TOTAL:',
+        `N${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      ),
+      ...tipLines,
+      solidDivider,
+      '',
+      centre('** PAYMENT CONFIRMED **'),
+      '',
+      isWaiter ? centre('-- Staff Record Only --') : centre('Thank you for visiting'),
+      isWaiter ? '' : centre("Beeshop's Place"),
+      '',
+    ].join('\n')
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${isWaiter ? 'Waiter Copy' : 'Customer Receipt'} - ${orderRef}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; background: #fff; width: 80mm; padding: 4mm; white-space: pre; }
+    @media print { body { width: 80mm; } @page { margin: 0; size: 80mm auto; } }
+  </style>
+</head>
+<body>${lines}</body>
+</html>`
+  }
 
   const handlePrint = (type: 'customer' | 'waiter') => {
-    const ref = type === 'customer' ? customerRef : waiterRef
-    if (!ref.current) return
-    const html = buildReceiptHtml(type, ref.current.innerHTML)
-    const iframe = document.createElement('iframe')
-    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:0'
-    document.body.appendChild(iframe)
-    iframe.contentDocument!.write(html)
-    iframe.contentDocument!.close()
-    iframe.contentWindow!.focus()
-    setTimeout(() => {
-      iframe.contentWindow!.print()
-      setTimeout(() => document.body.removeChild(iframe), 1000)
-    }, 300)
+    const html = buildMonoReceipt(type)
+    const win = window.open(
+      '',
+      '_blank',
+      'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
+    )
+    if (!win) return
+    win.document.open('text/html', 'replace')
+    win.document.write(html)
+    win.document.close()
+    win.onload = () => {
+      setTimeout(() => {
+        win.print()
+        win.close()
+      }, 200)
+    }
   }
 
   const handleDownload = (type: 'customer' | 'waiter') => {
-    const ref = type === 'customer' ? customerRef : waiterRef
-    if (!ref.current) return
-    const html = buildReceiptHtml(type, ref.current.innerHTML)
+    const html = buildMonoReceipt(type)
     const blob = new Blob([html], { type: 'text/html' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -171,8 +355,7 @@ export default function ReceiptModal({
                   disabled={printing}
                   className="flex items-center gap-1 text-xs bg-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
                 >
-                  <Printer size={12} />{' '}
-                  {printing ? 'Printing...' : isSupported ? 'Print (Thermal)' : 'Print'}
+                  <Printer size={12} /> {printing ? 'Printing...' : '🖨 Print Receipt'}
                 </button>
                 <button
                   onClick={() => handleDownload('customer')}
