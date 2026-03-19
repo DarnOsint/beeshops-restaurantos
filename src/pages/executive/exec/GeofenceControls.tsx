@@ -62,10 +62,10 @@ export default function GeofenceControls({
 
   const toggleGeofence = async () => {
     setGeoToggling(true)
+    const newValue = (!geofenceEnabled).toString()
     await supabase
       .from('settings')
-      .update({ value: (!geofenceEnabled).toString(), updated_at: new Date().toISOString() })
-      .eq('id', 'geofence_enabled')
+      .upsert({ id: 'geofence_enabled', value: newValue, updated_at: new Date().toISOString() })
     setGeofenceEnabled(!geofenceEnabled)
     setGeoToggling(false)
   }
