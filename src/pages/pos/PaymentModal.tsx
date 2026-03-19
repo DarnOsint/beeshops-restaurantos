@@ -124,18 +124,57 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       minute: '2-digit',
       hour12: true,
     })
-    // Use raw order total — no VAT added
     const orderTotal = order?.total_amount || subtotal
-    const itemRows = (order.order_items || [])
-      .map(
-        (item) => `
-      <tr>
-        <td style="padding:5px 0;">${item.quantity}x &nbsp;${item.menu_items?.name || 'Item'}</td>
-        <td style="padding:5px 0;text-align:right;">N${(item.total_price || 0).toLocaleString()}</td>
-      </tr>
-    `
-      )
-      .join('')
+
+    const W = 40
+    const fmtRow = (left: string, right: string) => {
+      const l = left.substring(0, W - right.length - 1)
+      const spaces = W - l.length - right.length
+      return l + ' '.repeat(Math.max(1, spaces)) + right
+    }
+    const divider = '-'.repeat(W)
+    const solidDivider = '='.repeat(W)
+    const centre = (str: string) => {
+      const pad = Math.max(0, Math.floor((W - str.length) / 2))
+      return ' '.repeat(pad) + str
+    }
+
+    const itemLines = (order.order_items || [])
+      .map((item) => {
+        const name = `${item.quantity}x ${item.menu_items?.name || 'Item'}`
+        const price = `N${(item.total_price || 0).toLocaleString()}`
+        return fmtRow(name, price)
+      })
+      .join('\n')
+
+    const receipt = [
+      '',
+      centre("BEESHOP'S PLACE"),
+      centre('Lounge & Restaurant'),
+      divider,
+      fmtRow('Ref:', orderRef),
+      fmtRow('Table:', table.name),
+      fmtRow('Date:', date),
+      fmtRow('Time:', time),
+      fmtRow('Served by:', profile?.full_name || 'Staff'),
+      divider,
+      fmtRow('ITEM', 'AMOUNT'),
+      divider,
+      itemLines,
+      solidDivider,
+      fmtRow(
+        'TOTAL:',
+        `N${orderTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      ),
+      solidDivider,
+      '',
+      centre('** PRE-PAYMENT RECEIPT **'),
+      centre('Payment not yet confirmed.'),
+      '',
+      centre('Thank you for visiting'),
+      centre("Beeshop's Place"),
+      '',
+    ].join('\n')
 
     const html = `<!DOCTYPE html>
 <html>
@@ -150,65 +189,16 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       color: #000;
       background: #fff;
       width: 80mm;
-      padding: 6mm 4mm;
+      padding: 4mm;
+      white-space: pre;
     }
-    .center { text-align: center; }
-    .bold { font-weight: bold; }
-    .divider { border-top: 1px dashed #000; margin: 6px 0; }
-    .divider-solid { border-top: 2px solid #000; margin: 6px 0; }
-    table { width: 100%; border-collapse: collapse; }
-    .total-row { font-weight: bold; font-size: 15px; }
-    .total-row td { padding: 5px 0; border-top: 2px solid #000; }
-    .notice {
-      margin-top: 8px;
-      padding: 6px;
-      border: 1px dashed #000;
-      text-align: center;
-      font-size: 12px;
-    }
-    .footer { margin-top: 10px; text-align: center; font-size: 11px; }
     @media print {
       body { width: 80mm; }
       @page { margin: 0; size: 80mm auto; }
     }
   </style>
 </head>
-<body>
-  <div class="center bold" style="font-size:16px;">BEESHOP'S PLACE</div>
-  <div class="center" style="font-size:11px;margin-bottom:8px;">Lounge &amp; Restaurant</div>
-  <div class="divider"></div>
-  <div style="font-size:12px;line-height:1.6;">
-    <div>Ref: <b>${orderRef}</b></div>
-    <div>Table: <b>${table.name}</b></div>
-    <div>Date: ${date}</div>
-    <div>Time: ${time}</div>
-    <div>Served by: ${profile?.full_name || 'Staff'}</div>
-  </div>
-  <div class="divider-solid"></div>
-  <table>
-    <thead>
-      <tr>
-        <th style="text-align:left;padding:4px 0;border-bottom:1px solid #000;">Item</th>
-        <th style="text-align:right;padding:4px 0;border-bottom:1px solid #000;">Amount</th>
-      </tr>
-    </thead>
-    <tbody>${itemRows}</tbody>
-    <tfoot>
-      <tr class="total-row">
-        <td>TOTAL</td>
-        <td style="text-align:right;">N${orderTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-      </tr>
-    </tfoot>
-  </table>
-  <div class="notice">
-    ** PRE-PAYMENT RECEIPT **<br/>
-    Payment not yet confirmed.
-  </div>
-  <div class="footer">
-    Thank you for visiting Beeshop's Place<br/>
-    <br/>
-  </div>
-</body>
+<body>${receipt}</body>
 </html>`
 
     const win = window.open(
