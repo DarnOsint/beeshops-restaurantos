@@ -105,8 +105,18 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   const total = subtotal
   const change = paymentMethod === 'cash' && cashTendered ? parseFloat(cashTendered) - total : 0
 
+  // Items that have been sent to a KDS station but not yet marked ready
+  const unreadyItems = (order?.order_items || []).filter(
+    (i) =>
+      i.destination &&
+      ['bar', 'kitchen', 'griller'].includes(i.destination) &&
+      i.status === 'pending'
+  )
+  const hasUnreadyItems = unreadyItems.length > 0
+
   const canProcess = () => {
     if (processing) return false
+    if (hasUnreadyItems) return false
     if (paymentMethod === 'cash') return parseFloat(cashTendered) >= total
     if (paymentMethod === 'credit') return debtorName.trim().length > 0
     return true
@@ -936,6 +946,28 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
                   onChange={(e) => setDueDate(e.target.value)}
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-red-500"
                 />
+              </div>
+            </div>
+          )}
+
+          {/* Unready items warning — blocks payment */}
+          {hasUnreadyItems && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+              <p className="text-red-400 font-semibold text-sm mb-2">⚠️ Items not yet ready</p>
+              <p className="text-gray-400 text-xs mb-2">
+                The following items have not been marked ready by the bar/kitchen. Payment is
+                blocked until all items are served:
+              </p>
+              <div className="space-y-1">
+                {unreadyItems.map((item) => (
+                  <div key={item.id} className="flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                    <p className="text-red-300 text-xs font-medium">
+                      {item.quantity}x {item.menu_items?.name || 'Item'}
+                      <span className="text-gray-500 ml-1 capitalize">({item.destination})</span>
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
           )}
