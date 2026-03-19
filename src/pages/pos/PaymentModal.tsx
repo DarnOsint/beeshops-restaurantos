@@ -102,8 +102,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   })
 
   const subtotal = order?.total_amount || 0
-  const vatAmount = subtotal * 0.075
-  const total = subtotal + vatAmount
+  const total = subtotal
   const change = paymentMethod === 'cash' && cashTendered ? parseFloat(cashTendered) - total : 0
 
   const canProcess = () => {
@@ -125,61 +124,108 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       minute: '2-digit',
       hour12: true,
     })
+    // Use raw order total — no VAT added
+    const orderTotal = order?.total_amount || subtotal
     const itemRows = (order.order_items || [])
       .map(
         (item) => `
       <tr>
-        <td style="padding:4px 8px;border-bottom:1px solid #eee;">${item.quantity}x ${item.menu_items?.name || 'Item'}</td>
-        <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right;">₦${(item.total_price || 0).toLocaleString()}</td>
+        <td style="padding:5px 0;">${item.quantity}x &nbsp;${item.menu_items?.name || 'Item'}</td>
+        <td style="padding:5px 0;text-align:right;">N${(item.total_price || 0).toLocaleString()}</td>
       </tr>
     `
       )
       .join('')
-    const html = `
-      <!DOCTYPE html><html>
-      <head><title>Receipt — ${table.name}</title>
-      <style>
-        body{font-family:Arial,sans-serif;font-size:13px;margin:20px;color:#000;max-width:380px}
-        h2{font-size:16px;text-align:center;margin:0 0 2px}
-        .sub{text-align:center;color:#555;font-size:11px;margin-bottom:12px}
-        table{width:100%;border-collapse:collapse}
-        .total-row td{font-weight:bold;font-size:15px;padding:6px 8px;border-top:2px solid #000}
-        .footer{margin-top:14px;font-size:10px;color:#999;text-align:center}
-        .notice{background:#fff8e1;border:1px solid #ffc107;padding:8px;border-radius:4px;font-size:11px;text-align:center;margin-top:10px}
-      </style></head>
-      <body>
-        <h2>BEESHOP'S PLACE</h2>
-        <div class="sub">Lounge &amp; Restaurant</div>
-        <div style="font-size:11px;margin-bottom:8px;">
-          <b>Ref:</b> ${orderRef} &nbsp;|&nbsp; <b>Table:</b> ${table.name}<br/>
-          <b>Date:</b> ${date} &nbsp;|&nbsp; <b>Time:</b> ${time}
-        </div>
-        <table>
-          <thead><tr>
-            <th style="text-align:left;padding:4px 8px;border-bottom:2px solid #000;">Item</th>
-            <th style="text-align:right;padding:4px 8px;border-bottom:2px solid #000;">Amount</th>
-          </tr></thead>
-          <tbody>${itemRows}</tbody>
-          <tfoot>
-            <tr class="total-row">
-              <td>TOTAL</td>
-              <td style="text-align:right;">₦${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-            </tr>
-          </tfoot>
-        </table>
-        <div class="notice">⚠️ This is a pre-payment receipt.<br/>Payment has not yet been confirmed.</div>
-        <div class="footer">Thank you for visiting Beeshop's Place<br/>Powered by RestaurantOS</div>
-      </body></html>
-    `
-    const win = window.open('', '_blank', 'width=400,height=600')
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Pre-Payment Receipt</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 13px;
+      color: #000;
+      background: #fff;
+      width: 80mm;
+      padding: 6mm 4mm;
+    }
+    .center { text-align: center; }
+    .bold { font-weight: bold; }
+    .divider { border-top: 1px dashed #000; margin: 6px 0; }
+    .divider-solid { border-top: 2px solid #000; margin: 6px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    .total-row { font-weight: bold; font-size: 15px; }
+    .total-row td { padding: 5px 0; border-top: 2px solid #000; }
+    .notice {
+      margin-top: 8px;
+      padding: 6px;
+      border: 1px dashed #000;
+      text-align: center;
+      font-size: 12px;
+    }
+    .footer { margin-top: 10px; text-align: center; font-size: 11px; }
+    @media print {
+      body { width: 80mm; }
+      @page { margin: 0; size: 80mm auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="center bold" style="font-size:16px;">BEESHOP'S PLACE</div>
+  <div class="center" style="font-size:11px;margin-bottom:8px;">Lounge &amp; Restaurant</div>
+  <div class="divider"></div>
+  <div style="font-size:12px;line-height:1.6;">
+    <div>Ref: <b>${orderRef}</b></div>
+    <div>Table: <b>${table.name}</b></div>
+    <div>Date: ${date}</div>
+    <div>Time: ${time}</div>
+    <div>Served by: ${profile?.full_name || 'Staff'}</div>
+  </div>
+  <div class="divider-solid"></div>
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:4px 0;border-bottom:1px solid #000;">Item</th>
+        <th style="text-align:right;padding:4px 0;border-bottom:1px solid #000;">Amount</th>
+      </tr>
+    </thead>
+    <tbody>${itemRows}</tbody>
+    <tfoot>
+      <tr class="total-row">
+        <td>TOTAL</td>
+        <td style="text-align:right;">N${orderTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      </tr>
+    </tfoot>
+  </table>
+  <div class="notice">
+    ** PRE-PAYMENT RECEIPT **<br/>
+    Payment not yet confirmed.
+  </div>
+  <div class="footer">
+    Thank you for visiting Beeshop's Place<br/>
+    <br/>
+  </div>
+</body>
+</html>`
+
+    const win = window.open(
+      '',
+      '_blank',
+      'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
+    )
     if (!win) return
+    win.document.open('text/html', 'replace')
     win.document.write(html)
     win.document.close()
-    win.focus()
-    setTimeout(() => {
-      win.print()
-      win.close()
-    }, 300)
+    win.onload = () => {
+      setTimeout(() => {
+        win.print()
+        win.close()
+      }, 200)
+    }
   }
 
   const orderItems = order?.order_items || []

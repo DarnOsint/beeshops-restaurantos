@@ -98,7 +98,6 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
   })
 
   push(text('================================================\n'))
-  push(row('Subtotal (VAT incl.):', '\u20A6' + subtotal.toLocaleString()))
 
   push(text('------------------------------------------------\n'))
   push(

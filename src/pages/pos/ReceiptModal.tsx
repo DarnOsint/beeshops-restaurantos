@@ -58,8 +58,7 @@ export default function ReceiptModal({
       ((i as unknown as { extra_charge?: number }).extra_charge || 0),
     0
   )
-  const vatRate = 0.075
-  const vatAmount = subtotal * vatRate
+  const vatAmount = 0
   // Total is order.total_amount (what was actually charged)
   const total = (order as unknown as { total_amount?: number }).total_amount || subtotal
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`${window.location.origin}/receipt/${order.id}`)}&color=000000&bgcolor=ffffff`
@@ -274,7 +273,7 @@ export default function ReceiptModal({
                   </div>
                 ))}
                 <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-                {[['Subtotal (VAT incl.)', `₦${subtotal.toLocaleString()}`]].map(([l, v]) => (
+                {[['Subtotal', `₦${subtotal.toLocaleString()}`]].map(([l, v]) => (
                   <div
                     key={l}
                     style={{
@@ -472,7 +471,7 @@ export default function ReceiptModal({
                   </div>
                 ))}
                 <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
-                {[['Subtotal (VAT incl.)', `₦${subtotal.toLocaleString()}`]].map(([l, v]) => (
+                {[['Subtotal', `₦${subtotal.toLocaleString()}`]].map(([l, v]) => (
                   <div
                     key={l}
                     style={{
