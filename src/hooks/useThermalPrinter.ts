@@ -153,17 +153,17 @@ export function useThermalPrinter() {
   const connect = async (): Promise<boolean> => {
     if (!isSupported) return false
     try {
-      // Try different baud rates — some printers use 115200
       port = await (
         navigator as Navigator & { serial: { requestPort: () => Promise<SerialPort> } }
       ).serial.requestPort()
-      // Try 9600 first, then 115200 if that fails
-      try {
-        await port.open({ baudRate: 9600 })
-      } catch {
-        await port.open({ baudRate: 115200 })
+      // Only open if not already open
+      if (!port.readable) {
+        try {
+          await port.open({ baudRate: 9600 })
+        } catch {
+          await port.open({ baudRate: 115200 })
+        }
       }
-      writer = port.writable!.getWriter()
       return true
     } catch (e) {
       console.warn('Serial port not selected or failed:', e)
@@ -196,10 +196,22 @@ export function useThermalPrinter() {
           const ports = await serial.getPorts()
           if (ports.length > 0) {
             port = ports[0]
-            await port.open({ baudRate: 9600 })
+            // Only open if not already open
+            if (!port.readable) {
+              await port.open({ baudRate: 9600 })
+            }
           }
         } catch (_e) {
           /* no saved port */
+        }
+      } else {
+        // Port exists — check if it's still open, reopen if not
+        if (!port.readable) {
+          try {
+            await port.open({ baudRate: 9600 })
+          } catch (_e) {
+            port = null
+          }
         }
       }
       // If still no port, ask user to select one
@@ -221,14 +233,6 @@ export function useThermalPrinter() {
         if (writer) {
           writer.releaseLock()
           writer = null
-        }
-        if (port) {
-          try {
-            await port.close()
-          } catch (_e) {
-            /* ignore */
-          }
-          port = null
         }
       } catch (_e) {
         /* intentional */

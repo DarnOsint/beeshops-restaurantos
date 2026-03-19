@@ -65,7 +65,7 @@ export default function ReceiptModal({
 
   const handleThermalPrint = async () => {
     setPrinting(true)
-    let thermalSuccess = false
+    let usedFallback = false
     await printReceipt(
       {
         order,
@@ -81,15 +81,14 @@ export default function ReceiptModal({
       } as Parameters<typeof printReceipt>[0],
       () => {
         // Thermal failed — use browser print fallback
+        usedFallback = true
         handlePrint('customer')
         setTimeout(onClose, 2000)
       }
     )
-    // If we get here without the fallback firing, thermal succeeded
-    if (!thermalSuccess) {
-      thermalSuccess = true
-      setPrinting(false)
-      // Auto-close after thermal print — takes user straight back to POS
+    setPrinting(false)
+    // Only auto-close if thermal succeeded (no fallback used)
+    if (!usedFallback) {
       setTimeout(onClose, 1500)
     }
   }
