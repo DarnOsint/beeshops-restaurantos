@@ -245,54 +245,125 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
           ]
         : []
 
-    const isWaiter = type === 'waiter'
+    if (type === 'waiter') {
+      // Waiter copy — plain monospace
+      const lines = [
+        '',
+        centre("BEESHOP'S PLACE"),
+        centre('Lounge & Restaurant'),
+        centre('-- WAITER COPY --'),
+        divider,
+        fmtRow('Ref:', orderRef),
+        fmtRow('Table:', table?.name ?? 'N/A'),
+        fmtRow('Date:', formatDate(order.created_at)),
+        fmtRow('Time:', formatTime(order.created_at)),
+        fmtRow('Served by:', staffName || 'Staff'),
+        fmtRow('Payment:', pmLabel),
+        divider,
+        fmtRow('ITEM', 'AMOUNT'),
+        divider,
+        itemLines,
+        solidDivider,
+        fmtRow(
+          'TOTAL:',
+          `N${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        ),
+        ...tipLines,
+        solidDivider,
+        '',
+        centre('-- Staff Record Only --'),
+        '',
+      ].join('\n')
 
-    const lines = [
-      '',
-      centre("BEESHOP'S PLACE"),
-      centre('Lounge & Restaurant'),
-      isWaiter ? centre('-- WAITER COPY --') : '',
-      divider,
-      fmtRow('Ref:', orderRef),
-      fmtRow('Table:', table?.name ?? 'N/A'),
-      fmtRow('Date:', formatDate(order.created_at)),
-      fmtRow('Time:', formatTime(order.created_at)),
-      fmtRow('Served by:', staffName || 'Staff'),
-      fmtRow('Payment:', pmLabel),
-      divider,
-      fmtRow('ITEM', 'AMOUNT'),
-      divider,
-      itemLines,
-      solidDivider,
-      fmtRow(
-        'TOTAL:',
-        `N${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      ),
-      ...tipLines,
-      solidDivider,
-      '',
-      centre('** PAYMENT CONFIRMED **'),
-      '',
-      isWaiter ? centre('-- Staff Record Only --') : centre('Thank you for visiting'),
-      isWaiter ? '' : centre("Beeshop's Place"),
-      '',
-    ].join('\n')
+      return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Waiter Copy - ${orderRef}</title>
+<style>* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; background: #fff; width: 80mm; padding: 4mm; white-space: pre; }
+@media print { body { width: 80mm; } @page { margin: 0; size: 80mm auto; } }
+</style></head><body>${lines}</body></html>`
+    }
+
+    // Customer copy — rich HTML with QR code
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(`${window.location.origin}/receipt/${order.id}`)}&color=000000&bgcolor=ffffff`
+    const itemRows = items
+      .map((item) => {
+        const iName = `${item.quantity}x ${(item as unknown as { menu_items?: { name: string } }).menu_items?.name || 'Item'}`
+        const iPrice = `N${((item as unknown as { total_price?: number }).total_price || 0).toLocaleString()}`
+        const notes = (item as unknown as { modifier_notes?: string }).modifier_notes
+        return `<div class="item-row">
+        <span class="item-name">${iName}</span>
+        <span class="item-price">${iPrice}</span>
+      </div>${notes ? `<div class="item-note">&gt; ${notes}</div>` : ''}`
+      })
+      .join('')
+
+    const tipHtml =
+      tipAmount > 0
+        ? `
+      <div class="divider-dashed"></div>
+      <div class="item-row"><span>Amount Received</span><span>N${(amountReceived > 0 ? amountReceived : total + tipAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+      <div class="item-row tip-row"><span>&#128154; Tip (Thank you!)</span><span>N${tipAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+    `
+        : ''
 
     return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>${isWaiter ? 'Waiter Copy' : 'Customer Receipt'} - ${orderRef}</title>
+  <title>Receipt - ${orderRef}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; background: #fff; width: 80mm; padding: 4mm; white-space: pre; }
+    body { font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #000; background: #fff; width: 80mm; padding: 3mm; }
+    .center { text-align: center; }
+    .store-name { font-size: 17px; font-weight: bold; text-align: center; letter-spacing: 1px; }
+    .store-sub { font-size: 11px; text-align: center; margin-bottom: 4px; }
+    .divider { border-top: 1px dashed #000; margin: 5px 0; }
+    .divider-solid { border-top: 2px solid #000; margin: 5px 0; }
+    .divider-dashed { border-top: 1px dashed #000; margin: 4px 0; }
+    .meta-row { display: flex; justify-content: space-between; font-size: 11px; margin: 2px 0; }
+    .meta-label { color: #555; }
+    .items-header { display: flex; justify-content: space-between; font-weight: bold; font-size: 11px; padding: 3px 0; border-bottom: 1px solid #000; margin-bottom: 3px; }
+    .item-row { display: flex; justify-content: space-between; font-size: 12px; margin: 3px 0; }
+    .item-name { flex: 1; padding-right: 4px; }
+    .item-price { white-space: nowrap; }
+    .item-note { font-size: 10px; color: #555; padding-left: 8px; margin-bottom: 2px; }
+    .total-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 15px; padding: 4px 0; }
+    .tip-row { color: #166534; font-weight: bold; }
+    .confirmed { text-align: center; font-weight: bold; font-size: 12px; margin: 6px 0; border: 1px solid #000; padding: 4px; }
+    .qr-section { text-align: center; margin: 8px 0 4px; }
+    .qr-label { font-size: 10px; color: #555; margin-top: 3px; }
+    .footer { text-align: center; font-size: 10px; color: #555; margin-top: 6px; }
     @media print { body { width: 80mm; } @page { margin: 0; size: 80mm auto; } }
   </style>
 </head>
-<body>${lines}</body>
+<body>
+  <div class="store-name">BEESHOP'S PLACE</div>
+  <div class="store-sub">Lounge &amp; Restaurant</div>
+  <div class="divider"></div>
+  <div class="meta-row"><span class="meta-label">Ref:</span><span><b>${orderRef}</b></span></div>
+  <div class="meta-row"><span class="meta-label">Table:</span><span>${table?.name ?? 'N/A'}</span></div>
+  <div class="meta-row"><span class="meta-label">Date:</span><span>${formatDate(order.created_at)}</span></div>
+  <div class="meta-row"><span class="meta-label">Time:</span><span>${formatTime(order.created_at)}</span></div>
+  <div class="meta-row"><span class="meta-label">Served by:</span><span>${staffName || 'Staff'}</span></div>
+  <div class="meta-row"><span class="meta-label">Payment:</span><span><b>${pmLabel}</b></span></div>
+  <div class="divider-solid"></div>
+  <div class="items-header"><span>ITEM</span><span>AMOUNT</span></div>
+  ${itemRows}
+  <div class="divider-solid"></div>
+  <div class="total-row"><span>TOTAL</span><span>N${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+  ${tipHtml}
+  <div class="divider-solid"></div>
+  <div class="confirmed">&#10003; PAYMENT CONFIRMED</div>
+  <div class="qr-section">
+    <img src="${qrUrl}" width="90" height="90" alt="QR Code" style="display:block;margin:0 auto;" />
+    <div class="qr-label">Scan to view your order online</div>
+  </div>
+  <div class="footer">
+    Thank you for visiting Beeshop's Place!<br/>
+    Please come again &#128153;
+  </div>
+</body>
 </html>`
   }
-
   const handlePrint = (type: 'customer' | 'waiter') => {
     const html = buildMonoReceipt(type)
     const win = window.open(
@@ -339,7 +410,7 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
             <p className="text-amber-800 text-sm font-semibold mb-3">Select which copy to print:</p>
             <div className="flex gap-3">
               <button
-                onClick={handleThermalPrint}
+                onClick={() => handlePrint('customer')}
                 disabled={printing}
                 className="flex-1 flex items-center justify-center gap-2 bg-black text-white font-semibold py-3 rounded-xl hover:bg-gray-800 disabled:opacity-50 transition-colors text-sm"
               >
@@ -382,7 +453,7 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
               </span>
               <div className="flex gap-2">
                 <button
-                  onClick={handleThermalPrint}
+                  onClick={() => handlePrint('customer')}
                   disabled={printing}
                   className="flex items-center gap-1 text-xs bg-black text-white px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
                 >
