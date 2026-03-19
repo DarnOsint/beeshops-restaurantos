@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../context/AuthContext'
 import { Printer, CheckCircle, Clock, Users, TrendingUp } from 'lucide-react'
 
 interface Tip {
@@ -34,6 +35,7 @@ interface Props {
 }
 
 export default function TipsTab({ dateRange }: Props) {
+  const { profile } = useAuth()
   const [tips, setTips] = useState<Tip[]>([])
   const [summaries, setSummaries] = useState<WaitronSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -82,14 +84,21 @@ export default function TipsTab({ dateRange }: Props) {
     fetchTips()
   }, [fetchTips])
 
-  const disburse = async (waitronId: string, waitronName: string) => {
+  const disburse = async (waitronId: string) => {
     setDisbursing(waitronId)
     const now = new Date().toISOString()
     await supabase
       .from('tips')
-      .update({ status: 'disbursed', disbursed_at: now })
+      .update({
+        status: 'disbursed',
+        disbursed_at: now,
+        disbursed_by: profile?.id,
+        disbursed_by_name: profile?.full_name,
+      })
       .eq('waitron_id', waitronId)
       .eq('status', 'pending')
+      .gte('shift_date', dateRange.from)
+      .lte('shift_date', dateRange.to)
     await fetchTips()
     setDisbursing(null)
   }
@@ -275,7 +284,7 @@ export default function TipsTab({ dateRange }: Props) {
                 </div>
                 {w.pending > 0 && (
                   <button
-                    onClick={() => disburse(w.waitron_id, w.waitron_name)}
+                    onClick={() => disburse(w.waitron_id)}
                     disabled={disbursing === w.waitron_id}
                     className="bg-green-500 hover:bg-green-400 disabled:bg-gray-700 text-black text-xs font-bold px-3 py-2 rounded-xl transition-colors"
                   >

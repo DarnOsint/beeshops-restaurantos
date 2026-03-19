@@ -473,14 +473,18 @@ export default function Accounting() {
             dateLabel={dateRange === 'Custom' ? `${customStart} – ${customEnd}` : dateRange}
           />
         )}
-        {activeTab === 'tips' && (
-          <TipsTab
-            dateRange={{
-              from: customStart || new Date().toLocaleDateString('en-CA'),
-              to: customEnd || new Date().toLocaleDateString('en-CA'),
-            }}
-          />
-        )}
+        {activeTab === 'tips' &&
+          (() => {
+            const { start, end } = getDateBounds()
+            return (
+              <TipsTab
+                dateRange={{
+                  from: start.slice(0, 10),
+                  to: end.slice(0, 10),
+                }}
+              />
+            )
+          })()}
       </div>
     </div>
   )

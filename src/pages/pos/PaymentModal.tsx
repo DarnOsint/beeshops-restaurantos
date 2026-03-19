@@ -385,7 +385,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
             paymentMethod === 'transfer'
               ? `transfer:${bankAccounts.find((b) => b.id === selectedBankId)?.bank_name || 'Bank Transfer'}`
               : paymentMethod,
-          shift_date: new Date().toLocaleDateString('en-CA'), // YYYY-MM-DD in WAT
+          shift_date: new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 10), // WAT = UTC+1
           status: 'pending',
         })
       }
