@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { MapPin, Package, Smartphone } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { MapPin, Package, Smartphone, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import type { Stats } from './types'
 
@@ -19,12 +19,6 @@ interface Props {
   setLatApartment: (v: string) => void
   lngApartment: string
   setLngApartment: (v: string) => void
-  bankName: string
-  setBankName: (v: string) => void
-  bankAccountNumber: string
-  setBankAccountNumber: (v: string) => void
-  bankAccountName: string
-  setBankAccountName: (v: string) => void
   peakHour: string | null
   onNavigateBackoffice: () => void
 }
@@ -45,20 +39,12 @@ export default function GeofenceControls({
   setLatApartment,
   lngApartment,
   setLngApartment,
-  bankName,
-  setBankName,
-  bankAccountNumber,
-  setBankAccountNumber,
-  bankAccountName,
-  setBankAccountName,
   peakHour,
   onNavigateBackoffice,
 }: Props) {
   const [geoToggling, setGeoToggling] = useState(false)
   const [radiusSaving, setRadiusSaving] = useState(false)
-  const [savingBank, setSavingBank] = useState(false)
   const [showRadiusEdit, setShowRadiusEdit] = useState(false)
-  const [showBankEdit, setShowBankEdit] = useState(false)
 
   const toggleGeofence = async () => {
     setGeoToggling(true)
@@ -119,30 +105,6 @@ export default function GeofenceControls({
     ])
     setRadiusSaving(false)
     setShowRadiusEdit(false)
-  }
-
-  const saveBank = async () => {
-    setSavingBank(true)
-    await Promise.all([
-      supabase
-        .from('settings')
-        .upsert({ id: 'bank_name', value: bankName, updated_at: new Date().toISOString() }),
-      supabase
-        .from('settings')
-        .upsert({
-          id: 'bank_account_number',
-          value: bankAccountNumber,
-          updated_at: new Date().toISOString(),
-        }),
-      supabase
-        .from('settings')
-        .upsert({
-          id: 'bank_account_name',
-          value: bankAccountName,
-          updated_at: new Date().toISOString(),
-        }),
-    ])
-    setSavingBank(false)
   }
 
   const inp =
@@ -277,61 +239,118 @@ export default function GeofenceControls({
       </div>
 
       {/* Bank settings accordion */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl mb-4 overflow-hidden">
+      <BankAccountsManager inp={inp} />
+    </>
+  )
+}
+
+interface BankAccount {
+  id: string
+  bank_name: string
+  account_number: string
+  account_name: string
+  is_active: boolean
+}
+
+function BankAccountsManager({ inp }: { inp: string }) {
+  const [banks, setBanks] = useState<BankAccount[]>([])
+  const [showAdd, setShowAdd] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [newBank, setNewBank] = useState({ bank_name: '', account_number: '', account_name: '' })
+
+  useEffect(() => {
+    supabase.from('bank_accounts').select('*').eq('is_active', true).order('created_at').then(({ data }) => {
+      if (data) setBanks(data as BankAccount[])
+    })
+  }, [])
+
+  const addBank = async () => {
+    if (!newBank.bank_name || !newBank.account_number || !newBank.account_name) return
+    setSaving(true)
+    const { data } = await supabase.from('bank_accounts').insert({
+      bank_name: newBank.bank_name,
+      account_number: newBank.account_number,
+      account_name: newBank.account_name,
+      is_active: true,
+    }).select().single()
+    if (data) setBanks((prev) => [...prev, data as BankAccount])
+    setNewBank({ bank_name: '', account_number: '', account_name: '' })
+    setShowAdd(false)
+    setSaving(false)
+  }
+
+  const removeBank = async (id: string) => {
+    await supabase.from('bank_accounts').update({ is_active: false }).eq('id', id)
+    setBanks((prev) => prev.filter((b) => b.id !== id))
+  }
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl mb-4 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+        <div className="flex items-center gap-2">
+          <Smartphone size={15} className="text-amber-400" />
+          <span className="text-white font-semibold text-sm">Bank Transfer Accounts</span>
+          <span className="text-gray-500 text-xs">· {banks.length} account{banks.length !== 1 ? 's' : ''}</span>
+        </div>
         <button
-          onClick={() => setShowBankEdit((v) => !v)}
-          className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800 transition-colors"
+          onClick={() => setShowAdd((v) => !v)}
+          className="flex items-center gap-1 text-amber-400 hover:text-amber-300 text-xs font-medium"
         >
-          <div className="flex items-center gap-2">
-            <Smartphone size={15} className="text-amber-400" />
-            <span className="text-white font-semibold text-sm">Bank Transfer Details</span>
-            {bankName && <span className="text-gray-500 text-xs">· {bankName}</span>}
-          </div>
-          <span className="text-gray-500 text-xs">{showBankEdit ? 'Close ▲' : 'Edit ▼'}</span>
+          <Plus size={13} /> Add
         </button>
-        {showBankEdit && (
-          <div className="px-4 pb-4 space-y-2 border-t border-gray-800 pt-3">
-            <p className="text-gray-500 text-xs mb-2">
-              Shown to waitrons when processing bank transfer payments.
-            </p>
+      </div>
+      <div className="px-4 py-3 space-y-2">
+        <p className="text-gray-500 text-xs">Waitrons choose which bank to display during transfer payment.</p>
+        {banks.length === 0 && !showAdd && (
+          <p className="text-gray-600 text-xs italic">No bank accounts added yet.</p>
+        )}
+        {banks.map((bank) => (
+          <div key={bank.id} className="bg-gray-800 rounded-xl p-3 flex items-start justify-between gap-2">
             <div>
-              <label className="text-gray-400 text-xs mb-1 block">Bank Name</label>
-              <input
-                value={bankName}
-                onChange={(e) => setBankName(e.target.value)}
-                placeholder="e.g. Moniepoint"
-                className={inp}
-              />
+              <p className="text-white text-sm font-semibold">{bank.bank_name}</p>
+              <p className="text-amber-400 font-mono text-sm">{bank.account_number}</p>
+              <p className="text-gray-400 text-xs">{bank.account_name}</p>
             </div>
-            <div>
-              <label className="text-gray-400 text-xs mb-1 block">Account Number</label>
-              <input
-                value={bankAccountNumber}
-                onChange={(e) => setBankAccountNumber(e.target.value)}
-                placeholder="e.g. 1234567890"
-                className={inp}
-              />
-            </div>
-            <div>
-              <label className="text-gray-400 text-xs mb-1 block">Account Name</label>
-              <input
-                value={bankAccountName}
-                onChange={(e) => setBankAccountName(e.target.value)}
-                placeholder="e.g. Beeshop's Place Lounge"
-                className={inp}
-              />
-            </div>
-            <div className="flex gap-2 pt-1">
+            <button
+              onClick={() => removeBank(bank.id)}
+              className="text-gray-500 hover:text-red-400 transition-colors mt-1"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+        {showAdd && (
+          <div className="bg-gray-800 rounded-xl p-3 space-y-2 border border-amber-500/30">
+            <p className="text-amber-400 text-xs font-medium">New Bank Account</p>
+            <input
+              value={newBank.bank_name}
+              onChange={(e) => setNewBank((p) => ({ ...p, bank_name: e.target.value }))}
+              placeholder="Bank name (e.g. Moniepoint)"
+              className={inp}
+            />
+            <input
+              value={newBank.account_number}
+              onChange={(e) => setNewBank((p) => ({ ...p, account_number: e.target.value }))}
+              placeholder="Account number"
+              className={inp}
+            />
+            <input
+              value={newBank.account_name}
+              onChange={(e) => setNewBank((p) => ({ ...p, account_name: e.target.value }))}
+              placeholder="Account name"
+              className={inp}
+            />
+            <div className="flex gap-2">
               <button
-                onClick={saveBank}
-                disabled={savingBank}
-                className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black text-sm font-bold py-2.5 rounded-xl transition-colors"
+                onClick={addBank}
+                disabled={saving}
+                className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black text-sm font-bold py-2 rounded-xl"
               >
-                {savingBank ? 'Saving...' : 'Save'}
+                {saving ? 'Saving...' : 'Save'}
               </button>
               <button
-                onClick={() => setShowBankEdit(false)}
-                className="flex-1 bg-gray-800 hover:bg-gray-700 text-white text-sm py-2.5 rounded-xl transition-colors"
+                onClick={() => setShowAdd(false)}
+                className="flex-1 bg-gray-700 text-white text-sm py-2 rounded-xl"
               >
                 Cancel
               </button>
@@ -339,6 +358,6 @@ export default function GeofenceControls({
           </div>
         )}
       </div>
-    </>
+    </div>
   )
 }

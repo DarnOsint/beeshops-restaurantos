@@ -44,12 +44,6 @@ interface SplitPayment {
   items: string[]
   change: number
 }
-interface BankDetails {
-  name: string
-  account_number: string
-  account_name: string
-}
-
 interface Props {
   order: OrderExtended
   table: Table
@@ -77,27 +71,20 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   const [currentSplitPerson, setCurrentSplitPerson] = useState(0)
   const [splitPayMethod, setSplitPayMethod] = useState('cash')
   const [splitCash, setSplitCash] = useState('')
-  const [bankDetails, setBankDetails] = useState<BankDetails>({
-    name: 'Moniepoint',
-    account_number: '',
-    account_name: '',
-  })
+  const [bankAccounts, setBankAccounts] = useState<{ id: string; bank_name: string; account_number: string; account_name: string }[]>([])
+  const [selectedBankId, setSelectedBankId] = useState<string>('')
 
   useState(() => {
     supabase
-      .from('settings')
-      .select('id, value')
-      .in('id', ['bank_name', 'bank_account_number', 'bank_account_name'])
+      .from('bank_accounts')
+      .select('id, bank_name, account_number, account_name')
+      .eq('is_active', true)
+      .order('created_at')
       .then(({ data }) => {
-        if (!data) return
-        const map = Object.fromEntries(
-          data.map((r: { id: string; value: string }) => [r.id, r.value])
-        )
-        setBankDetails({
-          name: map['bank_name'] || 'Moniepoint',
-          account_number: map['bank_account_number'] || '',
-          account_name: map['bank_account_name'] || '',
-        })
+        if (data && data.length > 0) {
+          setBankAccounts(data)
+          setSelectedBankId(data[0].id)
+        }
       })
   })
 
@@ -356,7 +343,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         .from('orders')
         .update({
           status: 'paid',
-          payment_method: paymentMethod,
+          payment_method: paymentMethod === 'transfer'
+            ? `transfer:${bankAccounts.find((b) => b.id === selectedBankId)?.bank_name || 'Bank Transfer'}`
+            : paymentMethod,
           closed_at: new Date().toISOString(),
         })
         .eq('id', order.id)
@@ -702,23 +691,46 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
               </p>
             </div>
           )}
-          {paymentMethod === 'transfer' && (
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-center">
-              <Smartphone size={28} className="text-amber-400 mx-auto mb-2" />
-              <p className="text-amber-400 font-medium">Bank Transfer</p>
-              <div className="bg-gray-800 rounded-xl p-3 mt-2 space-y-1">
-                <p className="text-gray-400 text-xs">Transfer ₦{total.toLocaleString()} to:</p>
-                <p className="text-white font-bold text-sm">{bankDetails.name}</p>
-                {bankDetails.account_number && (
-                  <p className="text-amber-400 font-mono font-bold">{bankDetails.account_number}</p>
+          {paymentMethod === 'transfer' && (() => {
+            const selectedBank = bankAccounts.find((b) => b.id === selectedBankId)
+            return (
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Smartphone size={20} className="text-amber-400" />
+                  <p className="text-amber-400 font-medium">Bank Transfer</p>
+                </div>
+                {bankAccounts.length > 1 && (
+                  <div className="mb-3">
+                    <p className="text-gray-400 text-xs mb-2">Select bank account:</p>
+                    <div className="space-y-2">
+                      {bankAccounts.map((bank) => (
+                        <button
+                          key={bank.id}
+                          onClick={() => setSelectedBankId(bank.id)}
+                          className={`w-full text-left rounded-xl p-2.5 border transition-colors ${selectedBankId === bank.id ? 'bg-amber-500/20 border-amber-500/50' : 'bg-gray-800 border-gray-700 hover:border-amber-500/30'}`}
+                        >
+                          <p className={`text-sm font-semibold ${selectedBankId === bank.id ? 'text-amber-400' : 'text-white'}`}>{bank.bank_name}</p>
+                          <p className="text-gray-400 text-xs">{bank.account_number}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
-                {bankDetails.account_name && (
-                  <p className="text-gray-300 text-sm">{bankDetails.account_name}</p>
+                {selectedBank && (
+                  <div className="bg-gray-800 rounded-xl p-3 space-y-1">
+                    <p className="text-gray-400 text-xs">Transfer ₦{total.toLocaleString()} to:</p>
+                    <p className="text-white font-bold text-sm">{selectedBank.bank_name}</p>
+                    <p className="text-amber-400 font-mono font-bold">{selectedBank.account_number}</p>
+                    <p className="text-gray-300 text-sm">{selectedBank.account_name}</p>
+                    <p className="text-gray-500 text-xs pt-1">Confirm transfer before proceeding.</p>
+                  </div>
                 )}
-                <p className="text-gray-500 text-xs pt-1">Confirm transfer before proceeding.</p>
+                {bankAccounts.length === 0 && (
+                  <p className="text-gray-400 text-sm text-center">No bank accounts configured. Ask the owner to add bank accounts in the Executive dashboard.</p>
+                )}
               </div>
-            </div>
-          )}
+            )
+          })()}
           {paymentMethod === 'credit' && (
             <div className="space-y-3">
               <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center">

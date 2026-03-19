@@ -84,9 +84,6 @@ export default function Executive() {
   const [lngMain, setLngMain] = useState('3.840780')
   const [latApartment, setLatApartment] = useState('7.349545')
   const [lngApartment, setLngApartment] = useState('3.839690')
-  const [bankName, setBankName] = useState('')
-  const [bankAccountNumber, setBankAccountNumber] = useState('')
-  const [bankAccountName, setBankAccountName] = useState('')
 
   const [stats, setStats] = useState<Stats>({
     revenue: 0,
@@ -240,10 +237,7 @@ export default function Executive() {
         if (map['geofence_lng_main']) setLngMain(map['geofence_lng_main'])
         if (map['geofence_lat_apartment']) setLatApartment(map['geofence_lat_apartment'])
         if (map['geofence_lng_apartment']) setLngApartment(map['geofence_lng_apartment'])
-        if (map['bank_name'] !== undefined) setBankName(map['bank_name'])
         if (map['bank_account_number'] !== undefined)
-          setBankAccountNumber(map['bank_account_number'])
-        if (map['bank_account_name'] !== undefined) setBankAccountName(map['bank_account_name'])
       })
     const iv = setInterval(fetchStats, 30000)
     const ch = supabase
@@ -346,12 +340,6 @@ export default function Executive() {
           setLatApartment={setLatApartment}
           lngApartment={lngApartment}
           setLngApartment={setLngApartment}
-          bankName={bankName}
-          setBankName={setBankName}
-          bankAccountNumber={bankAccountNumber}
-          setBankAccountNumber={setBankAccountNumber}
-          bankAccountName={bankAccountName}
-          setBankAccountName={setBankAccountName}
           peakHour={peakHour}
           onNavigateBackoffice={() => navigate('/backoffice')}
         />
