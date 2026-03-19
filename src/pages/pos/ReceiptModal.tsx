@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useThermalPrinter } from '../../hooks/useThermalPrinter'
 import { X, Printer, Download } from 'lucide-react'
 import type { Order, OrderItem, Table } from '../../types'
 
@@ -23,6 +24,7 @@ export default function ReceiptModal({
 }: Props) {
   const customerRef = useRef<HTMLDivElement>(null)
   const waiterRef = useRef<HTMLDivElement>(null)
+  const { printReceipt } = useThermalPrinter()
   const [printing, setPrinting] = useState(false)
   const [activeTab, setActiveTab] = useState<'customer' | 'waiter'>('customer')
 
@@ -50,9 +52,10 @@ export default function ReceiptModal({
   const total = (order as unknown as { total_amount?: number }).total_amount || subtotal
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`${window.location.origin}/receipt/${order.id}`)}&color=000000&bgcolor=ffffff`
 
-  const handleThermalPrint = () => {
+  const handleThermalPrint = async () => {
     setPrinting(true)
 
+    const orderRef2 = orderRef // already defined above
     const W = 40
     const fmtRow = (left: string, right: string) => {
       const l = left.substring(0, W - right.length - 1)
@@ -77,110 +80,112 @@ export default function ReceiptModal({
             ? 'PAY LATER (DEBT)'
             : pmRaw.toUpperCase()
 
-    const itemLines = items
-      .map((item) => {
-        const name = `${item.quantity}x ${(item as unknown as { menu_items?: { name: string } }).menu_items?.name || 'Item'}`
-        const price = `N${((item as unknown as { total_price?: number }).total_price || 0).toLocaleString()}`
-        return fmtRow(name, price)
-      })
-      .join('\n')
-
-    const tipLines =
-      tipAmount > 0
-        ? [
-            divider,
-            fmtRow(
-              'Amt Received:',
-              `N${(amountReceived > 0 ? amountReceived : total + tipAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            ),
-            fmtRow(
-              'Tip (Thank you!):',
-              `N${tipAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-            ),
-          ]
-        : []
-
-    const receiptLines = [
-      '',
-      centre("BEESHOP'S PLACE"),
-      centre('Lounge & Restaurant'),
-      divider,
-      fmtRow('Ref:', orderRef),
-      fmtRow('Table:', table?.name ?? 'N/A'),
-      fmtRow(
-        'Date:',
-        new Date(order.created_at).toLocaleDateString('en-NG', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric',
+    const buildWindowReceipt = () => {
+      const itemLines = items
+        .map((item) => {
+          const iName = `${item.quantity}x ${(item as unknown as { menu_items?: { name: string } }).menu_items?.name || 'Item'}`
+          const iPrice = `N${((item as unknown as { total_price?: number }).total_price || 0).toLocaleString()}`
+          return fmtRow(iName, iPrice)
         })
-      ),
-      fmtRow(
-        'Time:',
-        new Date(order.created_at).toLocaleTimeString('en-NG', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        })
-      ),
-      fmtRow('Served by:', staffName || 'Staff'),
-      fmtRow('Payment:', pmLabel),
-      divider,
-      fmtRow('ITEM', 'AMOUNT'),
-      divider,
-      itemLines,
-      solidDivider,
-      fmtRow(
-        'TOTAL:',
-        `N${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-      ),
-      ...tipLines,
-      solidDivider,
-      '',
-      centre('** PAYMENT CONFIRMED **'),
-      '',
-      centre('Thank you for visiting'),
-      centre("Beeshop's Place"),
-      '',
-    ].join('\n')
+        .join('\n')
 
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Receipt</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; background: #fff; width: 80mm; padding: 4mm; white-space: pre; }
-    @media print { body { width: 80mm; } @page { margin: 0; size: 80mm auto; } }
-  </style>
-</head>
-<body>${receiptLines}</body>
-</html>`
+      const tipLines =
+        tipAmount > 0
+          ? [
+              divider,
+              fmtRow(
+                'Amt Received:',
+                `N${(amountReceived > 0 ? amountReceived : total + tipAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              ),
+              fmtRow(
+                'Tip (Thank you!):',
+                `N${tipAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+              ),
+            ]
+          : []
 
-    const win = window.open(
-      '',
-      '_blank',
-      'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
-    )
-    if (!win) {
-      setPrinting(false)
-      return
+      const lines = [
+        '',
+        centre("BEESHOP'S PLACE"),
+        centre('Lounge & Restaurant'),
+        divider,
+        fmtRow('Ref:', orderRef2),
+        fmtRow('Table:', table?.name ?? 'N/A'),
+        fmtRow('Date:', formatDate(order.created_at)),
+        fmtRow('Time:', formatTime(order.created_at)),
+        fmtRow('Served by:', staffName || 'Staff'),
+        fmtRow('Payment:', pmLabel),
+        divider,
+        fmtRow('ITEM', 'AMOUNT'),
+        divider,
+        itemLines,
+        solidDivider,
+        fmtRow(
+          'TOTAL:',
+          `N${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        ),
+        ...tipLines,
+        solidDivider,
+        '',
+        centre('** PAYMENT CONFIRMED **'),
+        '',
+        centre('Thank you for visiting'),
+        centre("Beeshop's Place"),
+        '',
+      ].join('\n')
+
+      return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Receipt</title>
+<style>* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; background: #fff; width: 80mm; padding: 4mm; white-space: pre; }
+@media print { body { width: 80mm; } @page { margin: 0; size: 80mm auto; } }</style>
+</head><body>${lines}</body></html>`
     }
-    win.document.open('text/html', 'replace')
-    win.document.write(html)
-    win.document.close()
-    win.onload = () => {
-      setTimeout(() => {
-        win.print()
-        win.close()
+
+    const fallback = () => {
+      const html = buildWindowReceipt()
+      const win = window.open(
+        '',
+        '_blank',
+        'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
+      )
+      if (!win) {
         setPrinting(false)
-        setTimeout(onClose, 500)
-      }, 200)
+        return
+      }
+      win.document.open('text/html', 'replace')
+      win.document.write(html)
+      win.document.close()
+      win.onload = () => {
+        setTimeout(() => {
+          win.print()
+          win.close()
+          setPrinting(false)
+          setTimeout(onClose, 500)
+        }, 200)
+      }
     }
+
+    // Try thermal first — falls back to window.open if it fails
+    await printReceipt(
+      {
+        order,
+        items: items as Parameters<typeof printReceipt>[0]['items'],
+        table,
+        staffName,
+        orderRef: orderRef2,
+        subtotal,
+        vatAmount: 0,
+        total,
+        tipAmount,
+        amountReceived,
+      },
+      fallback
+    )
+    setPrinting(false)
+    setTimeout(onClose, 500)
   }
 
-  // Auto-trigger print when receipt opens — placed after function declaration
+  // Auto-trigger print when receipt opens — placed after function declaration when receipt opens — placed after function declaration
   const hasPrinted = useRef(false)
   useEffect(() => {
     if (hasPrinted.current) return
