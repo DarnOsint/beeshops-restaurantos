@@ -77,7 +77,7 @@ export default function Executive() {
   const navigate = useNavigate()
 
   // Settings state (lifted here so GeofenceControls can be stateless on the save actions)
-  const [geofenceEnabled, setGeofenceEnabled] = useState(false)
+  const [geofenceEnabled, setGeofenceEnabled] = useState(true)
   const [radiusMain, setRadiusMain] = useState(400)
   const [radiusApartment, setRadiusApartment] = useState(200)
   const [latMain, setLatMain] = useState('7.350834')
