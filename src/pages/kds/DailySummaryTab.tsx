@@ -37,7 +37,7 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
       `
       )
       .gte('orders.created_at', startUTC)
-      .eq('status', 'ready')
+      .in('status', ['ready', 'delivered'])
 
     if (data) {
       const filtered = (
