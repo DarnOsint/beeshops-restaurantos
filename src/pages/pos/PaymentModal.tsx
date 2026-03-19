@@ -2,7 +2,16 @@ import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
-import { X, Banknote, CreditCard, Smartphone, CheckCircle, Clock, Beer } from 'lucide-react'
+import {
+  X,
+  Banknote,
+  CreditCard,
+  Smartphone,
+  CheckCircle,
+  Clock,
+  Beer,
+  Printer,
+} from 'lucide-react'
 import ReceiptModal from './ReceiptModal'
 import type { Table, Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
@@ -102,6 +111,75 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     if (paymentMethod === 'cash') return parseFloat(cashTendered) >= total
     if (paymentMethod === 'credit') return debtorName.trim().length > 0
     return true
+  }
+
+  const printPreReceipt = () => {
+    const orderRef = `BSP-${String(order.id).slice(0, 8).toUpperCase()}`
+    const date = new Date().toLocaleDateString('en-NG', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
+    const time = new Date().toLocaleTimeString('en-NG', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
+    const itemRows = (order.order_items || [])
+      .map(
+        (item) => `
+      <tr>
+        <td style="padding:4px 8px;border-bottom:1px solid #eee;">${item.quantity}x ${item.menu_items?.name || 'Item'}</td>
+        <td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:right;">₦${(item.total_price || 0).toLocaleString()}</td>
+      </tr>
+    `
+      )
+      .join('')
+    const html = `
+      <!DOCTYPE html><html>
+      <head><title>Receipt — ${table.name}</title>
+      <style>
+        body{font-family:Arial,sans-serif;font-size:13px;margin:20px;color:#000;max-width:320px}
+        h2{font-size:16px;text-align:center;margin:0 0 2px}
+        .sub{text-align:center;color:#555;font-size:11px;margin-bottom:12px}
+        table{width:100%;border-collapse:collapse}
+        .total-row td{font-weight:bold;font-size:15px;padding:6px 8px;border-top:2px solid #000}
+        .footer{margin-top:14px;font-size:10px;color:#999;text-align:center}
+        .notice{background:#fff8e1;border:1px solid #ffc107;padding:8px;border-radius:4px;font-size:11px;text-align:center;margin-top:10px}
+      </style></head>
+      <body>
+        <h2>BEESHOP'S PLACE</h2>
+        <div class="sub">Lounge &amp; Restaurant</div>
+        <div style="font-size:11px;margin-bottom:8px;">
+          <b>Ref:</b> ${orderRef} &nbsp;|&nbsp; <b>Table:</b> ${table.name}<br/>
+          <b>Date:</b> ${date} &nbsp;|&nbsp; <b>Time:</b> ${time}
+        </div>
+        <table>
+          <thead><tr>
+            <th style="text-align:left;padding:4px 8px;border-bottom:2px solid #000;">Item</th>
+            <th style="text-align:right;padding:4px 8px;border-bottom:2px solid #000;">Amount</th>
+          </tr></thead>
+          <tbody>${itemRows}</tbody>
+          <tfoot>
+            <tr class="total-row">
+              <td>TOTAL</td>
+              <td style="text-align:right;">₦${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+            </tr>
+          </tfoot>
+        </table>
+        <div class="notice">⚠️ This is a pre-payment receipt.<br/>Payment has not yet been confirmed.</div>
+        <div class="footer">Thank you for visiting Beeshop's Place<br/>Powered by RestaurantOS</div>
+      </body></html>
+    `
+    const win = window.open('', '_blank', 'width=400,height=600')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    setTimeout(() => {
+      win.print()
+      win.close()
+    }, 300)
   }
 
   const orderItems = order?.order_items || []
@@ -618,9 +696,18 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
             <h3 className="text-white font-bold text-lg">Process Payment</h3>
             <p className="text-gray-400 text-sm">{table.name}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={printPreReceipt}
+              className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors"
+              title="Print receipt for customer to review before payment"
+            >
+              <Printer size={13} /> Print Receipt
+            </button>
+            <button onClick={onClose} className="text-gray-400 hover:text-white">
+              <X size={20} />
+            </button>
+          </div>
         </div>
         <div className="p-5 space-y-5">
           <div className="bg-gray-800 rounded-xl p-4">
