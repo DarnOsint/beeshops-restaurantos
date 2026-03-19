@@ -8,10 +8,20 @@ interface Props {
   table: Table | null
   items: OrderItem[]
   staffName: string
+  tipAmount?: number
+  amountReceived?: number
   onClose: () => void
 }
 
-export default function ReceiptModal({ order, table, items, staffName, onClose }: Props) {
+export default function ReceiptModal({
+  order,
+  table,
+  items,
+  staffName,
+  tipAmount = 0,
+  amountReceived = 0,
+  onClose,
+}: Props) {
   const customerRef = useRef<HTMLDivElement>(null)
   const waiterRef = useRef<HTMLDivElement>(null)
   const { isSupported, printReceipt } = useThermalPrinter()
@@ -288,6 +298,52 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
                     })}
                   </span>
                 </div>
+                {tipAmount > 0 && (
+                  <>
+                    <div style={{ borderTop: '1px dashed #000', margin: '4px 0' }} />
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '11px',
+                        margin: '3px 0',
+                      }}
+                    >
+                      <span>Amount Received</span>
+                      <span>
+                        ₦
+                        {amountReceived > 0
+                          ? amountReceived.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })
+                          : (total + tipAmount).toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '11px',
+                        margin: '3px 0',
+                        color: '#16a34a',
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      <span>💚 Tip (Thank you!)</span>
+                      <span>
+                        ₦
+                        {tipAmount.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                  </>
+                )}
                 {(order as unknown as { notes?: string }).notes && (
                   <div style={{ fontSize: '10px', marginTop: '6px', color: '#444' }}>
                     Note: {(order as unknown as { notes: string }).notes}
@@ -439,6 +495,46 @@ export default function ReceiptModal({ order, table, items, staffName, onClose }
                     })}
                   </span>
                 </div>
+                {tipAmount > 0 && (
+                  <>
+                    <div style={{ borderTop: '1px dashed #000', margin: '4px 0' }} />
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '11px',
+                        margin: '2px 0',
+                      }}
+                    >
+                      <span>Amount Received</span>
+                      <span>
+                        ₦
+                        {(amountReceived > 0 ? amountReceived : total + tipAmount).toLocaleString(
+                          undefined,
+                          { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+                        )}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '11px',
+                        margin: '2px 0',
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      <span>TIP RECEIVED</span>
+                      <span>
+                        ₦
+                        {tipAmount.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                    </div>
+                  </>
+                )}
                 {(order as unknown as { notes?: string }).notes && (
                   <div
                     style={{

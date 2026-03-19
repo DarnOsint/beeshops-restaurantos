@@ -14,6 +14,7 @@ import {
   Shield,
   TrendingUp,
   Monitor,
+  Heart,
 } from 'lucide-react'
 
 import Debtors from './Debtors'
@@ -27,6 +28,7 @@ import VoidsTab from './VoidsTab'
 import LedgerTab from './LedgerTab'
 import AuditTab from './AuditTab'
 import POSReconciliationTab from './POSReconciliationTab'
+import TipsTab from './TipsTab'
 
 import type {
   AccountingSummary,
@@ -50,6 +52,7 @@ const TABS = [
   { id: 'staff', label: 'Staff', icon: Users },
   { id: 'till', label: 'Till', icon: Clock },
   { id: 'payouts', label: 'Payouts', icon: DollarSign },
+  { id: 'tips', label: 'Tips', icon: Heart },
   { id: 'trends', label: 'Trends', icon: TrendingUp },
   { id: 'debtors', label: 'Debtors', icon: AlertTriangle },
   { id: 'voids', label: 'Voids', icon: Trash2 },
@@ -468,6 +471,14 @@ export default function Accounting() {
             timesheet={timesheet}
             orders={orders}
             dateLabel={dateRange === 'Custom' ? `${customStart} – ${customEnd}` : dateRange}
+          />
+        )}
+        {activeTab === 'tips' && (
+          <TipsTab
+            dateRange={{
+              from: customStart || new Date().toLocaleDateString('en-CA'),
+              to: customEnd || new Date().toLocaleDateString('en-CA'),
+            }}
           />
         )}
       </div>

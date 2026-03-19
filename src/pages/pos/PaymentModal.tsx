@@ -71,8 +71,12 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   const [currentSplitPerson, setCurrentSplitPerson] = useState(0)
   const [splitPayMethod, setSplitPayMethod] = useState('cash')
   const [splitCash, setSplitCash] = useState('')
-  const [bankAccounts, setBankAccounts] = useState<{ id: string; bank_name: string; account_number: string; account_name: string }[]>([])
+  const [bankAccounts, setBankAccounts] = useState<
+    { id: string; bank_name: string; account_number: string; account_name: string }[]
+  >([])
   const [selectedBankId, setSelectedBankId] = useState<string>('')
+  const [tipAmount, setTipAmount] = useState('')
+  const [amountReceived, setAmountReceived] = useState('')
 
   useState(() => {
     supabase
@@ -343,9 +347,10 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         .from('orders')
         .update({
           status: 'paid',
-          payment_method: paymentMethod === 'transfer'
-            ? `transfer:${bankAccounts.find((b) => b.id === selectedBankId)?.bank_name || 'Bank Transfer'}`
-            : paymentMethod,
+          payment_method:
+            paymentMethod === 'transfer'
+              ? `transfer:${bankAccounts.find((b) => b.id === selectedBankId)?.bank_name || 'Bank Transfer'}`
+              : paymentMethod,
           closed_at: new Date().toISOString(),
         })
         .eq('id', order.id)
@@ -364,6 +369,26 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         newValue: { total: order.total_amount, payment_method: paymentMethod },
         performer: profile as Profile,
       })
+      // Record tip if entered
+      const tipVal = parseFloat(tipAmount)
+      if (tipVal > 0 && profile?.id) {
+        await supabase.from('tips').insert({
+          order_id: order.id,
+          waitron_id: profile.id,
+          waitron_name: profile.full_name,
+          table_id: table.id,
+          table_name: table.name,
+          order_total: total,
+          amount_received: parseFloat(amountReceived) || total + tipVal,
+          tip_amount: tipVal,
+          payment_method:
+            paymentMethod === 'transfer'
+              ? `transfer:${bankAccounts.find((b) => b.id === selectedBankId)?.bank_name || 'Bank Transfer'}`
+              : paymentMethod,
+          shift_date: new Date().toLocaleDateString('en-CA'), // YYYY-MM-DD in WAT
+          status: 'pending',
+        })
+      }
       setPaidOrder({ ...order, payment_method: paymentMethod } as typeof order)
       setSuccess(true)
       setShowReceipt(true)
@@ -576,6 +601,8 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         table={table}
         items={(order.order_items || []) as import('../../types').OrderItem[]}
         staffName={profile?.full_name || 'Staff'}
+        tipAmount={parseFloat(tipAmount) || 0}
+        amountReceived={parseFloat(amountReceived) || 0}
         onClose={() => {
           setShowReceipt(false)
           onSuccess()
@@ -691,46 +718,60 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
               </p>
             </div>
           )}
-          {paymentMethod === 'transfer' && (() => {
-            const selectedBank = bankAccounts.find((b) => b.id === selectedBankId)
-            return (
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Smartphone size={20} className="text-amber-400" />
-                  <p className="text-amber-400 font-medium">Bank Transfer</p>
-                </div>
-                {bankAccounts.length > 1 && (
-                  <div className="mb-3">
-                    <p className="text-gray-400 text-xs mb-2">Select bank account:</p>
-                    <div className="space-y-2">
-                      {bankAccounts.map((bank) => (
-                        <button
-                          key={bank.id}
-                          onClick={() => setSelectedBankId(bank.id)}
-                          className={`w-full text-left rounded-xl p-2.5 border transition-colors ${selectedBankId === bank.id ? 'bg-amber-500/20 border-amber-500/50' : 'bg-gray-800 border-gray-700 hover:border-amber-500/30'}`}
-                        >
-                          <p className={`text-sm font-semibold ${selectedBankId === bank.id ? 'text-amber-400' : 'text-white'}`}>{bank.bank_name}</p>
-                          <p className="text-gray-400 text-xs">{bank.account_number}</p>
-                        </button>
-                      ))}
+          {paymentMethod === 'transfer' &&
+            (() => {
+              const selectedBank = bankAccounts.find((b) => b.id === selectedBankId)
+              return (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Smartphone size={20} className="text-amber-400" />
+                    <p className="text-amber-400 font-medium">Bank Transfer</p>
+                  </div>
+                  {bankAccounts.length > 1 && (
+                    <div className="mb-3">
+                      <p className="text-gray-400 text-xs mb-2">Select bank account:</p>
+                      <div className="space-y-2">
+                        {bankAccounts.map((bank) => (
+                          <button
+                            key={bank.id}
+                            onClick={() => setSelectedBankId(bank.id)}
+                            className={`w-full text-left rounded-xl p-2.5 border transition-colors ${selectedBankId === bank.id ? 'bg-amber-500/20 border-amber-500/50' : 'bg-gray-800 border-gray-700 hover:border-amber-500/30'}`}
+                          >
+                            <p
+                              className={`text-sm font-semibold ${selectedBankId === bank.id ? 'text-amber-400' : 'text-white'}`}
+                            >
+                              {bank.bank_name}
+                            </p>
+                            <p className="text-gray-400 text-xs">{bank.account_number}</p>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-                {selectedBank && (
-                  <div className="bg-gray-800 rounded-xl p-3 space-y-1">
-                    <p className="text-gray-400 text-xs">Transfer ₦{total.toLocaleString()} to:</p>
-                    <p className="text-white font-bold text-sm">{selectedBank.bank_name}</p>
-                    <p className="text-amber-400 font-mono font-bold">{selectedBank.account_number}</p>
-                    <p className="text-gray-300 text-sm">{selectedBank.account_name}</p>
-                    <p className="text-gray-500 text-xs pt-1">Confirm transfer before proceeding.</p>
-                  </div>
-                )}
-                {bankAccounts.length === 0 && (
-                  <p className="text-gray-400 text-sm text-center">No bank accounts configured. Ask the owner to add bank accounts in the Executive dashboard.</p>
-                )}
-              </div>
-            )
-          })()}
+                  )}
+                  {selectedBank && (
+                    <div className="bg-gray-800 rounded-xl p-3 space-y-1">
+                      <p className="text-gray-400 text-xs">
+                        Transfer ₦{total.toLocaleString()} to:
+                      </p>
+                      <p className="text-white font-bold text-sm">{selectedBank.bank_name}</p>
+                      <p className="text-amber-400 font-mono font-bold">
+                        {selectedBank.account_number}
+                      </p>
+                      <p className="text-gray-300 text-sm">{selectedBank.account_name}</p>
+                      <p className="text-gray-500 text-xs pt-1">
+                        Confirm transfer before proceeding.
+                      </p>
+                    </div>
+                  )}
+                  {bankAccounts.length === 0 && (
+                    <p className="text-gray-400 text-sm text-center">
+                      No bank accounts configured. Ask the owner to add bank accounts in the
+                      Executive dashboard.
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
           {paymentMethod === 'credit' && (
             <div className="space-y-3">
               <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center">
@@ -773,6 +814,54 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-red-500"
                 />
               </div>
+            </div>
+          )}
+
+          {/* Tip section — only for non-credit, non-tab payments */}
+          {paymentMethod !== 'credit' && paymentMethod !== 'run_tab' && (
+            <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-green-400 text-sm font-semibold">💚 Tip Recording</p>
+                <p className="text-gray-500 text-xs">Optional — enter if customer tipped</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-gray-400 text-xs mb-1 block">Amount Received (₦)</label>
+                  <input
+                    type="number"
+                    placeholder={total.toFixed(0)}
+                    value={amountReceived}
+                    onChange={(e) => {
+                      setAmountReceived(e.target.value)
+                      const received = parseFloat(e.target.value)
+                      if (!isNaN(received) && received > total) {
+                        setTipAmount((received - total).toFixed(0))
+                      } else {
+                        setTipAmount('')
+                      }
+                    }}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-green-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs mb-1 block">Tip Amount (₦)</label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={tipAmount}
+                    onChange={(e) => setTipAmount(e.target.value)}
+                    className="w-full bg-gray-800 border border-green-500/40 text-green-400 font-bold rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-green-500"
+                  />
+                </div>
+              </div>
+              {parseFloat(tipAmount) > 0 && (
+                <div className="flex items-center justify-between bg-green-500/10 rounded-lg px-3 py-2">
+                  <p className="text-green-400 text-xs">Tip will be recorded against your name</p>
+                  <p className="text-green-400 font-bold">
+                    ₦{parseFloat(tipAmount).toLocaleString()}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
