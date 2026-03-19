@@ -6,7 +6,7 @@ import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
 import { useAuth } from '../../context/AuthContext'
 import ErrorBoundary from '../../components/ErrorBoundary'
-import { Beer, Clock, LogOut, RefreshCw, CheckCircle } from 'lucide-react'
+import { Beer, Clock, LogOut, RefreshCw, CheckCircle, BarChart2 } from 'lucide-react'
 import type { KdsOrder } from './types'
 import { useToast } from '../../context/ToastContext'
 
@@ -78,6 +78,66 @@ function BarKDSInner() {
   const [orders, setOrders] = useState<KdsOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
+  const [activeTab, setActiveTab] = useState<'orders' | 'summary'>('orders')
+  const [summary, setSummary] = useState<{ name: string; quantity: number; tables: string[] }[]>([])
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const [totalDrinks, setTotalDrinks] = useState(0)
+
+  const fetchSummary = useCallback(async () => {
+    setSummaryLoading(true)
+    const todayWAT = new Date()
+    todayWAT.setHours(0, 0, 0, 0)
+    // WAT is UTC+1 — adjust for Lagos timezone
+    const startUTC = new Date(todayWAT.getTime() - 60 * 60 * 1000).toISOString()
+
+    const { data } = await supabase
+      .from('order_items')
+      .select(
+        `
+        quantity,
+        menu_items(name, menu_categories(destination)),
+        orders(created_at, tables(name))
+      `
+      )
+      .gte('orders.created_at', startUTC)
+      .eq('status', 'ready')
+
+    if (data) {
+      const barItems = (
+        data as unknown as {
+          quantity: number
+          menu_items: { name: string; menu_categories: { destination: string } } | null
+          orders: { created_at: string; tables: { name: string } | null } | null
+        }[]
+      ).filter((i) => i.menu_items?.menu_categories?.destination === 'bar' && i.orders)
+
+      // Aggregate by drink name
+      const map = new Map<string, { quantity: number; tables: Set<string> }>()
+      for (const item of barItems) {
+        const name = item.menu_items?.name || 'Unknown'
+        const table = item.orders?.tables?.name || 'Unknown'
+        const existing = map.get(name)
+        if (existing) {
+          existing.quantity += item.quantity
+          existing.tables.add(table)
+        } else {
+          map.set(name, { quantity: item.quantity, tables: new Set([table]) })
+        }
+      }
+
+      const sorted = Array.from(map.entries())
+        .map(([name, { quantity, tables }]) => ({
+          name,
+          quantity,
+          tables: Array.from(tables),
+        }))
+        .sort((a, b) => b.quantity - a.quantity)
+
+      setSummary(sorted)
+      setTotalDrinks(sorted.reduce((s, i) => s + i.quantity, 0))
+    }
+    setSummaryLoading(false)
+  }, [])
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -173,6 +233,10 @@ function BarKDSInner() {
     }
   }, [fetchOrders])
 
+  useEffect(() => {
+    if (activeTab === 'summary') fetchSummary()
+  }, [activeTab, fetchSummary])
+
   if (geoStatus === 'outside' || geoStatus === 'error' || geoStatus === 'unsupported')
     return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   if (loading)
@@ -197,7 +261,10 @@ function BarKDSInner() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={fetchOrders} className="text-gray-400 hover:text-white">
+          <button
+            onClick={activeTab === 'orders' ? fetchOrders : fetchSummary}
+            className="text-gray-400 hover:text-white"
+          >
             <RefreshCw size={16} />
           </button>
           <p className="text-gray-400 text-sm">{profile?.full_name}</p>
@@ -208,80 +275,150 @@ function BarKDSInner() {
         </div>
       </nav>
 
-      <div className="flex-1 p-4 overflow-y-auto">
-        {orders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mb-4">
-              <Beer size={32} className="text-gray-600" />
-            </div>
-            <p className="text-gray-400 text-lg font-medium">No pending bar orders</p>
-            <p className="text-gray-600 text-sm mt-1">New orders will appear here automatically</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {orders.map((order) => (
-              <div
-                key={order.id}
-                className={`rounded-2xl border-2 p-4 flex flex-col gap-3 transition-colors ${getUrgencyColor(order.created_at)}`}
-              >
-                <div className="flex items-center justify-between">
-                  <h2 className="text-white font-bold text-lg">{order.tables?.name}</h2>
-                  <div className="flex items-center gap-1 text-gray-400 text-xs">
-                    <Clock size={12} />
-                    <span className={getTimerColor(order.created_at)}>
-                      {getElapsed(order.created_at)}
-                    </span>
-                  </div>
-                </div>
-                {order.notes && (
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                    <p className="text-amber-400 text-xs">📝 {order.notes}</p>
-                  </div>
-                )}
-                <div className="flex flex-col gap-2 flex-1">
-                  {order.order_items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between bg-gray-800 rounded-xl px-3 py-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-amber-400 font-bold text-lg w-6">
-                          {item.quantity}x
-                        </span>
-                        <span className="text-white text-sm">{item.menu_items?.name}</span>
-                      </div>
-                      <button
-                        onClick={() => updateItemStatus(item.id, item.status, order.id)}
-                        disabled={item.status === 'ready'}
-                        className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${getStatusColor(item.status)}`}
-                      >
-                        {item.status === 'pending'
-                          ? 'Pending'
-                          : item.status === 'preparing'
-                            ? 'Preparing'
-                            : '✓ Ready'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                {order.order_items.some((i) => i.status !== 'ready') && (
-                  <button
-                    onClick={() => markAllReady(order)}
-                    className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl py-2.5 flex items-center justify-center gap-2 transition-colors"
-                  >
-                    <CheckCircle size={16} /> All Ready
-                  </button>
-                )}
-                {order.order_items.every((i) => i.status === 'ready') && (
-                  <div className="text-center text-green-400 text-xs font-bold py-1">
-                    ✅ All drinks ready — waiter notified
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+      {/* Tabs */}
+      <div className="flex border-b border-gray-800 bg-gray-900">
+        <button
+          onClick={() => setActiveTab('orders')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'orders' ? 'border-amber-500 text-amber-500' : 'border-transparent text-gray-400 hover:text-white'}`}
+        >
+          <Beer size={14} /> Orders
+          {orders.length > 0 && (
+            <span className="bg-amber-500 text-black text-xs font-bold px-1.5 py-0.5 rounded-full">
+              {orders.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('summary')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'summary' ? 'border-amber-500 text-amber-500' : 'border-transparent text-gray-400 hover:text-white'}`}
+        >
+          <BarChart2 size={14} /> Today's Summary
+        </button>
       </div>
+
+      {/* Summary Tab */}
+      {activeTab === 'summary' && (
+        <div className="flex-1 p-4 overflow-y-auto">
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-xs">Total drinks served today</p>
+              <p className="text-white text-2xl font-bold">{totalDrinks}</p>
+            </div>
+            <Beer size={28} className="text-amber-400" />
+          </div>
+          {summaryLoading ? (
+            <div className="text-amber-500 text-center py-8">Loading...</div>
+          ) : summary.length === 0 ? (
+            <div className="text-center py-12">
+              <Beer size={32} className="text-gray-600 mx-auto mb-3" />
+              <p className="text-gray-400">No drinks served yet today</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {summary.map((item, i) => (
+                <div
+                  key={item.name}
+                  className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center gap-3"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400 font-bold text-sm">
+                    {i + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-semibold text-sm truncate">{item.name}</p>
+                    <p className="text-gray-500 text-xs truncate">
+                      Tables: {item.tables.join(', ')}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-amber-400 font-bold text-lg">{item.quantity}</p>
+                    <p className="text-gray-500 text-xs">served</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Orders Tab */}
+      {activeTab === 'orders' && (
+        <div className="flex-1 p-4 overflow-y-auto">
+          {orders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                <Beer size={32} className="text-gray-600" />
+              </div>
+              <p className="text-gray-400 text-lg font-medium">No pending bar orders</p>
+              <p className="text-gray-600 text-sm mt-1">
+                New orders will appear here automatically
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {orders.map((order) => (
+                <div
+                  key={order.id}
+                  className={`rounded-2xl border-2 p-4 flex flex-col gap-3 transition-colors ${getUrgencyColor(order.created_at)}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-white font-bold text-lg">{order.tables?.name}</h2>
+                    <div className="flex items-center gap-1 text-gray-400 text-xs">
+                      <Clock size={12} />
+                      <span className={getTimerColor(order.created_at)}>
+                        {getElapsed(order.created_at)}
+                      </span>
+                    </div>
+                  </div>
+                  {order.notes && (
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                      <p className="text-amber-400 text-xs">📝 {order.notes}</p>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-2 flex-1">
+                    {order.order_items.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between bg-gray-800 rounded-xl px-3 py-2"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-amber-400 font-bold text-lg w-6">
+                            {item.quantity}x
+                          </span>
+                          <span className="text-white text-sm">{item.menu_items?.name}</span>
+                        </div>
+                        <button
+                          onClick={() => updateItemStatus(item.id, item.status, order.id)}
+                          disabled={item.status === 'ready'}
+                          className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${getStatusColor(item.status)}`}
+                        >
+                          {item.status === 'pending'
+                            ? 'Pending'
+                            : item.status === 'preparing'
+                              ? 'Preparing'
+                              : '✓ Ready'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {order.order_items.some((i) => i.status !== 'ready') && (
+                    <button
+                      onClick={() => markAllReady(order)}
+                      className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl py-2.5 flex items-center justify-center gap-2 transition-colors"
+                    >
+                      <CheckCircle size={16} /> All Ready
+                    </button>
+                  )}
+                  {order.order_items.every((i) => i.status === 'ready') && (
+                    <div className="text-center text-green-400 text-xs font-bold py-1">
+                      ✅ All drinks ready — waiter notified
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
