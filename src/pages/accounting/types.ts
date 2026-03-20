@@ -80,19 +80,6 @@ export interface AuditEntry {
   created_at: string
 }
 
-export interface VoidEntry {
-  id: string
-  menu_item_name: string
-  quantity: number
-  unit_price: number
-  total_value: number
-  void_type: 'item' | 'order'
-  reason: string | null
-  approved_by_name: string | null
-  voided_by_name: string | null
-  created_at: string
-}
-
 export interface PayoutForm {
   amount: string
   reason: string

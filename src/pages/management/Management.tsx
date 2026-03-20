@@ -29,7 +29,6 @@ import { HelpTooltip } from '../../components/HelpTooltip'
 import OverviewTab from './mgmt/OverviewTab'
 import OpenOrdersTab from './mgmt/OpenOrdersTab'
 import CctvTab from './mgmt/CctvTab'
-import VoidsTab from './mgmt/VoidsTab'
 import SyncTab from './mgmt/SyncTab'
 import SettingsTab from './mgmt/SettingsTab'
 import ActivityLogTab from './mgmt/ActivityLogTab'
@@ -44,7 +43,6 @@ const TABS = [
   { id: 'till', label: 'Till', icon: DollarSign },
   { id: 'kitchen', label: 'Kitchen', icon: UtensilsCrossed },
   { id: 'service', label: 'Service', icon: Clock },
-  { id: 'voids', label: 'Voids', icon: Trash2 },
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'cctv', label: 'CCTV', icon: Camera },
   { id: 'sync', label: 'Sync', icon: RefreshCw },
@@ -91,8 +89,6 @@ export default function Management() {
       served_at: string
     }>
   >([])
-  const [voidLog, setVoidLog] = useState<any[]>([])
-  const [voidLoading, setVoidLoading] = useState(false)
   const [serviceLogLoading, setServiceLogLoading] = useState(false)
   const [stats, setStats] = useState<Stats>({
     openOrders: 0,
@@ -201,22 +197,6 @@ export default function Management() {
       supabase.removeChannel(ch)
     }
   }, [fetchCvData])
-
-  useEffect(() => {
-    if (activeTab !== 'voids') return
-    setVoidLoading(true)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    supabase
-      .from('void_log')
-      .select('*')
-      .gte('created_at', today.toISOString())
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setVoidLog(data || [])
-        setVoidLoading(false)
-      })
-  }, [activeTab])
 
   useEffect(() => {
     if (activeTab !== 'service') return
@@ -439,7 +419,6 @@ export default function Management() {
             onResolve={resolveAlert}
           />
         )}
-        {activeTab === 'voids' && <VoidsTab voidLog={voidLog} loading={voidLoading} />}
         {activeTab === 'sync' && (
           <SyncTab
             syncStatus={syncStatus}

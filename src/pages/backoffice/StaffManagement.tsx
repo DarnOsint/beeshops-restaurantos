@@ -42,7 +42,6 @@ interface StaffForm {
   role: string
   pin: string
   password: string
-  approval_pin: string
   hire_date: string
   emergency_contact: string
   notes: string
@@ -72,7 +71,6 @@ export default function StaffManagement({ onBack }: Props) {
     role: 'waitron',
     pin: '',
     password: '',
-    approval_pin: '',
     hire_date: new Date().toISOString().split('T')[0],
     emergency_contact: '',
     notes: '',
@@ -108,7 +106,6 @@ export default function StaffManagement({ onBack }: Props) {
       role: member.role || 'waitron',
       pin: (member as unknown as { pin?: string }).pin || '',
       password: '',
-      approval_pin: (member as unknown as { approval_pin?: string }).approval_pin || '',
       hire_date:
         (member as unknown as { hire_date?: string }).hire_date ||
         new Date().toISOString().split('T')[0],
@@ -156,8 +153,6 @@ export default function StaffManagement({ onBack }: Props) {
           is_active: form.is_active,
         }
         if (form.pin) updates.pin = await hashPin(form.pin)
-        if (['owner', 'manager'].includes(form.role) && form.approval_pin)
-          updates.approval_pin = await hashPin(form.approval_pin)
         const { error } = await supabase.from('profiles').update(updates).eq('id', editingStaff.id)
         if (error) throw error
       } else if (isFloorRole(form.role)) {
@@ -195,9 +190,6 @@ export default function StaffManagement({ onBack }: Props) {
           emergency_contact: form.emergency_contact,
           notes: form.notes,
           is_active: true,
-        }
-        if (['owner', 'manager'].includes(form.role) && form.approval_pin) {
-          profileData.approval_pin = await hashPin(form.approval_pin)
         }
         const { error: upsertError } = await supabase.from('profiles').upsert(profileData)
         if (upsertError) throw upsertError
@@ -624,26 +616,7 @@ export default function StaffManagement({ onBack }: Props) {
                       Used for quick POS login on the floor
                     </p>
                   </div>
-                  {['owner', 'manager'].includes(form.role) && (
-                    <div>
-                      <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
-                        Void Approval PIN <span className="text-amber-500">(4 digits)</span>
-                      </label>
-                      <input
-                        type="password"
-                        maxLength={4}
-                        value={form.approval_pin}
-                        onChange={(e) =>
-                          f({ approval_pin: e.target.value.replace(/\D/g, '').slice(0, 4) })
-                        }
-                        className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 tracking-widest text-center text-xl"
-                        placeholder="••••"
-                      />
-                      <p className="text-gray-500 text-xs mt-1">
-                        Used to approve voids & cancellations at the POS
-                      </p>
-                    </div>
-                  )}
+
                   <div
                     className={`rounded-xl p-4 text-sm ${isFloorRole(form.role) ? 'bg-blue-500/10 border border-blue-500/20 text-blue-300' : 'bg-purple-500/10 border border-purple-500/20 text-purple-300'}`}
                   >

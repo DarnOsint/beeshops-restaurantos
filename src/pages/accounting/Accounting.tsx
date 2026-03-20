@@ -25,7 +25,6 @@ import StaffTab from './StaffTab'
 import TillTab from './TillTab'
 import PayoutsTab from './PayoutsTab'
 import TrendsTab from './TrendsTab'
-import VoidsTab from './VoidsTab'
 import LedgerTab from './LedgerTab'
 import AuditTab from './AuditTab'
 import POSReconciliationTab from './POSReconciliationTab'
@@ -41,7 +40,6 @@ import type {
   TillSession,
   TimesheetEntry,
   AuditEntry,
-  VoidEntry,
 } from './types'
 import type { Order } from '../../types'
 
@@ -58,7 +56,6 @@ const TABS = [
   { id: 'returns', label: 'Returns', icon: RotateCcw },
   { id: 'trends', label: 'Trends', icon: TrendingUp },
   { id: 'debtors', label: 'Debtors', icon: AlertTriangle },
-  { id: 'voids', label: 'Voids', icon: Trash2 },
   { id: 'ledger', label: 'Ledger', icon: BookOpen },
   { id: 'audit', label: 'Audit', icon: Shield },
   { id: 'pos', label: 'POS Recon', icon: Monitor },
@@ -76,9 +73,6 @@ export default function Accounting() {
   const [orderFilter, setOrderFilter] = useState({ status: 'all', type: 'all' })
 
   // ── Void sub-state (date-specific fetch) ─────────────────────────────────
-  const [voidLog, setVoidLog] = useState<VoidEntry[]>([])
-  const [voidLoading, setVoidLoading] = useState(false)
-  const [voidDateFilter, setVoidDateFilter] = useState(new Date().toISOString().split('T')[0])
 
   // ── Data state ────────────────────────────────────────────────────────────
   const [summary, setSummary] = useState<AccountingSummary>({
@@ -281,30 +275,6 @@ export default function Accounting() {
   }, [fetchAll])
 
   // ── Void log fetch (date-specific) ───────────────────────────────────────
-  useEffect(() => {
-    if (activeTab !== 'voids') return
-    const start = new Date(voidDateFilter)
-    start.setHours(0, 0, 0, 0)
-    const end = new Date(voidDateFilter)
-    end.setHours(23, 59, 59, 999)
-    let cancelled = false
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setVoidLoading(true)
-    supabase
-      .from('void_log')
-      .select('*')
-      .gte('created_at', start.toISOString())
-      .lte('created_at', end.toISOString())
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (cancelled) return
-        setVoidLog((data as VoidEntry[]) || [])
-        setVoidLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [activeTab, voidDateFilter])
 
   const totalPayouts = payouts.reduce((s, p) => s + (p.amount || 0), 0)
   const netRevenue = summary.total - totalPayouts
@@ -457,14 +427,7 @@ export default function Accounting() {
         {activeTab === 'debtors' && (
           <Debtors onBack={() => setActiveTab('overview')} embedded={true} />
         )}
-        {activeTab === 'voids' && (
-          <VoidsTab
-            voidLog={voidLog}
-            voidLoading={voidLoading}
-            voidDateFilter={voidDateFilter}
-            onDateChange={setVoidDateFilter}
-          />
-        )}
+
         {activeTab === 'ledger' && (
           <LedgerTab ledgerEntries={ledgerEntries} dateRange={dateRange} />
         )}

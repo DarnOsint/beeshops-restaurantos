@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import VoidPinModal from '../../components/VoidPinModal'
 import { Plus, Minus, Trash2, Send, X, CheckCircle2, Circle, Search } from 'lucide-react'
 import type { Table, MenuItem, Order, OrderItem, Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
@@ -25,13 +24,6 @@ interface OrderItemLocal {
   total: number
   menu_categories?: { name?: string; destination?: string } | null
   menu_items?: { name: string } | null
-}
-
-interface VoidRequest {
-  itemId: string
-  itemName: string
-  quantity: number
-  value: number
 }
 
 interface Props {
@@ -139,7 +131,6 @@ export default function OrderPanel({
   const [activeCategory, setActiveCategory] = useState('All')
   const [menuSearch, setMenuSearch] = useState('')
   const [notes, setNotes] = useState('')
-  const [voidRequest, setVoidRequest] = useState<VoidRequest | null>(null)
   const [modifierItem, setModifierItem] = useState<OrderItemLocal | null>(null)
   const isSubmitting = useRef(false)
   const [modifierNotes, setModifierNotes] = useState('')
@@ -215,55 +206,27 @@ export default function OrderPanel({
   }
 
   const deleteItem = (item: OrderItemLocal) => {
-    if (paymentInProgress) {
-      toast.warning('Payment In Progress', 'Close the payment screen before voiding items')
-      return
-    }
-    if (!activeOrder || !item._existing) {
-      setOrderItems((prev) => prev.filter((i) => (i._newId || i.id) !== (item._newId || item.id)))
-      return
-    }
-    setVoidRequest({
-      itemId: item.id,
-      itemName: item.name,
-      quantity: item.quantity,
-      value: item.total,
-    })
-  }
-
-  const confirmVoid = async (approver: { name: string; id: string }) => {
-    if (!voidRequest || !activeOrder) return
-    const item = orderItems.find((i) => i.id === voidRequest.itemId)
-    const dbId = item?._dbId
-
-    // 1. Delete the order_item row from Supabase
-    if (dbId) {
-      const { error: delErr } = await supabase.from('order_items').delete().eq('id', dbId)
-      if (delErr) {
-        toast.error('Error', 'Failed to void item: ' + delErr.message)
-        return
+    // Items pending in KDS — remove directly, no PIN needed (voiding replaced by returns)
+    if (item._existing) {
+      const dbId = item._dbId || dbIdMap[item.id]
+      if (dbId) {
+        supabase
+          .from('order_items')
+          .delete()
+          .eq('id', dbId)
+          .then(({ error }) => {
+            if (!error) {
+              supabase
+                .from('orders')
+                .update({
+                  total_amount: Math.max(0, (activeOrder?.total_amount || 0) - item.total),
+                })
+                .eq('id', activeOrder?.id || '')
+            }
+          })
       }
     }
-
-    // 2. Reduce the order total in Supabase
-    const newTotal = Math.max(0, (activeOrder.total_amount || 0) - voidRequest.value)
-    await supabase.from('orders').update({ total_amount: newTotal }).eq('id', activeOrder.id)
-
-    // 3. Log to void_log (best-effort audit trail)
-    const { error: voidErr } = await supabase.from('void_log').insert({
-      menu_item_name: voidRequest.itemName,
-      quantity: voidRequest.quantity,
-      unit_price: item?.price || 0,
-      total_value: voidRequest.value,
-      void_type: 'item',
-      approved_by_name: approver.name,
-      approved_by: approver.id,
-    })
-    if (voidErr) toast.error('Void log failed', voidErr.message)
-
-    // 4. Update local state
-    setOrderItems((prev) => prev.filter((i) => i.id !== voidRequest.itemId))
-    setVoidRequest(null)
+    setOrderItems((prev) => prev.filter((i) => i.id !== item.id && i._newId !== item._newId))
   }
 
   const openModifier = (item: OrderItemLocal) => {
@@ -567,14 +530,6 @@ export default function OrderPanel({
             </div>
           </div>
         </div>
-      )}
-
-      {voidRequest && (
-        <VoidPinModal
-          voidDescription={`Void ${voidRequest.quantity}x ${voidRequest.itemName} (₦${voidRequest.value.toLocaleString()})`}
-          onApproved={confirmVoid}
-          onCancel={() => setVoidRequest(null)}
-        />
       )}
     </>
   )
