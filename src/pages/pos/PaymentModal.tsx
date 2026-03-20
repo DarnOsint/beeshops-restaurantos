@@ -31,6 +31,9 @@ interface OrderItemExtended {
   extra_charge?: number
   created_at?: string
   menu_items?: { name: string } | null
+  return_requested?: boolean
+  return_accepted?: boolean
+  return_reason?: string | null
 }
 interface OrderExtended {
   id: string
@@ -80,6 +83,8 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   const [itemAssignments, setItemAssignments] = useState<Record<string, number>>({})
   const [splitPayments, setSplitPayments] = useState<SplitPayment[]>([])
   const [currentSplitPerson, setCurrentSplitPerson] = useState(0)
+  const [returningItemId, setReturningItemId] = useState<string | null>(null)
+  const [returnReason, setReturnReason] = useState('')
   const [splitPayMethod, setSplitPayMethod] = useState('cash')
   const [splitCash, setSplitCash] = useState('')
   const [bankAccounts, setBankAccounts] = useState<
@@ -103,15 +108,45 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       })
   })
 
-  const subtotal = order?.total_amount || 0
+  // Exclude items where return has been accepted by bar
+  const returnedTotal = (order?.order_items || [])
+    .filter((i) => i.return_accepted)
+    .reduce((sum, i) => sum + (i.total_price || 0), 0)
+  const subtotal = (order?.total_amount || 0) - returnedTotal
   const total = subtotal
   const change = paymentMethod === 'cash' && cashTendered ? parseFloat(cashTendered) - total : 0
 
   // Only bar items block payment — kitchen/griller have no dedicated tab so waitron can pay freely
   const unreadyItems = (order?.order_items || []).filter(
-    (i) => i.destination === 'bar' && i.status === 'pending'
+    (i) =>
+      i.destination === 'bar' && i.status === 'pending' && !i.return_requested && !i.return_accepted
   )
   const hasUnreadyItems = unreadyItems.length > 0
+
+  const requestReturn = async (itemId: string) => {
+    await supabase
+      .from('order_items')
+      .update({
+        return_requested: true,
+        return_reason: returnReason || 'No reason given',
+        return_requested_at: new Date().toISOString(),
+      })
+      .eq('id', itemId)
+    setReturningItemId(null)
+    setReturnReason('')
+  }
+
+  const cancelReturn = async (itemId: string) => {
+    await supabase
+      .from('order_items')
+      .update({
+        return_requested: false,
+        return_accepted: false,
+        return_reason: null,
+        return_requested_at: null,
+      })
+      .eq('id', itemId)
+  }
 
   const canProcess = () => {
     if (processing) return false
@@ -160,11 +195,23 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       return ' '.repeat(pad) + str
     }
 
-    const itemLines = (order.order_items || [])
+    const activeItems = (order.order_items || []).filter((i) => !i.return_accepted)
+    const adjustedTotal = activeItems.reduce((sum, i) => sum + (i.total_price || 0), 0)
+
+    const itemLines = activeItems
       .map((item) => {
         const name = `${item.quantity}x ${item.menu_items?.name || 'Item'}`
         const price = `N${(item.total_price || 0).toLocaleString()}`
         return fmtRow(name, price)
+      })
+      .join('\n')
+
+    // Show returned items struck through
+    const returnedLines = (order.order_items || [])
+      .filter((i) => i.return_accepted)
+      .map((item) => {
+        const name = `${item.quantity}x ${item.menu_items?.name || 'Item'} [RETURNED]`
+        return fmtRow(name, `N0`)
       })
       .join('\n')
 
@@ -196,10 +243,11 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       fmtRow('ITEM', 'AMOUNT'),
       divider,
       itemLines,
+      ...(returnedLines ? [returnedLines] : []),
       solidDivider,
       fmtRow(
         'TOTAL:',
-        `N${orderTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        `N${adjustedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       ),
       solidDivider,
       '',
@@ -999,6 +1047,106 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-red-500"
                 />
               </div>
+            </div>
+          )}
+
+          {/* Returned items section */}
+          {(order?.order_items || []).some((i) => i.destination === 'bar') && (
+            <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
+              <p className="text-gray-300 font-semibold text-sm mb-3">↩ Returned Items</p>
+              <div className="space-y-2">
+                {(order?.order_items || [])
+                  .filter((i) => i.destination === 'bar')
+                  .map((item) => {
+                    const isReturned = item.return_accepted
+                    const isPending = item.return_requested && !item.return_accepted
+                    const isRequesting = returningItemId === item.id
+                    return (
+                      <div
+                        key={item.id}
+                        className={`rounded-lg px-3 py-2 flex items-center justify-between gap-2 ${isReturned ? 'bg-red-500/10 border border-red-500/20' : isPending ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-gray-800'}`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className={`text-sm font-medium truncate ${isReturned ? 'line-through text-gray-500' : 'text-white'}`}
+                          >
+                            {item.quantity}x {item.menu_items?.name || 'Item'}
+                          </p>
+                          {isPending && (
+                            <p className="text-amber-400 text-xs">
+                              ⏳ Awaiting bar confirmation...
+                            </p>
+                          )}
+                          {isReturned && (
+                            <p className="text-red-400 text-xs">
+                              ✓ Return accepted — excluded from total
+                            </p>
+                          )}
+                          {item.return_reason && (isPending || isReturned) && (
+                            <p className="text-gray-500 text-xs italic">"{item.return_reason}"</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {!isReturned && !isPending && !isRequesting && (
+                            <button
+                              onClick={() => setReturningItemId(item.id)}
+                              className="text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 px-2 py-1 rounded-lg transition-colors"
+                            >
+                              Mark Returned
+                            </button>
+                          )}
+                          {isPending && (
+                            <button
+                              onClick={() => cancelReturn(item.id)}
+                              className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-400 px-2 py-1 rounded-lg transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                          {isReturned && (
+                            <span className="text-red-400 text-xs font-bold">
+                              -N{(item.total_price || 0).toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+              {/* Inline reason input */}
+              {returningItemId && (
+                <div className="mt-3 space-y-2">
+                  <input
+                    value={returnReason}
+                    onChange={(e) => setReturnReason(e.target.value)}
+                    placeholder="Reason for return (optional)..."
+                    className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-red-400"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => requestReturn(returningItemId)}
+                      className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm font-semibold py-2 rounded-lg transition-colors"
+                    >
+                      Send Return Request to Bar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setReturningItemId(null)
+                        setReturnReason('')
+                      }}
+                      className="bg-gray-700 hover:bg-gray-600 text-gray-400 text-sm px-3 py-2 rounded-lg transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+              {returnedTotal > 0 && (
+                <div className="mt-3 pt-2 border-t border-gray-700 flex justify-between text-sm">
+                  <span className="text-gray-400">Returns deducted:</span>
+                  <span className="text-red-400 font-bold">-N{returnedTotal.toLocaleString()}</span>
+                </div>
+              )}
             </div>
           )}
 

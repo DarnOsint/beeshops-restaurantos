@@ -122,13 +122,32 @@ export default function ReceiptModal({
             ? 'PAY LATER (DEBT)'
             : pmRaw.toUpperCase()
 
-    const itemLines = items
+    const activeItems = items.filter(
+      (i) => !(i as unknown as { return_accepted?: boolean }).return_accepted
+    )
+    const returnedItems = items.filter(
+      (i) => (i as unknown as { return_accepted?: boolean }).return_accepted
+    )
+
+    const itemLines = activeItems
       .map((item) => {
         const iName = `${item.quantity}x ${(item as unknown as { menu_items?: { name: string } }).menu_items?.name || 'Item'}`
         const iPrice = `N${((item as unknown as { total_price?: number }).total_price || 0).toLocaleString()}`
         return fmtRow(iName, iPrice)
       })
       .join('\n')
+
+    const returnedLines =
+      returnedItems.length > 0
+        ? returnedItems
+            .map((item) =>
+              fmtRow(
+                `${item.quantity}x ${(item as unknown as { menu_items?: { name: string } }).menu_items?.name || 'Item'} [RETURNED]`,
+                'N0'
+              )
+            )
+            .join('\n')
+        : ''
 
     const tipLines =
       tipAmount > 0

@@ -4,6 +4,9 @@ export interface KdsOrderItem {
   status: 'pending' | 'preparing' | 'ready' | 'delivered'
   destination: string
   notes?: string | null
+  return_requested?: boolean
+  return_accepted?: boolean
+  return_reason?: string | null
   menu_items?: {
     name: string
     menu_categories?: { name: string; destination: string } | null

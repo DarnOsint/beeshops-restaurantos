@@ -6,7 +6,7 @@ import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
 import { useAuth } from '../../context/AuthContext'
 import ErrorBoundary from '../../components/ErrorBoundary'
-import { Beer, Clock, LogOut, RefreshCw, CheckCircle, BarChart2 } from 'lucide-react'
+import { Beer, Clock, LogOut, RefreshCw, CheckCircle, BarChart2, RotateCcw, X } from 'lucide-react'
 import type { KdsOrder } from './types'
 import DailySummaryTab from './DailySummaryTab'
 import { useToast } from '../../context/ToastContext'
@@ -22,25 +22,25 @@ const HELP_TIPS = [
     id: 'bar-status',
     title: 'Item Status',
     description:
-      'Pending → tap to mark Preparing → tap again to mark Ready. Use All Ready to mark the full order at once when all drinks are poured. Items move one way only.',
+      'Tap an item to mark it Ready. Use All Ready to mark the full order at once. Items disappear from the screen once ready.',
+  },
+  {
+    id: 'bar-returns',
+    title: 'Return Requests',
+    description:
+      'When a waitron marks an item as returned, it appears in the Returns section. You must Accept or Reject. Accepted returns are deducted from the order total automatically.',
   },
   {
     id: 'bar-notify',
     title: 'Waitron Notification',
     description:
-      'Marking an item or full order ready sends an automatic push notification to the assigned waitron. No shouting across the floor — the system handles it.',
+      'Marking an item or full order ready sends an automatic push notification to the assigned waitron. No shouting across the floor.',
   },
   {
     id: 'bar-urgency',
     title: 'Urgency Colours',
     description:
       'Grey = normal (under 7 min). Amber = getting late (7–15 min). Red = critically overdue (15+ min). Prioritise red cards immediately.',
-  },
-  {
-    id: 'bar-realtime',
-    title: 'Live Updates',
-    description:
-      'The screen updates automatically via Supabase realtime — new tickets appear instantly and disappear when all items are marked ready. No need to refresh.',
   },
 ]
 
@@ -75,9 +75,12 @@ function BarKDSInner() {
   const toast = useToast()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
   const [orders, setOrders] = useState<KdsOrder[]>([])
+  const [returnItems, setReturnItems] = useState<
+    (KdsOrder['order_items'][0] & { tableName: string; orderId: string; staffId?: string | null })[]
+  >([])
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
-  const [activeTab, setActiveTab] = useState<'orders' | 'summary'>('orders')
+  const [activeTab, setActiveTab] = useState<'orders' | 'returns' | 'summary'>('orders')
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -85,25 +88,49 @@ function BarKDSInner() {
       .select(
         `id, created_at, notes, staff_id,
         tables(name),
-        order_items(id, quantity, status, destination, notes,
+        order_items(id, quantity, status, destination, notes, return_requested, return_accepted, return_reason,
           menu_items(name, menu_categories(name, destination)))`
       )
       .eq('status', 'open')
       .order('created_at', { ascending: true })
 
     if (!error && data) {
-      const bar = (data as unknown as KdsOrder[])
+      const allOrders = data as unknown as KdsOrder[]
+
+      // Active bar orders (not ready/delivered, not return_accepted)
+      const bar = allOrders
         .map((o) => ({
           ...o,
           order_items: o.order_items.filter(
             (i) =>
               i.menu_items?.menu_categories?.destination === 'bar' &&
               i.status !== 'delivered' &&
-              i.status !== 'ready'
+              i.status !== 'ready' &&
+              !i.return_accepted
           ),
         }))
         .filter((o) => o.order_items.length > 0)
       setOrders(bar)
+
+      // Return requests (bar items with return_requested but not yet accepted/rejected)
+      const returns: typeof returnItems = []
+      allOrders.forEach((o) => {
+        o.order_items.forEach((i) => {
+          if (
+            i.menu_items?.menu_categories?.destination === 'bar' &&
+            i.return_requested &&
+            !i.return_accepted
+          ) {
+            returns.push({
+              ...i,
+              tableName: (o.tables as { name: string } | null)?.name ?? 'Unknown',
+              orderId: o.id,
+              staffId: o.staff_id,
+            })
+          }
+        })
+      })
+      setReturnItems(returns)
     }
     setLoading(false)
   }, [])
@@ -134,7 +161,6 @@ function BarKDSInner() {
   }
 
   const markAllReady = async (order: KdsOrder) => {
-    // Only mark bar-destined items ready
     const barItemIds = order.order_items
       .filter((i) => i.menu_items?.menu_categories?.destination === 'bar' && i.status !== 'ready')
       .map((i) => i.id)
@@ -156,8 +182,54 @@ function BarKDSInner() {
     fetchOrders()
   }
 
+  const acceptReturn = async (itemId: string, staffId?: string | null, tableName?: string) => {
+    const { error } = await supabase
+      .from('order_items')
+      .update({
+        return_accepted: true,
+        return_accepted_at: new Date().toISOString(),
+      })
+      .eq('id', itemId)
+    if (error) {
+      toast.error('Error', 'Failed to accept return')
+      return
+    }
+    toast.success('Return Accepted', 'Item removed from bill')
+    if (staffId) {
+      await sendPushToStaff(
+        staffId,
+        '↩ Return Accepted',
+        `Return accepted for ${tableName ?? 'table'} — item removed from total`
+      )
+    }
+    fetchOrders()
+  }
+
+  const rejectReturn = async (itemId: string, staffId?: string | null, tableName?: string) => {
+    const { error } = await supabase
+      .from('order_items')
+      .update({
+        return_requested: false,
+        return_reason: null,
+        return_requested_at: null,
+      })
+      .eq('id', itemId)
+    if (error) {
+      toast.error('Error', 'Failed to reject return')
+      return
+    }
+    toast.success('Return Rejected', 'Item remains on the bill')
+    if (staffId) {
+      await sendPushToStaff(
+        staffId,
+        '❌ Return Rejected',
+        `Return rejected for ${tableName ?? 'table'} — item stays on bill`
+      )
+    }
+    fetchOrders()
+  }
+
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchOrders()
     const timer = setInterval(() => setTick((t) => t + 1), 1000)
     const channel = supabase
@@ -225,6 +297,17 @@ function BarKDSInner() {
           )}
         </button>
         <button
+          onClick={() => setActiveTab('returns')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'returns' ? 'border-red-500 text-red-400' : 'border-transparent text-gray-400 hover:text-white'}`}
+        >
+          <RotateCcw size={14} /> Returns
+          {returnItems.length > 0 && (
+            <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+              {returnItems.length}
+            </span>
+          )}
+        </button>
+        <button
           onClick={() => setActiveTab('summary')}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'summary' ? 'border-amber-500 text-amber-500' : 'border-transparent text-gray-400 hover:text-white'}`}
         >
@@ -239,6 +322,60 @@ function BarKDSInner() {
           icon={<Beer size={24} className="text-amber-400" />}
           color="text-amber-400"
         />
+      )}
+
+      {/* Returns Tab */}
+      {activeTab === 'returns' && (
+        <div className="flex-1 p-4 overflow-y-auto">
+          {returnItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center py-16">
+              <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                <RotateCcw size={28} className="text-gray-600" />
+              </div>
+              <p className="text-gray-400 font-medium">No pending return requests</p>
+              <p className="text-gray-600 text-sm mt-1">
+                Return requests from waitrons will appear here
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3 max-w-lg mx-auto">
+              {returnItems.map((item) => (
+                <div key={item.id} className="bg-gray-900 border border-red-500/30 rounded-2xl p-4">
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div>
+                      <p className="text-white font-bold text-sm">
+                        {item.quantity}x {item.menu_items?.name || 'Item'}
+                      </p>
+                      <p className="text-gray-400 text-xs mt-0.5">Table: {item.tableName}</p>
+                      {item.return_reason && (
+                        <p className="text-amber-400 text-xs mt-1 italic">
+                          Reason: "{item.return_reason}"
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-red-400 text-xs font-semibold bg-red-500/10 border border-red-500/20 px-2 py-1 rounded-lg whitespace-nowrap">
+                      ↩ Return Request
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => acceptReturn(item.id, item.staffId, item.tableName)}
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 text-green-400 font-semibold text-sm py-2.5 rounded-xl transition-colors"
+                    >
+                      <CheckCircle size={14} /> Accept Return
+                    </button>
+                    <button
+                      onClick={() => rejectReturn(item.id, item.staffId, item.tableName)}
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 font-semibold text-sm py-2.5 rounded-xl transition-colors"
+                    >
+                      <X size={14} /> Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Orders Tab */}
