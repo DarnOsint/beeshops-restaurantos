@@ -725,11 +725,9 @@ export default function POS() {
         ))}
       </div>
 
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden">
         {posTab === 'tables' && (
-          <div
-            className={`${selectedTable && !showPayment ? 'hidden md:flex' : 'flex'} flex-1 flex-col overflow-hidden`}
-          >
+          <div className={`flex flex-1 flex-col overflow-hidden`}>
             <TableGrid
               tables={tables}
               onSelectTable={handleSelectTable}
@@ -911,10 +909,7 @@ export default function POS() {
         )}
 
         {selectedTable && !showPayment && (
-          <div
-            className="absolute inset-0 md:relative md:inset-auto w-full md:w-96 border-l border-gray-800 flex flex-col overflow-hidden z-10"
-            style={{ height: '100%' }}
-          >
+          <div className="fixed inset-0 z-50 bg-gray-950 flex flex-col overflow-hidden">
             <OrderPanel
               table={selectedTable}
               menuItems={getMenuItemsWithZonePrices(selectedTable) as MenuItem[]}
