@@ -111,7 +111,10 @@ function GrillerKDSInner() {
     }
 
     const grillerItems = ((data || []) as GrillerItem[]).filter(
-      (i) => i.menu_items?.menu_categories?.destination === 'griller'
+      (i) =>
+        i.menu_items?.menu_categories?.destination === 'griller' &&
+        i.status !== 'ready' &&
+        i.status !== 'delivered'
     )
 
     const orderMap: Record<string, GrillerTicket> = {}
@@ -387,14 +390,6 @@ function GrillerKDSInner() {
                         >
                           <CheckCircle size={13} /> All Done — Ticket Complete
                         </button>
-                      </div>
-                    )}
-
-                    {ticket.items.every((i) => i.status === 'ready') && (
-                      <div className="bg-green-500/10 px-3 py-2 text-center">
-                        <p className="text-green-400 text-xs font-bold">
-                          ✅ Ticket Complete — Waiter Notified
-                        </p>
                       </div>
                     )}
                   </div>

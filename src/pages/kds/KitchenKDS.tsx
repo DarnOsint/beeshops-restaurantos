@@ -112,7 +112,9 @@ function KitchenKDSInner() {
           ...o,
           order_items: o.order_items.filter(
             (i) =>
-              i.menu_items?.menu_categories?.destination === 'kitchen' && i.status !== 'delivered'
+              i.menu_items?.menu_categories?.destination === 'kitchen' &&
+              i.status !== 'delivered' &&
+              i.status !== 'ready'
           ),
         }))
         .filter((o) => o.order_items.length > 0)
@@ -324,11 +326,6 @@ function KitchenKDSInner() {
                     >
                       <CheckCircle size={16} /> All Ready
                     </button>
-                  )}
-                  {order.order_items.every((i) => i.status === 'ready') && (
-                    <div className="text-center text-green-400 text-xs font-bold py-1">
-                      ✅ All items ready — waiter notified
-                    </div>
                   )}
                 </div>
               ))}
