@@ -107,12 +107,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   const total = subtotal
   const change = paymentMethod === 'cash' && cashTendered ? parseFloat(cashTendered) - total : 0
 
-  // Items that have been sent to a KDS station but not yet marked ready
+  // Only bar items block payment — kitchen/griller have no dedicated tab so waitron can pay freely
   const unreadyItems = (order?.order_items || []).filter(
-    (i) =>
-      i.destination &&
-      ['bar', 'kitchen', 'griller'].includes(i.destination) &&
-      i.status === 'pending'
+    (i) => i.destination === 'bar' && i.status === 'pending'
   )
   const hasUnreadyItems = unreadyItems.length > 0
 

@@ -6,7 +6,7 @@ import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
 import { useAuth } from '../../context/AuthContext'
 import ErrorBoundary from '../../components/ErrorBoundary'
-import { LogOut, RefreshCw, Flame, CheckCircle, AlertTriangle } from 'lucide-react'
+import { LogOut, RefreshCw, Flame, CheckCircle, AlertTriangle, Printer } from 'lucide-react'
 import type { GrillerTicket, GrillerItem } from './types'
 import { useToast } from '../../context/ToastContext'
 import DailySummaryTab from './DailySummaryTab'
@@ -86,6 +86,49 @@ const URGENCY_STYLES: Record<
 
 function GrillerKDSInner() {
   const { profile, signOut } = useAuth()
+  const printOrderTicket = (ticket: GrillerTicket) => {
+    const W = 40
+    const divider = '-'.repeat(W)
+    const centre = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
+    const fmtRow = (l: string, r: string) => {
+      const space = W - l.length - r.length
+      return l + ' '.repeat(Math.max(1, space)) + r
+    }
+    const itemLines = ticket.items
+      .map((i) => fmtRow(`${i.quantity}x ${(i.menu_items?.name ?? '').substring(0, 28)}`, ''))
+      .join('\n')
+    const lines = [
+      '',
+      centre('** GRILL ORDER **'),
+      divider,
+      fmtRow('Table:', ticket.tableName ?? 'N/A'),
+      fmtRow(
+        'Time:',
+        new Date(ticket.createdAt).toLocaleTimeString('en-NG', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        })
+      ),
+      divider,
+      itemLines,
+      divider,
+      '',
+    ].join('\n')
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Grill Ticket</title>
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:13px;width:80mm;padding:4mm;white-space:pre;}
+@media print{body{width:80mm;}@page{margin:0;size:80mm auto;}}</style></head><body>${lines}</body></html>`
+    const win = window.open('', '_blank', 'width=400,height=500,toolbar=no,menubar=no')
+    if (!win) return
+    win.document.open('text/html', 'replace')
+    win.document.write(html)
+    win.document.close()
+    win.onload = () =>
+      setTimeout(() => {
+        win.print()
+        win.close()
+      }, 200)
+  }
   const toast = useToast()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
   const [tickets, setTickets] = useState<GrillerTicket[]>([])

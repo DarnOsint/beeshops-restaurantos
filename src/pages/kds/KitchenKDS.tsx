@@ -7,7 +7,7 @@ import GeofenceBlock from '../../components/GeofenceBlock'
 import { useAuth } from '../../context/AuthContext'
 import KitchenStock from '../backoffice/KitchenStock'
 import ErrorBoundary from '../../components/ErrorBoundary'
-import { ChefHat, Clock, LogOut, RefreshCw, CheckCircle, BarChart2 } from 'lucide-react'
+import { ChefHat, Clock, LogOut, RefreshCw, CheckCircle, BarChart2, Printer } from 'lucide-react'
 import type { KdsOrder } from './types'
 import { useToast } from '../../context/ToastContext'
 import DailySummaryTab from './DailySummaryTab'
@@ -87,6 +87,50 @@ function getNextStatus(status: string): string | null {
 
 function KitchenKDSInner() {
   const { profile, signOut } = useAuth()
+  const printOrderTicket = (order: KdsOrder) => {
+    const W = 40
+    const divider = '-'.repeat(W)
+    const centre = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
+    const fmtRow = (l: string, r: string) => {
+      const space = W - l.length - r.length
+      return l + ' '.repeat(Math.max(1, space)) + r
+    }
+    const itemLines = order.order_items
+      .filter((i) => i.menu_items?.menu_categories?.destination === 'kitchen')
+      .map((i) => fmtRow(`${i.quantity}x ${(i.menu_items?.name ?? '').substring(0, 28)}`, ''))
+      .join('\n')
+    const lines = [
+      '',
+      centre('** KITCHEN ORDER **'),
+      divider,
+      fmtRow('Table:', order.tables?.name ?? 'N/A'),
+      fmtRow(
+        'Time:',
+        new Date(order.created_at).toLocaleTimeString('en-NG', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        })
+      ),
+      divider,
+      itemLines,
+      divider,
+      '',
+    ].join('\n')
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Kitchen Ticket</title>
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:13px;width:80mm;padding:4mm;white-space:pre;}
+@media print{body{width:80mm;}@page{margin:0;size:80mm auto;}}</style></head><body>${lines}</body></html>`
+    const win = window.open('', '_blank', 'width=400,height:500,toolbar=no,menubar=no')
+    if (!win) return
+    win.document.open('text/html', 'replace')
+    win.document.write(html)
+    win.document.close()
+    win.onload = () =>
+      setTimeout(() => {
+        win.print()
+        win.close()
+      }, 200)
+  }
   const toast = useToast()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
   const [tab, setTab] = useState<'orders' | 'stock' | 'summary'>('orders')
@@ -319,6 +363,12 @@ function KitchenKDSInner() {
                       </div>
                     ))}
                   </div>
+                  <button
+                    onClick={() => printOrderTicket(order)}
+                    className="flex items-center gap-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-1.5 rounded-lg transition-colors"
+                  >
+                    <Printer size={11} /> Print
+                  </button>
                   {order.order_items.some((i) => i.status !== 'ready') && (
                     <button
                       onClick={() => markAllReady(order)}
