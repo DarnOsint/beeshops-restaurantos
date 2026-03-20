@@ -725,7 +725,7 @@ export default function POS() {
         ))}
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         {posTab === 'tables' && (
           <div
             className={`${selectedTable && !showPayment ? 'hidden md:flex' : 'flex'} flex-1 flex-col overflow-hidden`}
@@ -912,7 +912,7 @@ export default function POS() {
 
         {selectedTable && !showPayment && (
           <div
-            className="w-full md:w-96 border-l border-gray-800 flex flex-col overflow-hidden"
+            className="absolute inset-0 md:relative md:inset-auto w-full md:w-96 border-l border-gray-800 flex flex-col overflow-hidden z-10"
             style={{ height: '100%' }}
           >
             <OrderPanel

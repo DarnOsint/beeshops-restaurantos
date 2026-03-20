@@ -316,7 +316,7 @@ export default function OrderPanel({
   return (
     <>
       <div className="flex flex-col h-full bg-gray-900">
-        <div className="flex items-center justify-between p-4 border-b border-gray-800">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 shrink-0">
           <div>
             <h2 className="text-white font-bold">{table.name}</h2>
             <p className="text-gray-400 text-xs">
@@ -341,19 +341,19 @@ export default function OrderPanel({
           </button>
         </div>
 
-        <div className="flex gap-2 p-3 overflow-x-auto border-b border-gray-800">
+        <div className="flex gap-1.5 px-3 py-2 overflow-x-auto border-b border-gray-800 shrink-0">
           {categories.map((cat) => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${activeCategory === cat ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${activeCategory === cat ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
             >
               {cat}
             </button>
           ))}
         </div>
 
-        <div className="flex px-3 pt-3 pb-0">
+        <div className="flex px-3 pt-2 pb-0 shrink-0">
           <div className="flex items-center gap-2 flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 focus-within:border-amber-500 transition-colors">
             <Search size={14} className="text-gray-500 shrink-0" />
             <input
@@ -372,7 +372,7 @@ export default function OrderPanel({
 
         {/* ── Zone 1: On-table items (existing) — fixed, max 3 rows ── */}
         {orderItems.some((i) => i._existing) && (
-          <div className="border-b border-gray-800 bg-gray-950 px-3 pt-1.5 pb-1 max-h-28 overflow-y-auto space-y-0.5 shrink-0">
+          <div className="border-b border-gray-800 bg-gray-950 px-3 pt-1 pb-1 max-h-20 overflow-y-auto space-y-0.5 shrink-0">
             <p className="text-gray-600 text-[10px] uppercase tracking-widest mb-0.5">On Table</p>
             {orderItems
               .filter((i) => i._existing)
@@ -413,7 +413,7 @@ export default function OrderPanel({
 
         {/* ── Zone 2: New items being added — fixed, visible always ── */}
         {orderItems.some((i) => !i._existing) && (
-          <div className="border-b border-amber-500/20 bg-gray-900 px-3 pt-1.5 pb-1 max-h-36 overflow-y-auto space-y-0.5 shrink-0">
+          <div className="border-b border-amber-500/20 bg-gray-900 px-3 pt-1 pb-1 max-h-28 overflow-y-auto space-y-0.5 shrink-0">
             <p className="text-amber-500/60 text-[10px] uppercase tracking-widest mb-0.5">Adding</p>
             {orderItems
               .filter((i) => !i._existing)
