@@ -135,6 +135,18 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     })
     const orderTotal = order?.total_amount || subtotal
 
+    // Fetch bank accounts for transfer details
+    const { data: bankData } = await supabase
+      .from('bank_accounts')
+      .select('bank_name, account_number, account_name')
+      .eq('is_active', true)
+      .order('created_at')
+    const banks = (bankData || []) as {
+      bank_name: string
+      account_number: string
+      account_name: string
+    }[]
+
     const W = 40
     const fmtRow = (left: string, right: string) => {
       const l = left.substring(0, W - right.length - 1)
@@ -155,6 +167,20 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         return fmtRow(name, price)
       })
       .join('\n')
+
+    const bankLines =
+      banks.length > 0
+        ? [
+            divider,
+            centre('-- PAYMENT DETAILS --'),
+            ...banks.flatMap((b) => [
+              fmtRow('Bank:', b.bank_name),
+              fmtRow('Account:', b.account_number),
+              fmtRow('Name:', b.account_name),
+              '',
+            ]),
+          ]
+        : []
 
     const receipt = [
       '',
@@ -179,6 +205,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       '',
       centre('** PRE-PAYMENT RECEIPT **'),
       centre('Payment not yet confirmed.'),
+      ...bankLines,
       '',
       centre('Thank you for visiting'),
       centre("Beeshop's Place"),
