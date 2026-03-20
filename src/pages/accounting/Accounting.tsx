@@ -15,6 +15,7 @@ import {
   TrendingUp,
   Monitor,
   Heart,
+  RotateCcw,
 } from 'lucide-react'
 
 import Debtors from './Debtors'
@@ -29,6 +30,7 @@ import LedgerTab from './LedgerTab'
 import AuditTab from './AuditTab'
 import POSReconciliationTab from './POSReconciliationTab'
 import TipsTab from './TipsTab'
+import ReturnsTab from './ReturnsTab'
 
 import type {
   AccountingSummary,
@@ -53,6 +55,7 @@ const TABS = [
   { id: 'till', label: 'Till', icon: Clock },
   { id: 'payouts', label: 'Payouts', icon: DollarSign },
   { id: 'tips', label: 'Tips', icon: Heart },
+  { id: 'returns', label: 'Returns', icon: RotateCcw },
   { id: 'trends', label: 'Trends', icon: TrendingUp },
   { id: 'debtors', label: 'Debtors', icon: AlertTriangle },
   { id: 'voids', label: 'Voids', icon: Trash2 },
@@ -481,6 +484,18 @@ export default function Accounting() {
                 dateRange={{
                   from: start.slice(0, 10),
                   to: end.slice(0, 10),
+                }}
+              />
+            )
+          })()}
+        {activeTab === 'returns' &&
+          (() => {
+            const { start, end } = getDateBounds()
+            return (
+              <ReturnsTab
+                dateRange={{
+                  start: start.slice(0, 10),
+                  end: end.slice(0, 10),
                 }}
               />
             )

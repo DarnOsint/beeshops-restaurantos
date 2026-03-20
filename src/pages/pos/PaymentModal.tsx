@@ -124,14 +124,32 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   const hasUnreadyItems = unreadyItems.length > 0
 
   const requestReturn = async (itemId: string) => {
+    const item = (order?.order_items || []).find((i) => i.id === itemId)
+    if (!item) return
+    const reason = returnReason || 'No reason given'
     await supabase
       .from('order_items')
       .update({
         return_requested: true,
-        return_reason: returnReason || 'No reason given',
+        return_reason: reason,
         return_requested_at: new Date().toISOString(),
       })
       .eq('id', itemId)
+
+    // Log to returns_log for manager/accountant review
+    await supabase.from('returns_log').insert({
+      order_id: order.id,
+      order_item_id: itemId,
+      item_name: item.menu_items?.name || 'Item',
+      quantity: item.quantity,
+      item_total: item.total_price || 0,
+      table_name: table?.name ?? null,
+      waitron_id: profile?.id ?? null,
+      waitron_name: profile?.full_name ?? null,
+      return_reason: reason,
+      status: 'pending',
+      requested_at: new Date().toISOString(),
+    })
     setReturningItemId(null)
     setReturnReason('')
   }
@@ -146,6 +164,8 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         return_requested_at: null,
       })
       .eq('id', itemId)
+    // Remove pending log entry if barman hasn't acted yet
+    await supabase.from('returns_log').delete().eq('order_item_id', itemId).eq('status', 'pending')
   }
 
   const canProcess = () => {

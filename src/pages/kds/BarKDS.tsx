@@ -185,47 +185,60 @@ function BarKDSInner() {
   const acceptReturn = async (itemId: string, staffId?: string | null, tableName?: string) => {
     const { error } = await supabase
       .from('order_items')
-      .update({
-        return_accepted: true,
-        return_accepted_at: new Date().toISOString(),
-      })
+      .update({ return_accepted: true, return_accepted_at: new Date().toISOString() })
       .eq('id', itemId)
     if (error) {
       toast.error('Error', 'Failed to accept return')
       return
     }
+    // Update returns_log — mark resolved
+    await supabase
+      .from('returns_log')
+      .update({
+        status: 'accepted',
+        barman_id: profile?.id ?? null,
+        barman_name: profile?.full_name ?? null,
+        resolved_at: new Date().toISOString(),
+      })
+      .eq('order_item_id', itemId)
+      .eq('status', 'pending')
     toast.success('Return Accepted', 'Item removed from bill')
-    if (staffId) {
+    if (staffId)
       await sendPushToStaff(
         staffId,
         '↩ Return Accepted',
         `Return accepted for ${tableName ?? 'table'} — item removed from total`
       )
-    }
     fetchOrders()
   }
 
   const rejectReturn = async (itemId: string, staffId?: string | null, tableName?: string) => {
     const { error } = await supabase
       .from('order_items')
-      .update({
-        return_requested: false,
-        return_reason: null,
-        return_requested_at: null,
-      })
+      .update({ return_requested: false, return_reason: null, return_requested_at: null })
       .eq('id', itemId)
     if (error) {
       toast.error('Error', 'Failed to reject return')
       return
     }
-    toast.success('Return Rejected', 'Item remains on the bill')
-    if (staffId) {
+    // Update returns_log — mark rejected
+    await supabase
+      .from('returns_log')
+      .update({
+        status: 'rejected',
+        barman_id: profile?.id ?? null,
+        barman_name: profile?.full_name ?? null,
+        resolved_at: new Date().toISOString(),
+      })
+      .eq('order_item_id', itemId)
+      .eq('status', 'pending')
+    toast.success('Return Rejected', 'Item stays on bill')
+    if (staffId)
       await sendPushToStaff(
         staffId,
         '❌ Return Rejected',
         `Return rejected for ${tableName ?? 'table'} — item stays on bill`
       )
-    }
     fetchOrders()
   }
 
