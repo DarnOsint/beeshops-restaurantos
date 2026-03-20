@@ -116,7 +116,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
 
   const canProcess = () => {
     if (processing) return false
-    if (hasUnreadyItems) return false
+    if (hasUnreadyItems && paymentMethod !== 'run_tab') return false
     if (paymentMethod === 'cash') return parseFloat(cashTendered) >= total
     if (paymentMethod === 'credit') return debtorName.trim().length > 0
     return true
@@ -951,7 +951,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           )}
 
           {/* Unready items warning — blocks payment */}
-          {hasUnreadyItems && (
+          {hasUnreadyItems && paymentMethod !== 'run_tab' && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
               <p className="text-red-400 font-semibold text-sm mb-2">⚠️ Items not yet ready</p>
               <p className="text-gray-400 text-xs mb-2">
