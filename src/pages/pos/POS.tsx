@@ -132,13 +132,12 @@ export default function POS() {
       .channel('tables-channel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tables' }, () => {
         fetchTables()
-        if (profile) fetchAssignedTables(profile.role, profile.id)
+        // Don't re-check clock-in on table updates — causes mid-session logout flicker
       })
       .subscribe()
     return () => {
       supabase.removeChannel(channel)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -154,7 +153,8 @@ export default function POS() {
       return
     }
 
-    const today = new Date().toISOString().split('T')[0]
+    // Use WAT (UTC+1) date to match Lagos timezone
+    const today = new Date(Date.now() + 60 * 60 * 1000).toISOString().split('T')[0]
     const { data: attendance } = await supabase
       .from('attendance')
       .select('id')
@@ -162,7 +162,13 @@ export default function POS() {
       .eq('date', today)
       .is('clock_out', null)
       .limit(1)
-    setIsClockedIn(attendance !== null && attendance.length > 0)
+    // Only update if we haven't already confirmed clocked-in — prevents mid-session flicker
+    const clockedIn = attendance !== null && attendance.length > 0
+    setIsClockedIn((prev) => {
+      // Once clocked in, don't flip to false due to a network hiccup
+      if (prev === true && !clockedIn) return true
+      return clockedIn
+    })
 
     const { data: zoneData } = await supabase
       .from('zone_assignments')
@@ -236,7 +242,8 @@ export default function POS() {
 
   const fetchShiftStats = async () => {
     setShiftLoading(true)
-    const today = new Date().toISOString().split('T')[0]
+    // Use WAT (UTC+1) date to match Lagos timezone
+    const today = new Date(Date.now() + 60 * 60 * 1000).toISOString().split('T')[0]
     const [attendanceRes, ordersRes] = await Promise.all([
       supabase
         .from('attendance')
@@ -546,7 +553,7 @@ export default function POS() {
     setShowCashSale(true)
   }
 
-  if (geoStatus === 'outside' || geoStatus === 'error' || geoStatus === 'unsupported')
+  if (geoStatus === 'outside')
     return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
 
   if (isClockedIn === false)

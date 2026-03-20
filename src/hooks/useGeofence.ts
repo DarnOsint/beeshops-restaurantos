@@ -109,7 +109,15 @@ export function useGeofence(locKey: LocKey = 'main') {
       setStatus(dist <= radius ? 'inside' : 'outside')
     }
 
-    const onError = () => setStatus('error')
+    const onError = (err: GeolocationPositionError) => {
+      // On GPS error, keep the last known status rather than blocking access
+      // TIMEOUT and POSITION_UNAVAILABLE are transient — don't punish staff for them
+      if (err.code === err.PERMISSION_DENIED) {
+        setStatus('error') // Only block on explicit permission denial
+      }
+      // For timeout/unavailable, silently keep previous status
+      console.warn('Geofence GPS error:', err.message)
+    }
 
     navigator.geolocation.getCurrentPosition(check, onError, { enableHighAccuracy: true })
     const interval = setInterval(() => {

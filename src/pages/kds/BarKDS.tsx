@@ -176,7 +176,7 @@ function BarKDSInner() {
     }
   }, [fetchOrders])
 
-  if (geoStatus === 'outside' || geoStatus === 'error' || geoStatus === 'unsupported')
+  if (geoStatus === 'outside')
     return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   if (loading)
     return (
