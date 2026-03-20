@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { isNetworkPrinterAvailable, printViaNetwork } from '../../lib/networkPrinter'
+import { buildReceipt } from '../../hooks/useThermalPrinter'
 import { X, Printer, Download } from 'lucide-react'
 import type { Order, OrderItem, Table } from '../../types'
 
@@ -52,9 +54,37 @@ export default function ReceiptModal({
   const total = (order as unknown as { total_amount?: number }).total_amount || subtotal
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`${window.location.origin}/receipt/${order.id}`)}&color=000000&bgcolor=ffffff`
 
-  const handleThermalPrint = () => {
-    // Use window.open approach — reliable across all devices
+  const handleThermalPrint = async () => {
+    setPrinting(true)
+    try {
+      // Try network printer first (LAN cable — no dialog, instant)
+      const networkAvailable = await isNetworkPrinterAvailable()
+      if (networkAvailable) {
+        const bytes = buildReceipt({
+          order,
+          items: items as Parameters<typeof buildReceipt>[0]['items'],
+          table,
+          staffName,
+          orderRef,
+          subtotal,
+          vatAmount: 0,
+          total,
+          tipAmount,
+          amountReceived,
+        })
+        const success = await printViaNetwork(bytes)
+        if (success) {
+          setPrinting(false)
+          setTimeout(onClose, 500)
+          return
+        }
+      }
+    } catch (_e) {
+      // Fall through to window.open
+    }
+    // Fallback — window.open (shows print dialog)
     handlePrint('customer')
+    setPrinting(false)
     setTimeout(onClose, 500)
   }
   // Auto-trigger print when receipt opens — only when autoPrint is true (post-payment flow)

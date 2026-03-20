@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
+import { isNetworkPrinterAvailable, printViaNetwork } from '../../lib/networkPrinter'
+import { buildReceipt } from '../../hooks/useThermalPrinter'
 import {
   X,
   Banknote,
@@ -122,7 +124,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     return true
   }
 
-  const printPreReceipt = () => {
+  const printPreReceipt = async () => {
     const orderRef = `BSP-${String(order.id).slice(0, 8).toUpperCase()}`
     const date = new Date().toLocaleDateString('en-NG', {
       day: '2-digit',
@@ -210,6 +212,32 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
 </head>
 <body>${receipt}</body>
 </html>`
+
+    // Try network printer first — instant, no dialog
+    try {
+      const networkAvailable = await isNetworkPrinterAvailable()
+      if (networkAvailable) {
+        const bytes = buildReceipt({
+          order: { ...order, payment_method: 'PRE-PAYMENT' },
+          items: (order.order_items || []).map((i) => ({
+            quantity: i.quantity,
+            total_price: (i as unknown as { total_price?: number }).total_price || 0,
+            menu_items: i.menu_items,
+            name: i.menu_items?.name || 'Item',
+          })) as Parameters<typeof buildReceipt>[0]['items'],
+          table,
+          staffName: profile?.full_name || 'Staff',
+          orderRef: `BSP-${String(order.id).slice(0, 8).toUpperCase()}`,
+          subtotal: orderTotal,
+          vatAmount: 0,
+          total: orderTotal,
+        })
+        const success = await printViaNetwork(bytes)
+        if (success) return
+      }
+    } catch (_e) {
+      /* fall through to window.open */
+    }
 
     const win = window.open(
       '',
