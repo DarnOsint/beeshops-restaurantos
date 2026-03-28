@@ -11,6 +11,7 @@ import {
   Lock,
   ChefHat,
   Monitor,
+  Printer,
 } from 'lucide-react'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import StaffManagement from './StaffManagement'
@@ -22,6 +23,7 @@ import Inventory from './Inventory'
 import Suppliers from './Suppliers'
 import ChangePassword from './ChangePassword'
 import KitchenStock from './KitchenStock'
+import PrinterConfig from './PrinterConfig'
 import { useNavigate } from 'react-router-dom'
 import type { Role } from '../../types'
 
@@ -118,6 +120,14 @@ export default function BackOffice() {
       roles: ['owner', 'manager'],
     },
     {
+      id: 'printerconfig',
+      label: 'Printer Config',
+      desc: 'Configure network print server for thermal receipt printing',
+      icon: Printer,
+      color: 'bg-indigo-500',
+      roles: ['owner', 'manager'],
+    },
+    {
       id: 'changepassword',
       label: 'Change Password',
       desc: 'Update your account login password',
@@ -153,6 +163,8 @@ export default function BackOffice() {
     return <KitchenStock onBack={() => setActiveSection(null)} />
   if (activeSection === 'inventory') return <Inventory onBack={() => setActiveSection(null)} />
   if (activeSection === 'suppliers') return <Suppliers onBack={() => setActiveSection(null)} />
+  if (activeSection === 'printerconfig')
+    return <PrinterConfig onBack={() => setActiveSection(null)} />
 
   return (
     <div className="min-h-full bg-gray-950">

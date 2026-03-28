@@ -305,7 +305,36 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
 <body>${receipt}</body>
 </html>`
 
-    // Try network printer first — instant, no dialog
+    // Always open browser print — guaranteed path
+    const win = window.open(
+      '',
+      '_blank',
+      'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
+    )
+    if (win) {
+      win.document.open('text/html', 'replace')
+      win.document.write(html)
+      win.document.close()
+      win.onafterprint = () => win.close()
+      win.onload = () => {
+        setTimeout(() => {
+          try {
+            win.print()
+          } catch {
+            /* already closed */
+          }
+        }, 200)
+      }
+      setTimeout(() => {
+        try {
+          if (!win.closed) win.close()
+        } catch {
+          /* already closed */
+        }
+      }, 300000)
+    }
+
+    // Additionally try network printer in background
     try {
       const networkAvailable = await isNetworkPrinterAvailable()
       if (networkAvailable) {
@@ -324,27 +353,10 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           vatAmount: 0,
           total: orderTotal,
         })
-        const success = await printViaNetwork(bytes)
-        if (success) return
+        await printViaNetwork(bytes)
       }
-    } catch (_e) {
-      /* fall through to window.open */
-    }
-
-    const win = window.open(
-      '',
-      '_blank',
-      'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
-    )
-    if (!win) return
-    win.document.open('text/html', 'replace')
-    win.document.write(html)
-    win.document.close()
-    win.onload = () => {
-      setTimeout(() => {
-        win.print()
-        win.close()
-      }, 200)
+    } catch {
+      // Network print failed — browser print already handled it
     }
   }
 

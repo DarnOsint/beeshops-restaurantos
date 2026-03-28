@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { setPrintServerUrl } from '../../lib/networkPrinter'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
@@ -123,6 +124,18 @@ export default function POS() {
   const [showPayment, setShowPayment] = useState(false)
   const [showCashSale, setShowCashSale] = useState(false)
   const [cashSaleType, setCashSaleType] = useState<'cash' | 'takeaway'>('cash')
+
+  // Load print server URL from settings on mount
+  useEffect(() => {
+    supabase
+      .from('settings')
+      .select('value')
+      .eq('id', 'print_server_url')
+      .single()
+      .then(({ data }) => {
+        if (data?.value) setPrintServerUrl(data.value)
+      })
+  }, [])
 
   useEffect(() => {
     fetchTables()
