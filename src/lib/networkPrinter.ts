@@ -1,12 +1,17 @@
-// Network print client — talks to local print server on localhost:6543
-// The print server forwards bytes to the thermal printer at 192.168.0.10:9100
+// Network print client — talks to a local print server on the venue's LAN.
+// The print server IP/port is configurable (defaults to localhost:6543 for dev).
 
-const PRINT_SERVER = 'http://localhost:6543'
+let printServerUrl = 'http://localhost:6543'
+
+/** Set the print server URL at runtime (called from settings/config) */
+export function setPrintServerUrl(url: string) {
+  printServerUrl = url
+}
 
 export async function isNetworkPrinterAvailable(): Promise<boolean> {
   try {
-    const res = await fetch(`${PRINT_SERVER}/health`, {
-      signal: AbortSignal.timeout(1000),
+    const res = await fetch(`${printServerUrl}/health`, {
+      signal: AbortSignal.timeout(1500),
     })
     return res.ok
   } catch {
@@ -16,11 +21,11 @@ export async function isNetworkPrinterAvailable(): Promise<boolean> {
 
 export async function printViaNetwork(data: Uint8Array): Promise<boolean> {
   try {
-    const res = await fetch(`${PRINT_SERVER}/print`, {
+    const res = await fetch(`${printServerUrl}/print`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data: Array.from(data) }),
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(5000),
     })
     const json = await res.json()
     return json.success === true

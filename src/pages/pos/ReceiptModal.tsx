@@ -56,8 +56,12 @@ export default function ReceiptModal({
 
   const handleThermalPrint = async () => {
     setPrinting(true)
+
+    // Always open browser print — this is the guaranteed path
+    handlePrint('customer')
+
+    // Additionally try network/thermal printer in background
     try {
-      // Try network printer first (LAN cable — no dialog, instant)
       const networkAvailable = await isNetworkPrinterAvailable()
       if (networkAvailable) {
         const bytes = buildReceipt({
@@ -72,20 +76,13 @@ export default function ReceiptModal({
           tipAmount,
           amountReceived,
         })
-        const success = await printViaNetwork(bytes)
-        if (success) {
-          setPrinting(false)
-          setTimeout(onClose, 500)
-          return
-        }
+        await printViaNetwork(bytes)
       }
-    } catch (_e) {
-      // Fall through to window.open
+    } catch {
+      // Network print failed — browser print already handled it
     }
-    // Fallback — window.open (shows print dialog)
-    handlePrint('customer')
+
     setPrinting(false)
-    setTimeout(onClose, 500)
   }
   // Auto-trigger print when receipt opens — only when autoPrint is true (post-payment flow)
   const hasPrinted = useRef(false)
@@ -268,14 +265,30 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
     win.document.open('text/html', 'replace')
     win.document.write(html)
     win.document.close()
+
+    // Close ONLY after the user finishes or cancels the print dialog
+    win.onafterprint = () => win.close()
+
     win.onload = () => {
       // Wait longer for customer copy to allow QR image to load
       const delay = type === 'customer' ? 800 : 200
       setTimeout(() => {
-        win.print()
-        win.close()
+        try {
+          win.print()
+        } catch {
+          /* already closed */
+        }
       }, delay)
     }
+
+    // Safety: close after 5 minutes if onafterprint never fires
+    setTimeout(() => {
+      try {
+        if (!win.closed) win.close()
+      } catch {
+        /* already closed */
+      }
+    }, 300000)
   }
 
   const handleDownload = (type: 'customer' | 'waiter') => {
