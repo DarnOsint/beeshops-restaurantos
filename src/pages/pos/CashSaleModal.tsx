@@ -538,7 +538,7 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
           </div>
 
           <div
-            className={`${activeTab === 'order' ? 'flex' : 'hidden'} md:flex w-full md:w-72 flex-col overflow-hidden shrink-0`}
+            className={`${activeTab === 'order' ? 'flex' : 'hidden'} md:flex w-full md:w-80 flex-col overflow-hidden shrink-0`}
           >
             {isTakeaway && (
               <div className="p-3 border-b border-gray-800 space-y-2 shrink-0">
@@ -556,40 +556,47 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
                 />
               </div>
             )}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
               {orderItems.length === 0 ? (
                 <div className="text-center py-8 text-gray-600 text-sm">Tap items to add</div>
               ) : (
                 orderItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-2 bg-gray-800 rounded-xl px-3 py-2"
-                  >
-                    <div className="flex items-center gap-1">
+                  <div key={item.id} className="bg-gray-800 rounded-xl px-3 py-2.5">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-white text-sm font-medium flex-1 mr-2">
+                        {item.name}
+                      </span>
                       <button
-                        onClick={() => removeItem(item.id)}
-                        className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-white"
+                        onClick={() =>
+                          setOrderItems((prev) => prev.filter((i) => i.id !== item.id))
+                        }
+                        className="text-red-400 hover:text-red-300 shrink-0 p-1"
                       >
-                        <Minus size={10} />
-                      </button>
-                      <span className="text-white text-sm w-5 text-center">{item.quantity}</span>
-                      <button
-                        onClick={() => addItem(item as unknown as MenuItem)}
-                        className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-white"
-                      >
-                        <Plus size={10} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
-                    <span className="text-gray-300 text-xs flex-1 truncate">{item.name}</span>
-                    <span className="text-white text-xs font-bold">
-                      ₦{item.total.toLocaleString()}
-                    </span>
-                    <button
-                      onClick={() => setOrderItems((prev) => prev.filter((i) => i.id !== item.id))}
-                      className="text-red-400"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => removeItem(item.id)}
+                          className="w-8 h-8 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white active:scale-95 transition-transform"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="text-white text-base font-bold w-6 text-center">
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => addItem(item as unknown as MenuItem)}
+                          className="w-8 h-8 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white active:scale-95 transition-transform"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                      <span className="text-amber-400 text-sm font-bold">
+                        ₦{item.total.toLocaleString()}
+                      </span>
+                    </div>
                   </div>
                 ))
               )}
