@@ -70,6 +70,7 @@ export default function FloorPlan({ onBack }: Props) {
   const dragTargetRef = useRef<DragTarget>(null)
   const resizeTargetRef = useRef<ResizeTarget>(null)
   const dragOffsetRef = useRef({ x: 0, y: 0 })
+  const didInteractRef = useRef(false)
   const [, forceRender] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -149,6 +150,7 @@ export default function FloorPlan({ onBack }: Props) {
       }
     }
     if (target?.type === 'table') setSelectedId(target.id)
+    didInteractRef.current = true
     forceRender((n) => n + 1)
   }
 
@@ -383,7 +385,13 @@ export default function FloorPlan({ onBack }: Props) {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          onClick={() => setSelectedId(null)}
+          onClick={() => {
+            if (didInteractRef.current) {
+              didInteractRef.current = false
+              return
+            }
+            setSelectedId(null)
+          }}
         >
           {/* Zone boundary areas — rendered first (behind tables) */}
           {Object.entries(zoneBounds).map(([zoneName, bounds]) => {

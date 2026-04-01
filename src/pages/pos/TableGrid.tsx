@@ -95,11 +95,189 @@ export default function TableGrid({
       ? tables
       : tables.filter((t) => t.table_categories?.name === activeCategory)
 
+  // Render a single zone's floor plan (used by both "All" and individual zone views)
+  const renderZoneFloorPlan = (zoneName: string, zoneTables: Table[], zoneScale: number) => {
+    const bounds = zoneBounds[zoneName]
+    if (!bounds) return null
+    const c = ZONE_COLORS[zoneName] || DEFAULT_ZONE_COLOR
+    // Position tables relative to the zone's top-left corner
+    const occupiedCount = zoneTables.filter((t) => t.status === 'occupied').length
+
+    return (
+      <div key={zoneName}>
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-2.5 h-2.5 rounded-full" style={{ background: c.stroke }} />
+          <span style={{ color: c.text }} className="text-sm font-bold uppercase tracking-wide">
+            {zoneName}
+          </span>
+          <span className="text-gray-600 text-xs">
+            ({occupiedCount}/{zoneTables.length} occupied)
+          </span>
+        </div>
+        <div
+          className="relative select-none"
+          style={{
+            width: bounds.w * zoneScale,
+            height: bounds.h * zoneScale,
+            background: c.fill,
+            border: `1.5px solid ${c.stroke}30`,
+            borderRadius: 14 * zoneScale,
+            marginBottom: 8,
+          }}
+        >
+          {zoneTables.map((table) => {
+            const layout = tableLayouts[table.id]
+            if (!layout) return null
+            const tc = getZoneColor(zoneName)
+            const isOccupied = table.status === 'occupied'
+            const isSelected = selectedTable?.id === table.id
+            const isAssigned = assignedTableIds === null || assignedTableIds.includes(table.id)
+            const servingStaffId = tableStaffMap[table.id]
+            const canBypass = currentRole && BYPASS_ROLES.includes(currentRole)
+            const isOtherWaitronTable =
+              isOccupied &&
+              servingStaffId &&
+              currentStaffId &&
+              servingStaffId !== currentStaffId &&
+              !canBypass
+            const isClickable = isAssigned && !isOtherWaitronTable
+            const occupiedFill = ZONE_FILL_OCCUPIED[zoneName] || tc.stroke
+
+            // Position relative to zone boundary
+            const relX = (layout.x - bounds.x) * zoneScale
+            const relY = (layout.y - bounds.y) * zoneScale
+
+            return (
+              <button
+                key={table.id}
+                onClick={() => (isClickable ? onSelectTable(table) : undefined)}
+                disabled={!isClickable}
+                title={
+                  isOtherWaitronTable
+                    ? 'Being served by another waitron'
+                    : !isAssigned
+                      ? 'Not assigned to you'
+                      : `${table.name} — ${table.capacity} seats`
+                }
+                style={{
+                  position: 'absolute',
+                  left: Math.max(0, relX),
+                  top: Math.max(0, relY),
+                  width: layout.w * zoneScale,
+                  height: layout.h * zoneScale,
+                  borderRadius: layout.shape === 'circle' ? '50%' : 10 * zoneScale,
+                  background: isOccupied ? occupiedFill : tc.fill.replace('0.08', '0.2'),
+                  border: `${2 * zoneScale}px solid ${isSelected ? '#f59e0b' : tc.stroke}`,
+                  boxShadow: isSelected ? `0 0 0 ${3 * zoneScale}px rgba(245,158,11,0.4)` : 'none',
+                  zIndex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: isClickable ? 'pointer' : 'not-allowed',
+                  opacity: isClickable ? 1 : 0.3,
+                  filter: isClickable ? 'none' : 'grayscale(1)',
+                  transition: 'box-shadow 0.15s, opacity 0.15s',
+                  padding: 0,
+                }}
+              >
+                <span
+                  style={{
+                    color: isOccupied ? '#fff' : tc.text,
+                    fontSize: Math.max(9, 12 * zoneScale),
+                    fontWeight: 700,
+                    lineHeight: 1.2,
+                    textAlign: 'center',
+                  }}
+                >
+                  {table.name}
+                </span>
+                <span
+                  style={{
+                    color: isOccupied ? 'rgba(255,255,255,0.7)' : 'rgba(156,163,175,0.7)',
+                    fontSize: Math.max(7, 9 * zoneScale),
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2 * zoneScale,
+                  }}
+                >
+                  <Users size={Math.max(7, 9 * zoneScale)} />
+                  {table.capacity}
+                </span>
+                {isOtherWaitronTable && (
+                  <Lock
+                    size={Math.max(8, 10 * zoneScale)}
+                    style={{
+                      position: 'absolute',
+                      top: 3 * zoneScale,
+                      right: 3 * zoneScale,
+                      color: '#f87171',
+                    }}
+                  />
+                )}
+                {!isAssigned && !isOtherWaitronTable && (
+                  <Lock
+                    size={Math.max(7, 9 * zoneScale)}
+                    style={{
+                      position: 'absolute',
+                      top: 3 * zoneScale,
+                      right: 3 * zoneScale,
+                      color: '#6b7280',
+                    }}
+                  />
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
   // Floor plan view
   if (hasLayout) {
+    // "All" view: each zone rendered as a separate section
+    if (activeCategory === 'All') {
+      const zoneNames = CATEGORIES.slice(1)
+      return (
+        <div className="flex flex-col h-full">
+          <div className="flex gap-2 p-4 overflow-x-auto border-b border-gray-800">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                  activeCategory === cat
+                    ? 'bg-amber-500 text-black'
+                    : 'bg-gray-800 text-gray-400 hover:text-white'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 overflow-auto p-4 space-y-4" ref={containerRef}>
+            {zoneNames.map((zoneName) => {
+              const zoneTables = tables.filter((t) => t.table_categories?.name === zoneName)
+              if (zoneTables.length === 0) return null
+              const bounds = zoneBounds[zoneName]
+              if (!bounds) return null
+              const zoneScale =
+                containerWidth > 0 ? Math.min(1, (containerWidth - 32) / bounds.w) : 0.5
+              return renderZoneFloorPlan(zoneName, zoneTables, zoneScale)
+            })}
+          </div>
+        </div>
+      )
+    }
+
+    // Single zone view
+    const bounds = zoneBounds[activeCategory]
+    const singleZoneScale =
+      bounds && containerWidth > 0 ? Math.min(1, (containerWidth - 16) / bounds.w) : scale
+
     return (
       <div className="flex flex-col h-full">
-        {/* Category Filter */}
         <div className="flex gap-2 p-4 overflow-x-auto border-b border-gray-800">
           {CATEGORIES.map((cat) => (
             <button
@@ -115,159 +293,8 @@ export default function TableGrid({
             </button>
           ))}
         </div>
-
-        <div className="flex-1 overflow-auto p-2" ref={containerRef}>
-          <div
-            className="relative mx-auto select-none"
-            style={{
-              width: CANVAS_W * scale,
-              height: CANVAS_H * scale,
-            }}
-          >
-            {/* Zone boundaries */}
-            {Object.entries(zoneBounds).map(([zoneName, bounds]) => {
-              if (activeCategory !== 'All' && activeCategory !== zoneName) return null
-              const c = ZONE_COLORS[zoneName] || DEFAULT_ZONE_COLOR
-              return (
-                <div
-                  key={`zone-${zoneName}`}
-                  style={{
-                    position: 'absolute',
-                    left: bounds.x * scale,
-                    top: bounds.y * scale,
-                    width: bounds.w * scale,
-                    height: bounds.h * scale,
-                    background: c.fill,
-                    border: `${1.5 * scale}px dashed ${c.stroke}40`,
-                    borderRadius: 14 * scale,
-                    zIndex: 0,
-                    pointerEvents: 'none',
-                  }}
-                >
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: 6 * scale,
-                      left: 10 * scale,
-                      color: c.text,
-                      fontSize: Math.max(9, 12 * scale),
-                      fontWeight: 700,
-                      opacity: 0.5,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                    }}
-                  >
-                    {zoneName}
-                  </span>
-                </div>
-              )
-            })}
-
-            {/* Tables */}
-            {filtered.map((table) => {
-              const layout = tableLayouts[table.id]
-              if (!layout) return null
-              const zoneName = table.table_categories?.name || ''
-              const c = getZoneColor(zoneName)
-              const isOccupied = table.status === 'occupied'
-              const isSelected = selectedTable?.id === table.id
-              const isAssigned = assignedTableIds === null || assignedTableIds.includes(table.id)
-
-              const servingStaffId = tableStaffMap[table.id]
-              const canBypass = currentRole && BYPASS_ROLES.includes(currentRole)
-              const isOtherWaitronTable =
-                isOccupied &&
-                servingStaffId &&
-                currentStaffId &&
-                servingStaffId !== currentStaffId &&
-                !canBypass
-              const isClickable = isAssigned && !isOtherWaitronTable
-
-              const occupiedFill = ZONE_FILL_OCCUPIED[zoneName] || c.stroke
-
-              return (
-                <button
-                  key={table.id}
-                  onClick={() => (isClickable ? onSelectTable(table) : undefined)}
-                  disabled={!isClickable}
-                  title={
-                    isOtherWaitronTable
-                      ? 'Being served by another waitron'
-                      : !isAssigned
-                        ? 'Not assigned to you'
-                        : `${table.name} — ${table.capacity} seats`
-                  }
-                  style={{
-                    position: 'absolute',
-                    left: layout.x * scale,
-                    top: layout.y * scale,
-                    width: layout.w * scale,
-                    height: layout.h * scale,
-                    borderRadius: layout.shape === 'circle' ? '50%' : 10 * scale,
-                    background: isOccupied ? occupiedFill : c.fill.replace('0.08', '0.2'),
-                    border: `${2 * scale}px solid ${isSelected ? '#f59e0b' : c.stroke}`,
-                    boxShadow: isSelected ? `0 0 0 ${3 * scale}px rgba(245,158,11,0.4)` : 'none',
-                    zIndex: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: isClickable ? 'pointer' : 'not-allowed',
-                    opacity: isClickable ? 1 : 0.3,
-                    filter: isClickable ? 'none' : 'grayscale(1)',
-                    transition: 'box-shadow 0.15s, opacity 0.15s',
-                    padding: 0,
-                  }}
-                >
-                  <span
-                    style={{
-                      color: isOccupied ? '#fff' : c.text,
-                      fontSize: Math.max(9, 12 * scale),
-                      fontWeight: 700,
-                      lineHeight: 1.2,
-                      textAlign: 'center',
-                    }}
-                  >
-                    {table.name}
-                  </span>
-                  <span
-                    style={{
-                      color: isOccupied ? 'rgba(255,255,255,0.7)' : 'rgba(156,163,175,0.7)',
-                      fontSize: Math.max(7, 9 * scale),
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 2 * scale,
-                    }}
-                  >
-                    <Users size={Math.max(7, 9 * scale)} />
-                    {table.capacity}
-                  </span>
-                  {isOtherWaitronTable && (
-                    <Lock
-                      size={Math.max(8, 10 * scale)}
-                      style={{
-                        position: 'absolute',
-                        top: 3 * scale,
-                        right: 3 * scale,
-                        color: '#f87171',
-                      }}
-                    />
-                  )}
-                  {!isAssigned && !isOtherWaitronTable && (
-                    <Lock
-                      size={Math.max(7, 9 * scale)}
-                      style={{
-                        position: 'absolute',
-                        top: 3 * scale,
-                        right: 3 * scale,
-                        color: '#6b7280',
-                      }}
-                    />
-                  )}
-                </button>
-              )
-            })}
-          </div>
+        <div className="flex-1 overflow-auto p-4" ref={containerRef}>
+          {renderZoneFloorPlan(activeCategory, filtered, singleZoneScale)}
         </div>
       </div>
     )
