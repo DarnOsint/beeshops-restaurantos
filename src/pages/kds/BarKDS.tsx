@@ -6,7 +6,17 @@ import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
 import { useAuth } from '../../context/AuthContext'
 import ErrorBoundary from '../../components/ErrorBoundary'
-import { Beer, Clock, LogOut, RefreshCw, CheckCircle, BarChart2, RotateCcw, X } from 'lucide-react'
+import {
+  Beer,
+  Clock,
+  LogOut,
+  RefreshCw,
+  CheckCircle,
+  BarChart2,
+  RotateCcw,
+  X,
+  History,
+} from 'lucide-react'
 import type { KdsOrder } from './types'
 import DailySummaryTab from './DailySummaryTab'
 import { useToast } from '../../context/ToastContext'
@@ -80,7 +90,21 @@ function BarKDSInner() {
   >([])
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
-  const [activeTab, setActiveTab] = useState<'orders' | 'returns' | 'summary'>('orders')
+  const [activeTab, setActiveTab] = useState<'orders' | 'returns' | 'summary' | 'history'>('orders')
+  const [returnHistory, setReturnHistory] = useState<
+    Array<{
+      id: string
+      item_name: string
+      quantity: number
+      item_total: number
+      table_name: string | null
+      waitron_name: string | null
+      return_reason: string | null
+      status: string
+      requested_at: string
+      resolved_at: string | null
+    }>
+  >([])
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
@@ -134,6 +158,21 @@ function BarKDSInner() {
     }
     setLoading(false)
   }, [])
+
+  const fetchReturnHistory = useCallback(async () => {
+    if (!profile) return
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const { data } = await supabase
+      .from('returns_log')
+      .select(
+        'id, item_name, quantity, item_total, table_name, waitron_name, return_reason, status, requested_at, resolved_at'
+      )
+      .or(`barman_id.eq.${profile.id},status.eq.pending`)
+      .gte('requested_at', today.toISOString())
+      .order('requested_at', { ascending: false })
+    if (data) setReturnHistory(data)
+  }, [profile])
 
   const updateItemStatus = async (itemId: string, currentStatus: string, orderId: string) => {
     const nextStatus = getNextStatus(currentStatus)
@@ -248,10 +287,16 @@ function BarKDSInner() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchOrders()
+
+    fetchReturnHistory()
     const tickTimer = setInterval(() => setTick((t) => t + 1), 1000)
     // Poll every 10s as safety net — realtime can drop silently
-    const pollTimer = setInterval(fetchOrders, 10000)
+    const pollTimer = setInterval(() => {
+      fetchOrders()
+      fetchReturnHistory()
+    }, 10000)
     const channel = supabase
       .channel('bar-channel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchOrders)
@@ -267,7 +312,7 @@ function BarKDSInner() {
       supabase.removeChannel(channel)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [fetchOrders])
+  }, [fetchOrders, fetchReturnHistory])
 
   if (geoStatus === 'outside')
     return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
@@ -329,12 +374,112 @@ function BarKDSInner() {
           )}
         </button>
         <button
+          onClick={() => {
+            setActiveTab('history')
+            fetchReturnHistory()
+          }}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'history' ? 'border-blue-500 text-blue-400' : 'border-transparent text-gray-400 hover:text-white'}`}
+        >
+          <History size={14} /> Return History
+        </button>
+        <button
           onClick={() => setActiveTab('summary')}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'summary' ? 'border-amber-500 text-amber-500' : 'border-transparent text-gray-400 hover:text-white'}`}
         >
           <BarChart2 size={14} /> Today's Summary
         </button>
       </div>
+
+      {/* Return History Tab */}
+      {activeTab === 'history' && (
+        <div className="flex-1 p-4 overflow-y-auto">
+          {returnHistory.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center py-16">
+              <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                <History size={28} className="text-gray-600" />
+              </div>
+              <p className="text-gray-400 font-medium">No returns today</p>
+              <p className="text-gray-600 text-sm mt-1">Processed returns will appear here</p>
+            </div>
+          ) : (
+            <div className="max-w-lg mx-auto space-y-2">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-gray-500 text-xs uppercase tracking-wider">
+                  Today's Returns — {returnHistory.length} total
+                </p>
+                <p className="text-gray-400 text-xs font-bold">
+                  ₦
+                  {returnHistory
+                    .filter((r) => r.status === 'accepted')
+                    .reduce((s, r) => s + (r.item_total || 0), 0)
+                    .toLocaleString()}{' '}
+                  accepted
+                </p>
+              </div>
+              {returnHistory.map((r) => (
+                <div
+                  key={r.id}
+                  className={`bg-gray-900 border rounded-xl p-3 ${
+                    r.status === 'accepted'
+                      ? 'border-green-500/20'
+                      : r.status === 'rejected'
+                        ? 'border-red-500/20'
+                        : 'border-amber-500/20'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div>
+                      <p className="text-white text-sm font-semibold">
+                        {r.quantity}x {r.item_name}
+                      </p>
+                      <p className="text-gray-500 text-xs">
+                        {r.table_name || 'Unknown'} — by {r.waitron_name || 'Unknown'}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span
+                        className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                          r.status === 'accepted'
+                            ? 'bg-green-500/20 text-green-400'
+                            : r.status === 'rejected'
+                              ? 'bg-red-500/20 text-red-400'
+                              : 'bg-amber-500/20 text-amber-400'
+                        }`}
+                      >
+                        {r.status}
+                      </span>
+                      <p className="text-gray-400 text-xs mt-1">
+                        ₦{(r.item_total || 0).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                  {r.return_reason && (
+                    <p className="text-gray-500 text-xs italic">Reason: {r.return_reason}</p>
+                  )}
+                  <p className="text-gray-600 text-[10px] mt-1">
+                    {new Date(r.requested_at).toLocaleTimeString('en-NG', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: true,
+                    })}
+                    {r.resolved_at && (
+                      <>
+                        {' '}
+                        — resolved{' '}
+                        {new Date(r.resolved_at).toLocaleTimeString('en-NG', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true,
+                        })}
+                      </>
+                    )}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Summary Tab */}
       {activeTab === 'summary' && (
