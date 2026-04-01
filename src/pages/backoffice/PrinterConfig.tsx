@@ -1,12 +1,42 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Printer, Save, Wifi, WifiOff, Loader2 } from 'lucide-react'
+import { ArrowLeft, Printer, Save, Wifi, WifiOff, Loader2, ChefHat, Flame } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../context/ToastContext'
-import { setPrintServerUrl, isNetworkPrinterAvailable } from '../../lib/networkPrinter'
+import {
+  setPrintServerUrl,
+  isNetworkPrinterAvailable,
+  setStationPrinterUrl,
+  isStationPrinterAvailable,
+} from '../../lib/networkPrinter'
 
 interface Props {
   onBack: () => void
 }
+
+interface StationPrinter {
+  key: string
+  label: string
+  description: string
+  icon: React.ReactNode
+  settingId: string
+}
+
+const STATIONS: StationPrinter[] = [
+  {
+    key: 'kitchen',
+    label: 'Kitchen Printer',
+    description: 'Auto-prints order tickets for kitchen items when orders are placed',
+    icon: <ChefHat size={18} className="text-orange-400" />,
+    settingId: 'kitchen_printer_url',
+  },
+  {
+    key: 'griller',
+    label: 'Griller Printer',
+    description: 'Auto-prints order tickets for grill items when orders are placed',
+    icon: <Flame size={18} className="text-red-400" />,
+    settingId: 'griller_printer_url',
+  },
+]
 
 export default function PrinterConfig({ onBack }: Props) {
   const toast = useToast()
@@ -15,16 +45,31 @@ export default function PrinterConfig({ onBack }: Props) {
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<'success' | 'fail' | null>(null)
 
+  const [stationUrls, setStationUrls] = useState<Record<string, string>>({})
+  const [stationTesting, setStationTesting] = useState<Record<string, boolean>>({})
+  const [stationTestResults, setStationTestResults] = useState<
+    Record<string, 'success' | 'fail' | null>
+  >({})
+  const [stationSaving, setStationSaving] = useState(false)
+
   useEffect(() => {
+    // Load all printer settings at once
     supabase
       .from('settings')
-      .select('value')
-      .eq('id', 'print_server_url')
-      .single()
+      .select('id, value')
+      .in('id', ['print_server_url', ...STATIONS.map((s) => s.settingId)])
       .then(({ data }) => {
-        if (data?.value) {
-          setServerUrl(data.value)
-          setPrintServerUrl(data.value)
+        if (!data) return
+        for (const row of data) {
+          if (row.id === 'print_server_url' && row.value) {
+            setServerUrl(row.value)
+            setPrintServerUrl(row.value)
+          }
+          const station = STATIONS.find((s) => s.settingId === row.id)
+          if (station && row.value) {
+            setStationUrls((prev) => ({ ...prev, [station.key]: row.value }))
+            setStationPrinterUrl(station.key, row.value)
+          }
         }
       })
   }, [])
@@ -61,6 +106,40 @@ export default function PrinterConfig({ onBack }: Props) {
     setTesting(false)
   }
 
+  const handleStationTest = async (station: StationPrinter) => {
+    setStationTesting((prev) => ({ ...prev, [station.key]: true }))
+    setStationTestResults((prev) => ({ ...prev, [station.key]: null }))
+    const url = stationUrls[station.key]?.trim()
+    if (url) setStationPrinterUrl(station.key, url)
+    const available = await isStationPrinterAvailable(station.key)
+    setStationTestResults((prev) => ({ ...prev, [station.key]: available ? 'success' : 'fail' }))
+    setStationTesting((prev) => ({ ...prev, [station.key]: false }))
+  }
+
+  const handleStationsSave = async () => {
+    setStationSaving(true)
+    try {
+      for (const station of STATIONS) {
+        const url = stationUrls[station.key]?.trim() || ''
+        const { error } = await supabase.from('settings').upsert(
+          {
+            id: station.settingId,
+            value: url,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' }
+        )
+        if (error) throw error
+        setStationPrinterUrl(station.key, url)
+      }
+      toast.success('Station printers saved')
+    } catch (e) {
+      toast.error('Failed to save', e instanceof Error ? e.message : String(e))
+    } finally {
+      setStationSaving(false)
+    }
+  }
+
   return (
     <div className="min-h-full bg-gray-950 p-6">
       <button
@@ -70,7 +149,7 @@ export default function PrinterConfig({ onBack }: Props) {
         <ArrowLeft size={18} /> Back
       </button>
 
-      <div className="max-w-lg">
+      <div className="max-w-lg space-y-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
             <Printer size={20} className="text-indigo-400" />
@@ -81,10 +160,10 @@ export default function PrinterConfig({ onBack }: Props) {
           </div>
         </div>
 
+        {/* Receipt Printer */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-5">
-          {/* How it works */}
           <div className="bg-gray-800/50 rounded-lg p-4">
-            <p className="text-gray-300 text-sm font-medium mb-2">How it works</p>
+            <p className="text-gray-300 text-sm font-medium mb-2">Receipt Printer</p>
             <ul className="text-gray-400 text-xs space-y-1.5">
               <li>• Receipts always print via browser print dialog (guaranteed)</li>
               <li>
@@ -99,7 +178,6 @@ export default function PrinterConfig({ onBack }: Props) {
             </ul>
           </div>
 
-          {/* URL Input */}
           <div>
             <label className="block text-sm text-gray-400 mb-1.5">Print Server URL</label>
             <input
@@ -115,7 +193,6 @@ export default function PrinterConfig({ onBack }: Props) {
             </p>
           </div>
 
-          {/* Test Connection */}
           <div className="flex items-center gap-3">
             <button
               onClick={handleTest}
@@ -138,19 +215,106 @@ export default function PrinterConfig({ onBack }: Props) {
             )}
           </div>
 
-          {/* Save */}
           <button
             onClick={handleSave}
             disabled={saving}
             className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-xl py-2.5 text-sm transition-colors disabled:opacity-50"
           >
             <Save size={14} />
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? 'Saving...' : 'Save Receipt Printer'}
+          </button>
+        </div>
+
+        {/* Station Printers */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-5">
+          <div className="bg-gray-800/50 rounded-lg p-4">
+            <p className="text-gray-300 text-sm font-medium mb-2">Station Printers</p>
+            <ul className="text-gray-400 text-xs space-y-1.5">
+              <li>
+                • Assign a dedicated printer to kitchen and/or griller stations so order tickets
+                print automatically when orders are placed
+              </li>
+              <li>
+                • Each station printer needs its own print server running on the network, connected
+                to the station's thermal printer
+              </li>
+              <li>• Stations without a printer configured will use the KDS screen instead</li>
+              <li>• Bar orders always go to the bar KDS screen</li>
+            </ul>
+          </div>
+
+          {STATIONS.map((station) => (
+            <div key={station.key} className="space-y-3">
+              <div className="flex items-center gap-2">
+                {station.icon}
+                <div>
+                  <p className="text-white text-sm font-medium">{station.label}</p>
+                  <p className="text-gray-500 text-xs">{station.description}</p>
+                </div>
+              </div>
+
+              <input
+                type="text"
+                value={stationUrls[station.key] || ''}
+                onChange={(e) =>
+                  setStationUrls((prev) => ({ ...prev, [station.key]: e.target.value }))
+                }
+                placeholder={`http://192.168.1.${station.key === 'kitchen' ? '101' : '102'}:6543`}
+                className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-amber-500 placeholder-gray-600"
+              />
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => handleStationTest(station)}
+                  disabled={stationTesting[station.key] || !stationUrls[station.key]?.trim()}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 border border-gray-700 text-white rounded-lg text-xs hover:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {stationTesting[station.key] ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Wifi size={12} />
+                  )}
+                  {stationTesting[station.key] ? 'Testing...' : 'Test'}
+                </button>
+
+                {stationTestResults[station.key] === 'success' && (
+                  <span className="flex items-center gap-1 text-green-400 text-xs">
+                    <Wifi size={12} /> Reachable
+                  </span>
+                )}
+                {stationTestResults[station.key] === 'fail' && (
+                  <span className="flex items-center gap-1 text-red-400 text-xs">
+                    <WifiOff size={12} /> Not reachable
+                  </span>
+                )}
+
+                {stationUrls[station.key]?.trim() && (
+                  <button
+                    onClick={() => {
+                      setStationUrls((prev) => ({ ...prev, [station.key]: '' }))
+                      setStationTestResults((prev) => ({ ...prev, [station.key]: null }))
+                    }}
+                    className="text-gray-500 hover:text-red-400 text-xs transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          <button
+            onClick={handleStationsSave}
+            disabled={stationSaving}
+            className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-xl py-2.5 text-sm transition-colors disabled:opacity-50"
+          >
+            <Save size={14} />
+            {stationSaving ? 'Saving...' : 'Save Station Printers'}
           </button>
         </div>
 
         {/* USB/Bluetooth thermal printer */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mt-4">
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
           <p className="text-gray-300 text-sm font-medium mb-2">USB / Bluetooth Thermal Printer</p>
           <p className="text-gray-400 text-xs">
             If your thermal printer is connected via USB or Bluetooth, use the WebSerial print

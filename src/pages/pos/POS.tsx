@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { setPrintServerUrl } from '../../lib/networkPrinter'
+import {
+  setPrintServerUrl,
+  setStationPrinterUrl,
+  printToStation,
+  hasStationPrinters,
+} from '../../lib/networkPrinter'
+import { buildOrderTicket, type TicketItem } from '../../lib/orderTicket'
+import type { ItemDestination } from '../../types'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
@@ -125,15 +132,21 @@ export default function POS() {
   const [showCashSale, setShowCashSale] = useState(false)
   const [cashSaleType, setCashSaleType] = useState<'cash' | 'takeaway'>('cash')
 
-  // Load print server URL from settings on mount
+  // Load print server URLs (receipt + station printers) on mount
   useEffect(() => {
     supabase
       .from('settings')
-      .select('value')
-      .eq('id', 'print_server_url')
-      .single()
+      .select('id, value')
+      .in('id', ['print_server_url', 'kitchen_printer_url', 'griller_printer_url'])
       .then(({ data }) => {
-        if (data?.value) setPrintServerUrl(data.value)
+        if (!data) return
+        for (const row of data) {
+          if (row.id === 'print_server_url' && row.value) setPrintServerUrl(row.value)
+          if (row.id === 'kitchen_printer_url' && row.value)
+            setStationPrinterUrl('kitchen', row.value)
+          if (row.id === 'griller_printer_url' && row.value)
+            setStationPrinterUrl('griller', row.value)
+        }
       })
   }, [])
 
@@ -395,6 +408,40 @@ export default function POS() {
     setPendingTable(null)
   }
 
+  /** Send order tickets to configured station printers (kitchen/griller) */
+  const printStationTickets = (
+    items: Array<{
+      quantity: number
+      name: string
+      modifier_notes?: string | null
+      destination: ItemDestination
+    }>,
+    tableName: string,
+    orderRef: string,
+    staffName: string,
+    createdAt: string
+  ) => {
+    if (!hasStationPrinters()) return
+    const stations: ItemDestination[] = ['kitchen', 'griller']
+    for (const station of stations) {
+      const stationItems: TicketItem[] = items
+        .filter((i) => i.destination === station)
+        .map((i) => ({ quantity: i.quantity, name: i.name, modifier_notes: i.modifier_notes }))
+      if (stationItems.length === 0) continue
+      const ticket = buildOrderTicket({
+        station,
+        tableName,
+        orderRef,
+        staffName,
+        items: stationItems,
+        createdAt,
+      })
+      printToStation(station, ticket).catch(() => {
+        /* silent — station printer offline is not a blocker */
+      })
+    }
+  }
+
   const placingOrderRef = useRef(false)
   const handlePlaceOrder = async ({ table, items, notes, total }: OrderPayload) => {
     if (placingOrderRef.current) return
@@ -430,6 +477,18 @@ export default function POS() {
             return
           }
         }
+        printStationTickets(
+          items.map((i) => ({
+            quantity: i.quantity,
+            name: i.name,
+            modifier_notes: i.modifier_notes || null,
+            destination: (i.menu_categories?.destination || 'bar') as ItemDestination,
+          })),
+          table.name,
+          activeOrder.id.slice(0, 8).toUpperCase(),
+          profile?.full_name || '',
+          new Date().toISOString()
+        )
         await audit({
           action: 'ORDER_UPDATED',
           entity: 'order',
@@ -532,6 +591,18 @@ export default function POS() {
           return
         }
       }
+      printStationTickets(
+        items.map((i) => ({
+          quantity: i.quantity,
+          name: i.name,
+          modifier_notes: i.modifier_notes || null,
+          destination: (i.menu_categories?.destination || 'bar') as ItemDestination,
+        })),
+        table.name,
+        (newOrder as Order).id.slice(0, 8).toUpperCase(),
+        profile?.full_name || '',
+        new Date().toISOString()
+      )
       await audit({
         action: 'ORDER_CREATED',
         entity: 'order',

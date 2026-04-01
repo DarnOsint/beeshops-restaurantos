@@ -17,8 +17,10 @@ import {
   Phone,
   Printer,
 } from 'lucide-react'
-import type { MenuItem } from '../../types'
+import type { MenuItem, ItemDestination } from '../../types'
 import { useToast } from '../../context/ToastContext'
+import { printToStation, hasStationPrinters } from '../../lib/networkPrinter'
+import { buildOrderTicket, type TicketItem } from '../../lib/orderTicket'
 
 interface OrderItemLocal {
   id: string
@@ -182,6 +184,25 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         if (error) throw error
       }
       await depleteInventory(orderItems)
+      // Auto-print station tickets
+      if (hasStationPrinters()) {
+        const stations: ItemDestination[] = ['kitchen', 'griller']
+        for (const station of stations) {
+          const stationItems: TicketItem[] = orderItems
+            .filter((i) => (i.menu_categories?.destination || 'bar') === station)
+            .map((i) => ({ quantity: i.quantity, name: i.name, modifier_notes: null }))
+          if (stationItems.length === 0) continue
+          const ticket = buildOrderTicket({
+            station,
+            tableName: type === 'takeaway' ? `Takeaway — ${customerName || ''}` : 'Counter',
+            orderRef: (order as { id: string }).id.slice(0, 8).toUpperCase(),
+            staffName: profile?.full_name || '',
+            items: stationItems,
+            createdAt: new Date().toISOString(),
+          })
+          printToStation(station, ticket).catch(() => {})
+        }
+      }
       await audit({
         action: 'ORDER_CREATED',
         entity: 'order',
