@@ -16,6 +16,7 @@ import {
   ShoppingBag,
   Phone,
   Printer,
+  Clock,
 } from 'lucide-react'
 import type { MenuItem, ItemDestination } from '../../types'
 import { useToast } from '../../context/ToastContext'
@@ -56,7 +57,9 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
   const [activeCategory, setActiveCategory] = useState('All')
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer'>('cash')
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'credit'>(
+    'cash'
+  )
   const [cashTendered, setCashTendered] = useState('')
   const [processing, setProcessing] = useState(false)
   const [success, setSuccess] = useState(false)
@@ -154,6 +157,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
   const canPay = () => {
     if (processing) return false
     if (isTakeaway && !customerName) return false
+    if (paymentMethod === 'credit' && !customerName) return false
     if (paymentMethod === 'cash') return parseFloat(cashTendered) >= total
     return true
   }
@@ -180,14 +184,17 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
     if (orderItems.length === 0) return toast.warning('Required', 'Add at least one item')
     if (isTakeaway && !customerName)
       return toast.warning('Required', 'Customer name is required for takeaway')
+    if (paymentMethod === 'credit' && !customerName)
+      return toast.warning('Required', 'Customer name is required for credit')
     setProcessing(true)
     try {
+      const isCredit = paymentMethod === 'credit'
       const orderId = crypto.randomUUID()
       const { data: order, error: orderError } = await offlineInsert('orders', {
         id: orderId,
         staff_id: staffId,
         order_type: type,
-        status: 'paid',
+        status: isCredit ? 'paid' : 'paid',
         payment_method: paymentMethod,
         total_amount: total,
         customer_name: customerName || null,
@@ -248,12 +255,56 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
           printToStation(station, ticket).catch(() => {})
         }
       }
+      // Create debtor record for credit orders
+      if (isCredit) {
+        const { data: existingDebtors } = await (customerPhone
+          ? supabase
+              .from('debtors')
+              .select('id, current_balance')
+              .eq('phone', customerPhone)
+              .eq('is_active', true)
+              .limit(1)
+          : supabase
+              .from('debtors')
+              .select('id, current_balance')
+              .ilike('name', customerName)
+              .eq('is_active', true)
+              .limit(1))
+        const existing = existingDebtors?.[0] as { id: string; current_balance: number } | undefined
+        if (existing) {
+          await supabase
+            .from('debtors')
+            .update({
+              current_balance: existing.current_balance + total,
+              status: 'outstanding',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existing.id)
+        } else {
+          await supabase.from('debtors').insert({
+            id: crypto.randomUUID(),
+            created_at: new Date().toISOString(),
+            name: customerName,
+            phone: customerPhone || null,
+            debt_type: isTakeaway ? 'takeaway' : 'cash_sale',
+            order_id: (order as { id: string }).id,
+            credit_limit: total,
+            current_balance: total,
+            amount_paid: 0,
+            status: 'outstanding',
+            is_active: true,
+            notes: `Auto-created from POS — ${isTakeaway ? 'Takeaway' : 'Cash Sale'}`,
+            recorded_by: profile?.id,
+            recorded_by_name: profile?.full_name,
+          })
+        }
+      }
       await audit({
         action: 'ORDER_CREATED',
         entity: 'order',
         entityId: (order as { id: string }).id,
         entityName: type === 'takeaway' ? `Takeaway — ${customerName}` : 'Cash Sale',
-        newValue: { total, items: orderItems.length, type },
+        newValue: { total, items: orderItems.length, type, paymentMethod },
         performer: profile,
       })
       setCompletedOrder({
@@ -698,12 +749,13 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
                     ₦{total.toLocaleString()}
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-1">
+                <div className="grid grid-cols-4 gap-1">
                   {(
                     [
                       ['cash', 'Cash', Banknote],
                       ['card', 'POS', CreditCard],
                       ['transfer', 'Transfer', Smartphone],
+                      ['credit', 'Credit', Clock],
                     ] as const
                   ).map(([id, label, Icon]) => (
                     <button
@@ -742,6 +794,34 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
                         <p className="text-white font-bold">₦{change.toLocaleString()}</p>
                       </div>
                     )}
+                  </div>
+                )}
+                {paymentMethod === 'credit' && !isTakeaway && (
+                  <div className="space-y-2">
+                    <input
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="Customer name *"
+                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                    />
+                    <input
+                      value={customerPhone}
+                      onChange={(e) => setCustomerPhone(e.target.value)}
+                      placeholder="Phone number"
+                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                    />
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2">
+                      <p className="text-amber-400 text-xs text-center">
+                        This order will be added to the customer's tab
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {paymentMethod === 'credit' && isTakeaway && (
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2">
+                    <p className="text-amber-400 text-xs text-center">
+                      ₦{total.toLocaleString()} will be added to {customerName || 'customer'}'s tab
+                    </p>
                   </div>
                 )}
                 <div className="flex gap-2">
