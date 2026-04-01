@@ -65,9 +65,12 @@ export default function FloorPlan({ onBack }: Props) {
   const [zoom, setZoom] = useState(1)
   const [filterZone, setFilterZone] = useState('All')
 
-  const [dragTarget, setDragTarget] = useState<DragTarget>(null)
-  const [resizeTarget, setResizeTarget] = useState<ResizeTarget>(null)
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
+  // Use refs for drag/resize interaction so mousemove always sees latest values
+  // (useState + useCallback creates stale closures that miss the first frames)
+  const dragTargetRef = useRef<DragTarget>(null)
+  const resizeTargetRef = useRef<ResizeTarget>(null)
+  const dragOffsetRef = useRef({ x: 0, y: 0 })
+  const [, forceRender] = useState(0)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -134,88 +137,90 @@ export default function FloorPlan({ onBack }: Props) {
     const pos = getMousePos(e)
 
     if (isResize) {
-      setResizeTarget(target)
+      resizeTargetRef.current = target
     } else {
-      setDragTarget(target)
+      dragTargetRef.current = target
       if (target?.type === 'table') {
         const l = tableLayouts[target.id]
-        if (l) setDragOffset({ x: pos.x - l.x, y: pos.y - l.y })
+        if (l) dragOffsetRef.current = { x: pos.x - l.x, y: pos.y - l.y }
       } else if (target?.type === 'zone') {
         const b = zoneBounds[target.name]
-        if (b) setDragOffset({ x: pos.x - b.x, y: pos.y - b.y })
+        if (b) dragOffsetRef.current = { x: pos.x - b.x, y: pos.y - b.y }
       }
     }
     if (target?.type === 'table') setSelectedId(target.id)
+    forceRender((n) => n + 1)
   }
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
-      if (!dragTarget && !resizeTarget) return
-      const pos = getMousePos(e)
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const drag = dragTargetRef.current
+    const resize = resizeTargetRef.current
+    if (!drag && !resize) return
+    const pos = getMousePos(e)
+    const offset = dragOffsetRef.current
 
-      if (dragTarget?.type === 'table') {
-        setTableLayouts((prev) => {
-          const l = prev[dragTarget.id]
-          if (!l) return prev
-          return {
-            ...prev,
-            [dragTarget.id]: {
-              ...l,
-              x: snapToGrid(Math.max(0, Math.min(CANVAS_W - l.w, pos.x - dragOffset.x))),
-              y: snapToGrid(Math.max(0, Math.min(CANVAS_H - l.h, pos.y - dragOffset.y))),
-            },
-          }
-        })
-      } else if (dragTarget?.type === 'zone') {
-        setZoneBounds((prev) => {
-          const b = prev[dragTarget.name]
-          if (!b) return prev
-          return {
-            ...prev,
-            [dragTarget.name]: {
-              ...b,
-              x: snapToGrid(Math.max(0, Math.min(CANVAS_W - b.w, pos.x - dragOffset.x))),
-              y: snapToGrid(Math.max(0, Math.min(CANVAS_H - b.h, pos.y - dragOffset.y))),
-            },
-          }
-        })
-      }
+    if (drag?.type === 'table') {
+      setTableLayouts((prev) => {
+        const l = prev[drag.id]
+        if (!l) return prev
+        return {
+          ...prev,
+          [drag.id]: {
+            ...l,
+            x: snapToGrid(Math.max(0, Math.min(CANVAS_W - l.w, pos.x - offset.x))),
+            y: snapToGrid(Math.max(0, Math.min(CANVAS_H - l.h, pos.y - offset.y))),
+          },
+        }
+      })
+    } else if (drag?.type === 'zone') {
+      setZoneBounds((prev) => {
+        const b = prev[drag.name]
+        if (!b) return prev
+        return {
+          ...prev,
+          [drag.name]: {
+            ...b,
+            x: snapToGrid(Math.max(0, Math.min(CANVAS_W - b.w, pos.x - offset.x))),
+            y: snapToGrid(Math.max(0, Math.min(CANVAS_H - b.h, pos.y - offset.y))),
+          },
+        }
+      })
+    }
 
-      if (resizeTarget?.type === 'table') {
-        setTableLayouts((prev) => {
-          const l = prev[resizeTarget.id]
-          if (!l) return prev
-          return {
-            ...prev,
-            [resizeTarget.id]: {
-              ...l,
-              w: snapToGrid(Math.max(MIN_SIZE, pos.x - l.x)),
-              h: snapToGrid(Math.max(MIN_SIZE, pos.y - l.y)),
-            },
-          }
-        })
-      } else if (resizeTarget?.type === 'zone') {
-        setZoneBounds((prev) => {
-          const b = prev[resizeTarget.name]
-          if (!b) return prev
-          return {
-            ...prev,
-            [resizeTarget.name]: {
-              ...b,
-              w: snapToGrid(Math.max(120, pos.x - b.x)),
-              h: snapToGrid(Math.max(80, pos.y - b.y)),
-            },
-          }
-        })
-      }
-    },
-    [dragTarget, resizeTarget, dragOffset, getMousePos]
-  )
+    if (resize?.type === 'table') {
+      setTableLayouts((prev) => {
+        const l = prev[resize.id]
+        if (!l) return prev
+        return {
+          ...prev,
+          [resize.id]: {
+            ...l,
+            w: snapToGrid(Math.max(MIN_SIZE, pos.x - l.x)),
+            h: snapToGrid(Math.max(MIN_SIZE, pos.y - l.y)),
+          },
+        }
+      })
+    } else if (resize?.type === 'zone') {
+      setZoneBounds((prev) => {
+        const b = prev[resize.name]
+        if (!b) return prev
+        return {
+          ...prev,
+          [resize.name]: {
+            ...b,
+            w: snapToGrid(Math.max(120, pos.x - b.x)),
+            h: snapToGrid(Math.max(80, pos.y - b.y)),
+          },
+        }
+      })
+    }
+  }
 
-  const handleMouseUp = useCallback(() => {
-    setDragTarget(null)
-    setResizeTarget(null)
-  }, [])
+  const handleMouseUp = () => {
+    dragTargetRef.current = null
+    resizeTargetRef.current = null
+    forceRender((n) => n + 1)
+  }
 
   const toggleShape = (tableId: string) => {
     setTableLayouts((prev) => {
@@ -229,16 +234,14 @@ export default function FloorPlan({ onBack }: Props) {
     setSaving(true)
     try {
       const data: FloorPlanData = { tables: tableLayouts, zones: zoneBounds }
-      const { error } = await supabase
-        .from('settings')
-        .upsert(
-          {
-            id: 'floor_plan_layout',
-            value: JSON.stringify(data),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'id' }
-        )
+      const { error } = await supabase.from('settings').upsert(
+        {
+          id: 'floor_plan_layout',
+          value: JSON.stringify(data),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      )
       if (error) throw error
       toast.success('Floor plan saved')
     } catch (e) {
@@ -281,7 +284,7 @@ export default function FloorPlan({ onBack }: Props) {
     )
   }
 
-  const isDragging = dragTarget !== null || resizeTarget !== null
+  const isDragging = dragTargetRef.current !== null || resizeTargetRef.current !== null
 
   return (
     <div className="min-h-full bg-gray-950 flex flex-col">
@@ -400,7 +403,8 @@ export default function FloorPlan({ onBack }: Props) {
                   borderRadius: 16 * zoom,
                   zIndex: 0,
                   cursor:
-                    dragTarget?.type === 'zone' && dragTarget.name === zoneName
+                    dragTargetRef.current?.type === 'zone' &&
+                    dragTargetRef.current.name === zoneName
                       ? 'grabbing'
                       : 'grab',
                 }}
@@ -463,7 +467,9 @@ export default function FloorPlan({ onBack }: Props) {
               border: `${2 * zoom}px solid ${isSelected ? '#f59e0b' : c.stroke}`,
               boxShadow: isSelected ? '0 0 0 3px rgba(245,158,11,0.3)' : 'none',
               cursor:
-                dragTarget?.type === 'table' && dragTarget.id === table.id ? 'grabbing' : 'grab',
+                dragTargetRef.current?.type === 'table' && dragTargetRef.current.id === table.id
+                  ? 'grabbing'
+                  : 'grab',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
