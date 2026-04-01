@@ -1,34 +1,45 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ShoppingBag, XCircle } from 'lucide-react'
+import { ShoppingBag, XCircle, Edit2 } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { useToast } from '../../../context/ToastContext'
+import EditOrderModal from './EditOrderModal'
+
+interface OrderRow {
+  id: string
+  table_id?: string
+  total_amount?: number
+  created_at: string
+  order_type?: string
+  tables?: { name: string } | null
+  profiles?: { full_name: string } | null
+  order_items?: Array<{
+    id: string
+    menu_item_id: string
+    quantity: number
+    unit_price: number
+    total_price: number
+    status: string
+    destination: string
+    modifier_notes?: string | null
+    menu_items?: {
+      name: string
+      menu_categories?: { name?: string; destination?: string } | null
+    } | null
+  }>
+}
 
 export default function OpenOrdersTab() {
-  const [orders, setOrders] = useState<
-    Array<{
-      id: string
-      table_id?: string
-      total_amount?: number
-      created_at: string
-      order_type?: string
-      tables?: { name: string } | null
-      profiles?: { full_name: string } | null
-      order_items?: Array<{
-        id: string
-        quantity: number
-        total_price: number
-        status: string
-        menu_items?: { name: string } | null
-      }>
-    }>
-  >([])
+  const [orders, setOrders] = useState<OrderRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [editingOrder, setEditingOrder] = useState<OrderRow | null>(null)
   const toast = useToast()
 
   const fetchOrders = useCallback(async () => {
     const { data, error } = await supabase
       .from('orders')
-      .select('*, table_id, tables(name), profiles(full_name), order_items(*, menu_items(name))')
+      .select(
+        '*, table_id, tables(name), profiles(full_name), order_items(*, menu_items(name, menu_categories(name, destination)))'
+      )
       .eq('status', 'open')
       .order('created_at', { ascending: false })
     if (!error) setOrders(data || [])
@@ -51,78 +62,99 @@ export default function OpenOrdersTab() {
     return <div className="flex items-center justify-center p-8 text-amber-500">Loading...</div>
 
   return (
-    <div className="space-y-3">
-      {orders.length === 0 ? (
-        <div className="bg-gray-900 rounded-2xl border border-gray-800 p-8 text-center">
-          <ShoppingBag size={32} className="text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-400">No open orders right now</p>
-        </div>
-      ) : (
-        orders.map((order) => (
-          <div key={order.id} className="bg-gray-900 rounded-2xl border border-gray-800 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-white font-bold">{order.tables?.name || 'Unknown Table'}</p>
-                <p className="text-gray-400 text-xs">{order.profiles?.full_name}</p>
-              </div>
-              <div className="text-right flex flex-col items-end gap-1.5">
-                <p className="text-amber-400 font-bold">₦{order.total_amount?.toLocaleString()}</p>
-                <p className="text-gray-500 text-xs">
-                  {new Date(order.created_at).toLocaleTimeString('en-NG', {
-                    timeZone: 'Africa/Lagos',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true,
-                  })}
-                </p>
-                <button
-                  onClick={async () => {
-                    if (
-                      !confirm(
-                        'Force-close this order? Use this only for stuck orders that were already paid.'
-                      )
-                    )
-                      return
-                    const { error } = await supabase
-                      .from('orders')
-                      .update({ status: 'paid', closed_at: new Date().toISOString() })
-                      .eq('id', order.id)
-                    if (error) {
-                      toast.error('Error', 'Failed: ' + error.message)
-                      return
-                    }
-                    // Mark all items delivered so KDS clears and shift summary is accurate
-                    await supabase
-                      .from('order_items')
-                      .update({ status: 'delivered' })
-                      .eq('order_id', order.id)
-                    await supabase
-                      .from('tables')
-                      .update({ status: 'available', assigned_staff: null })
-                      .eq('id', order.table_id)
-                    fetchOrders()
-                  }}
-                  className="flex items-center gap-1 text-[10px] bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg px-2 py-1 transition-colors"
-                >
-                  <XCircle size={10} /> Force Close
-                </button>
-              </div>
-            </div>
-            <div className="space-y-1">
-              {order.order_items?.map((item) => (
-                <div key={String(item.id)} className="flex justify-between text-sm">
-                  <span className="text-gray-300">
-                    {item.quantity}x {item.menu_items?.name}
-                  </span>
-                  <span className="text-gray-400">
-                    ₦{(item.total_price as number)?.toLocaleString()}
-                  </span>
-                </div>
-              ))}
-            </div>
+    <>
+      <div className="space-y-3">
+        {orders.length === 0 ? (
+          <div className="bg-gray-900 rounded-2xl border border-gray-800 p-8 text-center">
+            <ShoppingBag size={32} className="text-gray-600 mx-auto mb-3" />
+            <p className="text-gray-400">No open orders right now</p>
           </div>
-        ))
+        ) : (
+          orders.map((order) => (
+            <div key={order.id} className="bg-gray-900 rounded-2xl border border-gray-800 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-white font-bold">{order.tables?.name || 'Unknown Table'}</p>
+                  <p className="text-gray-400 text-xs">{order.profiles?.full_name}</p>
+                </div>
+                <div className="text-right flex flex-col items-end gap-1.5">
+                  <p className="text-amber-400 font-bold">
+                    ₦{order.total_amount?.toLocaleString()}
+                  </p>
+                  <p className="text-gray-500 text-xs">
+                    {new Date(order.created_at).toLocaleTimeString('en-NG', {
+                      timeZone: 'Africa/Lagos',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: true,
+                    })}
+                  </p>
+                  <button
+                    onClick={() => setEditingOrder(order)}
+                    className="flex items-center gap-1 text-[10px] bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg px-2 py-1 transition-colors"
+                  >
+                    <Edit2 size={10} /> Edit Order
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (
+                        !confirm(
+                          'Force-close this order? Use this only for stuck orders that were already paid.'
+                        )
+                      )
+                        return
+                      const { error } = await supabase
+                        .from('orders')
+                        .update({ status: 'paid', closed_at: new Date().toISOString() })
+                        .eq('id', order.id)
+                      if (error) {
+                        toast.error('Error', 'Failed: ' + error.message)
+                        return
+                      }
+                      // Mark all items delivered so KDS clears and shift summary is accurate
+                      await supabase
+                        .from('order_items')
+                        .update({ status: 'delivered' })
+                        .eq('order_id', order.id)
+                      await supabase
+                        .from('tables')
+                        .update({ status: 'available', assigned_staff: null })
+                        .eq('id', order.table_id)
+                      fetchOrders()
+                    }}
+                    className="flex items-center gap-1 text-[10px] bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg px-2 py-1 transition-colors"
+                  >
+                    <XCircle size={10} /> Force Close
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1">
+                {order.order_items?.map((item) => (
+                  <div key={String(item.id)} className="flex justify-between text-sm">
+                    <span className="text-gray-300">
+                      {item.quantity}x {item.menu_items?.name}
+                    </span>
+                    <span className="text-gray-400">
+                      ₦{(item.total_price as number)?.toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {editingOrder && (
+        <EditOrderModal
+          order={editingOrder}
+          onClose={() => setEditingOrder(null)}
+          onSaved={() => {
+            setEditingOrder(null)
+            fetchOrders()
+          }}
+        />
       )}
-    </div>
+    </>
   )
 }
