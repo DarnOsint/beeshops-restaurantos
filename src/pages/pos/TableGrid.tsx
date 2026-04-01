@@ -59,13 +59,15 @@ export default function TableGrid({
   joinSelectedIds = [],
   activeJoins = {},
 }: TableGridProps & { defaultCategory?: string }) {
-  // Waitrons only see their assigned zone tabs; managers/owners see all
+  // null = unrestricted (owner/manager), array = restricted to those zones only
   const visibleCategories: string[] =
-    assignedZoneNames && assignedZoneNames.length > 0
-      ? assignedZoneNames.length === 1
-        ? assignedZoneNames
-        : ['All', ...assignedZoneNames]
-      : [...ALL_CATEGORIES]
+    assignedZoneNames === null
+      ? [...ALL_CATEGORIES]
+      : assignedZoneNames.length === 0
+        ? [] // no zones assigned — show nothing
+        : assignedZoneNames.length === 1
+          ? assignedZoneNames
+          : ['All', ...assignedZoneNames]
 
   const [activeCategory, setActiveCategory] = useState<string>(
     defaultCategory && visibleCategories.includes(defaultCategory)

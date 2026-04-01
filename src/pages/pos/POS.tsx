@@ -298,55 +298,51 @@ export default function POS() {
 
     const { data: directTables } = await supabase
       .from('tables')
-      .select('id')
+      .select('id, category_id')
       .eq('assigned_staff', staffId)
     const directIds = (directTables || []).map((t: { id: string }) => t.id)
 
     if ((!zoneData || zoneData.length === 0) && directIds.length === 0) {
-      setAssignedTableIds(null)
+      // No assignments — restrict to nothing (empty arrays = no access)
+      setAssignedTableIds([])
+      setAssignedZoneNames([])
       return
     }
 
-    if (!zoneData || zoneData.length === 0) {
-      setAssignedTableIds(directIds)
-      return
+    const categoryIds = zoneData ? zoneData.map((z: { category_id: string }) => z.category_id) : []
+
+    // Also include category IDs from directly assigned tables
+    const directCategoryIds = (directTables || [])
+      .map((t: { category_id: string }) => t.category_id)
+      .filter(Boolean)
+    const allCategoryIds = [...new Set([...categoryIds, ...directCategoryIds])]
+
+    // Fetch all tables in assigned zones
+    let zoneIds: string[] = []
+    if (categoryIds.length > 0) {
+      const { data: zoneTableData } = await supabase
+        .from('tables')
+        .select('id')
+        .in('category_id', categoryIds)
+      zoneIds = (zoneTableData || []).map((t: { id: string }) => t.id)
     }
 
-    const categoryIds = zoneData.map((z: { category_id: string }) => z.category_id)
-    const { data: zoneTableData } = await supabase
-      .from('tables')
-      .select('id, category_id')
-      .in('category_id', categoryIds)
-
-    const zoneIds = (zoneTableData || []).map((t: { id: string }) => t.id)
     const combined = [...new Set([...zoneIds, ...directIds])]
-    setAssignedTableIds(combined.length > 0 ? combined : null)
+    setAssignedTableIds(combined.length > 0 ? combined : [])
 
-    // Resolve zone names from category IDs for filtering tabs
-    const zoneNames = tables
-      .filter((t) => categoryIds.includes(t.category_id || ''))
-      .map((t) => t.table_categories?.name)
-      .filter((n): n is string => !!n)
-    // Also include zones of directly assigned tables
-    if (directIds.length > 0) {
-      tables
-        .filter((t) => directIds.includes(t.id))
-        .forEach((t) => {
-          if (t.table_categories?.name) zoneNames.push(t.table_categories.name)
-        })
-    }
-    const uniqueZoneNames = [...new Set(zoneNames)]
-    setAssignedZoneNames(uniqueZoneNames.length > 0 ? uniqueZoneNames : null)
+    // Resolve zone names from DB — don't rely on tables state which may not be loaded yet
+    const { data: categoryData } = await supabase
+      .from('table_categories')
+      .select('id, name')
+      .in('id', allCategoryIds)
+    const uniqueZoneNames = (categoryData || []).map((c: { name: string }) => c.name)
+    setAssignedZoneNames(uniqueZoneNames.length > 0 ? uniqueZoneNames : [])
 
     // Auto-open the waitron's zone tab
     if (uniqueZoneNames.length === 1) {
       setDefaultZone(uniqueZoneNames[0])
-    } else {
-      const firstCatId = categoryIds[0]
-      const matchingZone = tables.find((t) => t.category_id === firstCatId)
-      if (matchingZone?.table_categories?.name) {
-        setDefaultZone(matchingZone.table_categories.name)
-      }
+    } else if (uniqueZoneNames.length > 0) {
+      setDefaultZone(uniqueZoneNames[0])
     }
   }
 
