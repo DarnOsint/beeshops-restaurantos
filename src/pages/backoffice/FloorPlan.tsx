@@ -2,6 +2,18 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { ArrowLeft, Save, RotateCcw, Circle, Square, ZoomIn, ZoomOut, Loader2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../context/ToastContext'
+import {
+  type TableLayout,
+  type ZoneBounds,
+  type FloorPlanData,
+  ZONE_COLORS,
+  DEFAULT_ZONE_COLOR,
+  CANVAS_W,
+  CANVAS_H,
+  GRID_SIZE,
+  getZoneColor,
+  parseFloorPlanData,
+} from '../../lib/floorPlanTypes'
 
 interface Props {
   onBack: () => void
@@ -21,54 +33,24 @@ interface TableRow {
   table_categories?: { id: string; name: string }
 }
 
-interface TableLayout {
-  x: number
-  y: number
-  w: number
-  h: number
-  shape: 'rect' | 'circle'
-}
-
-type LayoutMap = Record<string, TableLayout>
-
-const ZONE_COLORS: Record<string, { fill: string; stroke: string; text: string; bg: string }> = {
-  Outdoor: {
-    fill: 'rgba(34,197,94,0.15)',
-    stroke: '#22c55e',
-    text: '#4ade80',
-    bg: 'bg-green-500',
-  },
-  Indoor: { fill: 'rgba(59,130,246,0.15)', stroke: '#3b82f6', text: '#60a5fa', bg: 'bg-blue-500' },
-  'VIP Lounge': {
-    fill: 'rgba(245,158,11,0.15)',
-    stroke: '#f59e0b',
-    text: '#fbbf24',
-    bg: 'bg-amber-500',
-  },
-  'The Nook': {
-    fill: 'rgba(168,85,247,0.15)',
-    stroke: '#a855f7',
-    text: '#c084fc',
-    bg: 'bg-purple-500',
-  },
-}
-
-const DEFAULT_COLORS = {
-  fill: 'rgba(107,114,128,0.15)',
-  stroke: '#6b7280',
-  text: '#9ca3af',
-  bg: 'bg-gray-500',
-}
-
 const DEFAULT_SIZE = { w: 80, h: 80 }
 const MIN_SIZE = 40
-const CANVAS_W = 1200
-const CANVAS_H = 800
-const GRID_SIZE = 20
 
 function snapToGrid(v: number): number {
   return Math.round(v / GRID_SIZE) * GRID_SIZE
 }
+
+// Default zone boundary positions (quadrants)
+const DEFAULT_ZONE_BOUNDS: Record<string, ZoneBounds> = {
+  Outdoor: { x: 20, y: 20, w: 560, h: 370 },
+  Indoor: { x: 620, y: 20, w: 560, h: 370 },
+  'VIP Lounge': { x: 20, y: 410, w: 560, h: 370 },
+  'The Nook': { x: 620, y: 410, w: 560, h: 370 },
+}
+
+type DragTarget = { type: 'table'; id: string } | { type: 'zone'; name: string } | null
+
+type ResizeTarget = { type: 'table'; id: string } | { type: 'zone'; name: string } | null
 
 export default function FloorPlan({ onBack }: Props) {
   const toast = useToast()
@@ -76,19 +58,18 @@ export default function FloorPlan({ onBack }: Props) {
 
   const [tables, setTables] = useState<TableRow[]>([])
   const [zones, setZones] = useState<Zone[]>([])
-  const [layouts, setLayouts] = useState<LayoutMap>({})
+  const [tableLayouts, setTableLayouts] = useState<Record<string, TableLayout>>({})
+  const [zoneBounds, setZoneBounds] = useState<Record<string, ZoneBounds>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [filterZone, setFilterZone] = useState('All')
 
-  // Interaction state
-  const [dragId, setDragId] = useState<string | null>(null)
-  const [resizeId, setResizeId] = useState<string | null>(null)
+  const [dragTarget, setDragTarget] = useState<DragTarget>(null)
+  const [resizeTarget, setResizeTarget] = useState<ResizeTarget>(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  // Load tables + saved layout
   useEffect(() => {
     const load = async () => {
       const [tablesRes, zonesRes, layoutRes] = await Promise.all([
@@ -97,33 +78,21 @@ export default function FloorPlan({ onBack }: Props) {
         supabase.from('settings').select('value').eq('id', 'floor_plan_layout').single(),
       ])
       const tbls = (tablesRes.data || []) as TableRow[]
+      const zns = (zonesRes.data || []) as Zone[]
       setTables(tbls)
-      setZones((zonesRes.data || []) as Zone[])
+      setZones(zns)
 
-      // Parse saved layout or generate default grid positions
-      let saved: LayoutMap = {}
-      if (layoutRes.data?.value) {
-        try {
-          saved = JSON.parse(layoutRes.data.value) as LayoutMap
-        } catch {
-          /* corrupt, start fresh */
-        }
-      }
+      const saved = parseFloorPlanData(layoutRes.data?.value)
 
       // Ensure every table has a layout entry
-      const merged: LayoutMap = {}
+      const merged: Record<string, TableLayout> = {}
       let col = 0
       let row = 0
       for (const t of tbls) {
-        if (saved[t.id]) {
-          merged[t.id] = saved[t.id]
+        if (saved.tables[t.id]) {
+          merged[t.id] = saved.tables[t.id]
         } else {
-          merged[t.id] = {
-            x: 40 + col * 120,
-            y: 40 + row * 120,
-            ...DEFAULT_SIZE,
-            shape: 'rect',
-          }
+          merged[t.id] = { x: 40 + col * 120, y: 40 + row * 120, ...DEFAULT_SIZE, shape: 'rect' }
           col++
           if (col > 8) {
             col = 0
@@ -131,7 +100,20 @@ export default function FloorPlan({ onBack }: Props) {
           }
         }
       }
-      setLayouts(merged)
+      setTableLayouts(merged)
+
+      // Ensure every zone has bounds
+      const mergedZones: Record<string, ZoneBounds> = {}
+      for (const z of zns) {
+        mergedZones[z.name] = saved.zones[z.name] ||
+          DEFAULT_ZONE_BOUNDS[z.name] || {
+            x: 20,
+            y: 20,
+            w: 400,
+            h: 300,
+          }
+      }
+      setZoneBounds(mergedZones)
       setLoading(false)
     }
     load()
@@ -141,65 +123,102 @@ export default function FloorPlan({ onBack }: Props) {
     (e: React.MouseEvent): { x: number; y: number } => {
       const rect = canvasRef.current?.getBoundingClientRect()
       if (!rect) return { x: 0, y: 0 }
-      return {
-        x: (e.clientX - rect.left) / zoom,
-        y: (e.clientY - rect.top) / zoom,
-      }
+      return { x: (e.clientX - rect.left) / zoom, y: (e.clientY - rect.top) / zoom }
     },
     [zoom]
   )
 
-  const handleMouseDown = (e: React.MouseEvent, tableId: string, isResize: boolean) => {
+  const handleMouseDown = (e: React.MouseEvent, target: DragTarget, isResize: boolean) => {
     e.stopPropagation()
     e.preventDefault()
     const pos = getMousePos(e)
-    const layout = layouts[tableId]
-    if (!layout) return
 
     if (isResize) {
-      setResizeId(tableId)
+      setResizeTarget(target)
     } else {
-      setDragId(tableId)
-      setDragOffset({ x: pos.x - layout.x, y: pos.y - layout.y })
+      setDragTarget(target)
+      if (target?.type === 'table') {
+        const l = tableLayouts[target.id]
+        if (l) setDragOffset({ x: pos.x - l.x, y: pos.y - l.y })
+      } else if (target?.type === 'zone') {
+        const b = zoneBounds[target.name]
+        if (b) setDragOffset({ x: pos.x - b.x, y: pos.y - b.y })
+      }
     }
-    setSelectedId(tableId)
+    if (target?.type === 'table') setSelectedId(target.id)
   }
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!dragId && !resizeId) return
+      if (!dragTarget && !resizeTarget) return
       const pos = getMousePos(e)
 
-      if (dragId) {
-        setLayouts((prev) => {
-          const l = prev[dragId]
+      if (dragTarget?.type === 'table') {
+        setTableLayouts((prev) => {
+          const l = prev[dragTarget.id]
           if (!l) return prev
-          const x = snapToGrid(Math.max(0, Math.min(CANVAS_W - l.w, pos.x - dragOffset.x)))
-          const y = snapToGrid(Math.max(0, Math.min(CANVAS_H - l.h, pos.y - dragOffset.y)))
-          return { ...prev, [dragId]: { ...l, x, y } }
+          return {
+            ...prev,
+            [dragTarget.id]: {
+              ...l,
+              x: snapToGrid(Math.max(0, Math.min(CANVAS_W - l.w, pos.x - dragOffset.x))),
+              y: snapToGrid(Math.max(0, Math.min(CANVAS_H - l.h, pos.y - dragOffset.y))),
+            },
+          }
+        })
+      } else if (dragTarget?.type === 'zone') {
+        setZoneBounds((prev) => {
+          const b = prev[dragTarget.name]
+          if (!b) return prev
+          return {
+            ...prev,
+            [dragTarget.name]: {
+              ...b,
+              x: snapToGrid(Math.max(0, Math.min(CANVAS_W - b.w, pos.x - dragOffset.x))),
+              y: snapToGrid(Math.max(0, Math.min(CANVAS_H - b.h, pos.y - dragOffset.y))),
+            },
+          }
         })
       }
 
-      if (resizeId) {
-        setLayouts((prev) => {
-          const l = prev[resizeId]
+      if (resizeTarget?.type === 'table') {
+        setTableLayouts((prev) => {
+          const l = prev[resizeTarget.id]
           if (!l) return prev
-          const w = snapToGrid(Math.max(MIN_SIZE, pos.x - l.x))
-          const h = snapToGrid(Math.max(MIN_SIZE, pos.y - l.y))
-          return { ...prev, [resizeId]: { ...l, w, h } }
+          return {
+            ...prev,
+            [resizeTarget.id]: {
+              ...l,
+              w: snapToGrid(Math.max(MIN_SIZE, pos.x - l.x)),
+              h: snapToGrid(Math.max(MIN_SIZE, pos.y - l.y)),
+            },
+          }
+        })
+      } else if (resizeTarget?.type === 'zone') {
+        setZoneBounds((prev) => {
+          const b = prev[resizeTarget.name]
+          if (!b) return prev
+          return {
+            ...prev,
+            [resizeTarget.name]: {
+              ...b,
+              w: snapToGrid(Math.max(120, pos.x - b.x)),
+              h: snapToGrid(Math.max(80, pos.y - b.y)),
+            },
+          }
         })
       }
     },
-    [dragId, resizeId, dragOffset, getMousePos]
+    [dragTarget, resizeTarget, dragOffset, getMousePos]
   )
 
   const handleMouseUp = useCallback(() => {
-    setDragId(null)
-    setResizeId(null)
+    setDragTarget(null)
+    setResizeTarget(null)
   }, [])
 
   const toggleShape = (tableId: string) => {
-    setLayouts((prev) => {
+    setTableLayouts((prev) => {
       const l = prev[tableId]
       if (!l) return prev
       return { ...prev, [tableId]: { ...l, shape: l.shape === 'rect' ? 'circle' : 'rect' } }
@@ -209,14 +228,17 @@ export default function FloorPlan({ onBack }: Props) {
   const handleSave = async () => {
     setSaving(true)
     try {
-      const { error } = await supabase.from('settings').upsert(
-        {
-          id: 'floor_plan_layout',
-          value: JSON.stringify(layouts),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'id' }
-      )
+      const data: FloorPlanData = { tables: tableLayouts, zones: zoneBounds }
+      const { error } = await supabase
+        .from('settings')
+        .upsert(
+          {
+            id: 'floor_plan_layout',
+            value: JSON.stringify(data),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' }
+        )
       if (error) throw error
       toast.success('Floor plan saved')
     } catch (e) {
@@ -227,31 +249,29 @@ export default function FloorPlan({ onBack }: Props) {
   }
 
   const handleReset = () => {
-    const fresh: LayoutMap = {}
+    const fresh: Record<string, TableLayout> = {}
     let col = 0
     let row = 0
     for (const t of tables) {
-      fresh[t.id] = {
-        x: 40 + col * 120,
-        y: 40 + row * 120,
-        ...DEFAULT_SIZE,
-        shape: 'rect',
-      }
+      fresh[t.id] = { x: 40 + col * 120, y: 40 + row * 120, ...DEFAULT_SIZE, shape: 'rect' }
       col++
       if (col > 8) {
         col = 0
         row++
       }
     }
-    setLayouts(fresh)
+    setTableLayouts(fresh)
+    const freshZones: Record<string, ZoneBounds> = {}
+    for (const z of zones) {
+      freshZones[z.name] = DEFAULT_ZONE_BOUNDS[z.name] || { x: 20, y: 20, w: 400, h: 300 }
+    }
+    setZoneBounds(freshZones)
     setSelectedId(null)
     toast.success('Layout reset — save to apply')
   }
 
   const filteredTables =
     filterZone === 'All' ? tables : tables.filter((t) => t.table_categories?.name === filterZone)
-
-  const colors = (zone?: string) => (zone ? ZONE_COLORS[zone] || DEFAULT_COLORS : DEFAULT_COLORS)
 
   if (loading) {
     return (
@@ -260,6 +280,8 @@ export default function FloorPlan({ onBack }: Props) {
       </div>
     )
   }
+
+  const isDragging = dragTarget !== null || resizeTarget !== null
 
   return (
     <div className="min-h-full bg-gray-950 flex flex-col">
@@ -271,8 +293,7 @@ export default function FloorPlan({ onBack }: Props) {
         <div className="flex-1">
           <h1 className="text-white font-bold">Floor Plan Editor</h1>
           <p className="text-gray-400 text-xs">
-            Drag tables to position them. Drag corners to resize. Click to select, then toggle
-            shape.
+            Drag zone areas and tables to match your real layout. Resize with corner handles.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -320,7 +341,6 @@ export default function FloorPlan({ onBack }: Props) {
             {zone}
           </button>
         ))}
-
         <div className="ml-auto flex items-center gap-3">
           {selectedId && (
             <>
@@ -331,7 +351,7 @@ export default function FloorPlan({ onBack }: Props) {
                 onClick={() => toggleShape(selectedId)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white rounded-lg text-xs transition-colors"
               >
-                {layouts[selectedId]?.shape === 'rect' ? (
+                {tableLayouts[selectedId]?.shape === 'rect' ? (
                   <>
                     <Circle size={12} /> Make Round
                   </>
@@ -362,11 +382,73 @@ export default function FloorPlan({ onBack }: Props) {
           onMouseLeave={handleMouseUp}
           onClick={() => setSelectedId(null)}
         >
+          {/* Zone boundary areas — rendered first (behind tables) */}
+          {Object.entries(zoneBounds).map(([zoneName, bounds]) => {
+            if (filterZone !== 'All' && filterZone !== zoneName) return null
+            const c = ZONE_COLORS[zoneName] || DEFAULT_ZONE_COLOR
+            return (
+              <div
+                key={`zone-${zoneName}`}
+                style={{
+                  position: 'absolute',
+                  left: bounds.x * zoom,
+                  top: bounds.y * zoom,
+                  width: bounds.w * zoom,
+                  height: bounds.h * zoom,
+                  background: c.fill,
+                  border: `${1.5 * zoom}px dashed ${c.stroke}40`,
+                  borderRadius: 16 * zoom,
+                  zIndex: 0,
+                  cursor:
+                    dragTarget?.type === 'zone' && dragTarget.name === zoneName
+                      ? 'grabbing'
+                      : 'grab',
+                }}
+                onMouseDown={(e) => handleMouseDown(e, { type: 'zone', name: zoneName }, false)}
+              >
+                {/* Zone label */}
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 8 * zoom,
+                    left: 12 * zoom,
+                    color: c.text,
+                    fontSize: Math.max(11, 14 * zoom),
+                    fontWeight: 700,
+                    opacity: 0.7,
+                    pointerEvents: 'none',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  {zoneName}
+                </span>
+                {/* Zone resize handle */}
+                <div
+                  onMouseDown={(e) => handleMouseDown(e, { type: 'zone', name: zoneName }, true)}
+                  style={{
+                    position: 'absolute',
+                    right: -4 * zoom,
+                    bottom: -4 * zoom,
+                    width: 14 * zoom,
+                    height: 14 * zoom,
+                    background: c.stroke,
+                    borderRadius: 3 * zoom,
+                    cursor: 'nwse-resize',
+                    border: `${1.5 * zoom}px solid #000`,
+                    opacity: 0.6,
+                  }}
+                />
+              </div>
+            )
+          })}
+
+          {/* Tables — rendered on top */}
           {filteredTables.map((table) => {
-            const layout = layouts[table.id]
+            const layout = tableLayouts[table.id]
             if (!layout) return null
             const zoneName = table.table_categories?.name
-            const c = colors(zoneName)
+            const c = getZoneColor(zoneName)
             const isSelected = selectedId === table.id
             const isOccupied = table.status === 'occupied'
 
@@ -377,16 +459,17 @@ export default function FloorPlan({ onBack }: Props) {
               width: layout.w * zoom,
               height: layout.h * zoom,
               borderRadius: layout.shape === 'circle' ? '50%' : 12 * zoom,
-              background: isOccupied ? c.stroke : c.fill,
+              background: isOccupied ? c.stroke : c.fill.replace('0.08', '0.25'),
               border: `${2 * zoom}px solid ${isSelected ? '#f59e0b' : c.stroke}`,
               boxShadow: isSelected ? '0 0 0 3px rgba(245,158,11,0.3)' : 'none',
-              cursor: dragId === table.id ? 'grabbing' : 'grab',
+              cursor:
+                dragTarget?.type === 'table' && dragTarget.id === table.id ? 'grabbing' : 'grab',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              transition:
-                dragId === table.id || resizeId === table.id ? 'none' : 'box-shadow 0.15s',
+              zIndex: 1,
+              transition: isDragging ? 'none' : 'box-shadow 0.15s',
               userSelect: 'none',
             }
 
@@ -394,7 +477,7 @@ export default function FloorPlan({ onBack }: Props) {
               <div
                 key={table.id}
                 style={style}
-                onMouseDown={(e) => handleMouseDown(e, table.id, false)}
+                onMouseDown={(e) => handleMouseDown(e, { type: 'table', id: table.id }, false)}
               >
                 <span
                   style={{
@@ -417,23 +500,9 @@ export default function FloorPlan({ onBack }: Props) {
                 >
                   {table.capacity} seats
                 </span>
-                {zoneName && (
-                  <span
-                    style={{
-                      color: isOccupied ? 'rgba(255,255,255,0.5)' : c.text,
-                      fontSize: Math.max(7, 9 * zoom),
-                      opacity: 0.7,
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    {zoneName}
-                  </span>
-                )}
-
-                {/* Resize handle */}
                 {isSelected && (
                   <div
-                    onMouseDown={(e) => handleMouseDown(e, table.id, true)}
+                    onMouseDown={(e) => handleMouseDown(e, { type: 'table', id: table.id }, true)}
                     style={{
                       position: 'absolute',
                       right: -4 * zoom,
@@ -467,7 +536,7 @@ export default function FloorPlan({ onBack }: Props) {
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-sm bg-white/30" />
-          <span className="text-gray-400 text-xs">Occupied (filled)</span>
+          <span className="text-gray-400 text-xs">Occupied</span>
         </div>
       </div>
     </div>
