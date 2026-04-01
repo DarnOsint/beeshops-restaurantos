@@ -233,7 +233,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </div>
               <div className="flex items-center gap-1">
                 {notifPermission === 'granted' && (
-                  <Bell size={12} className="text-green-400" title="Notifications enabled" />
+                  <Bell size={12} className="text-green-400" aria-label="Notifications enabled" />
                 )}
                 <button onClick={signOut} className="text-gray-500 hover:text-white p-1">
                   <LogOut size={14} />

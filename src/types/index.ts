@@ -2,6 +2,7 @@
 
 export type Role =
   | 'owner'
+  | 'executive'
   | 'manager'
   | 'accountant'
   | 'waitron'

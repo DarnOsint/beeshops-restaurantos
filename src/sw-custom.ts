@@ -23,7 +23,7 @@ self.addEventListener('push', (event: PushEvent) => {
   }
 
   const title = payload.title || "Beeshop's Place"
-  const options: NotificationOptions = {
+  const options: NotificationOptions & { renotify?: boolean; vibrate?: number[] } = {
     body: payload.body || '',
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
