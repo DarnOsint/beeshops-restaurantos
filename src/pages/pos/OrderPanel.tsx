@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Plus, Minus, Trash2, Send, X, CheckCircle2, Circle, Search } from 'lucide-react'
+import { Plus, Minus, Trash2, Send, X, CheckCircle2, Circle, Search, Clock } from 'lucide-react'
 import type { Table, MenuItem, Order, OrderItem, Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
+import { audit } from '../../lib/audit'
 
 interface OrderItemLocal {
   id: string
@@ -205,39 +206,96 @@ export default function OrderPanel({
     })
   }
 
+  const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set())
+
   const deleteItem = async (item: OrderItemLocal) => {
-    // Items pending in KDS — remove directly, no PIN needed (voiding replaced by returns)
-    if (item._existing) {
-      const dbId = item._dbId || dbIdMap[item.id]
-      if (dbId) {
-        const { error } = await supabase.from('order_items').delete().eq('id', dbId)
-        if (error) {
-          toast.error('Error', 'Failed to delete item: ' + error.message)
-          return
-        }
-        // Recalculate total from remaining DB items — never subtract from stale prop
-        const { data: remaining } = await supabase
-          .from('order_items')
-          .select('total_price')
-          .eq('order_id', activeOrder?.id || '')
-        const newTotal = (remaining || []).reduce(
-          (sum: number, r: { total_price: number }) => sum + (r.total_price || 0),
-          0
-        )
-        await supabase
-          .from('orders')
-          .update({ total_amount: newTotal })
-          .eq('id', activeOrder?.id || '')
-      }
+    // New (unconfirmed) items — remove from local state immediately
+    if (!item._existing) {
+      const itemKey = item._newId || item.id
+      setOrderItems((prev) => prev.filter((i) => (i._newId || i.id) !== itemKey))
+      return
     }
-    // Use _dbId or _newId for unique identification — not menu_item_id which can duplicate
-    const itemKey = item._dbId || item._newId || item.id
-    setOrderItems((prev) =>
-      prev.filter((i) => {
-        const key = i._dbId || i._newId || i.id
-        return key !== itemKey
-      })
-    )
+
+    // Confirmed items — waitrons cannot delete, must request manager approval
+    const isManagerRole = profile && ['owner', 'manager'].includes(profile.role)
+    const dbId = item._dbId || dbIdMap[item.id]
+    if (!dbId) return
+
+    if (isManagerRole) {
+      // Managers can delete directly
+      const { error } = await supabase.from('order_items').delete().eq('id', dbId)
+      if (error) {
+        toast.error('Error', 'Failed to delete item: ' + error.message)
+        return
+      }
+      const { data: remaining } = await supabase
+        .from('order_items')
+        .select('total_price')
+        .eq('order_id', activeOrder?.id || '')
+      const newTotal = (remaining || []).reduce(
+        (sum: number, r: { total_price: number }) => sum + (r.total_price || 0),
+        0
+      )
+      await supabase
+        .from('orders')
+        .update({ total_amount: newTotal })
+        .eq('id', activeOrder?.id || '')
+      setOrderItems((prev) => prev.filter((i) => i._dbId !== dbId))
+      return
+    }
+
+    // Waitron — send deletion request to manager
+    if (pendingDeletes.has(dbId)) {
+      toast.warning('Already requested', 'Waiting for manager approval')
+      return
+    }
+
+    // Load existing requests, add this one, save
+    const { data: settingsRow } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('id', 'pending_delete_requests')
+      .single()
+    const existing: Array<Record<string, unknown>> = settingsRow?.value
+      ? JSON.parse(settingsRow.value)
+      : []
+    existing.push({
+      id: crypto.randomUUID(),
+      order_id: activeOrder?.id,
+      order_item_id: dbId,
+      item_name: item.name,
+      quantity: item.quantity,
+      item_total: item.total,
+      table_name: table?.name || '',
+      waitron_id: profile?.id,
+      waitron_name: profile?.full_name,
+      requested_at: new Date().toISOString(),
+    })
+    await supabase
+      .from('settings')
+      .upsert(
+        {
+          id: 'pending_delete_requests',
+          value: JSON.stringify(existing),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      )
+    setPendingDeletes((prev) => new Set(prev).add(dbId))
+    toast.success('Delete Requested', `Manager will review removal of ${item.name}`)
+    await audit({
+      action: 'ITEM_DELETE_REQUESTED',
+      entity: 'order_item',
+      entityId: dbId,
+      entityName: item.name,
+      newValue: {
+        order_id: activeOrder?.id,
+        table: table?.name,
+        quantity: item.quantity,
+        total: item.total,
+      },
+      performer: profile as Profile,
+    })
   }
 
   const openModifier = (item: OrderItemLocal) => {
@@ -375,13 +433,19 @@ export default function OrderPanel({
                         <Circle size={14} />
                       )}
                     </button>
-                    <button
-                      onClick={() => deleteItem(item)}
-                      className="text-red-400 hover:text-red-300 shrink-0"
-                      title="Void"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                    {pendingDeletes.has(dbId || '') ? (
+                      <span className="text-amber-400 shrink-0" title="Awaiting manager approval">
+                        <Clock size={12} />
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => deleteItem(item)}
+                        className="text-red-400 hover:text-red-300 shrink-0"
+                        title="Request removal"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
                   </div>
                 )
               })}

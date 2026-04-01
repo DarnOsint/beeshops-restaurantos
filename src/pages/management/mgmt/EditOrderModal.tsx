@@ -105,6 +105,11 @@ export default function EditOrderModal({ order, onClose, onSaved }: Props) {
   const addedTotal = addedItems.reduce((s, a) => s + a.menuItem.price * a.quantity, 0)
   const newTotal = existingTotal + addedTotal
 
+  // Detect total mismatch — stored total doesn't match actual items
+  const storedTotal = order.total_amount || 0
+  const actualItemsTotal = (order.order_items || []).reduce((s, i) => s + (i.total_price || 0), 0)
+  const hasTotalMismatch = Math.abs(storedTotal - actualItemsTotal) > 1
+
   const handleSave = async () => {
     setSaving(true)
     try {
@@ -117,6 +122,13 @@ export default function EditOrderModal({ order, onClose, onSaved }: Props) {
         if (removed) {
           changes.push(`Removed ${removed.quantity}x ${removed.menu_items?.name || 'item'}`)
         }
+      }
+
+      // Note total correction if mismatch
+      if (hasTotalMismatch && removedIds.length === 0 && addedItems.length === 0) {
+        changes.push(
+          `Total corrected from ₦${storedTotal.toLocaleString()} to ₦${actualItemsTotal.toLocaleString()}`
+        )
       }
 
       // Insert new items
@@ -171,7 +183,7 @@ export default function EditOrderModal({ order, onClose, onSaved }: Props) {
     }
   }
 
-  const hasChanges = removedIds.length > 0 || addedItems.length > 0
+  const hasChanges = removedIds.length > 0 || addedItems.length > 0 || hasTotalMismatch
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
@@ -191,6 +203,18 @@ export default function EditOrderModal({ order, onClose, onSaved }: Props) {
 
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto">
+          {/* Total mismatch warning */}
+          {hasTotalMismatch && (
+            <div className="mx-4 mt-4 bg-red-500/10 border border-red-500/30 rounded-xl p-3">
+              <p className="text-red-400 text-sm font-bold mb-1">Total Mismatch Detected</p>
+              <p className="text-red-400/80 text-xs">
+                Stored total is ₦{storedTotal.toLocaleString()} but items only add up to ₦
+                {actualItemsTotal.toLocaleString()}. This usually means items were deleted but the
+                total wasn't updated. Click Save to fix.
+              </p>
+            </div>
+          )}
+
           {/* Current items */}
           <div className="p-4">
             <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-2">Current Items</p>
