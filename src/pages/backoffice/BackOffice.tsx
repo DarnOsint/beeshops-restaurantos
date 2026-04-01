@@ -12,6 +12,7 @@ import {
   ChefHat,
   Monitor,
   Printer,
+  Map,
 } from 'lucide-react'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import StaffManagement from './StaffManagement'
@@ -24,6 +25,7 @@ import Suppliers from './Suppliers'
 import ChangePassword from './ChangePassword'
 import KitchenStock from './KitchenStock'
 import PrinterConfig from './PrinterConfig'
+import FloorPlan from './FloorPlan'
 import { useNavigate } from 'react-router-dom'
 import type { Role } from '../../types'
 
@@ -77,6 +79,14 @@ export default function BackOffice() {
       desc: 'Edit table names and capacity',
       icon: LayoutGrid,
       color: 'bg-amber-500',
+      roles: ['owner', 'manager'],
+    },
+    {
+      id: 'floorplan',
+      label: 'Floor Plan',
+      desc: 'Drag-and-drop table layout — arrange tables as they are on site',
+      icon: Map,
+      color: 'bg-emerald-600',
       roles: ['owner', 'manager'],
     },
     {
@@ -152,6 +162,7 @@ export default function BackOffice() {
   if (activeSection === 'menu') return <MenuManagement onBack={() => setActiveSection(null)} />
   if (activeSection === 'zonepricing') return <ZonePricing onBack={() => setActiveSection(null)} />
   if (activeSection === 'tables') return <TableConfig onBack={() => setActiveSection(null)} />
+  if (activeSection === 'floorplan') return <FloorPlan onBack={() => setActiveSection(null)} />
   if (activeSection === 'qrcards') {
     navigate('/backoffice/qr-cards')
     return null
@@ -200,6 +211,12 @@ export default function BackOffice() {
                 title: 'Table Configuration',
                 description:
                   'Edit table names and assign zones. The Zone Settings section below the table grid lets you set a hire fee per zone — useful for The Nook which is bookable as a private space. The hire fee is shown as a reminder banner in the POS when that zone is selected.',
+              },
+              {
+                id: 'bo-floorplan',
+                title: 'Floor Plan',
+                description:
+                  'Visual table layout editor. Drag tables to position them exactly as they are on site. Click a table to select it, then resize by dragging the corner handle or toggle between square and round shapes. Filter by zone to focus on specific areas. The layout is saved and can be used as a reference for staff.',
               },
               {
                 id: 'bo-pos',
