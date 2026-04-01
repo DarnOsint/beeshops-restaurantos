@@ -102,6 +102,7 @@ const MONTHS = [
 
 export default function MonthEnd() {
   const { profile } = useAuth()
+  const isReadOnly = profile?.role === 'auditor'
   const toast = useToast()
   const [periods, setPeriods] = useState<PeriodClose[]>([])
   const [loading, setLoading] = useState(true)
@@ -540,23 +541,27 @@ export default function MonthEnd() {
                 </div>
               )}
 
-              <textarea
-                placeholder="Notes for this period close (optional)..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500 resize-none"
-              />
+              {!isReadOnly && (
+                <>
+                  <textarea
+                    placeholder="Notes for this period close (optional)..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={2}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500 resize-none"
+                  />
 
-              <button
-                onClick={createPeriod}
-                disabled={creating}
-                className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-bold py-3 rounded-xl text-sm transition-colors"
-              >
-                {creating
-                  ? 'Creating...'
-                  : `Create ${periodType === 'month' ? MONTHS[selectedMonth] + ' ' + selectedYear : 'Year ' + selectedYear} Close`}
-              </button>
+                  <button
+                    onClick={createPeriod}
+                    disabled={creating}
+                    className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-bold py-3 rounded-xl text-sm transition-colors"
+                  >
+                    {creating
+                      ? 'Creating...'
+                      : `Create ${periodType === 'month' ? MONTHS[selectedMonth] + ' ' + selectedYear : 'Year ' + selectedYear} Close`}
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -747,7 +752,7 @@ export default function MonthEnd() {
                                     {count.system_qty.toFixed(2)}
                                   </td>
                                   <td className="px-2 py-1.5 text-right">
-                                    {period.status === 'locked' ? (
+                                    {period.status === 'locked' || isReadOnly ? (
                                       <span className="text-white">
                                         {count.physical_qty?.toFixed(2) ?? '—'}
                                       </span>
@@ -804,6 +809,10 @@ export default function MonthEnd() {
                           Locked by {period.closed_by_name} on{' '}
                           {period.closed_at ? fmtDate(period.closed_at) : '—'}
                         </span>
+                      </div>
+                    ) : isReadOnly ? (
+                      <div className="text-gray-500 text-xs text-center py-3">
+                        Draft — view only
                       </div>
                     ) : (
                       <button

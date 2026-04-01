@@ -131,6 +131,7 @@ function RoleRoute() {
   if (profile.role === 'bar') return <Navigate to="/kds/bar" />
   if (profile.role === 'griller') return <Navigate to="/kds/griller" />
   if (profile.role === 'apartment_manager') return <Navigate to="/apartment" />
+  if (profile.role === 'auditor') return <Navigate to="/accounting" />
   if (profile.role === 'supervisor') return <Navigate to="/supervisor" />
   return <Navigate to="/login" />
 }
@@ -192,7 +193,7 @@ function AppRoutes() {
             path="/accounting"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'accountant']}>
+                <RoleGuard allowed={['owner', 'manager', 'accountant', 'auditor']}>
                   <EB title="Accounting error">
                     <Accounting />
                   </EB>
@@ -288,7 +289,7 @@ function AppRoutes() {
             path="/debtors"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'accountant']}>
+                <RoleGuard allowed={['owner', 'manager', 'accountant', 'auditor']}>
                   <EB title="Debtors error">
                     <Debtors onBack={() => window.history.back()} />
                   </EB>
@@ -300,7 +301,7 @@ function AppRoutes() {
             path="/reports"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'accountant']}>
+                <RoleGuard allowed={['owner', 'manager', 'accountant', 'auditor']}>
                   <EB title="Reports error">
                     <Reports />
                   </EB>
@@ -312,7 +313,7 @@ function AppRoutes() {
             path="/analytics"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'accountant']}>
+                <RoleGuard allowed={['owner', 'manager', 'accountant', 'auditor']}>
                   <EB title="Analytics error">
                     <Analytics />
                   </EB>
@@ -359,7 +360,7 @@ function AppRoutes() {
             path="/month-end"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'accountant']}>
+                <RoleGuard allowed={['owner', 'manager', 'accountant', 'auditor']}>
                   <EB title="Month End error">
                     <MonthEnd />
                   </EB>

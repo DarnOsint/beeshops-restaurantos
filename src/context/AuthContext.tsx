@@ -40,7 +40,7 @@ const ACTIVITY_EVENTS = [
   'scroll',
   'click',
 ] as const
-const MFA_ROLES = ['owner', 'manager', 'executive', 'accountant'] as const
+const MFA_ROLES = ['owner', 'manager', 'executive', 'accountant', 'auditor'] as const
 
 // ── Context ───────────────────────────────────────────────────────────────────
 

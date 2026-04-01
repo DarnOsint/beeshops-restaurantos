@@ -5,6 +5,7 @@ export type Role =
   | 'executive'
   | 'manager'
   | 'accountant'
+  | 'auditor'
   | 'waitron'
   | 'kitchen'
   | 'bar'

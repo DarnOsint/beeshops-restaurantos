@@ -24,12 +24,22 @@ import {
 import type { Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
 
-const ROLES = ['waitron', 'kitchen', 'bar', 'griller', 'manager', 'accountant', 'owner'] as const
+const ROLES = [
+  'waitron',
+  'kitchen',
+  'bar',
+  'griller',
+  'manager',
+  'accountant',
+  'auditor',
+  'owner',
+] as const
 const FLOOR_ROLES = ['waitron', 'kitchen', 'bar', 'griller']
 const roleColors: Record<string, string> = {
   owner: 'bg-amber-500/20 text-amber-400',
   manager: 'bg-purple-500/20 text-purple-400',
   accountant: 'bg-blue-500/20 text-blue-400',
+  auditor: 'bg-indigo-500/20 text-indigo-400',
   waitron: 'bg-green-500/20 text-green-400',
   kitchen: 'bg-red-500/20 text-red-400',
   bar: 'bg-cyan-500/20 text-cyan-400',
