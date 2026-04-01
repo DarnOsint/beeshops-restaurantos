@@ -155,28 +155,25 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
   }
 
   const confirmClockOut = async (shift: Shift) => {
-    // Check for open orders before clocking out
-    if (shift.role === 'waitron') {
-      const { data: openOrders } = await supabase
-        .from('orders')
-        .select('id, tables(name)')
-        .eq('staff_id', shift.staff_id)
-        .eq('status', 'open')
-      if (openOrders && openOrders.length > 0) {
-        const names = openOrders
-          .map((o: Record<string, unknown>) => {
-            const t = o.tables as { name?: string } | null
-            return t?.name || 'Unknown table'
-          })
-          .join(', ')
-        if (
-          !confirm(
-            `${shift.staff_name} has ${openOrders.length} open order(s) on ${names}. ` +
-              'These orders will be orphaned if you proceed. Clock out anyway?'
-          )
-        )
-          return
-      }
+    // Block clock-out if staff has open/unresolved orders
+    const { data: openOrders } = await supabase
+      .from('orders')
+      .select('id, tables(name)')
+      .eq('staff_id', shift.staff_id)
+      .eq('status', 'open')
+    if (openOrders && openOrders.length > 0) {
+      const names = openOrders
+        .map((o: Record<string, unknown>) => {
+          const t = o.tables as { name?: string } | null
+          return t?.name || 'Unknown table'
+        })
+        .join(', ')
+      toast.error(
+        'Cannot Clock Out',
+        `${shift.staff_name} has ${openOrders.length} open order(s) on ${names}. All orders must be closed or reassigned before clocking out.`
+      )
+      setSummaryShift(null)
+      return
     }
     const clockOutTime = new Date()
     const duration = Math.round(
