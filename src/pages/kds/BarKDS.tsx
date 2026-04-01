@@ -215,7 +215,12 @@ function BarKDSInner() {
   const rejectReturn = async (itemId: string, staffId?: string | null, tableName?: string) => {
     const { error } = await supabase
       .from('order_items')
-      .update({ return_requested: false, return_reason: null, return_requested_at: null })
+      .update({
+        return_requested: false,
+        return_accepted: false,
+        return_reason: null,
+        return_requested_at: null,
+      })
       .eq('id', itemId)
     if (error) {
       toast.error('Error', 'Failed to reject return')

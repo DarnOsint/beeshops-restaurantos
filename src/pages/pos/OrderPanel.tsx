@@ -205,28 +205,32 @@ export default function OrderPanel({
     })
   }
 
-  const deleteItem = (item: OrderItemLocal) => {
+  const deleteItem = async (item: OrderItemLocal) => {
     // Items pending in KDS — remove directly, no PIN needed (voiding replaced by returns)
     if (item._existing) {
       const dbId = item._dbId || dbIdMap[item.id]
       if (dbId) {
-        supabase
-          .from('order_items')
-          .delete()
-          .eq('id', dbId)
-          .then(({ error }) => {
-            if (!error) {
-              supabase
-                .from('orders')
-                .update({
-                  total_amount: Math.max(0, (activeOrder?.total_amount || 0) - item.total),
-                })
-                .eq('id', activeOrder?.id || '')
-            }
+        const { error } = await supabase.from('order_items').delete().eq('id', dbId)
+        if (error) {
+          toast.error('Error', 'Failed to delete item: ' + error.message)
+          return
+        }
+        await supabase
+          .from('orders')
+          .update({
+            total_amount: Math.max(0, (activeOrder?.total_amount || 0) - item.total),
           })
+          .eq('id', activeOrder?.id || '')
       }
     }
-    setOrderItems((prev) => prev.filter((i) => i.id !== item.id && i._newId !== item._newId))
+    // Use _dbId or _newId for unique identification — not menu_item_id which can duplicate
+    const itemKey = item._dbId || item._newId || item.id
+    setOrderItems((prev) =>
+      prev.filter((i) => {
+        const key = i._dbId || i._newId || i.id
+        return key !== itemKey
+      })
+    )
   }
 
   const openModifier = (item: OrderItemLocal) => {

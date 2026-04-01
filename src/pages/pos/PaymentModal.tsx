@@ -66,9 +66,18 @@ interface Props {
 }
 
 export default function PaymentModal({ order: orderProp, table, onSuccess, onClose }: Props) {
-  let order = orderProp
+  const [order, setOrder] = useState(orderProp)
   const { profile } = useAuth()
   const toast = useToast()
+
+  const refreshOrder = async () => {
+    const { data } = await supabase
+      .from('orders')
+      .select('*, order_items(*, menu_items(name, price, menu_categories(name, destination)))')
+      .eq('id', order.id)
+      .single()
+    if (data) setOrder(data as unknown as OrderExtended)
+  }
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
   const [cashTendered, setCashTendered] = useState('')
   const [processing, setProcessing] = useState(false)
@@ -152,9 +161,22 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     })
     setReturningItemId(null)
     setReturnReason('')
+    await refreshOrder()
   }
 
   const cancelReturn = async (itemId: string) => {
+    // Only cancel if barman hasn't already accepted — check returns_log status first
+    const { data: logEntry } = await supabase
+      .from('returns_log')
+      .select('status')
+      .eq('order_item_id', itemId)
+      .order('requested_at', { ascending: false })
+      .limit(1)
+      .single()
+    if (logEntry?.status === 'accepted') {
+      toast.error('Cannot cancel', 'Bar has already accepted this return')
+      return
+    }
     await supabase
       .from('order_items')
       .update({
@@ -164,8 +186,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         return_requested_at: null,
       })
       .eq('id', itemId)
-    // Remove pending log entry if barman hasn't acted yet
+    // Remove pending log entry
     await supabase.from('returns_log').delete().eq('order_item_id', itemId).eq('status', 'pending')
+    await refreshOrder()
   }
 
   const canProcess = () => {
@@ -518,7 +541,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         if (Math.abs(serverTotal - order.total_amount) > 1) {
           // Total mismatch — use the server total
           await supabase.from('orders').update({ total_amount: serverTotal }).eq('id', order.id)
-          order = { ...order, total_amount: serverTotal }
+          setOrder({ ...order, total_amount: serverTotal })
         }
       }
 
