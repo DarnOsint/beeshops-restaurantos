@@ -61,13 +61,15 @@ function elapsed(ts: string) {
   const m = Math.floor((Date.now() - new Date(ts).getTime()) / 60000)
   return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`
 }
-function urgencyBorder(ts: string) {
+function urgencyBorder(ts: string, hasPending: boolean) {
+  if (!hasPending) return 'border-gray-700 bg-gray-900'
   const m = Math.floor((Date.now() - new Date(ts).getTime()) / 60000)
   if (m >= 20) return 'border-red-500 bg-red-500/5'
   if (m >= 10) return 'border-amber-500 bg-amber-500/5'
   return 'border-gray-700 bg-gray-900'
 }
-function urgencyText(ts: string) {
+function urgencyText(ts: string, hasPending: boolean) {
+  if (!hasPending) return 'text-gray-400'
   const m = Math.floor((Date.now() - new Date(ts).getTime()) / 60000)
   if (m >= 20) return 'text-red-400 font-bold'
   if (m >= 10) return 'text-amber-400 font-bold'
@@ -126,7 +128,9 @@ function SupervisorDashboardInner() {
   const [calls, setCalls] = useState<WaiterCall[]>([])
   const [voids, setVoids] = useState<VoidEntry[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'floor' | 'staff' | 'calls' | 'voids' | 'shift' | 'tables'>('floor')
+  const [tab, setTab] = useState<'floor' | 'staff' | 'calls' | 'voids' | 'shift' | 'tables'>(
+    'floor'
+  )
   const [zoneFilter, setZoneFilter] = useState('All')
   const [lateCount, setLateCount] = useState(0)
 
@@ -183,11 +187,15 @@ function SupervisorDashboardInner() {
     }
   }, [fetchAll])
 
-  // lateCount updated reactively when orders change
+  // lateCount: only orders with pending items (not yet started) past 15 min
   useEffect(() => {
     const computeLate = () =>
       setLateCount(
-        orders.filter((o) => Date.now() - new Date(o.created_at).getTime() >= 15 * 60 * 1000).length
+        orders.filter(
+          (o) =>
+            Date.now() - new Date(o.created_at).getTime() >= 15 * 60 * 1000 &&
+            o.order_items?.some((i) => i.status === 'pending')
+        ).length
       )
     computeLate()
     const iv = setInterval(computeLate, 60_000)
@@ -367,7 +375,7 @@ function SupervisorDashboardInner() {
                 return (
                   <div
                     key={order.id}
-                    className={`rounded-2xl border-2 p-3 ${urgencyBorder(order.created_at)}`}
+                    className={`rounded-2xl border-2 p-3 ${urgencyBorder(order.created_at, pending.length > 0)}`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
@@ -382,7 +390,9 @@ function SupervisorDashboardInner() {
                       </div>
                       <div className="flex items-center gap-1">
                         <Clock size={11} className="text-gray-500" />
-                        <span className={`text-xs ${urgencyText(order.created_at)}`}>
+                        <span
+                          className={`text-xs ${urgencyText(order.created_at, pending.length > 0)}`}
+                        >
                           {elapsed(order.created_at)}
                         </span>
                       </div>
@@ -501,13 +511,9 @@ function SupervisorDashboardInner() {
             </>
           ))}
 
-        {tab === 'shift' && (
-          <ShiftManager />
-        )}
+        {tab === 'shift' && <ShiftManager />}
 
-        {tab === 'tables' && (
-          <TableAssignment />
-        )}
+        {tab === 'tables' && <TableAssignment />}
       </div>
     </div>
   )

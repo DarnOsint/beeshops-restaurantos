@@ -8,7 +8,12 @@ export interface LateOrder {
   customer_name?: string | null
   created_at: string
   tables?: { name: string } | null
-  order_items?: Array<{ id: string; status: string; destination: string }>
+  order_items?: Array<{
+    id: string
+    status: string
+    destination: string
+    return_accepted?: boolean
+  }>
 }
 
 export function useLateOrders() {
@@ -41,7 +46,7 @@ export function useLateOrders() {
           .lte('created_at', cutoff)
         if (!active || error || !data) return
         const late = (data as unknown as LateOrder[]).filter((o) =>
-          o.order_items?.some((i) => i.status === 'pending')
+          o.order_items?.some((i) => i.status === 'pending' && !i.return_accepted)
         )
         setLateOrders(late)
       } catch {
