@@ -13,6 +13,7 @@ import {
   Monitor,
   Printer,
   Map,
+  ShoppingBag,
 } from 'lucide-react'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import StaffManagement from './StaffManagement'
@@ -26,6 +27,7 @@ import ChangePassword from './ChangePassword'
 import KitchenStock from './KitchenStock'
 import PrinterConfig from './PrinterConfig'
 import FloorPlan from './FloorPlan'
+import TakeawayPacks from './TakeawayPacks'
 import { useNavigate } from 'react-router-dom'
 import type { Role } from '../../types'
 
@@ -114,6 +116,14 @@ export default function BackOffice() {
       roles: ['owner', 'manager'],
     },
     {
+      id: 'takeawaypacks',
+      label: 'Takeaway Pack Sizes',
+      desc: 'Configure pack sizes and prices for takeaway orders',
+      icon: ShoppingBag,
+      color: 'bg-lime-600',
+      roles: ['owner', 'manager'],
+    },
+    {
       id: 'qrcards',
       label: 'QR Table Cards',
       desc: 'Print QR codes for all tables',
@@ -185,6 +195,8 @@ export default function BackOffice() {
   if (activeSection === 'suppliers') return <Suppliers onBack={() => setActiveSection(null)} />
   if (activeSection === 'printerconfig')
     return <PrinterConfig onBack={() => setActiveSection(null)} />
+  if (activeSection === 'takeawaypacks')
+    return <TakeawayPacks onBack={() => setActiveSection(null)} />
 
   return (
     <div className="min-h-full bg-gray-950">

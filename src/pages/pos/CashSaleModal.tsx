@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { offlineInsert } from '../../lib/offlineWrite'
 import { useAuth } from '../../context/AuthContext'
@@ -63,8 +63,31 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
   const [completedOrder, setCompletedOrder] = useState<CompletedOrder | null>(null)
   const [notes, setNotes] = useState('')
   const [activeTab, setActiveTab] = useState<'menu' | 'order'>('menu')
+  const [packSizes, setPackSizes] = useState<{ id: string; name: string; price: number }[]>([])
+  const [selectedPackId, setSelectedPackId] = useState<string | null>(null)
 
   const isTakeaway = type === 'takeaway'
+
+  // Load takeaway pack sizes
+  useEffect(() => {
+    if (!isTakeaway) return
+    supabase
+      .from('settings')
+      .select('value')
+      .eq('id', 'takeaway_pack_sizes')
+      .single()
+      .then(({ data }) => {
+        if (data?.value) {
+          try {
+            const sizes = JSON.parse(data.value) as { id: string; name: string; price: number }[]
+            setPackSizes(sizes)
+            if (sizes.length > 0) setSelectedPackId(sizes[0].id)
+          } catch {
+            /* invalid */
+          }
+        }
+      })
+  }, [isTakeaway])
   const categories = [
     'All',
     ...new Set(
@@ -119,7 +142,10 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
     })
   }
 
-  const total = orderItems.reduce((sum, i) => sum + i.total, 0)
+  const selectedPack = packSizes.find((p) => p.id === selectedPackId)
+  const packFee = isTakeaway && selectedPack ? selectedPack.price : 0
+  const itemsTotal = orderItems.reduce((sum, i) => sum + i.total, 0)
+  const total = itemsTotal + packFee
   const change = paymentMethod === 'cash' && cashTendered ? parseFloat(cashTendered) - total : 0
 
   const canPay = () => {
@@ -168,7 +194,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         created_at: new Date().toISOString(),
       })
       if (orderError) throw orderError
-      const itemsWithIds = orderItems.map((item) => ({
+      const itemRows = orderItems.map((item) => ({
         id: crypto.randomUUID(),
         order_id: (order as { id: string }).id,
         menu_item_id: item.id,
@@ -179,6 +205,21 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         destination: item.menu_categories?.destination || 'bar',
         created_at: new Date().toISOString(),
       }))
+      // Add takeaway pack fee as a line item
+      if (packFee > 0 && selectedPack) {
+        itemRows.push({
+          id: crypto.randomUUID(),
+          order_id: (order as { id: string }).id,
+          menu_item_id: null as unknown as string,
+          quantity: 1,
+          unit_price: packFee,
+          total_price: packFee,
+          status: 'delivered',
+          destination: 'bar',
+          created_at: new Date().toISOString(),
+        })
+      }
+      const itemsWithIds = itemRows
       for (const item of itemsWithIds) {
         const { error } = await offlineInsert('order_items', item)
         if (error) throw error
@@ -240,6 +281,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
       <div class="center" style="font-size:10px">${isTakeaway ? 'TAKEAWAY — ' + o.customerName : 'CASH SALE'}</div>
       <div class="divider"></div>
       ${o.items.map((i) => `<div class="row"><span>${i.quantity}x ${i.name}</span><span>₦${(i.total || i.price * i.quantity).toLocaleString()}</span></div>`).join('')}
+      ${packFee > 0 && selectedPack ? `<div class="row"><span>Pack (${selectedPack.name})</span><span>₦${packFee.toLocaleString()}</span></div>` : ''}
       <div class="divider"></div>
       <div class="row bold"><span>TOTAL</span><span>₦${o.total.toLocaleString()}</span></div>
       ${o.paymentMethod === 'cash' && o.change > 0 ? `<div class="row"><span>Change</span><span>₦${o.change.toLocaleString()}</span></div>` : ''}
@@ -466,8 +508,54 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
                 className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-amber-500"
               />
             </div>
+            {/* Pack size selector for takeaway */}
+            {isTakeaway && packSizes.length > 0 && orderItems.length > 0 && (
+              <div className="px-3 py-2 border-t border-gray-800 shrink-0">
+                <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1.5">
+                  Pack Size
+                </p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {packSizes.map((pack) => (
+                    <button
+                      key={pack.id}
+                      onClick={() => setSelectedPackId(pack.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        selectedPackId === pack.id
+                          ? 'bg-amber-500 text-black'
+                          : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {pack.name} — ₦{pack.price.toLocaleString()}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setSelectedPackId(null)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      selectedPackId === null
+                        ? 'bg-gray-600 text-white'
+                        : 'bg-gray-800 border border-gray-700 text-gray-500 hover:text-white'
+                    }`}
+                  >
+                    No Pack
+                  </button>
+                </div>
+              </div>
+            )}
+
             {orderItems.length > 0 && (
               <div className="p-3 border-t border-gray-800 space-y-3 shrink-0">
+                {packFee > 0 && (
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-500">Items subtotal</span>
+                    <span className="text-gray-400">₦{itemsTotal.toLocaleString()}</span>
+                  </div>
+                )}
+                {packFee > 0 && (
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-gray-500">Pack ({selectedPack?.name})</span>
+                    <span className="text-gray-400">₦{packFee.toLocaleString()}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400 text-sm">Total</span>
                   <span className="text-amber-400 font-bold text-xl">
