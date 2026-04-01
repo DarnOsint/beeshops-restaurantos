@@ -540,133 +540,141 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
           <div
             className={`${activeTab === 'order' ? 'flex' : 'hidden'} md:flex w-full md:w-80 flex-col overflow-hidden shrink-0`}
           >
-            {isTakeaway && (
-              <div className="p-3 border-b border-gray-800 space-y-2 shrink-0">
-                <input
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Customer name *"
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
-                />
-                <input
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="Phone number"
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
-                />
-              </div>
-            )}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-              {orderItems.length === 0 ? (
-                <div className="text-center py-8 text-gray-600 text-sm">Tap items to add</div>
-              ) : (
-                orderItems.map((item) => (
-                  <div key={item.id} className="bg-gray-800 rounded-xl px-3 py-2.5">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-white text-sm font-medium flex-1 mr-2">
-                        {item.name}
-                      </span>
-                      <button
-                        onClick={() =>
-                          setOrderItems((prev) => prev.filter((i) => i.id !== item.id))
-                        }
-                        className="text-red-400 hover:text-red-300 shrink-0 p-1"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => removeItem(item.id)}
-                          className="w-8 h-8 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white active:scale-95 transition-transform"
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <span className="text-white text-base font-bold w-6 text-center">
-                          {item.quantity}
+            {/* Scrollable order content — everything scrolls except the payment footer */}
+            <div className="flex-1 overflow-y-auto">
+              {isTakeaway && (
+                <div className="p-3 border-b border-gray-800 space-y-2">
+                  <input
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    placeholder="Customer name *"
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                  />
+                  <input
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    placeholder="Phone number"
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              )}
+
+              {/* Order items */}
+              <div className="p-3 space-y-2.5">
+                {orderItems.length === 0 ? (
+                  <div className="text-center py-8 text-gray-600 text-sm">Tap items to add</div>
+                ) : (
+                  orderItems.map((item) => (
+                    <div key={item.id} className="bg-gray-800 rounded-xl px-3 py-2.5">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-white text-sm font-medium flex-1 mr-2">
+                          {item.name}
                         </span>
                         <button
-                          onClick={() => addItem(item as unknown as MenuItem)}
-                          className="w-8 h-8 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white active:scale-95 transition-transform"
+                          onClick={() =>
+                            setOrderItems((prev) => prev.filter((i) => i.id !== item.id))
+                          }
+                          className="text-red-400 hover:text-red-300 shrink-0 p-1"
                         >
-                          <Plus size={14} />
+                          <Trash2 size={14} />
                         </button>
                       </div>
-                      <span className="text-amber-400 text-sm font-bold">
-                        ₦{item.total.toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="px-3 pb-2 shrink-0">
-              <input
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Notes..."
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-amber-500"
-              />
-            </div>
-            {/* Pack size selector for takeaway — multiple packs with quantities */}
-            {isTakeaway && packSizes.length > 0 && orderItems.length > 0 && (
-              <div className="px-3 py-2 border-t border-gray-800 shrink-0">
-                <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1.5">
-                  Takeaway Packs
-                </p>
-                <div className="space-y-1.5">
-                  {packSizes.map((pack) => {
-                    const qty = packQuantities[pack.id] || 0
-                    return (
-                      <div key={pack.id} className="flex items-center gap-2">
-                        <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
                           <button
-                            onClick={() =>
-                              setPackQuantities((prev) => ({
-                                ...prev,
-                                [pack.id]: Math.max(0, (prev[pack.id] || 0) - 1),
-                              }))
-                            }
-                            disabled={qty === 0}
-                            className="w-6 h-6 rounded-full bg-gray-700 hover:bg-gray-600 disabled:opacity-30 flex items-center justify-center text-white text-xs"
+                            onClick={() => removeItem(item.id)}
+                            className="w-8 h-8 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white active:scale-95 transition-transform"
                           >
-                            -
+                            <Minus size={14} />
                           </button>
-                          <span
-                            className={`text-sm w-5 text-center ${qty > 0 ? 'text-white font-bold' : 'text-gray-600'}`}
-                          >
-                            {qty}
+                          <span className="text-white text-base font-bold w-6 text-center">
+                            {item.quantity}
                           </span>
                           <button
-                            onClick={() =>
-                              setPackQuantities((prev) => ({
-                                ...prev,
-                                [pack.id]: (prev[pack.id] || 0) + 1,
-                              }))
-                            }
-                            className="w-6 h-6 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white text-xs"
+                            onClick={() => addItem(item as unknown as MenuItem)}
+                            className="w-8 h-8 rounded-lg bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white active:scale-95 transition-transform"
                           >
-                            +
+                            <Plus size={14} />
                           </button>
                         </div>
-                        <span
-                          className={`text-xs flex-1 ${qty > 0 ? 'text-white' : 'text-gray-500'}`}
-                        >
-                          {pack.name}
-                        </span>
-                        <span
-                          className={`text-xs shrink-0 ${qty > 0 ? 'text-amber-400 font-bold' : 'text-gray-600'}`}
-                        >
-                          ₦{pack.price.toLocaleString()}
-                          {qty > 1 ? ` × ${qty} = ₦${(pack.price * qty).toLocaleString()}` : ''}
+                        <span className="text-amber-400 text-sm font-bold">
+                          ₦{item.total.toLocaleString()}
                         </span>
                       </div>
-                    )
-                  })}
-                </div>
+                    </div>
+                  ))
+                )}
               </div>
-            )}
+
+              {/* Notes */}
+              <div className="px-3 pb-2">
+                <input
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Notes..."
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              {/* Pack size selector for takeaway — multiple packs with quantities */}
+              {isTakeaway && packSizes.length > 0 && orderItems.length > 0 && (
+                <div className="px-3 py-2 border-t border-gray-800 shrink-0">
+                  <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1.5">
+                    Takeaway Packs
+                  </p>
+                  <div className="space-y-1.5">
+                    {packSizes.map((pack) => {
+                      const qty = packQuantities[pack.id] || 0
+                      return (
+                        <div key={pack.id} className="flex items-center gap-2">
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() =>
+                                setPackQuantities((prev) => ({
+                                  ...prev,
+                                  [pack.id]: Math.max(0, (prev[pack.id] || 0) - 1),
+                                }))
+                              }
+                              disabled={qty === 0}
+                              className="w-6 h-6 rounded-full bg-gray-700 hover:bg-gray-600 disabled:opacity-30 flex items-center justify-center text-white text-xs"
+                            >
+                              -
+                            </button>
+                            <span
+                              className={`text-sm w-5 text-center ${qty > 0 ? 'text-white font-bold' : 'text-gray-600'}`}
+                            >
+                              {qty}
+                            </span>
+                            <button
+                              onClick={() =>
+                                setPackQuantities((prev) => ({
+                                  ...prev,
+                                  [pack.id]: (prev[pack.id] || 0) + 1,
+                                }))
+                              }
+                              className="w-6 h-6 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white text-xs"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <span
+                            className={`text-xs flex-1 ${qty > 0 ? 'text-white' : 'text-gray-500'}`}
+                          >
+                            {pack.name}
+                          </span>
+                          <span
+                            className={`text-xs shrink-0 ${qty > 0 ? 'text-amber-400 font-bold' : 'text-gray-600'}`}
+                          >
+                            ₦{pack.price.toLocaleString()}
+                            {qty > 1 ? ` × ${qty} = ₦${(pack.price * qty).toLocaleString()}` : ''}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* end scrollable content */}
 
             {orderItems.length > 0 && (
               <div className="p-3 border-t border-gray-800 space-y-3 shrink-0">
@@ -736,13 +744,97 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
                     )}
                   </div>
                 )}
-                <button
-                  onClick={processOrder}
-                  disabled={!canPay()}
-                  className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold rounded-xl py-3 text-sm transition-colors"
-                >
-                  {processing ? 'Processing...' : `Confirm ₦${total.toLocaleString()}`}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const W = 40
+                      const div = '-'.repeat(W)
+                      const sol = '='.repeat(W)
+                      const row = (l: string, r: string) => {
+                        const left = l.substring(0, W - r.length - 1)
+                        return left + ' '.repeat(Math.max(1, W - left.length - r.length)) + r
+                      }
+                      const ctr = (s: string) =>
+                        ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
+                      const fmtDate = new Date().toLocaleDateString('en-NG', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })
+                      const fmtTime = new Date().toLocaleTimeString('en-NG', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true,
+                      })
+                      const lines = [
+                        '',
+                        ctr("BEESHOP'S PLACE"),
+                        ctr('Lounge & Restaurant'),
+                        ctr(isTakeaway ? '** TAKEAWAY BILL **' : '** CASH SALE BILL **'),
+                        div,
+                        row(
+                          'Customer:',
+                          isTakeaway ? (customerName || 'Walk-in').substring(0, 20) : 'Counter'
+                        ),
+                        row('Date:', fmtDate),
+                        row('Time:', fmtTime),
+                        row('Staff:', (profile?.full_name || 'Staff').substring(0, 22)),
+                        div,
+                        row('ITEM', 'AMOUNT'),
+                        div,
+                        ...orderItems.map((i) =>
+                          row(`${i.quantity}x ${i.name}`, `N${i.total.toLocaleString()}`)
+                        ),
+                        ...packItems.map((p) =>
+                          row(
+                            `${p.qty}x Pack (${p.name})`,
+                            `N${(p.qty * p.price).toLocaleString()}`
+                          )
+                        ),
+                        sol,
+                        row(
+                          'TOTAL DUE:',
+                          `N${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                        ),
+                        sol,
+                        '',
+                        ctr('** PAYMENT PENDING **'),
+                        '',
+                        ctr('Please pay at the counter'),
+                        '',
+                      ].join('\n')
+                      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Bill</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',Courier,monospace;font-size:13px;color:#000;background:#fff;width:80mm;padding:4mm;white-space:pre;}@media print{body{width:80mm;}@page{margin:0;size:80mm auto;}}</style></head><body>${lines}</body></html>`
+                      const w = window.open(
+                        '',
+                        '_blank',
+                        'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
+                      )
+                      if (!w) return
+                      w.document.open('text/html', 'replace')
+                      w.document.write(html)
+                      w.document.close()
+                      w.onafterprint = () => w.close()
+                      w.onload = () =>
+                        setTimeout(() => {
+                          try {
+                            w.print()
+                          } catch {
+                            /* closed */
+                          }
+                        }, 200)
+                    }}
+                    className="flex items-center justify-center gap-1 bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 font-medium rounded-xl py-3 px-3 text-sm transition-colors shrink-0"
+                  >
+                    <Printer size={14} />
+                  </button>
+                  <button
+                    onClick={processOrder}
+                    disabled={!canPay()}
+                    className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold rounded-xl py-3 text-sm transition-colors"
+                  >
+                    {processing ? 'Processing...' : `Confirm ₦${total.toLocaleString()}`}
+                  </button>
+                </div>
               </div>
             )}
           </div>
