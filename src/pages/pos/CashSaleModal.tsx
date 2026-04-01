@@ -216,8 +216,9 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
           total_price: packFee,
           status: 'delivered',
           destination: 'bar',
+          modifier_notes: `Takeaway Pack — ${selectedPack.name}`,
           created_at: new Date().toISOString(),
-        })
+        } as (typeof itemRows)[0])
       }
       const itemsWithIds = itemRows
       for (const item of itemsWithIds) {

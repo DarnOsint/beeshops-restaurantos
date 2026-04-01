@@ -1219,7 +1219,11 @@ export default function POS() {
                                     className="flex items-center justify-between text-xs"
                                   >
                                     <span className="text-gray-400">
-                                      {item.quantity}x {item.menu_items?.name || 'Item'}
+                                      {item.quantity}x{' '}
+                                      {item.menu_items?.name ||
+                                        (item as unknown as { modifier_notes?: string })
+                                          .modifier_notes ||
+                                        'Item'}
                                     </span>
                                   </div>
                                 ))}
@@ -1334,7 +1338,10 @@ export default function POS() {
                                     </td>
                                     <td className="text-gray-300 py-0.5">
                                       {(item as unknown as { menu_items?: { name: string } })
-                                        .menu_items?.name || 'Item'}
+                                        .menu_items?.name ||
+                                        (item as unknown as { modifier_notes?: string })
+                                          .modifier_notes ||
+                                        'Item'}
                                     </td>
                                     <td className="text-gray-400 py-0.5 text-right pl-2">
                                       ₦{(item.total_price || 0).toLocaleString()}

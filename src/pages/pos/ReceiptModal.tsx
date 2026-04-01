@@ -128,7 +128,7 @@ export default function ReceiptModal({
 
     const itemLines = activeItems
       .map((item) => {
-        const iName = `${item.quantity}x ${(item as unknown as { menu_items?: { name: string } }).menu_items?.name || 'Item'}`
+        const iName = `${item.quantity}x ${(item as unknown as { menu_items?: { name: string } }).menu_items?.name || (item as unknown as { modifier_notes?: string }).modifier_notes || 'Item'}`
         const iPrice = `N${((item as unknown as { total_price?: number }).total_price || 0).toLocaleString()}`
         return fmtRow(iName, iPrice)
       })
@@ -139,7 +139,7 @@ export default function ReceiptModal({
         ? returnedItems
             .map((item) =>
               fmtRow(
-                `${item.quantity}x ${(item as unknown as { menu_items?: { name: string } }).menu_items?.name || 'Item'} [RETURNED]`,
+                `${item.quantity}x ${(item as unknown as { menu_items?: { name: string } }).menu_items?.name || (item as unknown as { modifier_notes?: string }).modifier_notes || 'Item'} [RETURNED]`,
                 'N0'
               )
             )

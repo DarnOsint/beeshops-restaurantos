@@ -149,7 +149,10 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     await supabase.from('returns_log').insert({
       order_id: order.id,
       order_item_id: itemId,
-      item_name: item.menu_items?.name || 'Item',
+      item_name:
+        item.menu_items?.name ||
+        (item as unknown as { modifier_notes?: string }).modifier_notes ||
+        'Item',
       quantity: item.quantity,
       item_total: item.total_price || 0,
       table_name: table?.name ?? null,
@@ -243,7 +246,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
 
     const itemLines = activeItems
       .map((item) => {
-        const name = `${item.quantity}x ${item.menu_items?.name || 'Item'}`
+        const name = `${item.quantity}x ${item.menu_items?.name || (item as unknown as { modifier_notes?: string }).modifier_notes || 'Item'}`
         const price = `N${(item.total_price || 0).toLocaleString()}`
         return fmtRow(name, price)
       })
@@ -253,7 +256,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     const returnedLines = (order.order_items || [])
       .filter((i) => i.return_accepted)
       .map((item) => {
-        const name = `${item.quantity}x ${item.menu_items?.name || 'Item'} [RETURNED]`
+        const name = `${item.quantity}x ${item.menu_items?.name || (item as unknown as { modifier_notes?: string }).modifier_notes || 'Item'} [RETURNED]`
         return fmtRow(name, `N0`)
       })
       .join('\n')
@@ -742,7 +745,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
                   <div className="flex items-center justify-between mb-2">
                     <div>
                       <p className="text-white text-sm font-medium">
-                        {item.menu_items?.name || 'Item'}
+                        {item.menu_items?.name ||
+                          (item as unknown as { modifier_notes?: string }).modifier_notes ||
+                          'Item'}
                       </p>
                       <p className="text-gray-500 text-xs">
                         ₦{((item.total_price || 0) + (item.extra_charge || 0)).toLocaleString()}
@@ -1125,7 +1130,10 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
                           <p
                             className={`text-sm font-medium truncate ${isReturned ? 'line-through text-gray-500' : 'text-white'}`}
                           >
-                            {item.quantity}x {item.menu_items?.name || 'Item'}
+                            {item.quantity}x{' '}
+                            {item.menu_items?.name ||
+                              (item as unknown as { modifier_notes?: string }).modifier_notes ||
+                              'Item'}
                           </p>
                           {isPending && (
                             <p className="text-amber-400 text-xs">
@@ -1218,7 +1226,10 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
                   <div key={item.id} className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
                     <p className="text-red-300 text-xs font-medium">
-                      {item.quantity}x {item.menu_items?.name || 'Item'}
+                      {item.quantity}x{' '}
+                      {item.menu_items?.name ||
+                        (item as unknown as { modifier_notes?: string }).modifier_notes ||
+                        'Item'}
                       <span className="text-gray-500 ml-1 capitalize">({item.destination})</span>
                     </p>
                   </div>
