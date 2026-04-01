@@ -14,12 +14,13 @@ interface Props {
   orders: Order[]
 }
 
-export default function RecentOrders({ orders }: Props) {
+export default function RecentOrders({ orders: rawOrders }: Props) {
+  const orders = rawOrders.slice(0, 10)
   return (
     <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4 md:p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-white font-semibold text-sm md:text-base">Recent Orders</h3>
-        <span className="text-gray-500 text-xs">{orders.length} latest</span>
+        <span className="text-gray-500 text-xs">Last {orders.length}</span>
       </div>
       {orders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-8 text-center">

@@ -1193,14 +1193,104 @@ export default function Reports() {
                       <span className="font-bold text-gray-800">Z-Report — End of Day</span>
                       <button
                         onClick={() => {
-                          const w = window.open('', '_blank', 'width=400,height=700')!
-                          const el = document.getElementById('zreport-content')
-                          w.document.write(
-                            '<html><head><style>body{font-family:monospace;font-size:12px;padding:16px;max-width:80mm}.row{display:flex;justify-content:space-between;margin:3px 0}.divider{border-top:1px dashed #000;margin:8px 0}</style></head><body>' +
-                              (el?.innerHTML || '') +
-                              '<script>window.onload=function(){window.print()}<\/script></body></html>'
+                          const W = 40
+                          const div = '-'.repeat(W)
+                          const sol = '='.repeat(W)
+                          const row = (l: string, r: string) => {
+                            const left = l.substring(0, W - r.length - 1)
+                            const sp = W - left.length - r.length
+                            return left + ' '.repeat(Math.max(1, sp)) + r
+                          }
+                          const ctr = (s: string) =>
+                            ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
+                          const z = [
+                            '',
+                            ctr("BEESHOP'S PLACE"),
+                            ctr('Lounge & Restaurant'),
+                            ctr('Z-REPORT — END OF DAY'),
+                            div,
+                            row('Period:', getPeriodLabel()),
+                            row('Printed:', new Date().toLocaleString('en-NG')),
+                            div,
+                            ctr('SALES SUMMARY'),
+                            div,
+                            row('Total Orders:', String(report.paidOrders.length)),
+                            row('Cancelled:', String(report.cancelledOrders)),
+                            row('Gross Revenue:', `N${report.grossRevenue.toLocaleString()}`),
+                            row(
+                              'VAT (7.5%):',
+                              `N${vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                            ),
+                            row(
+                              'Total incl. VAT:',
+                              `N${totalWithVat.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+                            ),
+                            div,
+                            ctr('PAYMENT BREAKDOWN'),
+                            div,
+                            row('Cash:', `N${cashTotal.toLocaleString()}`),
+                            row('Bank POS:', `N${report.byPayment.bank_pos.toLocaleString()}`),
+                            row('Transfer:', `N${report.byPayment.transfer.toLocaleString()}`),
+                            row('Credit:', `N${creditTotal.toLocaleString()}`),
+                            div,
+                            ctr('VOIDS & CANCELLATIONS'),
+                            div,
+                            row('Total Voids:', String((report.voids || []).length)),
+                            row('Value Voided:', `N${totalVoids.toLocaleString()}`),
+                            div,
+                            ctr('CASH RECONCILIATION'),
+                            div,
+                            row('Expected in Drawer:', `N${cashTotal.toLocaleString()}`),
+                            row('Expenses/Payouts:', `N${report.totalExpenses.toLocaleString()}`),
+                            sol,
+                            row(
+                              'NET CASH:',
+                              `N${(cashTotal - report.totalExpenses).toLocaleString()}`
+                            ),
+                            sol,
+                            div,
+                            ctr('STAFF ON SHIFT'),
+                            div,
+                            ...((report.attendance || []).length > 0
+                              ? (report.attendance || []).map((a) =>
+                                  row(
+                                    `${a.staff_name} (${a.role})`,
+                                    a.duration_minutes
+                                      ? `${Math.floor(a.duration_minutes / 60)}h ${a.duration_minutes % 60}m`
+                                      : 'Active'
+                                  )
+                                )
+                              : ['  No attendance records']),
+                            div,
+                            '',
+                            '',
+                            row('Manager:', '________________'),
+                            '',
+                            row('Cashier:', '________________'),
+                            '',
+                            '',
+                            ctr('*** END OF Z-REPORT ***'),
+                            '',
+                          ].join('\n')
+                          const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Z-Report</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',Courier,monospace;font-size:13px;color:#000;background:#fff;width:80mm;padding:4mm;white-space:pre;}@media print{body{width:80mm;}@page{margin:0;size:80mm auto;}}</style></head><body>${z}</body></html>`
+                          const w = window.open(
+                            '',
+                            '_blank',
+                            'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
                           )
+                          if (!w) return
+                          w.document.open('text/html', 'replace')
+                          w.document.write(html)
                           w.document.close()
+                          w.onafterprint = () => w.close()
+                          w.onload = () =>
+                            setTimeout(() => {
+                              try {
+                                w.print()
+                              } catch {
+                                /* closed */
+                              }
+                            }, 200)
                         }}
                         className="flex items-center gap-1.5 bg-black text-white text-sm px-4 py-2 rounded-xl"
                       >

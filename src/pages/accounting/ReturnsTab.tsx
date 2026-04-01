@@ -93,47 +93,81 @@ export default function ReturnsTab({ dateRange }: Props) {
   const unreviewed = entries.filter((e) => !e.reviewed).length
 
   const printReport = () => {
-    const W = 64
+    const W = 40
     const divider = '-'.repeat(W)
+    const solidDivider = '='.repeat(W)
     const fmtRow = (l: string, r: string) => {
-      const space = W - l.length - r.length
-      return l + ' '.repeat(Math.max(1, space)) + r
+      const left = l.substring(0, W - r.length - 1)
+      const space = W - left.length - r.length
+      return left + ' '.repeat(Math.max(1, space)) + r
     }
+    const centre = (s: string) => {
+      const pad = Math.max(0, Math.floor((W - s.length) / 2))
+      return ' '.repeat(pad) + s
+    }
+    const fmtDate = (d: string) =>
+      new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
+    const fmtTime = (d: string) =>
+      new Date(d).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true })
+
     const lines = [
-      `BEESHOP'S PLACE — RETURNS REPORT`,
-      `Date range: ${dateRange.start} to ${dateRange.end}`,
+      '',
+      centre("BEESHOP'S PLACE"),
+      centre('Lounge & Restaurant'),
+      centre('RETURNS REPORT'),
+      divider,
+      fmtRow('Period:', `${dateRange.start} to ${dateRange.end}`),
+      fmtRow('Printed:', fmtDate(new Date().toISOString())),
       divider,
       fmtRow(
-        'Total Accepted Returns:',
+        'Accepted Returns:',
         `N${totalAccepted.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
       ),
       fmtRow('Pending Returns:', String(totalPending)),
       fmtRow('Unreviewed:', String(unreviewed)),
-      divider,
-      ...entries.map((e) =>
+      fmtRow('Total Entries:', String(entries.length)),
+      solidDivider,
+      '',
+      ...entries.map((e, idx) =>
         [
-          `[${e.status.toUpperCase()}] ${e.item_name} x${e.quantity} — N${Number(e.item_total).toLocaleString()}`,
-          `  Table: ${e.table_name ?? 'N/A'} | Waitron: ${e.waitron_name ?? 'N/A'} | Bar: ${e.barman_name ?? 'Pending'}`,
-          `  Reason: ${e.return_reason ?? 'None'} | Date: ${new Date(e.requested_at).toLocaleString('en-NG')}`,
-          `  Reviewed: ${e.reviewed ? `Yes — ${e.reviewed_by_name}` : 'NO — NOT YET REVIEWED'}`,
-          '',
+          fmtRow(`${idx + 1}. ${e.item_name}`, `x${e.quantity}`),
+          fmtRow('   Amount:', `N${Number(e.item_total).toLocaleString()}`),
+          fmtRow('   Status:', e.status.toUpperCase()),
+          fmtRow('   Table:', e.table_name ?? 'N/A'),
+          fmtRow('   Waitron:', (e.waitron_name ?? 'N/A').substring(0, 18)),
+          fmtRow('   Bar:', (e.barman_name ?? 'Pending').substring(0, 20)),
+          fmtRow('   Reason:', (e.return_reason ?? 'None').substring(0, 20)),
+          fmtRow('   Date:', `${fmtDate(e.requested_at)} ${fmtTime(e.requested_at)}`),
+          fmtRow('   Reviewed:', e.reviewed ? `Yes` : 'NO'),
+          divider,
         ].join('\n')
       ),
+      '',
+      centre('*** END OF RETURNS REPORT ***'),
+      '',
     ].join('\n')
 
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Returns Report</title>
-<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:12px;padding:10mm;white-space:pre;}
-@media print{@page{margin:10mm;}}</style></head><body>${lines}</body></html>`
-    const win = window.open('', '_blank', 'width=800,height=700')
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',Courier,monospace;font-size:13px;color:#000;background:#fff;width:80mm;padding:4mm;white-space:pre;}
+@media print{body{width:80mm;}@page{margin:0;size:80mm auto;}}</style></head><body>${lines}</body></html>`
+    const win = window.open(
+      '',
+      '_blank',
+      'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
+    )
     if (!win) return
     win.document.open('text/html', 'replace')
     win.document.write(html)
     win.document.close()
+    win.onafterprint = () => win.close()
     win.onload = () =>
       setTimeout(() => {
-        win.print()
-        win.close()
-      }, 300)
+        try {
+          win.print()
+        } catch {
+          /* closed */
+        }
+      }, 200)
   }
 
   const statusIcon = (status: string) => {
