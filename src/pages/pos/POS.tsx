@@ -176,16 +176,14 @@ export default function POS() {
 
   const saveJoins = async (joins: Record<string, string[]>) => {
     setActiveJoins(joins)
-    await supabase
-      .from('settings')
-      .upsert(
-        {
-          id: 'active_table_joins',
-          value: JSON.stringify(joins),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'id' }
-      )
+    await supabase.from('settings').upsert(
+      {
+        id: 'active_table_joins',
+        value: JSON.stringify(joins),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    )
   }
 
   const handleJoinConfirm = async () => {
@@ -1057,13 +1055,7 @@ export default function POS() {
         )}
 
         {posTab === 'shift' && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-gray-400 text-sm">Current shift summary</p>
-              <button onClick={fetchShiftStats} className="text-gray-500 hover:text-white">
-                <RefreshCw size={14} />
-              </button>
-            </div>
+          <div className="flex-1 overflow-y-auto">
             {shiftLoading ? (
               <div className="flex items-center justify-center py-16">
                 <RefreshCw size={20} className="animate-spin text-amber-500" />
@@ -1074,155 +1066,295 @@ export default function POS() {
                 <p className="text-gray-500 text-sm">No shift data available</p>
               </div>
             ) : (
-              <>
-                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center">
-                    <Clock size={18} className="text-amber-400" />
-                  </div>
+              <div className="max-w-lg mx-auto p-4">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-5">
                   <div>
-                    <p className="text-gray-500 text-xs">Clocked in at</p>
-                    <p className="text-white font-bold">
-                      {shiftStats.clockIn
-                        ? new Date(shiftStats.clockIn).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })
-                        : 'N/A'}
+                    <h2 className="text-white text-lg font-bold">My Shift Summary</h2>
+                    <p className="text-gray-500 text-xs">
+                      {profile?.full_name} —{' '}
+                      {new Date().toLocaleDateString('en-NG', {
+                        weekday: 'long',
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                      })}
                     </p>
                   </div>
-                  <div className="ml-auto text-right">
-                    <p className="text-gray-500 text-xs">Duration</p>
-                    <p className="text-white font-bold">
-                      {shiftStats.clockIn
-                        ? (() => {
-                            const mins = Math.floor(
-                              (Date.now() - new Date(shiftStats.clockIn).getTime()) / 60000
-                            )
-                            return mins < 60
-                              ? `${mins}m`
-                              : `${Math.floor(mins / 60)}h ${mins % 60}m`
-                          })()
-                        : 'N/A'}
-                    </p>
+                  <button onClick={fetchShiftStats} className="text-gray-500 hover:text-white p-2">
+                    <RefreshCw size={14} />
+                  </button>
+                </div>
+
+                {/* Clock info */}
+                <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center">
+                        <Clock size={18} className="text-green-400" />
+                      </div>
+                      <div>
+                        <p className="text-gray-500 text-[10px] uppercase tracking-wider">
+                          Clocked In
+                        </p>
+                        <p className="text-white font-bold text-lg">
+                          {shiftStats.clockIn
+                            ? new Date(shiftStats.clockIn).toLocaleTimeString('en-NG', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: true,
+                              })
+                            : '—'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-gray-500 text-[10px] uppercase tracking-wider">On Shift</p>
+                      <p className="text-white font-bold text-lg">
+                        {shiftStats.clockIn
+                          ? (() => {
+                              const mins = Math.floor(
+                                (Date.now() - new Date(shiftStats.clockIn).getTime()) / 60000
+                              )
+                              const h = Math.floor(mins / 60)
+                              const m = mins % 60
+                              return h > 0 ? `${h}h ${m}m` : `${m} min`
+                            })()
+                          : '—'}
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+
+                {/* Total Sales — hero stat */}
+                <div className="bg-gradient-to-br from-amber-500/20 to-amber-500/5 border border-amber-500/30 rounded-2xl p-5 mb-4 text-center">
+                  <p className="text-amber-400/70 text-[10px] uppercase tracking-widest mb-1">
+                    Total Sales
+                  </p>
+                  <p className="text-amber-400 text-4xl font-bold tracking-tight">
+                    ₦
+                    {shiftStats.totalSales.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </p>
+                </div>
+
+                {/* Performance stats */}
+                <div className="grid grid-cols-3 gap-3 mb-5">
                   {(
                     [
-                      ['Orders Closed', shiftStats.ordersCount, 'text-blue-400'],
-                      ['Tables Served', shiftStats.uniqueTables, 'text-green-400'],
-                      ['Items Sold', shiftStats.totalItems, 'text-purple-400'],
+                      {
+                        label: 'Orders',
+                        value: shiftStats.ordersCount,
+                        color: 'text-blue-400',
+                        bg: 'bg-blue-500/10',
+                        border: 'border-blue-500/20',
+                      },
+                      {
+                        label: 'Tables',
+                        value: shiftStats.uniqueTables,
+                        color: 'text-green-400',
+                        bg: 'bg-green-500/10',
+                        border: 'border-green-500/20',
+                      },
+                      {
+                        label: 'Items',
+                        value: shiftStats.totalItems,
+                        color: 'text-purple-400',
+                        bg: 'bg-purple-500/10',
+                        border: 'border-purple-500/20',
+                      },
                     ] as const
-                  ).map(([label, value, color]) => (
+                  ).map(({ label, value, color, bg, border }) => (
                     <div
                       key={label}
-                      className="bg-gray-900 border border-gray-800 rounded-2xl p-3 text-center"
+                      className={`${bg} border ${border} rounded-2xl p-3 text-center`}
                     >
                       <p className={`text-2xl font-bold ${color}`}>{value}</p>
-                      <p className="text-gray-500 text-xs mt-0.5">{label}</p>
+                      <p className="text-gray-500 text-[10px] uppercase tracking-wider mt-0.5">
+                        {label}
+                      </p>
                     </div>
                   ))}
                 </div>
-                <div className="bg-gray-900 border border-amber-500/30 rounded-2xl p-4 text-center">
-                  <p className="text-gray-400 text-xs uppercase tracking-wide mb-1">Total Sales</p>
-                  <p className="text-amber-400 text-3xl font-bold">
-                    ₦{shiftStats.totalSales.toLocaleString()}
-                  </p>
-                </div>
+
+                {/* Recent orders breakdown */}
                 {shiftStats.recentOrders.length > 0 && (
                   <div>
-                    <p className="text-gray-500 text-xs uppercase tracking-wide mb-2">
+                    <p className="text-gray-500 text-[10px] uppercase tracking-widest mb-3">
                       Recent Orders
                     </p>
                     <div className="space-y-2">
-                      {shiftStats.recentOrders.map((order) => (
-                        <div
-                          key={order.id}
-                          className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 flex items-center justify-between"
-                        >
-                          <div>
-                            <p className="text-white text-sm">
-                              {order.tables?.name || 'Cash Sale'}
-                            </p>
-                            <p className="text-gray-500 text-xs">
-                              {new Date(order.closed_at).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </p>
+                      {shiftStats.recentOrders.map((order) => {
+                        const itemCount = order.order_items.reduce(
+                          (s, i) => s + (i.quantity || 0),
+                          0
+                        )
+                        return (
+                          <div
+                            key={order.id}
+                            className="bg-gray-900 border border-gray-800 rounded-xl p-3"
+                          >
+                            <div className="flex items-center justify-between mb-1.5">
+                              <p className="text-white text-sm font-semibold">
+                                {order.tables?.name || 'Cash Sale'}
+                              </p>
+                              <p className="text-amber-400 font-bold text-sm">
+                                ₦{(order.total_amount || 0).toLocaleString()}
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <p className="text-gray-500 text-xs">
+                                {new Date(order.closed_at).toLocaleTimeString('en-NG', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  hour12: true,
+                                })}
+                                {' · '}
+                                {itemCount} item{itemCount !== 1 ? 's' : ''}
+                              </p>
+                            </div>
+                            {order.order_items.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-gray-800 space-y-0.5">
+                                {order.order_items.map((item, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex items-center justify-between text-xs"
+                                  >
+                                    <span className="text-gray-400">
+                                      {item.quantity}x {item.menu_items?.name || 'Item'}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <p className="text-amber-400 font-bold text-sm">
-                            ₦{(order.total_amount || 0).toLocaleString()}
-                          </p>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 )}
-              </>
+              </div>
             )}
           </div>
         )}
 
         {posTab === 'history' && (
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-gray-400 text-sm">Today's closed orders</p>
-              <button onClick={fetchHistory} className="text-gray-500 hover:text-white">
-                <RefreshCw size={14} />
-              </button>
-            </div>
-            {historyLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <RefreshCw size={20} className="animate-spin text-amber-500" />
-              </div>
-            ) : orderHistory.length === 0 ? (
-              <div className="text-center py-16">
-                <History size={32} className="text-gray-700 mx-auto mb-3" />
-                <p className="text-gray-500 text-sm">No orders closed today</p>
-              </div>
-            ) : (
-              orderHistory.map((order) => (
-                <div key={order.id} className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div>
-                      <p className="text-white font-semibold text-sm">
-                        {order.tables?.name ||
-                          (order as unknown as { customer_name?: string }).customer_name ||
-                          'Cash Sale'}
-                      </p>
-                      <p className="text-gray-500 text-xs mt-0.5">
-                        {new Date(
-                          (order as unknown as { closed_at: string }).closed_at
-                        ).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}{' '}
-                        · {order.payment_method?.replace('_', ' ')}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-amber-400 font-bold text-sm">
-                        ₦{(order.total_amount || 0).toLocaleString()}
-                      </p>
-                      <button
-                        onClick={() => setReprintOrder(order)}
-                        className="flex items-center gap-1 text-gray-400 hover:text-white text-xs mt-1 transition-colors"
-                      >
-                        <Printer size={12} /> Reprint
-                      </button>
-                    </div>
-                  </div>
-                  <div className="border-t border-gray-800 pt-2 space-y-0.5">
-                    {order.order_items?.map((item) => (
-                      <p key={item.id} className="text-gray-500 text-xs">
-                        {item.quantity}x{' '}
-                        {(item as unknown as { menu_items?: { name: string } }).menu_items?.name ||
-                          'Item'}{' '}
-                        — ₦{(item.total_price || 0).toLocaleString()}
-                      </p>
-                    ))}
-                  </div>
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-lg mx-auto p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-white text-lg font-bold">My Orders</h2>
+                  <p className="text-gray-500 text-xs">
+                    Today's closed orders — {orderHistory.length} total
+                  </p>
                 </div>
-              ))
-            )}
+                <button onClick={fetchHistory} className="text-gray-500 hover:text-white p-2">
+                  <RefreshCw size={14} />
+                </button>
+              </div>
+              {historyLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <RefreshCw size={20} className="animate-spin text-amber-500" />
+                </div>
+              ) : orderHistory.length === 0 ? (
+                <div className="text-center py-16">
+                  <History size={32} className="text-gray-700 mx-auto mb-3" />
+                  <p className="text-gray-500 text-sm">No orders closed today</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {orderHistory.map((order) => {
+                    const pmRaw = (order.payment_method || '').toLowerCase()
+                    const pmLabel =
+                      pmRaw === 'cash'
+                        ? 'Cash'
+                        : pmRaw === 'card'
+                          ? 'Bank POS'
+                          : pmRaw === 'credit'
+                            ? 'Credit'
+                            : pmRaw.startsWith('transfer')
+                              ? 'Transfer'
+                              : pmRaw === 'split'
+                                ? 'Split'
+                                : pmRaw || '—'
+                    const itemCount = (order.order_items || []).reduce(
+                      (s, i) => s + (i.quantity || 0),
+                      0
+                    )
+                    return (
+                      <div
+                        key={order.id}
+                        className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden"
+                      >
+                        {/* Order header */}
+                        <div className="px-4 py-3 flex items-center justify-between">
+                          <div>
+                            <p className="text-white font-semibold text-sm">
+                              {order.tables?.name ||
+                                (order as unknown as { customer_name?: string }).customer_name ||
+                                (order.order_type === 'takeaway' ? 'Takeaway' : 'Cash Sale')}
+                            </p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-gray-500 text-xs">
+                                {new Date(
+                                  (order as unknown as { closed_at: string }).closed_at
+                                ).toLocaleTimeString('en-NG', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  hour12: true,
+                                })}
+                              </span>
+                              <span className="text-gray-700 text-xs">|</span>
+                              <span className="text-gray-400 text-xs">{pmLabel}</span>
+                              <span className="text-gray-700 text-xs">|</span>
+                              <span className="text-gray-500 text-xs">
+                                {itemCount} item{itemCount !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right flex items-center gap-3">
+                            <p className="text-amber-400 font-bold">
+                              ₦{(order.total_amount || 0).toLocaleString()}
+                            </p>
+                            <button
+                              onClick={() => setReprintOrder(order)}
+                              className="flex items-center gap-1 text-gray-500 hover:text-white text-xs px-2 py-1 bg-gray-800 rounded-lg transition-colors"
+                            >
+                              <Printer size={11} /> Reprint
+                            </button>
+                          </div>
+                        </div>
+                        {/* Item breakdown */}
+                        {(order.order_items || []).length > 0 && (
+                          <div className="px-4 py-2.5 bg-gray-950 border-t border-gray-800">
+                            <table className="w-full text-xs">
+                              <tbody>
+                                {(order.order_items || []).map((item) => (
+                                  <tr key={item.id}>
+                                    <td className="text-gray-500 py-0.5 pr-2 w-8 text-right">
+                                      {item.quantity}x
+                                    </td>
+                                    <td className="text-gray-300 py-0.5">
+                                      {(item as unknown as { menu_items?: { name: string } })
+                                        .menu_items?.name || 'Item'}
+                                    </td>
+                                    <td className="text-gray-400 py-0.5 text-right pl-2">
+                                      ₦{(item.total_price || 0).toLocaleString()}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
