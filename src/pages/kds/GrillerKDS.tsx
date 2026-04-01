@@ -229,7 +229,8 @@ function GrillerKDSInner() {
 
   useEffect(() => {
     fetchTickets()
-    const timer = setInterval(() => setTick((t) => t + 1), 1000)
+    const tickTimer = setInterval(() => setTick((t) => t + 1), 1000)
+    const pollTimer = setInterval(() => fetchTickets(), 10000)
     const channel = supabase
       .channel('griller-kds')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () =>
@@ -241,7 +242,8 @@ function GrillerKDSInner() {
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
-      clearInterval(timer)
+      clearInterval(tickTimer)
+      clearInterval(pollTimer)
       supabase.removeChannel(channel)
       document.removeEventListener('visibilitychange', onVisible)
     }

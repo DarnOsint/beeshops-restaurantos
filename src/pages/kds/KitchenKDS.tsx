@@ -220,7 +220,8 @@ function KitchenKDSInner() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchOrders()
-    const timer = setInterval(() => setTick((t) => t + 1), 1000)
+    const tickTimer = setInterval(() => setTick((t) => t + 1), 1000)
+    const pollTimer = setInterval(fetchOrders, 10000)
     const channel = supabase
       .channel('kitchen-channel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchOrders)
@@ -231,7 +232,8 @@ function KitchenKDSInner() {
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
-      clearInterval(timer)
+      clearInterval(tickTimer)
+      clearInterval(pollTimer)
       supabase.removeChannel(channel)
       document.removeEventListener('visibilitychange', onVisible)
     }

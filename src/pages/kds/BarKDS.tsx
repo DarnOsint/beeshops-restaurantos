@@ -249,7 +249,9 @@ function BarKDSInner() {
 
   useEffect(() => {
     fetchOrders()
-    const timer = setInterval(() => setTick((t) => t + 1), 1000)
+    const tickTimer = setInterval(() => setTick((t) => t + 1), 1000)
+    // Poll every 10s as safety net — realtime can drop silently
+    const pollTimer = setInterval(fetchOrders, 10000)
     const channel = supabase
       .channel('bar-channel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchOrders)
@@ -260,7 +262,8 @@ function BarKDSInner() {
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
-      clearInterval(timer)
+      clearInterval(tickTimer)
+      clearInterval(pollTimer)
       supabase.removeChannel(channel)
       document.removeEventListener('visibilitychange', onVisible)
     }

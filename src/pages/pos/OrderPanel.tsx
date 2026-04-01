@@ -337,16 +337,19 @@ export default function OrderPanel({
           </div>
         </div>
 
-        {/* ── Zone 1: On-table items (existing) — fixed, max 3 rows ── */}
+        {/* ── Zone 1: On-table items (existing) ── */}
         {orderItems.some((i) => i._existing) && (
-          <div className="border-b border-gray-800 bg-gray-950 px-3 pt-1 pb-1 max-h-20 overflow-y-auto space-y-0.5 shrink-0">
+          <div className="border-b border-gray-800 bg-gray-950 px-3 pt-1 pb-1 max-h-36 overflow-y-auto space-y-0.5 shrink-0">
             <p className="text-gray-600 text-[10px] uppercase tracking-widest mb-0.5">On Table</p>
             {orderItems
               .filter((i) => i._existing)
               .map((item) => {
                 const dbId = item._dbId || dbIdMap[item.id]
                 return (
-                  <div key={item._newId || item.id} className="flex items-center gap-2 py-0.5">
+                  <div
+                    key={item._dbId || item._newId || item.id}
+                    className="flex items-center gap-2 py-0.5"
+                  >
                     <span className="text-gray-500 text-xs w-5 text-center shrink-0">
                       {item.quantity}×
                     </span>
@@ -378,9 +381,9 @@ export default function OrderPanel({
           </div>
         )}
 
-        {/* ── Zone 2: New items being added — fixed, visible always ── */}
+        {/* ── Zone 2: New items being added ── */}
         {orderItems.some((i) => !i._existing) && (
-          <div className="border-b border-amber-500/20 bg-gray-900 px-3 pt-1 pb-1 max-h-28 overflow-y-auto space-y-0.5 shrink-0">
+          <div className="border-b border-amber-500/20 bg-gray-900 px-3 pt-1 pb-1 max-h-40 overflow-y-auto space-y-0.5 shrink-0">
             <p className="text-amber-500/60 text-[10px] uppercase tracking-widest mb-0.5">Adding</p>
             {orderItems
               .filter((i) => !i._existing)
