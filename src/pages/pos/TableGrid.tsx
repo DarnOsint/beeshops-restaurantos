@@ -32,6 +32,7 @@ interface TableGridProps {
   onSelectTable: (table: Table) => void
   selectedTable: Table | null
   assignedTableIds: string[] | null
+  assignedZoneNames?: string[] | null
   tableStaffMap?: Record<string, string>
   currentStaffId?: string | null
   currentRole?: string | null
@@ -39,19 +40,32 @@ interface TableGridProps {
 
 const BYPASS_ROLES = ['owner', 'manager', 'accountant', 'supervisor']
 
-const CATEGORIES = ['All', 'Outdoor', 'Indoor', 'VIP Lounge', 'The Nook'] as const
+const ALL_CATEGORIES = ['All', 'Outdoor', 'Indoor', 'VIP Lounge', 'The Nook'] as const
 
 export default function TableGrid({
   tables,
   onSelectTable,
   selectedTable,
   assignedTableIds,
+  assignedZoneNames = null,
   defaultCategory = 'All',
   tableStaffMap = {},
   currentStaffId = null,
   currentRole = null,
 }: TableGridProps & { defaultCategory?: string }) {
-  const [activeCategory, setActiveCategory] = useState<string>(defaultCategory)
+  // Waitrons only see their assigned zone tabs; managers/owners see all
+  const visibleCategories: string[] =
+    assignedZoneNames && assignedZoneNames.length > 0
+      ? assignedZoneNames.length === 1
+        ? assignedZoneNames
+        : ['All', ...assignedZoneNames]
+      : [...ALL_CATEGORIES]
+
+  const [activeCategory, setActiveCategory] = useState<string>(
+    defaultCategory && visibleCategories.includes(defaultCategory)
+      ? defaultCategory
+      : visibleCategories[0]
+  )
   const [tableLayouts, setTableLayouts] = useState<Record<string, TableLayout>>({})
   const [zoneBounds, setZoneBounds] = useState<Record<string, ZoneBounds>>({})
   const [hasLayout, setHasLayout] = useState(false)
@@ -238,11 +252,11 @@ export default function TableGrid({
   if (hasLayout) {
     // "All" view: each zone rendered as a separate section
     if (activeCategory === 'All') {
-      const zoneNames = CATEGORIES.slice(1)
+      const zoneNames = visibleCategories.filter((c) => c !== 'All')
       return (
         <div className="flex flex-col h-full">
           <div className="flex gap-2 p-4 overflow-x-auto border-b border-gray-800">
-            {CATEGORIES.map((cat) => (
+            {visibleCategories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
@@ -278,21 +292,23 @@ export default function TableGrid({
 
     return (
       <div className="flex flex-col h-full">
-        <div className="flex gap-2 p-4 overflow-x-auto border-b border-gray-800">
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                activeCategory === cat
-                  ? 'bg-amber-500 text-black'
-                  : 'bg-gray-800 text-gray-400 hover:text-white'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
+        {visibleCategories.length > 1 && (
+          <div className="flex gap-2 p-4 overflow-x-auto border-b border-gray-800">
+            {visibleCategories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                  activeCategory === cat
+                    ? 'bg-amber-500 text-black'
+                    : 'bg-gray-800 text-gray-400 hover:text-white'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex-1 overflow-auto p-4" ref={containerRef}>
           {renderZoneFloorPlan(activeCategory, filtered, singleZoneScale)}
         </div>
@@ -334,28 +350,31 @@ export default function TableGrid({
     'VIP Lounge': 'bg-amber-500',
     'The Nook': 'bg-purple-500',
   }
-  const grouped = CATEGORIES.slice(1).reduce<Record<string, Table[]>>((acc, cat) => {
+  const fallbackZones = visibleCategories.filter((c) => c !== 'All')
+  const grouped = fallbackZones.reduce<Record<string, Table[]>>((acc, cat) => {
     acc[cat] = filtered.filter((t) => t.table_categories?.name === cat)
     return acc
   }, {})
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex gap-2 p-4 overflow-x-auto border-b border-gray-800">
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-              activeCategory === cat
-                ? 'bg-amber-500 text-black'
-                : 'bg-gray-800 text-gray-400 hover:text-white'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
+      {visibleCategories.length > 1 && (
+        <div className="flex gap-2 p-4 overflow-x-auto border-b border-gray-800">
+          {visibleCategories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                activeCategory === cat
+                  ? 'bg-amber-500 text-black'
+                  : 'bg-gray-800 text-gray-400 hover:text-white'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {Object.entries(grouped).map(([category, categoryTables]) => {
           if (categoryTables.length === 0) return null

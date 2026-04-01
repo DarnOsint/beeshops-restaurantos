@@ -120,6 +120,7 @@ export default function POS() {
     | null
   >(null)
   const [assignedTableIds, setAssignedTableIds] = useState<string[] | null>(null)
+  const [assignedZoneNames, setAssignedZoneNames] = useState<string[] | null>(null)
   const [defaultZone, setDefaultZone] = useState<string>('All')
   const [posTab, setPosTab] = useState<'tables' | 'history' | 'shift'>('tables')
   const [orderHistory, setOrderHistory] = useState<HistoryOrder[]>([])
@@ -175,6 +176,7 @@ export default function POS() {
   const fetchAssignedTables = async (role: string, staffId: string) => {
     if (['owner', 'manager', 'accountant'].includes(role)) {
       setAssignedTableIds(null)
+      setAssignedZoneNames(null)
       setIsClockedIn(true)
       return
     }
@@ -228,11 +230,31 @@ export default function POS() {
     const combined = [...new Set([...zoneIds, ...directIds])]
     setAssignedTableIds(combined.length > 0 ? combined : null)
 
+    // Resolve zone names from category IDs for filtering tabs
+    const zoneNames = tables
+      .filter((t) => categoryIds.includes(t.category_id || ''))
+      .map((t) => t.table_categories?.name)
+      .filter((n): n is string => !!n)
+    // Also include zones of directly assigned tables
+    if (directIds.length > 0) {
+      tables
+        .filter((t) => directIds.includes(t.id))
+        .forEach((t) => {
+          if (t.table_categories?.name) zoneNames.push(t.table_categories.name)
+        })
+    }
+    const uniqueZoneNames = [...new Set(zoneNames)]
+    setAssignedZoneNames(uniqueZoneNames.length > 0 ? uniqueZoneNames : null)
+
     // Auto-open the waitron's zone tab
-    const firstCatId = categoryIds[0]
-    const matchingZone = tables.find((t) => t.category_id === firstCatId)
-    if (matchingZone?.table_categories?.name) {
-      setDefaultZone(matchingZone.table_categories.name)
+    if (uniqueZoneNames.length === 1) {
+      setDefaultZone(uniqueZoneNames[0])
+    } else {
+      const firstCatId = categoryIds[0]
+      const matchingZone = tables.find((t) => t.category_id === firstCatId)
+      if (matchingZone?.table_categories?.name) {
+        setDefaultZone(matchingZone.table_categories.name)
+      }
     }
   }
 
@@ -838,6 +860,7 @@ export default function POS() {
               onSelectTable={handleSelectTable}
               selectedTable={selectedTable}
               assignedTableIds={assignedTableIds}
+              assignedZoneNames={assignedZoneNames}
               defaultCategory={defaultZone}
               tableStaffMap={tableStaffMap}
               currentStaffId={profile?.id || null}
