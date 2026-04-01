@@ -104,6 +104,8 @@ export default function TableGrid({
       })
   }, [])
 
+  const [containerHeight, setContainerHeight] = useState(0)
+
   // Measure container for responsive scaling
   useEffect(() => {
     const el = containerRef.current
@@ -111,13 +113,14 @@ export default function TableGrid({
     const obs = new ResizeObserver((entries) => {
       for (const entry of entries) {
         setContainerWidth(entry.contentRect.width)
+        setContainerHeight(entry.contentRect.height)
       }
     })
     obs.observe(el)
     return () => obs.disconnect()
   }, [])
 
-  const scale = containerWidth > 0 ? Math.min(1, containerWidth / CANVAS_W) : 0.5
+  const scale = containerWidth > 0 ? containerWidth / CANVAS_W : 0.5
 
   const filtered =
     activeCategory === 'All'
@@ -338,8 +341,8 @@ export default function TableGrid({
               const sections = zoneBounds[zoneName]
               if (!sections || sections.length === 0) return null
               const bbox = getZoneBoundingBox(sections)
-              const zoneScale =
-                containerWidth > 0 ? Math.min(1, (containerWidth - 32) / bbox.w) : 0.5
+              // In "All" view, fit to width (zones stack vertically so height scrolls)
+              const zoneScale = containerWidth > 0 ? (containerWidth - 32) / bbox.w : 0.5
               return renderZoneFloorPlan(zoneName, zoneTables, zoneScale)
             })}
           </div>
@@ -347,11 +350,17 @@ export default function TableGrid({
       )
     }
 
-    // Single zone view
+    // Single zone view — scale to fill available space (fit both width and height)
     const singleSections = zoneBounds[activeCategory]
     const singleBbox = singleSections ? getZoneBoundingBox(singleSections) : null
-    const singleZoneScale =
-      singleBbox && containerWidth > 0 ? Math.min(1, (containerWidth - 16) / singleBbox.w) : scale
+    const singleZoneScale = (() => {
+      if (!singleBbox || containerWidth <= 0) return scale
+      const padW = 32
+      const padH = 48 // extra padding for zone header text
+      const scaleX = (containerWidth - padW) / singleBbox.w
+      const scaleY = containerHeight > 0 ? (containerHeight - padH) / singleBbox.h : scaleX
+      return Math.min(scaleX, scaleY)
+    })()
 
     return (
       <div className="flex flex-col h-full">
