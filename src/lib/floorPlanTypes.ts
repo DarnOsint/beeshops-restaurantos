@@ -15,9 +15,10 @@ export interface ZoneBounds {
   h: number
 }
 
+// zones can be a single rect (legacy) or array of rects (multi-section)
 export interface FloorPlanData {
   tables: Record<string, TableLayout>
-  zones: Record<string, ZoneBounds>
+  zones: Record<string, ZoneBounds | ZoneBounds[]>
 }
 
 export const ZONE_COLORS: Record<string, { fill: string; stroke: string; text: string }> = {
@@ -46,6 +47,21 @@ export const GRID_SIZE = 20
 
 export function getZoneColor(zone?: string) {
   return zone ? ZONE_COLORS[zone] || DEFAULT_ZONE_COLOR : DEFAULT_ZONE_COLOR
+}
+
+/** Normalize a zone value to always be an array of bounds */
+export function normalizeZoneBounds(z: ZoneBounds | ZoneBounds[]): ZoneBounds[] {
+  return Array.isArray(z) ? z : [z]
+}
+
+/** Get the bounding box that contains all sections of a zone */
+export function getZoneBoundingBox(sections: ZoneBounds[]): ZoneBounds {
+  if (sections.length === 0) return { x: 0, y: 0, w: 400, h: 300 }
+  const minX = Math.min(...sections.map((s) => s.x))
+  const minY = Math.min(...sections.map((s) => s.y))
+  const maxX = Math.max(...sections.map((s) => s.x + s.w))
+  const maxY = Math.max(...sections.map((s) => s.y + s.h))
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
 }
 
 export function parseFloorPlanData(raw: string | null | undefined): FloorPlanData {

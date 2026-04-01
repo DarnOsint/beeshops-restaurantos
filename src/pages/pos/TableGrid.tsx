@@ -10,6 +10,8 @@ import {
   CANVAS_W,
   CANVAS_H,
   getZoneColor,
+  normalizeZoneBounds,
+  getZoneBoundingBox,
   parseFloorPlanData,
 } from '../../lib/floorPlanTypes'
 
@@ -75,7 +77,7 @@ export default function TableGrid({
       : visibleCategories[0]
   )
   const [tableLayouts, setTableLayouts] = useState<Record<string, TableLayout>>({})
-  const [zoneBounds, setZoneBounds] = useState<Record<string, ZoneBounds>>({})
+  const [zoneBounds, setZoneBounds] = useState<Record<string, ZoneBounds[]>>({})
   const [hasLayout, setHasLayout] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -91,7 +93,12 @@ export default function TableGrid({
         const parsed = parseFloorPlanData(data?.value)
         if (Object.keys(parsed.tables).length > 0) {
           setTableLayouts(parsed.tables)
-          setZoneBounds(parsed.zones)
+          // Normalize zones to arrays
+          const normalized: Record<string, ZoneBounds[]> = {}
+          for (const [k, v] of Object.entries(parsed.zones)) {
+            normalized[k] = normalizeZoneBounds(v)
+          }
+          setZoneBounds(normalized)
           setHasLayout(true)
         }
       })
@@ -119,10 +126,10 @@ export default function TableGrid({
 
   // Render a single zone's floor plan (used by both "All" and individual zone views)
   const renderZoneFloorPlan = (zoneName: string, zoneTables: Table[], zoneScale: number) => {
-    const bounds = zoneBounds[zoneName]
-    if (!bounds) return null
+    const sections = zoneBounds[zoneName]
+    if (!sections || sections.length === 0) return null
+    const bbox = getZoneBoundingBox(sections)
     const c = ZONE_COLORS[zoneName] || DEFAULT_ZONE_COLOR
-    // Position tables relative to the zone's top-left corner
     const occupiedCount = zoneTables.filter((t) => t.status === 'occupied').length
 
     return (
@@ -139,14 +146,29 @@ export default function TableGrid({
         <div
           className="relative select-none"
           style={{
-            width: bounds.w * zoneScale,
-            height: bounds.h * zoneScale,
-            background: c.fill,
-            border: `1.5px solid ${c.stroke}30`,
-            borderRadius: 14 * zoneScale,
+            width: bbox.w * zoneScale,
+            height: bbox.h * zoneScale,
             marginBottom: 8,
           }}
         >
+          {/* Zone section backgrounds */}
+          {sections.map((sec, idx) => (
+            <div
+              key={`sec-${idx}`}
+              style={{
+                position: 'absolute',
+                left: (sec.x - bbox.x) * zoneScale,
+                top: (sec.y - bbox.y) * zoneScale,
+                width: sec.w * zoneScale,
+                height: sec.h * zoneScale,
+                background: c.fill,
+                border: `1.5px solid ${c.stroke}30`,
+                borderRadius: 14 * zoneScale,
+                zIndex: 0,
+                pointerEvents: 'none',
+              }}
+            />
+          ))}
           {zoneTables.map((table) => {
             const layout = tableLayouts[table.id]
             if (!layout) return null
@@ -169,9 +191,9 @@ export default function TableGrid({
               ids.includes(table.id)
             )
 
-            // Position relative to zone boundary
-            const relX = (layout.x - bounds.x) * zoneScale
-            const relY = (layout.y - bounds.y) * zoneScale
+            // Position relative to zone bounding box
+            const relX = (layout.x - bbox.x) * zoneScale
+            const relY = (layout.y - bbox.y) * zoneScale
 
             return (
               <button
@@ -313,10 +335,11 @@ export default function TableGrid({
             {zoneNames.map((zoneName) => {
               const zoneTables = tables.filter((t) => t.table_categories?.name === zoneName)
               if (zoneTables.length === 0) return null
-              const bounds = zoneBounds[zoneName]
-              if (!bounds) return null
+              const sections = zoneBounds[zoneName]
+              if (!sections || sections.length === 0) return null
+              const bbox = getZoneBoundingBox(sections)
               const zoneScale =
-                containerWidth > 0 ? Math.min(1, (containerWidth - 32) / bounds.w) : 0.5
+                containerWidth > 0 ? Math.min(1, (containerWidth - 32) / bbox.w) : 0.5
               return renderZoneFloorPlan(zoneName, zoneTables, zoneScale)
             })}
           </div>
@@ -325,9 +348,10 @@ export default function TableGrid({
     }
 
     // Single zone view
-    const bounds = zoneBounds[activeCategory]
+    const singleSections = zoneBounds[activeCategory]
+    const singleBbox = singleSections ? getZoneBoundingBox(singleSections) : null
     const singleZoneScale =
-      bounds && containerWidth > 0 ? Math.min(1, (containerWidth - 16) / bounds.w) : scale
+      singleBbox && containerWidth > 0 ? Math.min(1, (containerWidth - 16) / singleBbox.w) : scale
 
     return (
       <div className="flex flex-col h-full">

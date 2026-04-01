@@ -1,5 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { ArrowLeft, Save, RotateCcw, Circle, Square, ZoomIn, ZoomOut, Loader2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  Save,
+  RotateCcw,
+  Circle,
+  Square,
+  ZoomIn,
+  ZoomOut,
+  Loader2,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../context/ToastContext'
 import {
@@ -12,6 +23,7 @@ import {
   CANVAS_H,
   GRID_SIZE,
   getZoneColor,
+  normalizeZoneBounds,
   parseFloorPlanData,
 } from '../../lib/floorPlanTypes'
 
@@ -48,9 +60,12 @@ const DEFAULT_ZONE_BOUNDS: Record<string, ZoneBounds> = {
   'The Nook': { x: 620, y: 410, w: 560, h: 370 },
 }
 
-type DragTarget = { type: 'table'; id: string } | { type: 'zone'; name: string } | null
+type DragTarget = { type: 'table'; id: string } | { type: 'zone'; name: string; idx: number } | null
 
-type ResizeTarget = { type: 'table'; id: string } | { type: 'zone'; name: string } | null
+type ResizeTarget =
+  | { type: 'table'; id: string }
+  | { type: 'zone'; name: string; idx: number }
+  | null
 
 export default function FloorPlan({ onBack }: Props) {
   const toast = useToast()
@@ -59,7 +74,7 @@ export default function FloorPlan({ onBack }: Props) {
   const [tables, setTables] = useState<TableRow[]>([])
   const [zones, setZones] = useState<Zone[]>([])
   const [tableLayouts, setTableLayouts] = useState<Record<string, TableLayout>>({})
-  const [zoneBounds, setZoneBounds] = useState<Record<string, ZoneBounds>>({})
+  const [zoneBounds, setZoneBounds] = useState<Record<string, ZoneBounds[]>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [zoom, setZoom] = useState(1)
@@ -106,16 +121,15 @@ export default function FloorPlan({ onBack }: Props) {
       }
       setTableLayouts(merged)
 
-      // Ensure every zone has bounds
-      const mergedZones: Record<string, ZoneBounds> = {}
+      // Ensure every zone has bounds — normalize to arrays
+      const mergedZones: Record<string, ZoneBounds[]> = {}
       for (const z of zns) {
-        mergedZones[z.name] = saved.zones[z.name] ||
-          DEFAULT_ZONE_BOUNDS[z.name] || {
-            x: 20,
-            y: 20,
-            w: 400,
-            h: 300,
-          }
+        const saved_z = saved.zones[z.name]
+        if (saved_z) {
+          mergedZones[z.name] = normalizeZoneBounds(saved_z)
+        } else {
+          mergedZones[z.name] = [DEFAULT_ZONE_BOUNDS[z.name] || { x: 20, y: 20, w: 400, h: 300 }]
+        }
       }
       setZoneBounds(mergedZones)
       setLoading(false)
@@ -145,7 +159,8 @@ export default function FloorPlan({ onBack }: Props) {
         const l = tableLayouts[target.id]
         if (l) dragOffsetRef.current = { x: pos.x - l.x, y: pos.y - l.y }
       } else if (target?.type === 'zone') {
-        const b = zoneBounds[target.name]
+        const sections = zoneBounds[target.name]
+        const b = sections?.[target.idx]
         if (b) dragOffsetRef.current = { x: pos.x - b.x, y: pos.y - b.y }
       }
     }
@@ -176,16 +191,16 @@ export default function FloorPlan({ onBack }: Props) {
       })
     } else if (drag?.type === 'zone') {
       setZoneBounds((prev) => {
-        const b = prev[drag.name]
+        const sections = prev[drag.name]
+        const b = sections?.[drag.idx]
         if (!b) return prev
-        return {
-          ...prev,
-          [drag.name]: {
-            ...b,
-            x: snapToGrid(Math.max(0, Math.min(CANVAS_W - b.w, pos.x - offset.x))),
-            y: snapToGrid(Math.max(0, Math.min(CANVAS_H - b.h, pos.y - offset.y))),
-          },
+        const updated = [...sections]
+        updated[drag.idx] = {
+          ...b,
+          x: snapToGrid(Math.max(0, Math.min(CANVAS_W - b.w, pos.x - offset.x))),
+          y: snapToGrid(Math.max(0, Math.min(CANVAS_H - b.h, pos.y - offset.y))),
         }
+        return { ...prev, [drag.name]: updated }
       })
     }
 
@@ -204,16 +219,16 @@ export default function FloorPlan({ onBack }: Props) {
       })
     } else if (resize?.type === 'zone') {
       setZoneBounds((prev) => {
-        const b = prev[resize.name]
+        const sections = prev[resize.name]
+        const b = sections?.[resize.idx]
         if (!b) return prev
-        return {
-          ...prev,
-          [resize.name]: {
-            ...b,
-            w: snapToGrid(Math.max(120, pos.x - b.x)),
-            h: snapToGrid(Math.max(80, pos.y - b.y)),
-          },
+        const updated = [...sections]
+        updated[resize.idx] = {
+          ...b,
+          w: snapToGrid(Math.max(120, pos.x - b.x)),
+          h: snapToGrid(Math.max(80, pos.y - b.y)),
         }
+        return { ...prev, [resize.name]: updated }
       })
     }
   }
@@ -266,13 +281,36 @@ export default function FloorPlan({ onBack }: Props) {
       }
     }
     setTableLayouts(fresh)
-    const freshZones: Record<string, ZoneBounds> = {}
+    const freshZones: Record<string, ZoneBounds[]> = {}
     for (const z of zones) {
-      freshZones[z.name] = DEFAULT_ZONE_BOUNDS[z.name] || { x: 20, y: 20, w: 400, h: 300 }
+      freshZones[z.name] = [DEFAULT_ZONE_BOUNDS[z.name] || { x: 20, y: 20, w: 400, h: 300 }]
     }
     setZoneBounds(freshZones)
     setSelectedId(null)
     toast.success('Layout reset — save to apply')
+  }
+
+  const addZoneSection = (zoneName: string) => {
+    setZoneBounds((prev) => {
+      const sections = prev[zoneName] || []
+      const last = sections[sections.length - 1] || { x: 20, y: 20, w: 300, h: 200 }
+      return {
+        ...prev,
+        [zoneName]: [...sections, { x: last.x + 40, y: last.y + 40, w: 300, h: 200 }],
+      }
+    })
+    toast.success('Section added', `Drag and resize the new ${zoneName} section`)
+  }
+
+  const removeZoneSection = (zoneName: string, idx: number) => {
+    setZoneBounds((prev) => {
+      const sections = prev[zoneName] || []
+      if (sections.length <= 1) {
+        toast.error('Cannot remove', 'Each zone needs at least one section')
+        return prev
+      }
+      return { ...prev, [zoneName]: sections.filter((_, i) => i !== idx) }
+    })
   }
 
   const filteredTables =
@@ -346,6 +384,16 @@ export default function FloorPlan({ onBack }: Props) {
             {zone}
           </button>
         ))}
+        {/* Add section button — visible when a specific zone is selected */}
+        {filterZone !== 'All' && (
+          <button
+            onClick={() => addZoneSection(filterZone)}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-800 border border-gray-700 text-gray-300 hover:text-white rounded-lg text-xs transition-colors"
+          >
+            <Plus size={12} /> Add Section
+          </button>
+        )}
+
         <div className="ml-auto flex items-center gap-3">
           {selectedId && (
             <>
@@ -393,13 +441,13 @@ export default function FloorPlan({ onBack }: Props) {
             setSelectedId(null)
           }}
         >
-          {/* Zone boundary areas — rendered first (behind tables) */}
-          {Object.entries(zoneBounds).map(([zoneName, bounds]) => {
+          {/* Zone boundary sections — rendered first (behind tables) */}
+          {Object.entries(zoneBounds).map(([zoneName, sections]) => {
             if (filterZone !== 'All' && filterZone !== zoneName) return null
             const c = ZONE_COLORS[zoneName] || DEFAULT_ZONE_COLOR
-            return (
+            return sections.map((bounds, idx) => (
               <div
-                key={`zone-${zoneName}`}
+                key={`zone-${zoneName}-${idx}`}
                 style={{
                   position: 'absolute',
                   left: bounds.x * zoom,
@@ -412,32 +460,82 @@ export default function FloorPlan({ onBack }: Props) {
                   zIndex: 0,
                   cursor:
                     dragTargetRef.current?.type === 'zone' &&
-                    dragTargetRef.current.name === zoneName
+                    dragTargetRef.current.name === zoneName &&
+                    dragTargetRef.current.idx === idx
                       ? 'grabbing'
                       : 'grab',
                 }}
-                onMouseDown={(e) => handleMouseDown(e, { type: 'zone', name: zoneName }, false)}
+                onMouseDown={(e) =>
+                  handleMouseDown(e, { type: 'zone', name: zoneName, idx }, false)
+                }
               >
-                {/* Zone label */}
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: 8 * zoom,
-                    left: 12 * zoom,
-                    color: c.text,
-                    fontSize: Math.max(11, 14 * zoom),
-                    fontWeight: 700,
-                    opacity: 0.7,
-                    pointerEvents: 'none',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                  }}
-                >
-                  {zoneName}
-                </span>
-                {/* Zone resize handle */}
+                {/* Zone label — only on first section */}
+                {idx === 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: 8 * zoom,
+                      left: 12 * zoom,
+                      color: c.text,
+                      fontSize: Math.max(11, 14 * zoom),
+                      fontWeight: 700,
+                      opacity: 0.7,
+                      pointerEvents: 'none',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    {zoneName}
+                  </span>
+                )}
+                {/* Section number badge for multi-section zones */}
+                {sections.length > 1 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: 8 * zoom,
+                      right: 28 * zoom,
+                      color: c.text,
+                      fontSize: Math.max(8, 10 * zoom),
+                      opacity: 0.5,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    {idx + 1}/{sections.length}
+                  </span>
+                )}
+                {/* Remove section button (only if multiple sections) */}
+                {sections.length > 1 && (
+                  <button
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeZoneSection(zoneName, idx)
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: 6 * zoom,
+                      right: 8 * zoom,
+                      width: 16 * zoom,
+                      height: 16 * zoom,
+                      background: 'rgba(239,68,68,0.3)',
+                      borderRadius: 4 * zoom,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      border: 'none',
+                      padding: 0,
+                    }}
+                  >
+                    <Trash2 size={Math.max(8, 10 * zoom)} color="#f87171" />
+                  </button>
+                )}
+                {/* Resize handle */}
                 <div
-                  onMouseDown={(e) => handleMouseDown(e, { type: 'zone', name: zoneName }, true)}
+                  onMouseDown={(e) =>
+                    handleMouseDown(e, { type: 'zone', name: zoneName, idx }, true)
+                  }
                   style={{
                     position: 'absolute',
                     right: -4 * zoom,
@@ -452,7 +550,7 @@ export default function FloorPlan({ onBack }: Props) {
                   }}
                 />
               </div>
-            )
+            ))
           })}
 
           {/* Tables — rendered on top */}
