@@ -270,34 +270,124 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
   const printCashReceipt = () => {
     if (!completedOrder) return
     const o = completedOrder
-    const now = new Date().toLocaleString('en-NG')
-    const html = `<html><head><style>* { margin:0; padding:0; box-sizing:border-box; } body { font-family:'Courier New',monospace; font-size:12px; color:#000; width:80mm; padding:4mm; }
-      .center { text-align:center; } .bold { font-weight:bold; } .row { display:flex; justify-content:space-between; margin:3px 0; } .divider { border-top:1px dashed #000; margin:6px 0; }
-      @media print { body{width:80mm;} @page{margin:0;size:80mm auto;} }</style></head><body>
-      <div class="center bold" style="font-size:15px">Beeshop's Place</div>
-      <div class="center" style="font-size:10px">Restaurant & Bar</div>
-      <div class="divider"></div>
-      <div class="center" style="font-size:10px">${now}</div>
-      <div class="center" style="font-size:10px">${isTakeaway ? 'TAKEAWAY — ' + o.customerName : 'CASH SALE'}</div>
-      <div class="divider"></div>
-      ${o.items.map((i) => `<div class="row"><span>${i.quantity}x ${i.name}</span><span>₦${(i.total || i.price * i.quantity).toLocaleString()}</span></div>`).join('')}
-      ${packFee > 0 && selectedPack ? `<div class="row"><span>Pack (${selectedPack.name})</span><span>₦${packFee.toLocaleString()}</span></div>` : ''}
-      <div class="divider"></div>
-      <div class="row bold"><span>TOTAL</span><span>₦${o.total.toLocaleString()}</span></div>
-      ${o.paymentMethod === 'cash' && o.change > 0 ? `<div class="row"><span>Change</span><span>₦${o.change.toLocaleString()}</span></div>` : ''}
-      <div class="divider"></div>
-      <div class="center" style="font-size:10px">Thank you!</div>
-    </body></html>`
-    const iframe = document.createElement('iframe')
-    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:0'
-    document.body.appendChild(iframe)
-    iframe.contentDocument!.write(html)
-    iframe.contentDocument!.close()
-    iframe.contentWindow!.focus()
+    const W = 40
+    const fmtRow = (left: string, right: string) => {
+      const l = left.substring(0, W - right.length - 1)
+      const spaces = W - l.length - right.length
+      return l + ' '.repeat(Math.max(1, spaces)) + right
+    }
+    const divider = '-'.repeat(W)
+    const solidDivider = '='.repeat(W)
+    const centre = (str: string) => {
+      const pad = Math.max(0, Math.floor((W - str.length) / 2))
+      return ' '.repeat(pad) + str
+    }
+    const fmtDate = new Date().toLocaleDateString('en-NG', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
+    const fmtTime = new Date().toLocaleTimeString('en-NG', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
+    const pmLabel =
+      o.paymentMethod === 'cash'
+        ? 'CASH'
+        : o.paymentMethod === 'card'
+          ? 'BANK POS'
+          : o.paymentMethod === 'transfer'
+            ? 'TRANSFER'
+            : o.paymentMethod.toUpperCase()
+    const orderRef = `BSP-${o.order.id.slice(0, 8).toUpperCase()}`
+
+    const itemLines = o.items
+      .map((i) =>
+        fmtRow(`${i.quantity}x ${i.name}`, `N${(i.total || i.price * i.quantity).toLocaleString()}`)
+      )
+      .join('\n')
+
+    const packLine =
+      packFee > 0 && selectedPack
+        ? '\n' + fmtRow(`Pack (${selectedPack.name})`, `N${packFee.toLocaleString()}`)
+        : ''
+
+    const fmtTotal = `N${o.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+    const lines = [
+      '',
+      centre("BEESHOP'S PLACE"),
+      centre('Lounge & Restaurant'),
+      divider,
+      fmtRow('Ref:', orderRef),
+      fmtRow('Customer:', isTakeaway ? (o.customerName || 'Walk-in').substring(0, 20) : 'Counter'),
+      fmtRow('Date:', fmtDate),
+      fmtRow('Time:', fmtTime),
+      fmtRow('Served by:', (profile?.full_name || 'Staff').substring(0, 20)),
+      fmtRow('Payment:', pmLabel),
+      fmtRow('Type:', isTakeaway ? 'TAKEAWAY' : 'CASH SALE'),
+      divider,
+      fmtRow('ITEM', 'AMOUNT'),
+      divider,
+      itemLines + packLine,
+      solidDivider,
+      fmtRow('TOTAL:', fmtTotal),
+      ...(o.paymentMethod === 'cash' && o.change > 0
+        ? [
+            fmtRow(
+              'Tendered:',
+              `N${(o.total + o.change).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            ),
+            fmtRow(
+              'Change:',
+              `N${o.change.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            ),
+          ]
+        : []),
+      solidDivider,
+      '',
+      centre('** PAYMENT CONFIRMED **'),
+      '',
+      centre('Thank you for visiting'),
+      centre("Beeshop's Place!"),
+      '',
+    ].join('\n')
+
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Receipt - ${orderRef}</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; background: #fff; width: 80mm; padding: 4mm; white-space: pre; }
+@media print { body { width: 80mm; } @page { margin: 0; size: 80mm auto; } }
+</style></head><body>${lines}</body></html>`
+
+    const win = window.open(
+      '',
+      '_blank',
+      'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
+    )
+    if (!win) return
+    win.document.open('text/html', 'replace')
+    win.document.write(html)
+    win.document.close()
+    win.onafterprint = () => win.close()
+    win.onload = () => {
+      setTimeout(() => {
+        try {
+          win.print()
+        } catch {
+          /* already closed */
+        }
+      }, 200)
+    }
     setTimeout(() => {
-      iframe.contentWindow!.print()
-      setTimeout(() => document.body.removeChild(iframe), 1000)
-    }, 300)
+      try {
+        if (!win.closed) win.close()
+      } catch {
+        /* already closed */
+      }
+    }, 300000)
   }
 
   if (success)
