@@ -60,48 +60,36 @@ export default function GeofenceControls({
   const saveRadius = async () => {
     setRadiusSaving(true)
     await Promise.all([
-      supabase
-        .from('settings')
-        .upsert({
-          id: 'geofence_radius_main',
-          value: String(radiusMain),
-          updated_at: new Date().toISOString(),
-        }),
-      supabase
-        .from('settings')
-        .upsert({
-          id: 'geofence_radius_apartment',
-          value: String(radiusApartment),
-          updated_at: new Date().toISOString(),
-        }),
-      supabase
-        .from('settings')
-        .upsert({
-          id: 'geofence_lat_main',
-          value: String(latMain),
-          updated_at: new Date().toISOString(),
-        }),
-      supabase
-        .from('settings')
-        .upsert({
-          id: 'geofence_lng_main',
-          value: String(lngMain),
-          updated_at: new Date().toISOString(),
-        }),
-      supabase
-        .from('settings')
-        .upsert({
-          id: 'geofence_lat_apartment',
-          value: String(latApartment),
-          updated_at: new Date().toISOString(),
-        }),
-      supabase
-        .from('settings')
-        .upsert({
-          id: 'geofence_lng_apartment',
-          value: String(lngApartment),
-          updated_at: new Date().toISOString(),
-        }),
+      supabase.from('settings').upsert({
+        id: 'geofence_radius_main',
+        value: String(radiusMain),
+        updated_at: new Date().toISOString(),
+      }),
+      supabase.from('settings').upsert({
+        id: 'geofence_radius_apartment',
+        value: String(radiusApartment),
+        updated_at: new Date().toISOString(),
+      }),
+      supabase.from('settings').upsert({
+        id: 'geofence_lat_main',
+        value: String(latMain),
+        updated_at: new Date().toISOString(),
+      }),
+      supabase.from('settings').upsert({
+        id: 'geofence_lng_main',
+        value: String(lngMain),
+        updated_at: new Date().toISOString(),
+      }),
+      supabase.from('settings').upsert({
+        id: 'geofence_lat_apartment',
+        value: String(latApartment),
+        updated_at: new Date().toISOString(),
+      }),
+      supabase.from('settings').upsert({
+        id: 'geofence_lng_apartment',
+        value: String(lngApartment),
+        updated_at: new Date().toISOString(),
+      }),
     ])
     setRadiusSaving(false)
     setShowRadiusEdit(false)
@@ -254,25 +242,35 @@ interface BankAccount {
 
 function BankAccountsManager({ inp }: { inp: string }) {
   const [banks, setBanks] = useState<BankAccount[]>([])
+  const [expanded, setExpanded] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [saving, setSaving] = useState(false)
   const [newBank, setNewBank] = useState({ bank_name: '', account_number: '', account_name: '' })
 
   useEffect(() => {
-    supabase.from('bank_accounts').select('*').eq('is_active', true).order('created_at').then(({ data }) => {
-      if (data) setBanks(data as BankAccount[])
-    })
+    supabase
+      .from('bank_accounts')
+      .select('*')
+      .eq('is_active', true)
+      .order('created_at')
+      .then(({ data }) => {
+        if (data) setBanks(data as BankAccount[])
+      })
   }, [])
 
   const addBank = async () => {
     if (!newBank.bank_name || !newBank.account_number || !newBank.account_name) return
     setSaving(true)
-    const { data } = await supabase.from('bank_accounts').insert({
-      bank_name: newBank.bank_name,
-      account_number: newBank.account_number,
-      account_name: newBank.account_name,
-      is_active: true,
-    }).select().single()
+    const { data } = await supabase
+      .from('bank_accounts')
+      .insert({
+        bank_name: newBank.bank_name,
+        account_number: newBank.account_number,
+        account_name: newBank.account_name,
+        is_active: true,
+      })
+      .select()
+      .single()
     if (data) setBanks((prev) => [...prev, data as BankAccount])
     setNewBank({ bank_name: '', account_number: '', account_name: '' })
     setShowAdd(false)
@@ -286,78 +284,97 @@ function BankAccountsManager({ inp }: { inp: string }) {
 
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-2xl mb-4 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-800/50 transition-colors text-left"
+      >
         <div className="flex items-center gap-2">
           <Smartphone size={15} className="text-amber-400" />
           <span className="text-white font-semibold text-sm">Bank Transfer Accounts</span>
-          <span className="text-gray-500 text-xs">· {banks.length} account{banks.length !== 1 ? 's' : ''}</span>
+          <span className="text-gray-500 text-xs">
+            · {banks.length} account{banks.length !== 1 ? 's' : ''}
+          </span>
         </div>
-        <button
-          onClick={() => setShowAdd((v) => !v)}
-          className="flex items-center gap-1 text-amber-400 hover:text-amber-300 text-xs font-medium"
+        <span
+          className={`text-gray-500 text-xs transition-transform ${expanded ? 'rotate-180' : ''}`}
         >
-          <Plus size={13} /> Add
-        </button>
-      </div>
-      <div className="px-4 py-3 space-y-2">
-        <p className="text-gray-500 text-xs">Waitrons choose which bank to display during transfer payment.</p>
-        {banks.length === 0 && !showAdd && (
-          <p className="text-gray-600 text-xs italic">No bank accounts added yet.</p>
-        )}
-        {banks.map((bank) => (
-          <div key={bank.id} className="bg-gray-800 rounded-xl p-3 flex items-start justify-between gap-2">
-            <div>
-              <p className="text-white text-sm font-semibold">{bank.bank_name}</p>
-              <p className="text-amber-400 font-mono text-sm">{bank.account_number}</p>
-              <p className="text-gray-400 text-xs">{bank.account_name}</p>
-            </div>
+          ▼
+        </span>
+      </button>
+      {expanded && (
+        <div className="px-4 py-3 space-y-2 border-t border-gray-800">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-gray-500 text-xs">
+              Waitrons choose which bank to display during transfer payment.
+            </p>
             <button
-              onClick={() => removeBank(bank.id)}
-              className="text-gray-500 hover:text-red-400 transition-colors mt-1"
+              onClick={() => setShowAdd((v) => !v)}
+              className="flex items-center gap-1 text-amber-400 hover:text-amber-300 text-xs font-medium shrink-0 ml-2"
             >
-              <Trash2 size={14} />
+              <Plus size={13} /> Add
             </button>
           </div>
-        ))}
-        {showAdd && (
-          <div className="bg-gray-800 rounded-xl p-3 space-y-2 border border-amber-500/30">
-            <p className="text-amber-400 text-xs font-medium">New Bank Account</p>
-            <input
-              value={newBank.bank_name}
-              onChange={(e) => setNewBank((p) => ({ ...p, bank_name: e.target.value }))}
-              placeholder="Bank name (e.g. Moniepoint)"
-              className={inp}
-            />
-            <input
-              value={newBank.account_number}
-              onChange={(e) => setNewBank((p) => ({ ...p, account_number: e.target.value }))}
-              placeholder="Account number"
-              className={inp}
-            />
-            <input
-              value={newBank.account_name}
-              onChange={(e) => setNewBank((p) => ({ ...p, account_name: e.target.value }))}
-              placeholder="Account name"
-              className={inp}
-            />
-            <div className="flex gap-2">
+          {banks.length === 0 && !showAdd && (
+            <p className="text-gray-600 text-xs italic">No bank accounts added yet.</p>
+          )}
+          {banks.map((bank) => (
+            <div
+              key={bank.id}
+              className="bg-gray-800 rounded-xl p-3 flex items-start justify-between gap-2"
+            >
+              <div>
+                <p className="text-white text-sm font-semibold">{bank.bank_name}</p>
+                <p className="text-amber-400 font-mono text-sm">{bank.account_number}</p>
+                <p className="text-gray-400 text-xs">{bank.account_name}</p>
+              </div>
               <button
-                onClick={addBank}
-                disabled={saving}
-                className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black text-sm font-bold py-2 rounded-xl"
+                onClick={() => removeBank(bank.id)}
+                className="text-gray-500 hover:text-red-400 transition-colors mt-1"
               >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-              <button
-                onClick={() => setShowAdd(false)}
-                className="flex-1 bg-gray-700 text-white text-sm py-2 rounded-xl"
-              >
-                Cancel
+                <Trash2 size={14} />
               </button>
             </div>
-          </div>
-        )}
-      </div>
+          ))}
+          {showAdd && (
+            <div className="bg-gray-800 rounded-xl p-3 space-y-2 border border-amber-500/30">
+              <p className="text-amber-400 text-xs font-medium">New Bank Account</p>
+              <input
+                value={newBank.bank_name}
+                onChange={(e) => setNewBank((p) => ({ ...p, bank_name: e.target.value }))}
+                placeholder="Bank name (e.g. Moniepoint)"
+                className={inp}
+              />
+              <input
+                value={newBank.account_number}
+                onChange={(e) => setNewBank((p) => ({ ...p, account_number: e.target.value }))}
+                placeholder="Account number"
+                className={inp}
+              />
+              <input
+                value={newBank.account_name}
+                onChange={(e) => setNewBank((p) => ({ ...p, account_name: e.target.value }))}
+                placeholder="Account name"
+                className={inp}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={addBank}
+                  disabled={saving}
+                  className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black text-sm font-bold py-2 rounded-xl"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={() => setShowAdd(false)}
+                  className="flex-1 bg-gray-700 text-white text-sm py-2 rounded-xl"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
