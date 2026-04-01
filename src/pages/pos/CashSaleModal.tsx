@@ -64,7 +64,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
   const [notes, setNotes] = useState('')
   const [activeTab, setActiveTab] = useState<'menu' | 'order'>('menu')
   const [packSizes, setPackSizes] = useState<{ id: string; name: string; price: number }[]>([])
-  const [selectedPackId, setSelectedPackId] = useState<string | null>(null)
+  const [packQuantities, setPackQuantities] = useState<Record<string, number>>({})
 
   const isTakeaway = type === 'takeaway'
 
@@ -81,7 +81,6 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
           try {
             const sizes = JSON.parse(data.value) as { id: string; name: string; price: number }[]
             setPackSizes(sizes)
-            if (sizes.length > 0) setSelectedPackId(sizes[0].id)
           } catch {
             /* invalid */
           }
@@ -142,8 +141,12 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
     })
   }
 
-  const selectedPack = packSizes.find((p) => p.id === selectedPackId)
-  const packFee = isTakeaway && selectedPack ? selectedPack.price : 0
+  const packFee = isTakeaway
+    ? packSizes.reduce((sum, p) => sum + (packQuantities[p.id] || 0) * p.price, 0)
+    : 0
+  const packItems = packSizes
+    .filter((p) => (packQuantities[p.id] || 0) > 0)
+    .map((p) => ({ ...p, qty: packQuantities[p.id] }))
   const itemsTotal = orderItems.reduce((sum, i) => sum + i.total, 0)
   const total = itemsTotal + packFee
   const change = paymentMethod === 'cash' && cashTendered ? parseFloat(cashTendered) - total : 0
@@ -205,18 +208,18 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         destination: item.menu_categories?.destination || 'bar',
         created_at: new Date().toISOString(),
       }))
-      // Add takeaway pack fee as a line item
-      if (packFee > 0 && selectedPack) {
+      // Add takeaway pack fees as line items
+      for (const pack of packItems) {
         itemRows.push({
           id: crypto.randomUUID(),
           order_id: (order as { id: string }).id,
           menu_item_id: null as unknown as string,
-          quantity: 1,
-          unit_price: packFee,
-          total_price: packFee,
+          quantity: pack.qty,
+          unit_price: pack.price,
+          total_price: pack.qty * pack.price,
           status: 'delivered',
           destination: 'bar',
-          modifier_notes: `Takeaway Pack — ${selectedPack.name}`,
+          modifier_notes: `Takeaway Pack — ${pack.name}`,
           created_at: new Date().toISOString(),
         } as (typeof itemRows)[0])
       }
@@ -309,10 +312,10 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
       )
       .join('\n')
 
-    const packLine =
-      packFee > 0 && selectedPack
-        ? '\n' + fmtRow(`Pack (${selectedPack.name})`, `N${packFee.toLocaleString()}`)
-        : ''
+    const packLines = packItems
+      .map((p) => fmtRow(`${p.qty}x Pack (${p.name})`, `N${(p.qty * p.price).toLocaleString()}`))
+      .join('\n')
+    const packLine = packLines ? '\n' + packLines : ''
 
     const fmtTotal = `N${o.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -599,36 +602,61 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
                 className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-amber-500"
               />
             </div>
-            {/* Pack size selector for takeaway */}
+            {/* Pack size selector for takeaway — multiple packs with quantities */}
             {isTakeaway && packSizes.length > 0 && orderItems.length > 0 && (
               <div className="px-3 py-2 border-t border-gray-800 shrink-0">
                 <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1.5">
-                  Pack Size
+                  Takeaway Packs
                 </p>
-                <div className="flex gap-1.5 flex-wrap">
-                  {packSizes.map((pack) => (
-                    <button
-                      key={pack.id}
-                      onClick={() => setSelectedPackId(pack.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                        selectedPackId === pack.id
-                          ? 'bg-amber-500 text-black'
-                          : 'bg-gray-800 border border-gray-700 text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      {pack.name} — ₦{pack.price.toLocaleString()}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => setSelectedPackId(null)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                      selectedPackId === null
-                        ? 'bg-gray-600 text-white'
-                        : 'bg-gray-800 border border-gray-700 text-gray-500 hover:text-white'
-                    }`}
-                  >
-                    No Pack
-                  </button>
+                <div className="space-y-1.5">
+                  {packSizes.map((pack) => {
+                    const qty = packQuantities[pack.id] || 0
+                    return (
+                      <div key={pack.id} className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() =>
+                              setPackQuantities((prev) => ({
+                                ...prev,
+                                [pack.id]: Math.max(0, (prev[pack.id] || 0) - 1),
+                              }))
+                            }
+                            disabled={qty === 0}
+                            className="w-6 h-6 rounded-full bg-gray-700 hover:bg-gray-600 disabled:opacity-30 flex items-center justify-center text-white text-xs"
+                          >
+                            -
+                          </button>
+                          <span
+                            className={`text-sm w-5 text-center ${qty > 0 ? 'text-white font-bold' : 'text-gray-600'}`}
+                          >
+                            {qty}
+                          </span>
+                          <button
+                            onClick={() =>
+                              setPackQuantities((prev) => ({
+                                ...prev,
+                                [pack.id]: (prev[pack.id] || 0) + 1,
+                              }))
+                            }
+                            className="w-6 h-6 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white text-xs"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <span
+                          className={`text-xs flex-1 ${qty > 0 ? 'text-white' : 'text-gray-500'}`}
+                        >
+                          {pack.name}
+                        </span>
+                        <span
+                          className={`text-xs shrink-0 ${qty > 0 ? 'text-amber-400 font-bold' : 'text-gray-600'}`}
+                        >
+                          ₦{pack.price.toLocaleString()}
+                          {qty > 1 ? ` × ${qty} = ₦${(pack.price * qty).toLocaleString()}` : ''}
+                        </span>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -641,12 +669,14 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
                     <span className="text-gray-400">₦{itemsTotal.toLocaleString()}</span>
                   </div>
                 )}
-                {packFee > 0 && (
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-gray-500">Pack ({selectedPack?.name})</span>
-                    <span className="text-gray-400">₦{packFee.toLocaleString()}</span>
+                {packItems.map((p) => (
+                  <div key={p.id} className="flex justify-between items-center text-xs">
+                    <span className="text-gray-500">
+                      {p.qty}x {p.name}
+                    </span>
+                    <span className="text-gray-400">₦{(p.qty * p.price).toLocaleString()}</span>
                   </div>
-                )}
+                ))}
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400 text-sm">Total</span>
                   <span className="text-amber-400 font-bold text-xl">
