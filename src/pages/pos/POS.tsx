@@ -22,6 +22,10 @@ import {
   Printer,
   TrendingUp,
   Clock,
+  Link2,
+  Unlink,
+  X,
+  Check,
 } from 'lucide-react'
 import TableGrid from './TableGrid'
 import CoversModal from './CoversModal'
@@ -123,6 +127,10 @@ export default function POS() {
   const [assignedZoneNames, setAssignedZoneNames] = useState<string[] | null>(null)
   const [defaultZone, setDefaultZone] = useState<string>('All')
   const [posTab, setPosTab] = useState<'tables' | 'history' | 'shift'>('tables')
+  const [joinMode, setJoinMode] = useState(false)
+  const [joinSelection, setJoinSelection] = useState<Table[]>([])
+  // Active joins: maps primary table ID → array of secondary table IDs
+  const [activeJoins, setActiveJoins] = useState<Record<string, string[]>>({})
   const [orderHistory, setOrderHistory] = useState<HistoryOrder[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [reprintOrder, setReprintOrder] = useState<HistoryOrder | null>(null)
@@ -149,7 +157,93 @@ export default function POS() {
             setStationPrinterUrl('griller', row.value)
         }
       })
+    // Load active table joins
+    supabase
+      .from('settings')
+      .select('value')
+      .eq('id', 'active_table_joins')
+      .single()
+      .then(({ data }) => {
+        if (data?.value) {
+          try {
+            setActiveJoins(JSON.parse(data.value))
+          } catch {
+            /* invalid JSON */
+          }
+        }
+      })
   }, [])
+
+  const saveJoins = async (joins: Record<string, string[]>) => {
+    setActiveJoins(joins)
+    await supabase
+      .from('settings')
+      .upsert(
+        {
+          id: 'active_table_joins',
+          value: JSON.stringify(joins),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      )
+  }
+
+  const handleJoinConfirm = async () => {
+    if (joinSelection.length < 2) {
+      toast.error('Select at least 2 tables', 'Tap tables you want to join together')
+      return
+    }
+    const primary = joinSelection[0]
+    const secondaryIds = joinSelection.slice(1).map((t) => t.id)
+    // Mark all secondary tables as occupied
+    for (const id of secondaryIds) {
+      await supabase.from('tables').update({ status: 'occupied' }).eq('id', id)
+    }
+    const newJoins = { ...activeJoins, [primary.id]: secondaryIds }
+    await saveJoins(newJoins)
+    const joinedNames = joinSelection.map((t) => t.name).join(' + ')
+    toast.success('Tables Joined', joinedNames)
+    await audit({
+      action: 'TABLES_JOINED',
+      entity: 'table',
+      entityId: primary.id,
+      entityName: joinedNames,
+      newValue: { primary: primary.name, joined: joinSelection.slice(1).map((t) => t.name) },
+      performer: profile as Profile,
+    })
+    setJoinMode(false)
+    setJoinSelection([])
+    void fetchTables()
+  }
+
+  const handleUnjoin = async (primaryId: string) => {
+    const secondaryIds = activeJoins[primaryId] || []
+    // Release secondary tables if they have no open orders of their own
+    for (const id of secondaryIds) {
+      const { data: openOrders } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('table_id', id)
+        .eq('status', 'open')
+        .limit(1)
+      if (!openOrders || openOrders.length === 0) {
+        await supabase.from('tables').update({ status: 'available' }).eq('id', id)
+      }
+    }
+    const newJoins = { ...activeJoins }
+    delete newJoins[primaryId]
+    await saveJoins(newJoins)
+    toast.success('Tables Unjoined')
+    void fetchTables()
+  }
+
+  // Get display name for a table including joined tables
+  const getTableDisplayName = (table: Table): string => {
+    const joined = activeJoins[table.id]
+    if (!joined || joined.length === 0) return table.name
+    const joinedNames = joined.map((id) => tables.find((t) => t.id === id)?.name).filter(Boolean)
+    return `${table.name} + ${joinedNames.join(' + ')}`
+  }
 
   useEffect(() => {
     fetchTables()
@@ -408,6 +502,16 @@ export default function POS() {
   }
 
   const handleSelectTable = async (table: Table) => {
+    // Join mode: toggle table selection instead of opening order
+    if (joinMode) {
+      setJoinSelection((prev) => {
+        const exists = prev.find((t) => t.id === table.id)
+        if (exists) return prev.filter((t) => t.id !== table.id)
+        return [...prev, table]
+      })
+      return
+    }
+
     // Always check DB for open orders — don't trust table.status alone
     // (table may be 'available' but have an orphaned open order, or vice versa)
     const { data: openOrders } = await supabase
@@ -740,6 +844,25 @@ export default function POS() {
               <span className="hidden sm:inline">Takeaway</span>
             </button>
             <button
+              onClick={() => {
+                if (joinMode) {
+                  setJoinMode(false)
+                  setJoinSelection([])
+                } else {
+                  setJoinMode(true)
+                  setJoinSelection([])
+                }
+              }}
+              className={`flex items-center gap-1 text-xs font-bold px-2.5 py-2 rounded-xl transition-colors ${
+                joinMode
+                  ? 'bg-red-600 hover:bg-red-500 text-white'
+                  : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+              }`}
+            >
+              {joinMode ? <X size={13} /> : <Link2 size={13} />}
+              <span className="hidden sm:inline">{joinMode ? 'Cancel' : 'Join'}</span>
+            </button>
+            <button
               onClick={fullRefresh}
               className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-white active:rotate-180 transition-transform duration-300"
             >
@@ -855,6 +978,67 @@ export default function POS() {
       <div className="flex-1 flex overflow-hidden">
         {posTab === 'tables' && (
           <div className={`flex flex-1 flex-col overflow-hidden`}>
+            {/* Join mode banner */}
+            {joinMode && (
+              <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-3 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <Link2 size={16} className="text-amber-400" />
+                  <span className="text-amber-400 text-sm font-bold">
+                    Join Tables — tap{' '}
+                    {joinSelection.length < 2
+                      ? `${2 - joinSelection.length} more`
+                      : 'tables to add, or confirm'}
+                  </span>
+                  {joinSelection.length > 0 && (
+                    <span className="text-amber-300 text-xs bg-amber-500/20 px-2 py-0.5 rounded-lg">
+                      {joinSelection.map((t) => t.name).join(' + ')}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={handleJoinConfirm}
+                  disabled={joinSelection.length < 2}
+                  className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold text-xs px-3 py-1.5 rounded-xl transition-colors"
+                >
+                  <Check size={13} /> Join {joinSelection.length} Tables
+                </button>
+              </div>
+            )}
+
+            {/* Active joins indicator */}
+            {Object.keys(activeJoins).length > 0 && !joinMode && (
+              <div className="bg-gray-900 border-b border-gray-800 px-4 py-2 flex items-center gap-3 overflow-x-auto shrink-0">
+                <Link2 size={13} className="text-gray-500 shrink-0" />
+                {Object.entries(activeJoins).map(([primaryId, secondaryIds]) => {
+                  const primary = tables.find((t) => t.id === primaryId)
+                  if (!primary) return null
+                  const names = [
+                    primary.name,
+                    ...secondaryIds
+                      .map((id) => tables.find((t) => t.id === id)?.name)
+                      .filter(Boolean),
+                  ]
+                  return (
+                    <div
+                      key={primaryId}
+                      className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2 py-1 shrink-0"
+                    >
+                      <span className="text-amber-400 text-xs font-medium">
+                        {names.join(' + ')}
+                      </span>
+                      <button
+                        onClick={() => handleUnjoin(primaryId)}
+                        className="text-gray-500 hover:text-red-400 transition-colors"
+                        title="Unjoin tables"
+                      >
+                        <Unlink size={11} />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
             <TableGrid
               tables={tables}
               onSelectTable={handleSelectTable}
@@ -865,6 +1049,9 @@ export default function POS() {
               tableStaffMap={tableStaffMap}
               currentStaffId={profile?.id || null}
               currentRole={profile?.role || null}
+              joinMode={joinMode}
+              joinSelectedIds={joinSelection.map((t) => t.id)}
+              activeJoins={activeJoins}
             />
           </div>
         )}
@@ -1061,7 +1248,11 @@ export default function POS() {
         <PaymentModal
           order={activeOrder}
           table={selectedTable}
-          onSuccess={() => {
+          onSuccess={async () => {
+            // Release joined tables if this was a primary table
+            if (selectedTable && activeJoins[selectedTable.id]) {
+              await handleUnjoin(selectedTable.id)
+            }
             setShowPayment(false)
             setActiveOrder(null)
             setSelectedTable(null)
