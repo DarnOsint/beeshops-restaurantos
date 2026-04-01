@@ -215,11 +215,18 @@ export default function OrderPanel({
           toast.error('Error', 'Failed to delete item: ' + error.message)
           return
         }
+        // Recalculate total from remaining DB items — never subtract from stale prop
+        const { data: remaining } = await supabase
+          .from('order_items')
+          .select('total_price')
+          .eq('order_id', activeOrder?.id || '')
+        const newTotal = (remaining || []).reduce(
+          (sum: number, r: { total_price: number }) => sum + (r.total_price || 0),
+          0
+        )
         await supabase
           .from('orders')
-          .update({
-            total_amount: Math.max(0, (activeOrder?.total_amount || 0) - item.total),
-          })
+          .update({ total_amount: newTotal })
           .eq('id', activeOrder?.id || '')
       }
     }
