@@ -321,12 +321,26 @@ export default function POS() {
     setHistoryLoading(false)
   }
 
+  const [tableStaffMap, setTableStaffMap] = useState<Record<string, string>>({})
+
   const fetchTables = async () => {
-    const { data, error } = await supabase
-      .from('tables')
-      .select('*, table_categories(id, name, hire_fee)')
-      .order('name')
-    if (!error) setTables(data || [])
+    const [tablesRes, openOrdersRes] = await Promise.all([
+      supabase.from('tables').select('*, table_categories(id, name, hire_fee)').order('name'),
+      supabase
+        .from('orders')
+        .select('table_id, staff_id')
+        .eq('status', 'open')
+        .not('table_id', 'is', null),
+    ])
+    if (!tablesRes.error) setTables(tablesRes.data || [])
+    // Build map: table_id → staff_id (who is serving each occupied table)
+    if (!openOrdersRes.error && openOrdersRes.data) {
+      const map: Record<string, string> = {}
+      for (const o of openOrdersRes.data) {
+        if (o.table_id && o.staff_id) map[o.table_id] = o.staff_id
+      }
+      setTableStaffMap(map)
+    }
     setLoading(false)
   }
 
@@ -825,6 +839,9 @@ export default function POS() {
               selectedTable={selectedTable}
               assignedTableIds={assignedTableIds}
               defaultCategory={defaultZone}
+              tableStaffMap={tableStaffMap}
+              currentStaffId={profile?.id || null}
+              currentRole={profile?.role || null}
             />
           </div>
         )}

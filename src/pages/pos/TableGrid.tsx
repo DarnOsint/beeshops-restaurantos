@@ -27,6 +27,9 @@ interface TableGridProps {
   onSelectTable: (table: Table) => void
   selectedTable: Table | null
   assignedTableIds: string[] | null
+  tableStaffMap?: Record<string, string>
+  currentStaffId?: string | null
+  currentRole?: string | null
 }
 
 const categoryColors: Record<string, CategoryStyle> = {
@@ -65,12 +68,17 @@ const occupiedColors: Record<string, string> = {
 
 const CATEGORIES = ['All', 'Outdoor', 'Indoor', 'VIP Lounge', 'The Nook'] as const
 
+const BYPASS_ROLES = ['owner', 'manager', 'accountant', 'supervisor']
+
 export default function TableGrid({
   tables,
   onSelectTable,
   selectedTable,
   assignedTableIds,
   defaultCategory = 'All',
+  tableStaffMap = {},
+  currentStaffId = null,
+  currentRole = null,
 }: TableGridProps & { defaultCategory?: string }) {
   const [activeCategory, setActiveCategory] = useState<string>(defaultCategory)
 
@@ -125,15 +133,33 @@ export default function TableGrid({
                   const isAssigned =
                     assignedTableIds === null || assignedTableIds.includes(table.id)
                   const occupiedColor = occupiedColors[category]
+
+                  // Check if another waitron is serving this occupied table
+                  const servingStaffId = tableStaffMap[table.id]
+                  const canBypass = currentRole && BYPASS_ROLES.includes(currentRole)
+                  const isOtherWaitronTable =
+                    isOccupied &&
+                    servingStaffId &&
+                    currentStaffId &&
+                    servingStaffId !== currentStaffId &&
+                    !canBypass
+                  const isClickable = isAssigned && !isOtherWaitronTable
+
                   return (
                     <button
                       key={table.id}
-                      onClick={() => (isAssigned ? onSelectTable(table) : undefined)}
-                      disabled={!isAssigned}
-                      title={!isAssigned ? 'Not assigned to you' : ''}
+                      onClick={() => (isClickable ? onSelectTable(table) : undefined)}
+                      disabled={!isClickable}
+                      title={
+                        isOtherWaitronTable
+                          ? 'Being served by another waitron'
+                          : !isAssigned
+                            ? 'Not assigned to you'
+                            : ''
+                      }
                       className={`
                         relative p-3 rounded-xl border-2 transition-all text-left
-                        ${!isAssigned ? 'opacity-30 cursor-not-allowed grayscale' : ''}
+                        ${!isClickable ? 'opacity-30 cursor-not-allowed grayscale' : ''}
                         ${isSelected ? 'ring-2 ring-amber-500 ring-offset-2 ring-offset-gray-950' : ''}
                         ${
                           isOccupied
@@ -153,10 +179,15 @@ export default function TableGrid({
                         <Users size={10} />
                         <span className="text-xs">{table.capacity}</span>
                       </div>
-                      {isOccupied && (
+                      {isOccupied && !isOtherWaitronTable && (
                         <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-white/50" />
                       )}
-                      {!isAssigned && (
+                      {isOtherWaitronTable && (
+                        <div className="absolute top-1 right-1">
+                          <Lock size={8} className="text-red-400" />
+                        </div>
+                      )}
+                      {!isAssigned && !isOtherWaitronTable && (
                         <div className="absolute top-1 right-1">
                           <Lock size={8} className="text-gray-500" />
                         </div>
