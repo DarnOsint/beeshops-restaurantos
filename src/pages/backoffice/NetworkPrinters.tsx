@@ -369,7 +369,7 @@ export default function NetworkPrinters({ onBack }: Props) {
               <Printer size={16} /> Download BeeshopPrint.exe
             </a>
             <a
-              href="https://github.com/DarnOsint/beeshops-restaurantos/releases/download/v1.0-print-server/INSTALL_AUTOSTART.bat"
+              href="https://github.com/DarnOsint/beeshops-restaurantos/releases/download/v1.0-print-server/INSTALL_SERVICE.bat"
               className="flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-xl py-3 text-sm transition-colors border border-gray-700"
               target="_blank"
               rel="noopener noreferrer"
@@ -378,18 +378,17 @@ export default function NetworkPrinters({ onBack }: Props) {
             </a>
           </div>
           <div className="bg-gray-800 rounded-lg p-3">
-            <p className="text-gray-300 text-xs font-medium mb-2">Quick Install (3 steps):</p>
+            <p className="text-gray-300 text-xs font-medium mb-2">Quick Install (2 steps):</p>
             <ol className="text-gray-500 text-xs space-y-1 list-decimal list-inside">
-              <li>Download both files above to the POS computer</li>
+              <li>Download both files to the same folder on the POS computer</li>
               <li>
-                Run <span className="text-amber-400 font-mono">INSTALL_AUTOSTART.bat</span> as
-                Administrator
+                Right-click the <span className="text-amber-400 font-mono">.bat</span> file →{' '}
+                <span className="text-white">Run as Administrator</span>
               </li>
-              <li>It installs to C:\BeeshopPrint, auto-starts on boot, and runs immediately</li>
             </ol>
             <p className="text-gray-600 text-[10px] mt-2">
-              The print server listens on port 6543 and forwards to the printer on
-              192.168.0.10:9100. It auto-starts every time Windows boots.
+              It installs silently, runs in the background with no window, and auto-starts on every
+              boot. No typing or configuration needed.
             </p>
           </div>
           <div className="bg-gray-800 rounded-lg p-3">
