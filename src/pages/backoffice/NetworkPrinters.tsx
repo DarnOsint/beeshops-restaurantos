@@ -361,16 +361,18 @@ export default function NetworkPrinters({ onBack }: Props) {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <a
-              href="/print-server-dist/BeeshopPrint.exe"
-              download
+              href="https://github.com/DarnOsint/beeshops-restaurantos/releases/download/v1.0-print-server/BeeshopPrint.exe"
               className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl py-3 text-sm transition-colors"
+              target="_blank"
+              rel="noopener noreferrer"
             >
               <Printer size={16} /> Download BeeshopPrint.exe
             </a>
             <a
-              href="/print-server-dist/INSTALL_AUTOSTART.bat"
-              download
+              href="https://github.com/DarnOsint/beeshops-restaurantos/releases/download/v1.0-print-server/INSTALL_AUTOSTART.bat"
               className="flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-xl py-3 text-sm transition-colors border border-gray-700"
+              target="_blank"
+              rel="noopener noreferrer"
             >
               <Printer size={16} /> Download Auto-Installer
             </a>
