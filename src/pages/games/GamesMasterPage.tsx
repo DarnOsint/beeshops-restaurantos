@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
+import { useGeofence } from '../../hooks/useGeofence'
+import GeofenceBlock from '../../components/GeofenceBlock'
 import {
   Gamepad2,
   Plus,
@@ -43,6 +45,7 @@ const todayStr = () => new Date().toISOString().slice(0, 10)
 export default function GamesMasterPage() {
   const { profile, signOut } = useAuth()
   const toast = useToast()
+  const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
   const isManager = ['owner', 'manager'].includes(profile?.role || '')
 
   const [gameTypes, setGameTypes] = useState<GameType[]>([])
@@ -145,6 +148,8 @@ export default function GamesMasterPage() {
   const inp =
     'w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500'
 
+  if (geoStatus === 'outside')
+    return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   if (loading)
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { useGeofence } from '../../hooks/useGeofence'
+import GeofenceBlock from '../../components/GeofenceBlock'
 import ErrorBoundary from '../../components/ErrorBoundary'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import ShiftManager from '../management/ShiftManager'
@@ -123,6 +125,7 @@ const SUPERVISOR_TIPS = [
 
 function SupervisorDashboardInner() {
   const { profile, signOut } = useAuth()
+  const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
   const [orders, setOrders] = useState<OpenOrder[]>([])
   const [shifts, setShifts] = useState<ActiveShift[]>([])
   const [calls, setCalls] = useState<WaiterCall[]>([])
@@ -246,6 +249,8 @@ function SupervisorDashboardInner() {
     { id: 'tables' as const, label: 'Tables', icon: LayoutGrid, badge: 0, badgeRed: false },
   ]
 
+  if (geoStatus === 'outside')
+    return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
   if (loading)
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
