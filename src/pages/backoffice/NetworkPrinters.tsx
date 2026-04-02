@@ -352,9 +352,57 @@ export default function NetworkPrinters({ onBack }: Props) {
           </div>
         )}
 
+        {/* Print Server Install */}
+        <div className="bg-gray-900 border border-emerald-500/30 rounded-xl p-5 mb-4 space-y-3">
+          <p className="text-white font-semibold text-sm">Print Server Setup (Windows)</p>
+          <p className="text-gray-400 text-xs">
+            Install the print server on each POS computer that has a printer connected via LAN
+            cable.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <a
+              href="/print-server-dist/BeeshopPrint.exe"
+              download
+              className="flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl py-3 text-sm transition-colors"
+            >
+              <Printer size={16} /> Download BeeshopPrint.exe
+            </a>
+            <a
+              href="/print-server-dist/INSTALL_AUTOSTART.bat"
+              download
+              className="flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-xl py-3 text-sm transition-colors border border-gray-700"
+            >
+              <Printer size={16} /> Download Auto-Installer
+            </a>
+          </div>
+          <div className="bg-gray-800 rounded-lg p-3">
+            <p className="text-gray-300 text-xs font-medium mb-2">Quick Install (3 steps):</p>
+            <ol className="text-gray-500 text-xs space-y-1 list-decimal list-inside">
+              <li>Download both files above to the POS computer</li>
+              <li>
+                Run <span className="text-amber-400 font-mono">INSTALL_AUTOSTART.bat</span> as
+                Administrator
+              </li>
+              <li>It installs to C:\BeeshopPrint, auto-starts on boot, and runs immediately</li>
+            </ol>
+            <p className="text-gray-600 text-[10px] mt-2">
+              The print server listens on port 6543 and forwards to the printer on
+              192.168.0.10:9100. It auto-starts every time Windows boots.
+            </p>
+          </div>
+          <div className="bg-gray-800 rounded-lg p-3">
+            <p className="text-gray-300 text-xs font-medium mb-1">After installing:</p>
+            <p className="text-gray-500 text-xs">
+              Set the Print Server URL in the printer config above to{' '}
+              <span className="text-amber-400 font-mono">http://localhost:6543</span> — this tells
+              the POS to send print jobs to the local print server on that computer.
+            </p>
+          </div>
+        </div>
+
         {/* Setup guide */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
-          <p className="text-gray-300 text-sm font-medium">Setup Guide</p>
+          <p className="text-gray-300 text-sm font-medium">Network Setup Guide</p>
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
             <p className="text-amber-400 text-xs font-bold mb-1">
               Important: Same Network Required

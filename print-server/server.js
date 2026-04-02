@@ -1,18 +1,34 @@
 // Beeshop's Place — Local Print Server
 // Runs on localhost:6543 on the POS machine
 // Receives ESC/POS bytes from the browser and forwards to printer IP:9100
+// Config: reads printer IP from config.json if present, else uses default
 
 const http = require('http')
 const net = require('net')
+const fs = require('fs')
+const path = require('path')
 
-const PRINTER_IP = '192.168.0.10'
-const PRINTER_PORT = 9100
-const SERVER_PORT = 6543
+// Load config
+let config = { printer_ip: '192.168.0.10', printer_port: 9100, server_port: 6543 }
+const configPath = path.join(__dirname, 'config.json')
+try {
+  if (fs.existsSync(configPath)) {
+    const loaded = JSON.parse(fs.readFileSync(configPath, 'utf8'))
+    config = { ...config, ...loaded }
+    console.log('Config loaded from config.json')
+  }
+} catch (e) {
+  console.log('Using default config')
+}
+
+const PRINTER_IP = config.printer_ip
+const PRINTER_PORT = config.printer_port
+const SERVER_PORT = config.server_port
 
 // CORS headers so beeshop.place can call localhost
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Content-Type': 'application/json',
 }
@@ -33,7 +49,6 @@ function sendToPrinter(data) {
           reject(err)
           return
         }
-        // Give printer time to receive before closing
         setTimeout(() => {
           clearTimeout(timeout)
           socket.destroy()
@@ -59,8 +74,51 @@ const server = http.createServer(async (req, res) => {
 
   // Health check
   if (req.method === 'GET' && req.url === '/health') {
+    // Test printer connection
+    let printerStatus = 'unknown'
+    try {
+      await new Promise((resolve, reject) => {
+        const sock = new net.Socket()
+        sock.setTimeout(2000)
+        sock.connect(PRINTER_PORT, PRINTER_IP, () => {
+          printerStatus = 'reachable'
+          sock.destroy()
+          resolve()
+        })
+        sock.on('error', () => { printerStatus = 'unreachable'; sock.destroy(); resolve() })
+        sock.on('timeout', () => { printerStatus = 'timeout'; sock.destroy(); resolve() })
+      })
+    } catch { printerStatus = 'error' }
+
     res.writeHead(200, CORS_HEADERS)
-    res.end(JSON.stringify({ status: 'ok', printer: `${PRINTER_IP}:${PRINTER_PORT}` }))
+    res.end(JSON.stringify({
+      status: 'ok',
+      printer: `${PRINTER_IP}:${PRINTER_PORT}`,
+      printer_status: printerStatus,
+      server_port: SERVER_PORT,
+    }))
+    return
+  }
+
+  // Config endpoint — update printer IP
+  if (req.method === 'POST' && req.url === '/config') {
+    let body = []
+    req.on('data', chunk => body.push(chunk))
+    req.on('end', () => {
+      try {
+        const buf = Buffer.concat(body)
+        const newConfig = JSON.parse(buf.toString())
+        const updated = { ...config, ...newConfig }
+        fs.writeFileSync(configPath, JSON.stringify(updated, null, 2))
+        config = updated
+        res.writeHead(200, CORS_HEADERS)
+        res.end(JSON.stringify({ success: true, config: updated }))
+        console.log(`Config updated: printer=${updated.printer_ip}:${updated.printer_port}`)
+      } catch (err) {
+        res.writeHead(400, CORS_HEADERS)
+        res.end(JSON.stringify({ error: err.message }))
+      }
+    })
     return
   }
 
@@ -97,15 +155,15 @@ const server = http.createServer(async (req, res) => {
   res.end(JSON.stringify({ error: 'Not found' }))
 })
 
-server.listen(SERVER_PORT, '127.0.0.1', () => {
-  console.log('╔════════════════════════════════════════╗')
-  console.log("║   Beeshop's Place — Print Server       ║")
-  console.log('╠════════════════════════════════════════╣')
-  console.log(`║  Listening on  localhost:${SERVER_PORT}          ║`)
-  console.log(`║  Printer IP    ${PRINTER_IP}:${PRINTER_PORT}        ║`)
-  console.log('╠════════════════════════════════════════╣')
-  console.log('║  Ready to receive print jobs...        ║')
-  console.log('╚════════════════════════════════════════╝')
+server.listen(SERVER_PORT, '0.0.0.0', () => {
+  console.log('='.repeat(50))
+  console.log("  Beeshop's Place — Print Server")
+  console.log('='.repeat(50))
+  console.log(`  Listening on  0.0.0.0:${SERVER_PORT}`)
+  console.log(`  Printer IP    ${PRINTER_IP}:${PRINTER_PORT}`)
+  console.log('='.repeat(50))
+  console.log('  Ready to receive print jobs...')
+  console.log()
 })
 
 server.on('error', (err) => {
