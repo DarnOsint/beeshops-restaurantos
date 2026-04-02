@@ -14,6 +14,7 @@ import {
   Printer,
   Map,
   ShoppingBag,
+  Beer,
 } from 'lucide-react'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import StaffManagement from './StaffManagement'
@@ -28,6 +29,7 @@ import KitchenStock from './KitchenStock'
 import PrinterConfig from './PrinterConfig'
 import FloorPlan from './FloorPlan'
 import TakeawayPacks from './TakeawayPacks'
+import BarChillerStock from './BarChillerStock'
 import { useNavigate } from 'react-router-dom'
 import type { Role } from '../../types'
 
@@ -93,11 +95,19 @@ export default function BackOffice() {
     },
     {
       id: 'inventory',
-      label: 'Drink Inventory',
-      desc: 'Stock levels, restocking and supplier logs',
+      label: 'Main Store',
+      desc: 'Master stock levels, restocking, supplier logs — the big store',
       icon: Package,
       color: 'bg-blue-600',
       roles: ['owner', 'manager'],
+    },
+    {
+      id: 'barchiller',
+      label: 'Bar Chiller Stock',
+      desc: 'Daily bar chiller register — what was received, sold, and remaining',
+      icon: Beer,
+      color: 'bg-cyan-600',
+      roles: ['owner', 'manager', 'bar'],
     },
     {
       id: 'kitchenstock',
@@ -193,6 +203,8 @@ export default function BackOffice() {
     return <KitchenStock onBack={() => setActiveSection(null)} />
   if (activeSection === 'inventory') return <Inventory onBack={() => setActiveSection(null)} />
   if (activeSection === 'suppliers') return <Suppliers onBack={() => setActiveSection(null)} />
+  if (activeSection === 'barchiller')
+    return <BarChillerStock onBack={() => setActiveSection(null)} />
   if (activeSection === 'printerconfig')
     return <PrinterConfig onBack={() => setActiveSection(null)} />
   if (activeSection === 'takeawaypacks')
