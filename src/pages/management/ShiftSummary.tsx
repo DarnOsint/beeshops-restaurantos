@@ -227,18 +227,86 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
   }
 
   const handlePrint = () => {
-    const content = printRef.current
-    if (!content) return
-    const win = window.open('', '_blank', 'width=800,height=900')!
-    win.document.write(
-      `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Shift Summary — ${data?.staffName}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#111;background:white;padding:20px}h1{font-size:18px;font-weight:800;margin-bottom:2px}h2{font-size:13px;font-weight:700;margin:14px 0 6px;border-bottom:1px solid #ccc;padding-bottom:4px;text-transform:uppercase;letter-spacing:.5px}.header{border-bottom:2px solid #111;padding-bottom:12px;margin-bottom:14px}.header .sub{color:#555;font-size:11px;margin-top:2px}.stat{border:1px solid #ddd;border-radius:6px;padding:8px 10px}.stat .val{font-size:18px;font-weight:800}.stat .lbl{font-size:10px;color:#777;text-transform:uppercase}.stat.highlight{background:#0f172a;color:white;border-color:#0f172a}table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:10px}th{background:#0f172a;color:white;text-align:left;padding:5px 8px;font-size:10px;text-transform:uppercase}td{padding:5px 8px;border-bottom:1px solid #eee}tr:nth-child(even) td{background:#f9f9f9}.footer{margin-top:20px;padding-top:10px;border-top:1px solid #ddd;font-size:10px;color:#888}@media print{body{padding:0}}</style></head><body>${content.innerHTML}</body></html>`
-    )
+    if (!data) return
+    const W = 40
+    const div = '-'.repeat(W)
+    const sol = '='.repeat(W)
+    const row = (l: string, r: string) => {
+      const left = l.substring(0, W - r.length - 1)
+      return left + ' '.repeat(Math.max(1, W - left.length - r.length)) + r
+    }
+    const ctr = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
+    const fmtT = (d: string) =>
+      new Date(d).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true })
+    const fmtD = (d: string) =>
+      new Date(d).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
+    const h = Math.floor(data.durationMinutes / 60)
+    const m = data.durationMinutes % 60
+
+    const lines = [
+      '',
+      ctr("BEESHOP'S PLACE"),
+      ctr('SHIFT SUMMARY'),
+      div,
+      row('Staff:', data.staffName),
+      row('Role:', data.role),
+      row('Date:', fmtD(data.clockIn)),
+      row('Clock In:', fmtT(data.clockIn)),
+      row('Clock Out:', fmtT(data.clockOut)),
+      row('Duration:', `${h}h ${m}m`),
+      div,
+      ctr('SALES SUMMARY'),
+      div,
+      row('Total Orders:', String(data.totalOrders)),
+      row('Total Sales:', `N${data.totalSales.toLocaleString()}`),
+      row('Cash Sales:', `N${data.cashSales.toLocaleString()}`),
+      row('Credit Sales:', `N${data.creditSales.toLocaleString()}`),
+      row('Voids:', `${data.voidCount} (N${data.totalVoided.toLocaleString()})`),
+      div,
+      ctr('PAYMENT BREAKDOWN'),
+      div,
+      ...Object.entries(data.paymentBreakdown).map(([method, amount]) =>
+        row(`${(paymentLabels[method] || method).substring(0, 25)}:`, `N${amount.toLocaleString()}`)
+      ),
+      div,
+      ctr('ORDER TYPES'),
+      div,
+      ...Object.entries(data.typeBreakdown).map(([type, count]) => row(`${type}:`, String(count))),
+      div,
+      ctr('TOP ITEMS SOLD'),
+      div,
+      ...data.topItems.map(([name, { qty, total }]) =>
+        row(`${qty}x ${name.substring(0, 25)}`, `N${total.toLocaleString()}`)
+      ),
+      div,
+      ctr('TABLES SERVED'),
+      div,
+      data.tablesServed.length > 0 ? data.tablesServed.join(', ') : '  None',
+      '',
+      row('Calls Resolved:', String(data.callsResolved)),
+      sol,
+      row('TOTAL SALES:', `N${data.totalSales.toLocaleString()}`),
+      sol,
+      '',
+      ctr('*** END OF SHIFT SUMMARY ***'),
+      '',
+    ].join('\n')
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Shift Summary — ${data.staffName}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;color:#000;background:#fff;width:80mm;padding:4mm;white-space:pre}@media print{body{width:80mm}@page{margin:0;size:80mm auto}}</style></head><body>${lines}</body></html>`
+    const win = window.open('', '_blank', 'width=500,height=700,toolbar=no,menubar=no')
+    if (!win) return
+    win.document.open('text/html', 'replace')
+    win.document.write(html)
     win.document.close()
-    win.focus()
-    setTimeout(() => {
-      win.print()
-      win.close()
-    }, 400)
+    win.onafterprint = () => win.close()
+    win.onload = () =>
+      setTimeout(() => {
+        try {
+          win.print()
+        } catch {
+          /* closed */
+        }
+      }, 200)
   }
 
   const handleConfirm = async () => {
