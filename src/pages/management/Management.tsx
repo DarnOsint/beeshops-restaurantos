@@ -14,12 +14,14 @@ import {
   RefreshCw,
   UtensilsCrossed,
   Shield,
+  Beer,
 } from 'lucide-react'
 import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
 import TillManagement from './TillManagement'
 import WaiterCalls from './WaiterCalls'
 import KitchenStock from '../backoffice/KitchenStock'
+import ChillerSummaryTab from './mgmt/ChillerSummaryTab'
 import { useLateOrders } from '../../hooks/useLateOrders'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import type { SyncQueueEntry } from '../../lib/db'
@@ -42,6 +44,7 @@ const TABS = [
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
   { id: 'till', label: 'Till', icon: DollarSign },
   { id: 'kitchen', label: 'Kitchen', icon: UtensilsCrossed },
+  { id: 'chiller', label: 'Chiller', icon: Beer },
   { id: 'service', label: 'Service', icon: Clock },
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'cctv', label: 'CCTV', icon: Camera },
@@ -411,6 +414,7 @@ export default function Management() {
         {activeTab === 'orders' && <OpenOrdersTab />}
         {activeTab === 'till' && <TillManagement />}
         {activeTab === 'kitchen' && <KitchenStock onBack={() => setActiveTab('overview')} />}
+        {activeTab === 'chiller' && <ChillerSummaryTab />}
         {activeTab === 'cctv' && (
           <CctvTab
             occupancy={cvData.occupancy}
