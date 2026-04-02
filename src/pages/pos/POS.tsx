@@ -141,12 +141,18 @@ export default function POS() {
   const [showCashSale, setShowCashSale] = useState(false)
   const [cashSaleType, setCashSaleType] = useState<'cash' | 'takeaway'>('cash')
 
-  // Load print server URLs (receipt + station printers) on mount
+  // Load printer URLs from settings — supports both legacy individual settings
+  // and the new network_printers JSON config
   useEffect(() => {
     supabase
       .from('settings')
       .select('id, value')
-      .in('id', ['print_server_url', 'kitchen_printer_url', 'griller_printer_url'])
+      .in('id', [
+        'print_server_url',
+        'kitchen_printer_url',
+        'griller_printer_url',
+        'network_printers',
+      ])
       .then(({ data }) => {
         if (!data) return
         for (const row of data) {
@@ -155,6 +161,27 @@ export default function POS() {
             setStationPrinterUrl('kitchen', row.value)
           if (row.id === 'griller_printer_url' && row.value)
             setStationPrinterUrl('griller', row.value)
+          // Load from network_printers config (overrides individual settings)
+          if (row.id === 'network_printers' && row.value) {
+            try {
+              const printers = JSON.parse(row.value) as Array<{
+                label: string
+                ip: string
+                port: number
+                enabled: boolean
+              }>
+              for (const p of printers) {
+                if (!p.enabled) continue
+                const url = `http://${p.ip}:${p.port === 9100 ? 6543 : p.port}`
+                if (p.label === 'receipt') setPrintServerUrl(url)
+                if (p.label === 'kitchen') setStationPrinterUrl('kitchen', url)
+                if (p.label === 'griller') setStationPrinterUrl('griller', url)
+                if (p.label === 'bar') setStationPrinterUrl('bar', url)
+              }
+            } catch {
+              /* invalid JSON */
+            }
+          }
         }
       })
     // Load active table joins

@@ -133,11 +133,20 @@ export default function NetworkPrinters({ onBack }: Props) {
   const testPrinter = async (printer: NetworkPrinter) => {
     setTesting(printer.id)
     try {
-      const url = `http://${printer.ip}:${printer.port === 9100 ? 6543 : printer.port}/health`
+      // Try print server HTTP health check first (port 6543)
+      const httpPort = printer.port === 9100 ? 6543 : printer.port
+      const url = `http://${printer.ip}:${httpPort}/health`
       const res = await fetch(url, { signal: AbortSignal.timeout(3000) })
       setTestResults((prev) => ({ ...prev, [printer.id]: res.ok ? 'ok' : 'fail' }))
     } catch {
-      setTestResults((prev) => ({ ...prev, [printer.id]: 'fail' }))
+      // HTTP failed — try a basic fetch to the IP (checks if device is reachable)
+      try {
+        await fetch(`http://${printer.ip}/`, { signal: AbortSignal.timeout(2000), mode: 'no-cors' })
+        // no-cors fetch succeeding means the device responded (even if we can't read it)
+        setTestResults((prev) => ({ ...prev, [printer.id]: 'ok' }))
+      } catch {
+        setTestResults((prev) => ({ ...prev, [printer.id]: 'fail' }))
+      }
     } finally {
       setTesting(null)
     }
@@ -344,21 +353,46 @@ export default function NetworkPrinters({ onBack }: Props) {
         )}
 
         {/* Setup guide */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <p className="text-gray-300 text-sm font-medium mb-2">Setup Guide</p>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+          <p className="text-gray-300 text-sm font-medium">Setup Guide</p>
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3">
+            <p className="text-amber-400 text-xs font-bold mb-1">
+              Important: Same Network Required
+            </p>
+            <p className="text-amber-400/80 text-[11px]">
+              The printer must be on the same WiFi as the POS devices (Beeshop's Place 5g). A
+              printer on 192.168.0.x cannot be reached from 192.168.100.x.
+            </p>
+          </div>
           <ul className="text-gray-500 text-xs space-y-1.5">
             <li>
-              • Connect each printer to the "Beeshop's Place 5g" WiFi network via its setup page
+              <span className="text-white font-medium">Step 1:</span> Connect LAN cable from laptop
+              to printer
             </li>
             <li>
-              • Use a LAN cable to access the printer's web interface for initial WiFi configuration
+              <span className="text-white font-medium">Step 2:</span> Open printer web page (e.g.
+              http://192.168.0.10)
             </li>
-            <li>• Most thermal printers use port 9100 for raw printing</li>
-            <li>• If using a print server (Raspberry Pi or PC), use port 6543</li>
-            <li>• Each printer needs a unique label — Kitchen, Bar, Griller, Receipt, etc.</li>
-            <li>• Test the connection after adding to verify the printer is reachable</li>
-            <li>• Once configured, the POS will auto-route print jobs to the correct printer</li>
+            <li>
+              <span className="text-white font-medium">Step 3:</span> WiFi settings → connect to
+              "Beeshop's Place 5g"
+            </li>
+            <li>
+              <span className="text-white font-medium">Step 4:</span> Printer gets new IP on
+              192.168.100.x — find it via router or config print
+            </li>
+            <li>
+              <span className="text-white font-medium">Step 5:</span> Enter that new IP here with
+              the correct function label
+            </li>
+            <li>
+              <span className="text-white font-medium">Step 6:</span> Test connection — green icon =
+              reachable
+            </li>
           </ul>
+          <p className="text-gray-600 text-[10px]">
+            Port 9100 = direct raw printing · Port 6543 = via print server
+          </p>
         </div>
       </div>
     </div>
