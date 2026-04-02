@@ -15,6 +15,8 @@ import {
   Map,
   ShoppingBag,
   Beer,
+  Camera,
+  Network,
 } from 'lucide-react'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import StaffManagement from './StaffManagement'
@@ -30,6 +32,8 @@ import PrinterConfig from './PrinterConfig'
 import FloorPlan from './FloorPlan'
 import TakeawayPacks from './TakeawayPacks'
 import BarChillerStock from './BarChillerStock'
+import CCTVConfig from './CCTVConfig'
+import NetworkPrinters from './NetworkPrinters'
 import { useNavigate } from 'react-router-dom'
 import type { Role } from '../../types'
 
@@ -150,9 +154,25 @@ export default function BackOffice() {
       roles: ['owner', 'manager'],
     },
     {
+      id: 'cctvconfig',
+      label: 'CCTV Config',
+      desc: 'Configure cameras, zones, and AI detection settings',
+      icon: Camera,
+      color: 'bg-violet-600',
+      roles: ['owner', 'manager'],
+    },
+    {
+      id: 'networkprinters',
+      label: 'Network Printers',
+      desc: 'Configure all thermal printers on the network by IP and function',
+      icon: Network,
+      color: 'bg-indigo-600',
+      roles: ['owner', 'manager'],
+    },
+    {
       id: 'printerconfig',
-      label: 'Printer Config',
-      desc: 'Configure network print server for thermal receipt printing',
+      label: 'Print Server',
+      desc: 'Legacy print server URL configuration',
       icon: Printer,
       color: 'bg-indigo-500',
       roles: ['owner', 'manager'],
@@ -205,6 +225,9 @@ export default function BackOffice() {
   if (activeSection === 'suppliers') return <Suppliers onBack={() => setActiveSection(null)} />
   if (activeSection === 'barchiller')
     return <BarChillerStock onBack={() => setActiveSection(null)} />
+  if (activeSection === 'cctvconfig') return <CCTVConfig onBack={() => setActiveSection(null)} />
+  if (activeSection === 'networkprinters')
+    return <NetworkPrinters onBack={() => setActiveSection(null)} />
   if (activeSection === 'printerconfig')
     return <PrinterConfig onBack={() => setActiveSection(null)} />
   if (activeSection === 'takeawaypacks')
