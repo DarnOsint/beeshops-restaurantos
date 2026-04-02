@@ -31,6 +31,8 @@ const ROLES = [
   'griller',
   'games_master',
   'shisha_attendant',
+  'supervisor',
+  'apartment_manager',
   'manager',
   'accountant',
   'auditor',
@@ -48,6 +50,8 @@ const roleColors: Record<string, string> = {
   griller: 'bg-orange-500/20 text-orange-400',
   games_master: 'bg-emerald-500/20 text-emerald-400',
   shisha_attendant: 'bg-rose-500/20 text-rose-400',
+  supervisor: 'bg-teal-500/20 text-teal-400',
+  apartment_manager: 'bg-violet-500/20 text-violet-400',
 }
 interface StaffForm {
   full_name: string
