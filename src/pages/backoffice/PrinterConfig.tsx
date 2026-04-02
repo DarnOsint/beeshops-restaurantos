@@ -1,5 +1,17 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Printer, Save, Wifi, WifiOff, Loader2, ChefHat, Flame } from 'lucide-react'
+import {
+  ArrowLeft,
+  Printer,
+  Save,
+  Wifi,
+  WifiOff,
+  Loader2,
+  ChefHat,
+  Flame,
+  Beer,
+  Monitor,
+  Copy,
+} from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../context/ToastContext'
 import {
@@ -52,18 +64,50 @@ export default function PrinterConfig({ onBack }: Props) {
   >({})
   const [stationSaving, setStationSaving] = useState(false)
 
+  // Station modes: 'display' | 'printer' | 'both'
+  const [stationModes, setStationModes] = useState<Record<string, string>>({
+    kitchen: 'display',
+    griller: 'display',
+    bar: 'display',
+  })
+  const [printCopies, setPrintCopies] = useState<Record<string, number>>({
+    kitchen: 2,
+    griller: 2,
+    bar: 1,
+  })
+  const [modesSaving, setModesSaving] = useState(false)
+
   useEffect(() => {
     // Load all printer settings at once
     supabase
       .from('settings')
       .select('id, value')
-      .in('id', ['print_server_url', ...STATIONS.map((s) => s.settingId)])
+      .in('id', [
+        'print_server_url',
+        'station_modes',
+        'print_copies',
+        ...STATIONS.map((s) => s.settingId),
+      ])
       .then(({ data }) => {
         if (!data) return
         for (const row of data) {
           if (row.id === 'print_server_url' && row.value) {
             setServerUrl(row.value)
             setPrintServerUrl(row.value)
+          }
+          if (row.id === 'station_modes' && row.value) {
+            try {
+              setStationModes((prev) => ({ ...prev, ...JSON.parse(row.value) }))
+            } catch {
+              /* */
+            }
+          }
+          if (row.id === 'print_copies' && row.value) {
+            try {
+              setPrintCopies((prev) => ({ ...prev, ...JSON.parse(row.value) }))
+            } catch {
+              /* */
+            }
           }
           const station = STATIONS.find((s) => s.settingId === row.id)
           if (station && row.value) {
@@ -310,6 +354,135 @@ export default function PrinterConfig({ onBack }: Props) {
           >
             <Save size={14} />
             {stationSaving ? 'Saving...' : 'Save Station Printers'}
+          </button>
+        </div>
+
+        {/* Station Modes */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+          <div className="bg-gray-800/50 rounded-lg p-4">
+            <p className="text-gray-300 text-sm font-medium mb-2">Station Output Modes</p>
+            <ul className="text-gray-400 text-xs space-y-1.5">
+              <li>
+                • <span className="text-white">Display Only</span> — orders appear on the KDS
+                screen, no printing
+              </li>
+              <li>
+                • <span className="text-white">Printer Only</span> — orders auto-print, KDS screen
+                shows no new orders
+              </li>
+              <li>
+                • <span className="text-white">Both</span> — orders appear on KDS AND auto-print
+              </li>
+              <li>
+                • Set <span className="text-white">copies</span> to 2 for kitchen/griller so they
+                keep one and give one out
+              </li>
+            </ul>
+          </div>
+
+          {[
+            {
+              key: 'kitchen',
+              label: 'Kitchen',
+              icon: <ChefHat size={16} className="text-orange-400" />,
+            },
+            {
+              key: 'griller',
+              label: 'Griller',
+              icon: <Flame size={16} className="text-red-400" />,
+            },
+            { key: 'bar', label: 'Bar', icon: <Beer size={16} className="text-cyan-400" /> },
+          ].map((station) => (
+            <div key={station.key} className="space-y-2">
+              <div className="flex items-center gap-2">
+                {station.icon}
+                <p className="text-white text-sm font-medium">{station.label}</p>
+              </div>
+              <div className="flex gap-2">
+                {(['display', 'printer', 'both'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setStationModes((prev) => ({ ...prev, [station.key]: mode }))}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium border-2 transition-all ${
+                      stationModes[station.key] === mode
+                        ? 'border-amber-500 bg-amber-500/10 text-amber-400'
+                        : 'border-gray-700 bg-gray-800 text-gray-500'
+                    }`}
+                  >
+                    {mode === 'display' && <Monitor size={12} />}
+                    {mode === 'printer' && <Printer size={12} />}
+                    {mode === 'both' && (
+                      <>
+                        <Monitor size={10} />
+                        <span>+</span>
+                        <Printer size={10} />
+                      </>
+                    )}
+                    {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                  </button>
+                ))}
+              </div>
+              {(stationModes[station.key] === 'printer' ||
+                stationModes[station.key] === 'both') && (
+                <div className="flex items-center gap-3 pl-6">
+                  <Copy size={12} className="text-gray-500" />
+                  <span className="text-gray-400 text-xs">Print copies:</span>
+                  {[1, 2, 3].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setPrintCopies((prev) => ({ ...prev, [station.key]: n }))}
+                      className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${
+                        printCopies[station.key] === n
+                          ? 'bg-amber-500 text-black'
+                          : 'bg-gray-800 text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+
+          <button
+            onClick={async () => {
+              setModesSaving(true)
+              try {
+                await Promise.all([
+                  supabase
+                    .from('settings')
+                    .upsert(
+                      {
+                        id: 'station_modes',
+                        value: JSON.stringify(stationModes),
+                        updated_at: new Date().toISOString(),
+                      },
+                      { onConflict: 'id' }
+                    ),
+                  supabase
+                    .from('settings')
+                    .upsert(
+                      {
+                        id: 'print_copies',
+                        value: JSON.stringify(printCopies),
+                        updated_at: new Date().toISOString(),
+                      },
+                      { onConflict: 'id' }
+                    ),
+                ])
+                toast.success('Station modes saved')
+              } catch (e) {
+                toast.error('Failed to save', e instanceof Error ? e.message : String(e))
+              } finally {
+                setModesSaving(false)
+              }
+            }}
+            disabled={modesSaving}
+            className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-semibold rounded-xl py-2.5 text-sm transition-colors disabled:opacity-50"
+          >
+            <Save size={14} />
+            {modesSaving ? 'Saving...' : 'Save Station Modes'}
           </button>
         </div>
 

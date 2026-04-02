@@ -127,6 +127,8 @@ export default function POS() {
   const [assignedZoneNames, setAssignedZoneNames] = useState<string[] | null>(null)
   const [defaultZone, setDefaultZone] = useState<string>('All')
   const [posTab, setPosTab] = useState<'tables' | 'history' | 'shift'>('tables')
+  const [stationModes, setStationModes] = useState<Record<string, string>>({})
+  const [printCopiesConfig, setPrintCopiesConfig] = useState<Record<string, number>>({})
   const [joinMode, setJoinMode] = useState(false)
   const [joinSelection, setJoinSelection] = useState<Table[]>([])
   // Active joins: maps primary table ID → array of secondary table IDs
@@ -152,6 +154,8 @@ export default function POS() {
         'kitchen_printer_url',
         'griller_printer_url',
         'network_printers',
+        'station_modes',
+        'print_copies',
       ])
       .then(({ data }) => {
         if (!data) return
@@ -161,6 +165,20 @@ export default function POS() {
             setStationPrinterUrl('kitchen', row.value)
           if (row.id === 'griller_printer_url' && row.value)
             setStationPrinterUrl('griller', row.value)
+          if (row.id === 'station_modes' && row.value) {
+            try {
+              setStationModes(JSON.parse(row.value))
+            } catch {
+              /* */
+            }
+          }
+          if (row.id === 'print_copies' && row.value) {
+            try {
+              setPrintCopiesConfig(JSON.parse(row.value))
+            } catch {
+              /* */
+            }
+          }
           // Load from network_printers config (overrides individual settings)
           if (row.id === 'network_printers' && row.value) {
             try {
@@ -569,7 +587,7 @@ export default function POS() {
     setPendingTable(null)
   }
 
-  /** Send order tickets to configured station printers (kitchen/griller) */
+  /** Send order tickets to configured station printers (kitchen/griller/bar) */
   const printStationTickets = (
     items: Array<{
       quantity: number
@@ -582,13 +600,19 @@ export default function POS() {
     staffName: string,
     createdAt: string
   ) => {
-    if (!hasStationPrinters()) return
-    const stations: ItemDestination[] = ['kitchen', 'griller']
+    const stations: ItemDestination[] = ['kitchen', 'griller', 'bar']
     for (const station of stations) {
+      const mode = stationModes[station] || 'display'
+      // Skip printing if mode is display-only
+      if (mode === 'display') continue
+      // Need a printer configured for this station
+      if (!hasStationPrinters() && mode !== 'both') continue
+
       const stationItems: TicketItem[] = items
         .filter((i) => i.destination === station)
         .map((i) => ({ quantity: i.quantity, name: i.name, modifier_notes: i.modifier_notes }))
       if (stationItems.length === 0) continue
+
       const ticket = buildOrderTicket({
         station,
         tableName,
@@ -597,9 +621,14 @@ export default function POS() {
         items: stationItems,
         createdAt,
       })
-      printToStation(station, ticket).catch(() => {
-        /* silent — station printer offline is not a blocker */
-      })
+
+      // Print the configured number of copies
+      const copies = printCopiesConfig[station] || 1
+      for (let c = 0; c < copies; c++) {
+        printToStation(station, ticket).catch(() => {
+          /* silent — station printer offline is not a blocker */
+        })
+      }
     }
   }
 
