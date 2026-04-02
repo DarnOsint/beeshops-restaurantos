@@ -193,9 +193,7 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
         itemSales[n].total += item.total_price || 0
       })
     )
-    const topItems = Object.entries(itemSales)
-      .sort((a, b) => b[1].total - a[1].total)
-      .slice(0, 8)
+    const topItems = Object.entries(itemSales).sort((a, b) => b[1].total - a[1].total)
     const cashSales = ordersArr
       .filter((o) => o.payment_method === 'cash')
       .reduce((s, o) => s + (o.total_amount || 0), 0)
@@ -273,7 +271,7 @@ export default function ShiftSummary({ shift, onClose, onConfirmClockOut }: Prop
       div,
       ...Object.entries(data.typeBreakdown).map(([type, count]) => row(`${type}:`, String(count))),
       div,
-      ctr('TOP ITEMS SOLD'),
+      ctr('ALL ITEMS SOLD'),
       div,
       ...data.topItems.map(([name, { qty, total }]) =>
         row(`${qty}x ${name.substring(0, 25)}`, `N${total.toLocaleString()}`)
