@@ -16,8 +16,13 @@ import {
   Monitor,
   Heart,
   RotateCcw,
+  Beer,
+  ChefHat,
+  ClipboardList,
 } from 'lucide-react'
 
+import WaitronOrdersTab from './WaitronOrdersTab'
+import StockSummaryTab from './StockSummaryTab'
 import Debtors from './Debtors'
 import OverviewTab from './OverviewTab'
 import OrdersTab from './OrdersTab'
@@ -59,6 +64,9 @@ const TABS = [
   { id: 'ledger', label: 'Ledger', icon: BookOpen },
   { id: 'audit', label: 'Audit', icon: Shield },
   { id: 'pos', label: 'POS Recon', icon: Monitor },
+  { id: 'waitron_orders', label: 'Waitron Orders', icon: ClipboardList },
+  { id: 'bar_stock', label: 'Bar Stock', icon: Beer },
+  { id: 'kitchen_stock', label: 'Kitchen Stock', icon: ChefHat },
 ] as const
 
 export default function Accounting() {
@@ -463,6 +471,9 @@ export default function Accounting() {
               />
             )
           })()}
+        {activeTab === 'waitron_orders' && <WaitronOrdersTab />}
+        {activeTab === 'bar_stock' && <StockSummaryTab type="bar" />}
+        {activeTab === 'kitchen_stock' && <StockSummaryTab type="kitchen" />}
       </div>
     </div>
   )
