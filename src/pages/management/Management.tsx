@@ -69,14 +69,14 @@ export default function Management() {
   const [activeTab, setActiveTab] = useState<TabId>('overview')
   const { lateOrders, threshold, setThreshold, markDelivered } = useLateOrders()
 
-  // Memoized — stable reference, won't cause ActivityLogTab to re-fetch on every render
-  const todayRange = useMemo(
-    () => ({
-      start: new Date(new Date().setHours(0, 0, 0, 0)).toISOString(),
-      end: new Date(new Date().setHours(23, 59, 59, 999)).toISOString(),
-    }),
-    []
-  )
+  const [activityDate, setActivityDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const activityRange = useMemo(() => {
+    const d = new Date(activityDate)
+    return {
+      start: new Date(d.setHours(0, 0, 0, 0)).toISOString(),
+      end: new Date(d.setHours(23, 59, 59, 999)).toISOString(),
+    }
+  }, [activityDate])
   const { status: syncStatus, pendingCount, lastSynced, manualSync } = useSyncStatus()
 
   const [syncQueue, setSyncQueue] = useState<SyncQueueEntry[]>([])
@@ -428,7 +428,40 @@ export default function Management() {
             onManualSync={manualSync}
           />
         )}
-        {activeTab === 'activity' && <ActivityLogTab dateRange={todayRange} />}
+        {activeTab === 'activity' && (
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <input
+                type="date"
+                value={activityDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setActivityDate(e.target.value)}
+                className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+              />
+              <button
+                onClick={() => setActivityDate(new Date().toISOString().slice(0, 10))}
+                className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${
+                  activityDate === new Date().toISOString().slice(0, 10)
+                    ? 'bg-amber-500 text-black'
+                    : 'bg-gray-800 text-gray-400 hover:text-white'
+                }`}
+              >
+                Today
+              </button>
+              <button
+                onClick={() => {
+                  const d = new Date(activityDate)
+                  d.setDate(d.getDate() - 1)
+                  setActivityDate(d.toISOString().slice(0, 10))
+                }}
+                className="px-3 py-2 rounded-xl text-xs bg-gray-800 text-gray-400 hover:text-white transition-colors"
+              >
+                Previous Day
+              </button>
+            </div>
+            <ActivityLogTab dateRange={activityRange} />
+          </div>
+        )}
         {activeTab === 'settings' && (
           <SettingsTab threshold={threshold} setThreshold={setThreshold} />
         )}

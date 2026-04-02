@@ -133,7 +133,7 @@ interface Report {
   paidOrdersCount: number
   cancelledOrders: number
   avgOrderValue: number
-  byPayment: { cash: number; bank_pos: number; transfer: number }
+  byPayment: { cash: number; bank_pos: number; transfer: number; credit: number; split: number }
   byCategory: CategoryStat[]
   topItems: ItemStat[]
   staffPerformance: StaffStat[]
@@ -297,7 +297,13 @@ export default function Reports() {
           .filter((o) => ['card', 'bank_pos'].includes(o.payment_method || ''))
           .reduce((s, o) => s + (o.total_amount || 0), 0),
         transfer: paidOrders
-          .filter((o) => ['transfer', 'bank_transfer'].includes(o.payment_method || ''))
+          .filter((o) => (o.payment_method || '').startsWith('transfer'))
+          .reduce((s, o) => s + (o.total_amount || 0), 0),
+        credit: paidOrders
+          .filter((o) => o.payment_method === 'credit')
+          .reduce((s, o) => s + (o.total_amount || 0), 0),
+        split: paidOrders
+          .filter((o) => o.payment_method === 'split')
           .reduce((s, o) => s + (o.total_amount || 0), 0),
       }
 
@@ -446,6 +452,8 @@ export default function Reports() {
       ['Cash', '₦' + report.byPayment.cash.toLocaleString()],
       ['Bank POS', '₦' + report.byPayment.bank_pos.toLocaleString()],
       ['Bank Transfer', '₦' + report.byPayment.transfer.toLocaleString()],
+      ['Credit (Pay Later)', '₦' + report.byPayment.credit.toLocaleString()],
+      ['Split Payment', '₦' + report.byPayment.split.toLocaleString()],
       [],
       ['TOP SELLING ITEMS'],
       ['Item', 'Qty Sold', 'Revenue'],
@@ -777,6 +785,16 @@ export default function Reports() {
                         label: 'Bank Transfer',
                         value: report.byPayment.transfer,
                         color: 'bg-purple-500',
+                      },
+                      {
+                        label: 'Credit (Pay Later)',
+                        value: report.byPayment.credit,
+                        color: 'bg-amber-500',
+                      },
+                      {
+                        label: 'Split Payment',
+                        value: report.byPayment.split,
+                        color: 'bg-cyan-500',
                       },
                     ] as const
                   ).map((item) => (
@@ -1232,6 +1250,7 @@ export default function Reports() {
                             row('Bank POS:', `N${report.byPayment.bank_pos.toLocaleString()}`),
                             row('Transfer:', `N${report.byPayment.transfer.toLocaleString()}`),
                             row('Credit:', `N${creditTotal.toLocaleString()}`),
+                            row('Split:', `N${report.byPayment.split.toLocaleString()}`),
                             div,
                             ctr('VOIDS & CANCELLATIONS'),
                             div,
@@ -1342,6 +1361,7 @@ export default function Reports() {
                           ['Bank POS', '₦' + report.byPayment.bank_pos.toLocaleString()],
                           ['Bank Transfer', '₦' + report.byPayment.transfer.toLocaleString()],
                           ['Credit (Pay Later)', '₦' + creditTotal.toLocaleString()],
+                          ['Split Payment', '₦' + report.byPayment.split.toLocaleString()],
                         ] as const
                       ).map(([label, value]) => (
                         <div key={label} className="flex justify-between my-1 text-sm">
