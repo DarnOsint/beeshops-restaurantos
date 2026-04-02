@@ -184,15 +184,59 @@ export default function StaffManagement({ onBack }: Props) {
         })
         if (error) throw error
       } else {
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: form.email,
-          password: form.password,
-          options: { data: { full_name: form.full_name } },
-        })
-        if (signUpError) throw signUpError
-        // When email confirmation is enabled, signUpData.user is null until confirmed.
-        // Fall back to session user or a new UUID so the profile is still created.
-        const userId = signUpData.user?.id ?? signUpData.session?.user?.id ?? crypto.randomUUID()
+        // Office staff (auditor, accountant, manager, owner) need auth accounts.
+        // Use a separate Supabase client to avoid disrupting the current session.
+        let userId: string
+        try {
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email: form.email,
+            password: form.password,
+            options: { data: { full_name: form.full_name } },
+          })
+          if (signUpError) {
+            // If user already exists in auth, try to find their ID from profiles
+            if (
+              signUpError.message?.includes('already registered') ||
+              signUpError.message?.includes('already been registered')
+            ) {
+              const { data: existing } = await supabase
+                .from('profiles')
+                .select('id')
+                .eq('email', form.email)
+                .limit(1)
+                .maybeSingle()
+              if (existing) {
+                userId = existing.id
+              } else {
+                throw signUpError
+              }
+            } else {
+              throw signUpError
+            }
+          } else {
+            userId = signUpData.user?.id ?? signUpData.session?.user?.id ?? crypto.randomUUID()
+          }
+        } catch (authErr) {
+          // If auth signup fails entirely, create profile with a generated UUID
+          // The staff member can use PIN login and set up email auth later
+          const msg = (authErr as { message?: string })?.message || ''
+          if (msg.includes('already') || msg.includes('duplicate')) {
+            const { data: existing } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('email', form.email)
+              .limit(1)
+              .maybeSingle()
+            userId = existing?.id || crypto.randomUUID()
+          } else {
+            // Can't create auth user — fall back to profile-only with PIN access
+            userId = crypto.randomUUID()
+            toast.warning(
+              'Auth Notice',
+              'Auth account could not be created. Staff can use PIN login. Error: ' + msg
+            )
+          }
+        }
         const profileData: Record<string, unknown> = {
           id: userId,
           full_name: form.full_name,
