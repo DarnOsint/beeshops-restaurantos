@@ -234,6 +234,28 @@ function BarKDSInner() {
       toast.error('Error', 'Failed to accept return')
       return
     }
+
+    // Recalculate order total — deduct returned item
+    const { data: itemData } = await supabase
+      .from('order_items')
+      .select('order_id, total_price')
+      .eq('id', itemId)
+      .single()
+    if (itemData) {
+      // Sum all non-returned items on this order
+      const { data: remaining } = await supabase
+        .from('order_items')
+        .select('total_price, return_accepted')
+        .eq('order_id', itemData.order_id)
+      const newTotal = (remaining || [])
+        .filter((r: { return_accepted?: boolean }) => !r.return_accepted)
+        .reduce((s: number, r: { total_price: number }) => s + (r.total_price || 0), 0)
+      await supabase
+        .from('orders')
+        .update({ total_amount: newTotal, updated_at: new Date().toISOString() })
+        .eq('id', itemData.order_id)
+    }
+
     // Update returns_log — mark resolved
     await supabase
       .from('returns_log')
