@@ -41,6 +41,7 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
   const [todayLog, setTodayLog] = useState<Shift[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'active' | 'all' | 'log'>('active')
+  const [logDate, setLogDate] = useState(todayWAT())
   const [summaryShift, setSummaryShift] = useState<Shift | null>(null)
 
   const fetchPosMachines = async () => {
@@ -86,12 +87,12 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
       setActiveShifts(Array.from(seen.values()))
     }
   }
-  const fetchTodayLog = async () => {
-    const today = todayWAT()
+  const fetchTodayLog = async (d?: string) => {
+    const dateToFetch = d || logDate
     const { data } = await supabase
       .from('attendance')
       .select('*')
-      .eq('date', today)
+      .eq('date', dateToFetch)
       .order('clock_in', { ascending: false })
     if (data) setTodayLog(data)
   }
@@ -368,10 +369,46 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
 
       {tab === 'log' && (
         <div className="space-y-2">
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
+            <input
+              type="date"
+              value={logDate}
+              max={todayWAT()}
+              onChange={(e) => {
+                setLogDate(e.target.value)
+                fetchTodayLog(e.target.value)
+              }}
+              className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+            />
+            <button
+              onClick={() => {
+                setLogDate(todayWAT())
+                fetchTodayLog(todayWAT())
+              }}
+              className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${logDate === todayWAT() ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => {
+                const d = new Date(logDate)
+                d.setDate(d.getDate() - 1)
+                const ds = d.toISOString().slice(0, 10)
+                setLogDate(ds)
+                fetchTodayLog(ds)
+              }}
+              className="px-3 py-2 rounded-xl text-xs bg-gray-800 text-gray-400 hover:text-white transition-colors"
+            >
+              Prev Day
+            </button>
+            <span className="text-gray-500 text-xs">
+              {todayLog.length} record{todayLog.length !== 1 ? 's' : ''}
+            </span>
+          </div>
           {todayLog.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <Calendar size={24} className="mx-auto mb-2 opacity-50" />
-              <p>No attendance records today</p>
+              <p>No attendance records for {logDate === todayWAT() ? 'today' : logDate}</p>
             </div>
           ) : (
             todayLog.map((entry) => (
