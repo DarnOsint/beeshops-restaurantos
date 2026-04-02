@@ -40,7 +40,7 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
         quantity,
         status,
         menu_items(name, menu_categories(destination)),
-        orders(created_at, profiles(full_name))
+        orders(created_at, order_type, profiles(full_name), tables(table_categories(name)))
       `
         )
         .gte('orders.created_at', startUTC)
@@ -53,14 +53,21 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
             quantity: number
             status: string
             menu_items: { name: string; menu_categories: { destination: string } } | null
-            orders: { created_at: string; profiles: { full_name: string } | null } | null
+            orders: {
+              created_at: string
+              order_type?: string
+              profiles: { full_name: string } | null
+              tables: { table_categories: { name: string } | null } | null
+            } | null
           }[]
         ).filter((i) => i.menu_items?.menu_categories?.destination === destination && i.orders)
 
         const itemMap = new Map<string, Map<string, number>>()
         for (const item of filtered) {
           const itemName = item.menu_items?.name || 'Unknown'
-          const waitronName = item.orders?.profiles?.full_name || 'Unknown'
+          const zone = item.orders?.tables?.table_categories?.name
+          const staffName = item.orders?.profiles?.full_name || 'Unknown'
+          const waitronName = zone ? `${staffName} (${zone})` : staffName
           if (!itemMap.has(itemName)) itemMap.set(itemName, new Map())
           const wm = itemMap.get(itemName)!
           wm.set(waitronName, (wm.get(waitronName) || 0) + item.quantity)
