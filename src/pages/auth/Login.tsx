@@ -148,13 +148,15 @@ export default function Login() {
       void fetch('https://api.ipify.org?format=json')
         .then((r) => r.json())
         .catch(() => ({ ip: 'unknown' }))
-        .then(({ ip }) => supabase.from('audit_log').insert({
-          action: 'LOGIN_EMAIL',
-          entity: 'auth',
-          entity_name: email,
-          ip_address: ip,
-          new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
-        }))
+        .then(({ ip }) =>
+          supabase.from('audit_log').insert({
+            action: 'LOGIN_EMAIL',
+            entity: 'auth',
+            entity_name: email,
+            ip_address: ip,
+            new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
+          })
+        )
       // Navigate immediately — AuthContext will fetch profile in the background.
       // PrivateRoute waits for profile before rendering, so no flicker.
       navigate('/dashboard')
@@ -226,29 +228,27 @@ export default function Login() {
     }
     resetAttempts('rl_pin')
 
-    // Auto-upgrade PIN to bcrypt on successful login (migrates plain-text and PBKDF2)
-    if (profile.pin && !profile.pin.startsWith('$2')) {
-      void hashPin(entered).then((hashed) => {
-        if (hashed !== entered) {
-          // only update if hashPin returned a real hash
-          supabase.from('profiles').update({ pin: hashed }).eq('id', profile.id)
-        }
-      })
+    // Normalize PIN storage: if stored as PBKDF2 hash, replace with plaintext
+    // so the server-side RPC can verify it directly next time (faster, no fallback loop)
+    if (profile.pin && profile.pin.startsWith('pbkdf2:')) {
+      void supabase.from('profiles').update({ pin: entered }).eq('id', profile.id)
     }
 
     void fetch('https://api.ipify.org?format=json')
       .then((r) => r.json())
       .catch(() => ({ ip: 'unknown' }))
-      .then(({ ip }) => supabase.from('audit_log').insert({
-        action: 'LOGIN_PIN',
-        entity: 'auth',
-        entity_name: profile.full_name,
-        performed_by: profile.id,
-        performed_by_name: profile.full_name,
-        performed_by_role: profile.role,
-        ip_address: ip,
-        new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
-      }))
+      .then(({ ip }) =>
+        supabase.from('audit_log').insert({
+          action: 'LOGIN_PIN',
+          entity: 'auth',
+          entity_name: profile.full_name,
+          performed_by: profile.id,
+          performed_by_name: profile.full_name,
+          performed_by_role: profile.role,
+          ip_address: ip,
+          new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
+        })
+      )
     localStorage.setItem(
       'pin_session',
       JSON.stringify({

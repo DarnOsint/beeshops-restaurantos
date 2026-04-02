@@ -14,138 +14,144 @@ interface Props {
   color: string
 }
 
+const todayStr = () => new Date().toISOString().slice(0, 10)
+
 export default function DailySummaryTab({ destination, icon, color }: Props) {
   const [summary, setSummary] = useState<SummaryItem[]>([])
   const [totalItems, setTotalItems] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [date, setDate] = useState(todayStr())
   const printRef = useRef<HTMLDivElement>(null)
 
-  const fetchSummary = useCallback(async () => {
-    setLoading(true)
-    const todayWAT = new Date()
-    todayWAT.setHours(0, 0, 0, 0)
-    const startUTC = new Date(todayWAT.getTime() - 60 * 60 * 1000).toISOString()
+  const fetchSummary = useCallback(
+    async (d?: string) => {
+      setLoading(true)
+      const targetDate = new Date(d || date)
+      targetDate.setHours(0, 0, 0, 0)
+      const startUTC = targetDate.toISOString()
+      const endDate = new Date(targetDate)
+      endDate.setHours(23, 59, 59, 999)
+      const endUTC = endDate.toISOString()
 
-    const { data } = await supabase
-      .from('order_items')
-      .select(
-        `
+      const { data } = await supabase
+        .from('order_items')
+        .select(
+          `
         quantity,
         status,
         menu_items(name, menu_categories(destination)),
         orders(created_at, profiles(full_name))
       `
-      )
-      .gte('orders.created_at', startUTC)
-      .in('status', ['ready', 'delivered'])
+        )
+        .gte('orders.created_at', startUTC)
+        .lte('orders.created_at', endUTC)
+        .in('status', ['ready', 'delivered'])
 
-    if (data) {
-      const filtered = (
-        data as unknown as {
-          quantity: number
-          status: string
-          menu_items: { name: string; menu_categories: { destination: string } } | null
-          orders: { created_at: string; profiles: { full_name: string } | null } | null
-        }[]
-      ).filter((i) => i.menu_items?.menu_categories?.destination === destination && i.orders)
+      if (data) {
+        const filtered = (
+          data as unknown as {
+            quantity: number
+            status: string
+            menu_items: { name: string; menu_categories: { destination: string } } | null
+            orders: { created_at: string; profiles: { full_name: string } | null } | null
+          }[]
+        ).filter((i) => i.menu_items?.menu_categories?.destination === destination && i.orders)
 
-      const itemMap = new Map<string, Map<string, number>>()
-      for (const item of filtered) {
-        const itemName = item.menu_items?.name || 'Unknown'
-        const waitronName = item.orders?.profiles?.full_name || 'Unknown'
-        if (!itemMap.has(itemName)) itemMap.set(itemName, new Map())
-        const wm = itemMap.get(itemName)!
-        wm.set(waitronName, (wm.get(waitronName) || 0) + item.quantity)
+        const itemMap = new Map<string, Map<string, number>>()
+        for (const item of filtered) {
+          const itemName = item.menu_items?.name || 'Unknown'
+          const waitronName = item.orders?.profiles?.full_name || 'Unknown'
+          if (!itemMap.has(itemName)) itemMap.set(itemName, new Map())
+          const wm = itemMap.get(itemName)!
+          wm.set(waitronName, (wm.get(waitronName) || 0) + item.quantity)
+        }
+
+        const result: SummaryItem[] = Array.from(itemMap.entries())
+          .map(([name, wm]) => {
+            const waitrons = Array.from(wm.entries())
+              .map(([wName, qty]) => ({ name: wName, quantity: qty }))
+              .sort((a, b) => b.quantity - a.quantity)
+            return { name, quantity: waitrons.reduce((s, w) => s + w.quantity, 0), waitrons }
+          })
+          .sort((a, b) => b.quantity - a.quantity)
+
+        setSummary(result)
+        setTotalItems(result.reduce((s, i) => s + i.quantity, 0))
       }
-
-      const result: SummaryItem[] = Array.from(itemMap.entries())
-        .map(([name, wm]) => {
-          const waitrons = Array.from(wm.entries())
-            .map(([wName, qty]) => ({ name: wName, quantity: qty }))
-            .sort((a, b) => b.quantity - a.quantity)
-          return { name, quantity: waitrons.reduce((s, w) => s + w.quantity, 0), waitrons }
-        })
-        .sort((a, b) => b.quantity - a.quantity)
-
-      setSummary(result)
-      setTotalItems(result.reduce((s, i) => s + i.quantity, 0))
-    }
-    setLoading(false)
-  }, [destination])
+      setLoading(false)
+    },
+    [destination, date]
+  )
 
   useEffect(() => {
     fetchSummary()
   }, [fetchSummary])
 
+  const handleDateChange = (d: string) => {
+    setDate(d)
+    fetchSummary(d)
+  }
+
   const handlePrint = () => {
-    const label = destination === 'bar' ? 'Drinks' : destination === 'kitchen' ? 'Kitchen' : 'Grill'
-    const date = new Date().toLocaleDateString('en-NG', {
+    const label = destination === 'bar' ? 'DRINKS' : destination === 'kitchen' ? 'KITCHEN' : 'GRILL'
+    const fmtDate = new Date(date).toLocaleDateString('en-NG', {
       day: '2-digit',
       month: 'short',
       year: 'numeric',
     })
-    const time = new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })
+    const fmtTime = new Date().toLocaleTimeString('en-NG', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
+    const W = 40
+    const div = '-'.repeat(W)
+    const sol = '='.repeat(W)
+    const row = (l: string, r: string) => {
+      const left = l.substring(0, W - r.length - 1)
+      return left + ' '.repeat(Math.max(1, W - left.length - r.length)) + r
+    }
+    const ctr = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
 
-    const rows = summary
-      .map(
-        (item, i) => `
-      <tr>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;">${i + 1}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-weight:600;">${item.name}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;">
-          ${item.waitrons.map((w) => `${w.name} (${w.quantity})`).join(', ')}
-        </td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eee;font-weight:bold;text-align:center;">${item.quantity}</td>
-      </tr>
-    `
-      )
-      .join('')
+    const lines = [
+      '',
+      ctr("BEESHOP'S PLACE"),
+      ctr(`${label} DAILY SUMMARY`),
+      div,
+      row('Date:', fmtDate),
+      row('Printed:', fmtTime),
+      row('Total Items:', String(totalItems)),
+      div,
+      row('ITEM', 'QTY'),
+      div,
+      ...summary.map((item, i) => {
+        const itemLine = row(`${i + 1}. ${item.name}`, String(item.quantity))
+        const waitronLines = item.waitrons.map((w) => `   ${w.name}: ${w.quantity}`).join('\n')
+        return itemLine + '\n' + waitronLines
+      }),
+      sol,
+      row('TOTAL:', String(totalItems)),
+      sol,
+      '',
+      ctr('*** END OF SUMMARY ***'),
+      '',
+    ].join('\n')
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>${label} Daily Summary — ${date}</title>
-          <style>
-            body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; color: #000; }
-            h1 { font-size: 16px; margin: 0 0 4px; }
-            p { margin: 0 0 12px; color: #555; }
-            table { width: 100%; border-collapse: collapse; }
-            th { background: #f5f5f5; padding: 8px; text-align: left; border-bottom: 2px solid #ddd; }
-            td { vertical-align: top; }
-            .total { margin-top: 12px; font-weight: bold; font-size: 14px; text-align: right; }
-            .footer { margin-top: 20px; font-size: 10px; color: #999; text-align: center; }
-          </style>
-        </head>
-        <body>
-          <h1>Beeshop's Place — ${label} Daily Summary</h1>
-          <p>${date} &nbsp;|&nbsp; Printed at ${time} &nbsp;|&nbsp; Total: ${totalItems} items</p>
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Item</th>
-                <th>Served To (Waitron)</th>
-                <th style="text-align:center;">Qty</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-          <div class="total">Total ${label.toLowerCase()} served: ${totalItems}</div>
-          <div class="footer">RestaurantOS — Beeshop's Place Lounge</div>
-        </body>
-      </html>
-    `
-
-    const win = window.open('', '_blank', 'width=700,height=600')
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${label} Summary — ${fmtDate}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;color:#000;background:#fff;width:80mm;padding:4mm;white-space:pre}@media print{body{width:80mm}@page{margin:0;size:80mm auto}}</style></head><body>${lines}</body></html>`
+    const win = window.open('', '_blank', 'width=500,height=700,toolbar=no,menubar=no')
     if (!win) return
+    win.document.open('text/html', 'replace')
     win.document.write(html)
     win.document.close()
-    win.focus()
-    setTimeout(() => {
-      win.print()
-      win.close()
-    }, 300)
+    win.onafterprint = () => win.close()
+    win.onload = () =>
+      setTimeout(() => {
+        try {
+          win.print()
+        } catch {
+          /* closed */
+        }
+      }, 200)
   }
 
   const label = destination === 'bar' ? 'drinks' : destination === 'kitchen' ? 'dishes' : 'grills'
@@ -153,15 +159,47 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
   return (
     <div ref={printRef} className="flex-1 p-4 overflow-y-auto">
       {/* Header */}
+      {/* Date controls */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <input
+          type="date"
+          value={date}
+          max={todayStr()}
+          onChange={(e) => handleDateChange(e.target.value)}
+          className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+        />
+        <button
+          onClick={() => handleDateChange(todayStr())}
+          className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${date === todayStr() ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+        >
+          Today
+        </button>
+        <button
+          onClick={() => {
+            const d = new Date(date)
+            d.setDate(d.getDate() - 1)
+            handleDateChange(d.toISOString().slice(0, 10))
+          }}
+          className="px-3 py-2 rounded-xl text-xs bg-gray-800 text-gray-400 hover:text-white transition-colors"
+        >
+          Prev Day
+        </button>
+      </div>
+
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 flex items-center justify-between">
         <div>
-          <p className="text-gray-400 text-xs capitalize">Total {label} served today</p>
+          <p className="text-gray-400 text-xs capitalize">
+            Total {label} served{' '}
+            {date === todayStr()
+              ? 'today'
+              : `on ${new Date(date).toLocaleDateString('en-NG', { day: '2-digit', month: 'short' })}`}
+          </p>
           <p className={`text-2xl font-bold ${color}`}>{totalItems}</p>
         </div>
         <div className="flex items-center gap-2">
           {icon}
           <button
-            onClick={fetchSummary}
+            onClick={() => fetchSummary()}
             className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-gray-800"
             title="Refresh"
           >

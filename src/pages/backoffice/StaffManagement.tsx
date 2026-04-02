@@ -166,7 +166,7 @@ export default function StaffManagement({ onBack }: Props) {
           notes: form.notes,
           is_active: form.is_active,
         }
-        if (form.pin) updates.pin = await hashPin(form.pin)
+        if (form.pin) updates.pin = form.pin
         const { error } = await supabase.from('profiles').update(updates).eq('id', editingStaff.id)
         if (error) throw error
       } else if (isFloorRole(form.role)) {
@@ -176,7 +176,7 @@ export default function StaffManagement({ onBack }: Props) {
           email: form.email || null,
           phone: form.phone,
           role: form.role,
-          pin: await hashPin(form.pin),
+          pin: form.pin,
           hire_date: form.hire_date,
           emergency_contact: form.emergency_contact,
           notes: form.notes,
@@ -199,7 +199,7 @@ export default function StaffManagement({ onBack }: Props) {
           email: form.email,
           phone: form.phone,
           role: form.role,
-          pin: await hashPin(form.pin),
+          pin: form.pin,
           hire_date: form.hire_date,
           emergency_contact: form.emergency_contact,
           notes: form.notes,
@@ -213,7 +213,9 @@ export default function StaffManagement({ onBack }: Props) {
       setShowModal(false)
       toast.success(editingStaff ? 'Staff Updated' : 'Staff Added')
     } catch (e) {
-      toast.error('Error', e instanceof Error ? e.message : String(e))
+      const msg =
+        e instanceof Error ? e.message : (e as { message?: string })?.message || JSON.stringify(e)
+      toast.error('Error', msg)
       setSaving(false)
     }
   }
