@@ -68,7 +68,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
   supervisor: [{ label: 'Supervisor', icon: LayoutDashboard, path: '/supervisor' }],
 }
 
-const BARE_ROLES = ['kitchen', 'bar', 'griller', 'waitron']
+const BARE_ROLES = ['kitchen', 'bar', 'griller', 'waitron', 'games_master', 'shisha_attendant']
 const ZONES = ['Outdoor', 'Indoor', 'VIP Lounge', 'The Nook']
 
 interface TableRow {

@@ -29,12 +29,14 @@ const ROLES = [
   'kitchen',
   'bar',
   'griller',
+  'games_master',
+  'shisha_attendant',
   'manager',
   'accountant',
   'auditor',
   'owner',
 ] as const
-const FLOOR_ROLES = ['waitron', 'kitchen', 'bar', 'griller']
+const FLOOR_ROLES = ['waitron', 'kitchen', 'bar', 'griller', 'games_master', 'shisha_attendant']
 const roleColors: Record<string, string> = {
   owner: 'bg-amber-500/20 text-amber-400',
   manager: 'bg-purple-500/20 text-purple-400',
@@ -44,6 +46,8 @@ const roleColors: Record<string, string> = {
   kitchen: 'bg-red-500/20 text-red-400',
   bar: 'bg-cyan-500/20 text-cyan-400',
   griller: 'bg-orange-500/20 text-orange-400',
+  games_master: 'bg-emerald-500/20 text-emerald-400',
+  shisha_attendant: 'bg-rose-500/20 text-rose-400',
 }
 interface StaffForm {
   full_name: string

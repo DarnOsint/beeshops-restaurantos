@@ -42,6 +42,7 @@ interface EnrichedEntry extends StockEntry {
 
 interface Props {
   onBack: () => void
+  embedded?: boolean
 }
 
 function computeStatus(e: EnrichedEntry): 'ok' | 'warn' | 'alarm' | 'commend' {
@@ -71,7 +72,7 @@ const blankForm = {
   note: '',
 }
 
-export default function BarChillerStock({ onBack }: Props) {
+export default function BarChillerStock({ onBack, embedded = false }: Props) {
   const { profile } = useAuth()
   const toast = useToast()
   const [date, setDate] = useState(todayStr())
@@ -272,28 +273,46 @@ export default function BarChillerStock({ onBack }: Props) {
 
   return (
     <div className="min-h-full bg-gray-950">
-      {/* Header */}
-      <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center gap-3">
-        <button onClick={onBack} className="text-gray-400 hover:text-white">
-          <ArrowLeft size={20} />
-        </button>
-        <div className="flex-1">
-          <h1 className="text-white font-bold">Bar Chiller Stock</h1>
-          <p className="text-gray-400 text-xs">
-            Daily drink stock register — what came in, what went out
-          </p>
+      {/* Header — hidden when embedded in BarKDS tabs */}
+      {!embedded && (
+        <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center gap-3">
+          <button onClick={onBack} className="text-gray-400 hover:text-white">
+            <ArrowLeft size={20} />
+          </button>
+          <div className="flex-1">
+            <h1 className="text-white font-bold">Bar Chiller Stock</h1>
+            <p className="text-gray-400 text-xs">
+              Daily drink stock register — what came in, what went out
+            </p>
+          </div>
+          <input
+            type="date"
+            value={date}
+            max={todayStr()}
+            onChange={(e) => setDate(e.target.value)}
+            className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+          />
+          <button onClick={() => loadEntries(date)} className="text-gray-400 hover:text-white p-2">
+            <RefreshCw size={16} />
+          </button>
         </div>
-        <input
-          type="date"
-          value={date}
-          max={todayStr()}
-          onChange={(e) => setDate(e.target.value)}
-          className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
-        />
-        <button onClick={() => loadEntries(date)} className="text-gray-400 hover:text-white p-2">
-          <RefreshCw size={16} />
-        </button>
-      </div>
+      )}
+
+      {/* Embedded date picker when inside KDS */}
+      {embedded && (
+        <div className="px-6 pt-4 flex items-center gap-3">
+          <input
+            type="date"
+            value={date}
+            max={todayStr()}
+            onChange={(e) => setDate(e.target.value)}
+            className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+          />
+          <button onClick={() => loadEntries(date)} className="text-gray-400 hover:text-white p-2">
+            <RefreshCw size={16} />
+          </button>
+        </div>
+      )}
 
       <div className="p-6 max-w-3xl mx-auto">
         {/* Dashboard stats */}

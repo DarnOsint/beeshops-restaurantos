@@ -10,6 +10,8 @@ export type Role =
   | 'kitchen'
   | 'bar'
   | 'griller'
+  | 'games_master'
+  | 'shisha_attendant'
   | 'supervisor'
   | 'apartment_manager'
 

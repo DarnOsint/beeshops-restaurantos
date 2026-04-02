@@ -36,6 +36,8 @@ const RoomManagement = lazy(() => import('./pages/rooms/RoomManagement'))
 const SupervisorDashboard = lazy(() => import('./pages/supervisor/SupervisorDashboard'))
 const ApartmentDashboard = lazy(() => import('./pages/apartment/ApartmentDashboard'))
 const MonthEnd = lazy(() => import('./pages/monthend/MonthEnd'))
+const GamesMasterPage = lazy(() => import('./pages/games/GamesMasterPage'))
+const ShishaAttendantPage = lazy(() => import('./pages/shisha/ShishaAttendantPage'))
 // Public customer pages
 const TableView = lazy(() => import('./pages/customer/TableView'))
 const ReceiptView = lazy(() => import('./pages/customer/ReceiptView'))
@@ -132,6 +134,8 @@ function RoleRoute() {
   if (profile.role === 'griller') return <Navigate to="/kds/griller" />
   if (profile.role === 'apartment_manager') return <Navigate to="/apartment" />
   if (profile.role === 'auditor') return <Navigate to="/accounting" />
+  if (profile.role === 'games_master') return <Navigate to="/games" />
+  if (profile.role === 'shisha_attendant') return <Navigate to="/shisha" />
   if (profile.role === 'supervisor') return <Navigate to="/supervisor" />
   return <Navigate to="/login" />
 }
@@ -363,6 +367,31 @@ function AppRoutes() {
                 <RoleGuard allowed={['owner', 'manager', 'accountant', 'auditor']}>
                   <EB title="Month End error">
                     <MonthEnd />
+                  </EB>
+                </RoleGuard>
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/games"
+            element={
+              <PrivateRoute>
+                <RoleGuard allowed={['owner', 'manager', 'games_master'] as Role[]}>
+                  <EB title="Games error">
+                    <GamesMasterPage />
+                  </EB>
+                </RoleGuard>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/shisha"
+            element={
+              <PrivateRoute>
+                <RoleGuard allowed={['owner', 'manager', 'shisha_attendant'] as Role[]}>
+                  <EB title="Shisha error">
+                    <ShishaAttendantPage />
                   </EB>
                 </RoleGuard>
               </PrivateRoute>

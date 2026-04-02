@@ -16,7 +16,9 @@ import {
   RotateCcw,
   X,
   History,
+  Snowflake,
 } from 'lucide-react'
+import BarChillerStock from '../backoffice/BarChillerStock'
 import type { KdsOrder } from './types'
 import DailySummaryTab from './DailySummaryTab'
 import { useToast } from '../../context/ToastContext'
@@ -90,7 +92,9 @@ function BarKDSInner() {
   >([])
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
-  const [activeTab, setActiveTab] = useState<'orders' | 'returns' | 'summary' | 'history'>('orders')
+  const [activeTab, setActiveTab] = useState<
+    'orders' | 'returns' | 'summary' | 'history' | 'chiller'
+  >('orders')
   const [returnHistory, setReturnHistory] = useState<
     Array<{
       id: string
@@ -386,9 +390,22 @@ function BarKDSInner() {
           onClick={() => setActiveTab('summary')}
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'summary' ? 'border-amber-500 text-amber-500' : 'border-transparent text-gray-400 hover:text-white'}`}
         >
-          <BarChart2 size={14} /> Today's Summary
+          <BarChart2 size={14} /> Summary
+        </button>
+        <button
+          onClick={() => setActiveTab('chiller')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'chiller' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-gray-400 hover:text-white'}`}
+        >
+          <Snowflake size={14} /> Chiller
         </button>
       </div>
+
+      {/* Chiller Tab */}
+      {activeTab === 'chiller' && (
+        <div className="flex-1 overflow-y-auto">
+          <BarChillerStock onBack={() => setActiveTab('orders')} embedded />
+        </div>
+      )}
 
       {/* Return History Tab */}
       {activeTab === 'history' && (
