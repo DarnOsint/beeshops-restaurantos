@@ -31,6 +31,15 @@ export default function ReturnedDrinksTab() {
   const [returns, setReturns] = useState<ReturnEntry[]>([])
   const [loading, setLoading] = useState(true)
 
+  const errMsg = (e: unknown) => {
+    if (!e) return 'Unknown error'
+    if (typeof e === 'string') return e
+    if (e instanceof Error) return e.message
+    if (typeof e === 'object' && 'message' in (e as any)) return String((e as any).message)
+    if (typeof e === 'object' && 'error' in (e as any)) return String((e as any).error)
+    return JSON.stringify(e)
+  }
+
   const fetchReturns = useCallback(async (d: string) => {
     setLoading(true)
     const dayStart = new Date(d)
@@ -132,7 +141,7 @@ export default function ReturnedDrinksTab() {
       toast.success('Return Approved', `${r.quantity}x ${r.item_name} permanently removed`)
       fetchReturns(date)
     } catch (e) {
-      toast.error('Approve failed', e instanceof Error ? e.message : String(e))
+      toast.error('Approve failed', errMsg(e))
     }
   }
 
@@ -184,7 +193,7 @@ export default function ReturnedDrinksTab() {
       toast.success('Return Rejected', `${r.quantity}x ${r.item_name} added back to order`)
       fetchReturns(date)
     } catch (e) {
-      toast.error('Reject failed', e instanceof Error ? e.message : String(e))
+      toast.error('Reject failed', errMsg(e))
     }
   }
 
