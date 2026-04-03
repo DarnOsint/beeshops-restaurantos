@@ -85,83 +85,107 @@ export default function ReturnedDrinksTab() {
   }, [date, fetchReturns])
 
   const managerApprove = async (r: ReturnEntry) => {
-    // Also accept the order_item if still pending (manager overrides station)
-    await supabase
-      .from('order_items')
-      .update({ return_accepted: true, return_accepted_at: new Date().toISOString() })
-      .eq('id', r.order_item_id)
-    // Recalculate order total
-    const { data: remaining } = await supabase
-      .from('order_items')
-      .select('total_price, return_accepted')
-      .eq('order_id', r.order_id)
-    const newTotal = (remaining || [])
-      .filter((ri: { return_accepted?: boolean }) => !ri.return_accepted)
-      .reduce((s: number, ri: { total_price: number }) => s + (ri.total_price || 0), 0)
-    await supabase.from('orders').update({ total_amount: newTotal }).eq('id', r.order_id)
-    await supabase
-      .from('returns_log')
-      .update({
-        status: 'accepted',
-        manager_approved_by: profile?.full_name,
-        manager_approved_at: new Date().toISOString(),
+    try {
+      const { error: oiErr } = await supabase
+        .from('order_items')
+        .update({ return_accepted: true, return_accepted_at: new Date().toISOString() })
+        .eq('id', r.order_item_id)
+      if (oiErr) throw oiErr
+
+      const { data: remaining, error: remErr } = await supabase
+        .from('order_items')
+        .select('total_price, return_accepted')
+        .eq('order_id', r.order_id)
+      if (remErr) throw remErr
+      const newTotal = (remaining || [])
+        .filter((ri: { return_accepted?: boolean }) => !ri.return_accepted)
+        .reduce((s: number, ri: { total_price: number }) => s + (ri.total_price || 0), 0)
+      const { error: orderErr } = await supabase
+        .from('orders')
+        .update({ total_amount: newTotal })
+        .eq('id', r.order_id)
+      if (orderErr) throw orderErr
+
+      const { error: retErr } = await supabase
+        .from('returns_log')
+        .update({
+          status: 'accepted',
+          manager_approved_by: profile?.full_name,
+          manager_approved_at: new Date().toISOString(),
+        })
+        .eq('id', r.id)
+      if (retErr) throw retErr
+
+      await audit({
+        action: 'RETURN_MANAGER_APPROVED',
+        entity: 'returns_log',
+        entityId: r.id,
+        entityName: r.item_name,
+        newValue: {
+          quantity: r.quantity,
+          total: r.item_total,
+          table: r.table_name,
+          approved_by: profile?.full_name,
+        },
+        performer: profile as Profile,
       })
-      .eq('id', r.id)
-    await audit({
-      action: 'RETURN_MANAGER_APPROVED',
-      entity: 'returns_log',
-      entityId: r.id,
-      entityName: r.item_name,
-      newValue: {
-        quantity: r.quantity,
-        total: r.item_total,
-        table: r.table_name,
-        approved_by: profile?.full_name,
-      },
-      performer: profile as Profile,
-    })
-    toast.success('Return Approved', `${r.quantity}x ${r.item_name} permanently removed`)
-    fetchReturns(date)
+      toast.success('Return Approved', `${r.quantity}x ${r.item_name} permanently removed`)
+      fetchReturns(date)
+    } catch (e) {
+      toast.error('Approve failed', e instanceof Error ? e.message : String(e))
+    }
   }
 
   const managerReject = async (r: ReturnEntry) => {
-    // Revert — put item back on the order
-    await supabase
-      .from('order_items')
-      .update({ return_accepted: false, return_requested: false, return_reason: null })
-      .eq('id', r.order_item_id)
-    await supabase
-      .from('returns_log')
-      .update({
-        status: 'manager_rejected',
-        manager_approved_by: profile?.full_name,
-        manager_approved_at: new Date().toISOString(),
+    try {
+      const { error: oiErr } = await supabase
+        .from('order_items')
+        .update({ return_accepted: false, return_requested: false, return_reason: null })
+        .eq('id', r.order_item_id)
+      if (oiErr) throw oiErr
+
+      const { error: retErr } = await supabase
+        .from('returns_log')
+        .update({
+          status: 'manager_rejected',
+          manager_approved_by: profile?.full_name,
+          manager_approved_at: new Date().toISOString(),
+        })
+        .eq('id', r.id)
+      if (retErr) throw retErr
+
+      const { data: remaining, error: remErr } = await supabase
+        .from('order_items')
+        .select('total_price, return_accepted')
+        .eq('order_id', r.order_id)
+      if (remErr) throw remErr
+      const newTotal = (remaining || [])
+        .filter((ri: { return_accepted?: boolean }) => !ri.return_accepted)
+        .reduce((s: number, ri: { total_price: number }) => s + (ri.total_price || 0), 0)
+      const { error: orderErr } = await supabase
+        .from('orders')
+        .update({ total_amount: newTotal })
+        .eq('id', r.order_id)
+      if (orderErr) throw orderErr
+
+      await audit({
+        action: 'RETURN_MANAGER_REJECTED',
+        entity: 'returns_log',
+        entityId: r.id,
+        entityName: r.item_name,
+        newValue: {
+          quantity: r.quantity,
+          total: r.item_total,
+          table: r.table_name,
+          rejected_by: profile?.full_name,
+        },
+        performer: profile as Profile,
       })
-      .eq('id', r.id)
-    // Recalculate order total
-    const { data: remaining } = await supabase
-      .from('order_items')
-      .select('total_price, return_accepted')
-      .eq('order_id', r.order_id)
-    const newTotal = (remaining || [])
-      .filter((ri: { return_accepted?: boolean }) => !ri.return_accepted)
-      .reduce((s: number, ri: { total_price: number }) => s + (ri.total_price || 0), 0)
-    await supabase.from('orders').update({ total_amount: newTotal }).eq('id', r.order_id)
-    await audit({
-      action: 'RETURN_MANAGER_REJECTED',
-      entity: 'returns_log',
-      entityId: r.id,
-      entityName: r.item_name,
-      newValue: {
-        quantity: r.quantity,
-        total: r.item_total,
-        table: r.table_name,
-        rejected_by: profile?.full_name,
-      },
-      performer: profile as Profile,
-    })
-    toast.success('Return Rejected', `${r.quantity}x ${r.item_name} added back to order`)
-    fetchReturns(date)
+      toast.success('Return Rejected', `${r.quantity}x ${r.item_name} added back to order`)
+      fetchReturns(date)
+    } catch (e) {
+      toast.error('Reject failed', e instanceof Error ? e.message : String(e))
+    }
   }
 
   const barAccepted = returns.filter((r) => r.status === 'bar_accepted')

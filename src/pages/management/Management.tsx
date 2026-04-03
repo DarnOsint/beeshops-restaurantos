@@ -10,7 +10,6 @@ import {
   DollarSign,
   Settings,
   AlertTriangle,
-  Trash2,
   RefreshCw,
   UtensilsCrossed,
   Shield,
@@ -24,7 +23,6 @@ import WaiterCalls from './WaiterCalls'
 import KitchenStock from '../backoffice/KitchenStock'
 import ChillerSummaryTab from './mgmt/ChillerSummaryTab'
 import ReturnedDrinksTab from './mgmt/ReturnedDrinksTab'
-import VoidsTab from './mgmt/VoidsTab'
 import { useLateOrders } from '../../hooks/useLateOrders'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import type { SyncQueueEntry } from '../../lib/db'
@@ -60,12 +58,10 @@ const TABS = [
   { id: 'kitchen', label: 'Kitchen', icon: UtensilsCrossed },
   { id: 'chiller', label: 'Chiller', icon: Beer },
   { id: 'returns', label: 'Returns', icon: RotateCcw },
-  { id: 'voids', label: 'Voids', icon: Trash2 },
-  { id: 'service', label: 'Service', icon: Clock },
-  { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'settings', label: 'Alert Threshold', icon: Settings },
   { id: 'cctv', label: 'CCTV', icon: Camera },
   { id: 'sync', label: 'Sync', icon: RefreshCw },
-  { id: 'activity', label: 'Activity', icon: Shield },
+  { id: 'activity', label: 'Activity Log', icon: Shield },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -100,16 +96,6 @@ export default function Management() {
   const { status: syncStatus, pendingCount, lastSynced, manualSync } = useSyncStatus()
 
   const [syncQueue, setSyncQueue] = useState<SyncQueueEntry[]>([])
-  const [serviceLog, setServiceLog] = useState<
-    Array<{
-      id: string
-      item_name: string
-      table_name: string
-      waitron_name: string
-      served_at: string
-    }>
-  >([])
-  const [serviceLogLoading, setServiceLogLoading] = useState(false)
   const [stats, setStats] = useState<Stats>({
     openOrders: 0,
     occupiedTables: 0,
@@ -218,34 +204,6 @@ export default function Management() {
   }, [fetchCvData])
 
   useEffect(() => {
-    if (activeTab !== 'service') return
-    setServiceLogLoading(true)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    supabase
-      .from('service_log')
-      .select('*')
-      .gte('served_at', today.toISOString())
-      .order('served_at', { ascending: false })
-      .limit(100)
-      .then(({ data }) => {
-        setServiceLog(data || [])
-        setServiceLogLoading(false)
-      })
-    const ch = supabase
-      .channel('service-log-live')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'service_log' },
-        (payload) => setServiceLog((prev) => [payload.new as any, ...prev])
-      )
-      .subscribe()
-    return () => {
-      supabase.removeChannel(ch)
-    }
-  }, [activeTab])
-
-  useEffect(() => {
     const load = async () => {
       const q = await getPendingQueue()
       setSyncQueue(q || [])
@@ -298,18 +256,6 @@ export default function Management() {
         'Daily food stock register — records what was received, auto-syncs what was sold from POS, and calculates what should remain. Managers can edit and delete entries; kitchen staff can only add new entries. Variance alarms flag possible theft or waste.',
     },
     {
-      id: 'mgmt-service',
-      title: 'Service Tab',
-      description:
-        'Real-time log of every item marked served by a waitron — item, table, waitron, and timestamp. Use this to resolve customer disputes about whether an item was delivered.',
-    },
-    {
-      id: 'mgmt-voids',
-      title: 'Voids Tab',
-      description:
-        'All voids performed today — item name, quantity, value, and which manager PIN authorised it. Every void also deletes the order_items row and reduces the order total in real time. Cannot be reversed.',
-    },
-    {
       id: 'mgmt-activity',
       title: 'Activity Log Tab',
       description:
@@ -323,7 +269,7 @@ export default function Management() {
     },
     {
       id: 'mgmt-settings',
-      title: 'Settings Tab',
+      title: 'Alert Threshold',
       description:
         'Configure the late order alert threshold — how many minutes before an unfulfilled order triggers a warning banner for management and the Supervisor.',
     },
@@ -432,7 +378,6 @@ export default function Management() {
         {activeTab === 'kitchen' && <KitchenStock onBack={() => setActiveTab('overview')} />}
         {activeTab === 'chiller' && <ChillerSummaryTab />}
         {activeTab === 'returns' && <ReturnedDrinksTab />}
-        {activeTab === 'voids' && <VoidsTab />}
         {activeTab === 'cctv' && (
           <CctvTab
             occupancy={cvData.occupancy}
@@ -486,41 +431,6 @@ export default function Management() {
         )}
         {activeTab === 'settings' && (
           <SettingsTab threshold={threshold} setThreshold={setThreshold} />
-        )}
-        {activeTab === 'service' && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-white font-bold">Service Log — Today</p>
-              <span className="text-gray-500 text-xs">{serviceLog.length} entries</span>
-            </div>
-            {serviceLogLoading && (
-              <p className="text-gray-500 text-sm text-center py-8">Loading…</p>
-            )}
-            {!serviceLogLoading && serviceLog.length === 0 && (
-              <p className="text-gray-500 text-sm text-center py-12">
-                No service events recorded today
-              </p>
-            )}
-            {serviceLog.map((e) => (
-              <div
-                key={e.id}
-                className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3 flex items-center justify-between"
-              >
-                <div>
-                  <p className="text-white text-sm font-medium">{e.item_name}</p>
-                  <p className="text-gray-500 text-xs">
-                    {e.table_name} · {e.waitron_name}
-                  </p>
-                </div>
-                <p className="text-gray-600 text-xs">
-                  {new Date(e.served_at).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
-                </p>
-              </div>
-            ))}
-          </div>
         )}
       </div>
     </div>
