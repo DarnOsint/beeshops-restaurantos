@@ -40,6 +40,14 @@ import GeofenceBlock from '../../components/GeofenceBlock'
 import type { Table, MenuItem, Order, OrderItem, Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
 
+const normalizeDestination = (dest?: string | null): ItemDestination => {
+  const d = (dest || '').trim().toLowerCase()
+  if (d === 'kitchen') return 'kitchen'
+  if (d === 'griller' || d === 'grill' || d === 'grilling') return 'griller'
+  if (d === 'bar') return 'bar'
+  return 'bar'
+}
+
 interface ZonePrice {
   menu_item_id: string
   category_id: string
@@ -610,7 +618,7 @@ export default function POS() {
       if (!getStationPrinterUrl(station)) continue
 
       const stationItems: TicketItem[] = items
-        .filter((i) => i.destination === station)
+        .filter((i) => normalizeDestination(i.destination) === station)
         .map((i) => ({ quantity: i.quantity, name: i.name, modifier_notes: i.modifier_notes }))
       if (stationItems.length === 0) continue
 
@@ -663,7 +671,7 @@ export default function POS() {
           unit_price: item.price,
           total_price: item.total,
           status: 'pending',
-          destination: item.menu_categories?.destination || 'bar',
+          destination: normalizeDestination(item.menu_categories?.destination),
           modifier_notes: item.modifier_notes || null,
           extra_charge: item.extra_charge || 0,
           created_at: new Date().toISOString(),
@@ -778,7 +786,7 @@ export default function POS() {
           unit_price: item.price,
           total_price: item.total,
           status: 'pending',
-          destination: item.menu_categories?.destination || 'bar',
+          destination: normalizeDestination(item.menu_categories?.destination),
           modifier_notes: item.modifier_notes || null,
           extra_charge: item.extra_charge || 0,
           created_at: new Date().toISOString(),
