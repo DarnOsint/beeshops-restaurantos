@@ -74,11 +74,18 @@ export default function StockSummaryTab({ type }: Props) {
     fetchData(date)
   }, [date, fetchData])
 
+  // Auto-compute closing when it's 0
+  const getEffectiveClosing = (e: StockEntry) => {
+    const sold = soldMap[e.item_name] || e.sold_qty || 0
+    if (e.closing_qty > 0) return e.closing_qty
+    return Math.max(0, e.opening_qty + e.received_qty - sold - e.void_qty)
+  }
+
   const totalOpening = entries.reduce((s, e) => s + e.opening_qty, 0)
   const totalReceived = entries.reduce((s, e) => s + e.received_qty, 0)
   const totalSold = entries.reduce((s, e) => s + (soldMap[e.item_name] || e.sold_qty || 0), 0)
   const totalVoid = entries.reduce((s, e) => s + e.void_qty, 0)
-  const totalClosing = entries.reduce((s, e) => s + e.closing_qty, 0)
+  const totalClosing = entries.reduce((s, e) => s + getEffectiveClosing(e), 0)
   const totalExpected = totalOpening + totalReceived - totalSold - totalVoid
   const totalVariance = totalExpected - totalClosing
 
@@ -247,8 +254,9 @@ export default function StockSummaryTab({ type }: Props) {
               <tbody>
                 {entries.map((e) => {
                   const sold = soldMap[e.item_name] || e.sold_qty || 0
+                  const effectiveClose = getEffectiveClosing(e)
                   const expected = e.opening_qty + e.received_qty - sold - e.void_qty
-                  const variance = expected - e.closing_qty
+                  const variance = expected - effectiveClose
                   return (
                     <tr key={e.id} className="border-t border-gray-800 hover:bg-gray-800/50">
                       <td className="text-white px-3 py-2 font-medium">{e.item_name}</td>
@@ -259,7 +267,7 @@ export default function StockSummaryTab({ type }: Props) {
                       <td className="text-blue-400 text-right px-2 py-2">{sold || '–'}</td>
                       <td className="text-red-400 text-right px-2 py-2">{e.void_qty || '–'}</td>
                       <td className="text-cyan-400 text-right px-2 py-2 font-bold">
-                        {e.closing_qty}
+                        {effectiveClose}
                       </td>
                       <td
                         className={`text-right px-2 py-2 font-bold ${variance > 0 ? 'text-red-400' : variance < 0 ? 'text-blue-400' : 'text-green-400'}`}
