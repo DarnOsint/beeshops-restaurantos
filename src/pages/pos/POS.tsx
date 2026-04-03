@@ -624,6 +624,7 @@ export default function POS() {
       })
 
       // Print the configured number of copies — kitchen/griller default to 2
+      // If print_copies is missing or zero, fallback to default to avoid under-printing
       const defaultCopies = station === 'kitchen' || station === 'griller' ? 2 : 1
       const configuredRaw = printCopiesConfig[station]
       const configured = Number(configuredRaw)

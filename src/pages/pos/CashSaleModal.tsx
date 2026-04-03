@@ -68,6 +68,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
   const [activeTab, setActiveTab] = useState<'menu' | 'order'>('menu')
   const [packSizes, setPackSizes] = useState<{ id: string; name: string; price: number }[]>([])
   const [packQuantities, setPackQuantities] = useState<Record<string, number>>({})
+  const [printCopiesConfig, setPrintCopiesConfig] = useState<Record<string, number>>({})
 
   const isTakeaway = type === 'takeaway'
 
@@ -90,6 +91,26 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         }
       })
   }, [isTakeaway])
+
+  // Load station print copy counts (kitchen/griller) so cash/takeaway sales respect back office
+  useEffect(() => {
+    supabase
+      .from('settings')
+      .select('id, value')
+      .in('id', ['print_copies'])
+      .then(({ data }) => {
+        if (!data) return
+        for (const row of data) {
+          if (row.id === 'print_copies' && row.value) {
+            try {
+              setPrintCopiesConfig(JSON.parse(row.value))
+            } catch {
+              /* ignore invalid */
+            }
+          }
+        }
+      })
+  }, [])
   const categories = [
     'All',
     ...new Set(
@@ -236,7 +257,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         if (error) throw error
       }
       await depleteInventory(orderItems)
-      // Auto-print station tickets — always 2 copies for kitchen/griller
+      // Auto-print station tickets — number of copies follows back office setting (default 2)
       const stations: ItemDestination[] = ['kitchen', 'griller']
       for (const station of stations) {
         if (!getStationPrinterUrl(station)) continue
@@ -252,8 +273,10 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
           items: stationItems,
           createdAt: new Date().toISOString(),
         })
-        // 2 copies for kitchen/griller
-        for (let c = 0; c < 2; c++) {
+        const configuredRaw = printCopiesConfig[station]
+        const configured = Number(configuredRaw)
+        const copies = Number.isFinite(configured) && configured > 0 ? Math.trunc(configured) : 2
+        for (let c = 0; c < copies; c++) {
           printToStation(station, ticket).catch(() => {})
         }
       }
