@@ -45,6 +45,15 @@ interface Props {
   onClose?: () => void
 }
 
+const sessionStartIso = () => {
+  const now = new Date()
+  const lagosNow = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+  const start = new Date(lagosNow)
+  start.setHours(8, 0, 0, 0)
+  if (lagosNow.getHours() < 8) start.setDate(start.getDate() - 1)
+  return start.toISOString()
+}
+
 const PETTY_CASH_LIMIT = 50000
 const PETTY_CATEGORIES = [
   { value: 'general', label: 'General' },
@@ -91,35 +100,18 @@ export default function TillManagement({ onClose }: Props) {
     const { data } = await supabase
       .from('payouts')
       .select('*, profiles!payouts_staff_id_fkey(full_name)')
-      .gte(
-        'created_at',
-        new Date(
-          new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) + 'T00:00:00+01:00'
-        ).toISOString()
-      )
+      .gte('created_at', sessionStartIso())
       .order('created_at', { ascending: false })
     if (data) setPayouts(data)
   }
   const fetchTodayStats = async () => {
+    const startIso = sessionStartIso()
     const [ordersRes, payoutsRes] = await Promise.all([
       supabase
         .from('orders')
         .select('total_amount, payment_method, payment_status')
-        .gte(
-          'created_at',
-          new Date(
-            new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) + 'T00:00:00+01:00'
-          ).toISOString()
-        ),
-      supabase
-        .from('payouts')
-        .select('amount')
-        .gte(
-          'created_at',
-          new Date(
-            new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) + 'T00:00:00+01:00'
-          ).toISOString()
-        ),
+        .gte('created_at', startIso),
+      supabase.from('payouts').select('amount').gte('created_at', startIso),
     ])
     const paidOrders = (ordersRes.data || []).filter(
       (o: { payment_status: string }) => o.payment_status === 'paid'
