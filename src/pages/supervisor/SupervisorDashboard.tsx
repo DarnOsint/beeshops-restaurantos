@@ -135,7 +135,7 @@ function SupervisorDashboardInner() {
     'floor'
   )
   const [zoneFilter, setZoneFilter] = useState('All')
-  const [lateCount, setLateCount] = useState(0)
+  const [lateCount] = useState(0) // SUSPENDED
 
   const fetchAll = useCallback(async () => {
     const today = new Date()
@@ -190,20 +190,8 @@ function SupervisorDashboardInner() {
     }
   }, [fetchAll])
 
-  // lateCount: only orders with pending items (not yet started) past 15 min
-  useEffect(() => {
-    const computeLate = () =>
-      setLateCount(
-        orders.filter(
-          (o) =>
-            Date.now() - new Date(o.created_at).getTime() >= 15 * 60 * 1000 &&
-            o.order_items?.some((i) => i.status === 'pending')
-        ).length
-      )
-    computeLate()
-    const iv = setInterval(computeLate, 60_000)
-    return () => clearInterval(iv)
-  }, [orders])
+  // SUSPENDED: late order alerts disabled until further notice
+  // useEffect(() => { ... }, [orders])
 
   const pendingItems = useMemo(
     () =>
