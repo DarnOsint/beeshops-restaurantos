@@ -14,6 +14,10 @@ export type Role =
   | 'shisha_attendant'
   | 'supervisor'
   | 'apartment_manager'
+  | 'floor_staff'
+  | 'social_media_manager'
+  | 'dj'
+  | 'hypeman'
 
 export type OrderStatus = 'open' | 'paid' | 'voided' | 'pending'
 export type OrderType = 'table' | 'cash_sale' | 'takeaway'

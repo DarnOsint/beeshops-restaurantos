@@ -1,4 +1,4 @@
--- Update profiles role check constraint to include all new roles
+-- Update profiles role check constraint to include all roles
 -- Run this in Supabase SQL Editor
 
 ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
@@ -16,6 +16,10 @@ ALTER TABLE profiles ADD CONSTRAINT profiles_role_check CHECK (
     'games_master',
     'shisha_attendant',
     'supervisor',
-    'apartment_manager'
+    'apartment_manager',
+    'floor_staff',
+    'social_media_manager',
+    'dj',
+    'hypeman'
   )
 );
