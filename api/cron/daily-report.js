@@ -32,21 +32,29 @@ function pct(num, den) {
   return `${Math.round((num / den) * 100)}%`
 }
 
-function getYesterdayWAT() {
+// Accounting session: 08:00 WAT previous day to 08:00 WAT current day
+function getSessionWAT() {
   const now = new Date()
-  const watNow = new Date(now.getTime() + 60 * 60 * 1000)
-  const watYesterday = new Date(watNow)
-  watYesterday.setDate(watYesterday.getDate() - 1)
-  const y = watYesterday.getFullYear()
-  const m = String(watYesterday.getMonth() + 1).padStart(2, '0')
-  const d = String(watYesterday.getDate()).padStart(2, '0')
+  const watNow = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+  const end = new Date(watNow)
+  end.setHours(8, 0, 0, 0)
+  if (watNow.getHours() < 8) end.setDate(end.getDate() - 1)
+  const start = new Date(end)
+  start.setDate(start.getDate() - 1)
+  const label = start.toLocaleDateString('en-NG', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'Africa/Lagos',
+  })
+  const y = start.getFullYear()
+  const m = String(start.getMonth() + 1).padStart(2, '0')
+  const d = String(start.getDate()).padStart(2, '0')
   return {
-    start: `${y}-${m}-${d}T00:00:00+01:00`,
-    end:   `${y}-${m}-${d}T23:59:59+01:00`,
-    label: watYesterday.toLocaleDateString('en-NG', {
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-      timeZone: 'Africa/Lagos',
-    }),
+    start: start.toISOString(),
+    end: end.toISOString(),
+    label,
     short: `${d}/${m}/${y}`,
   }
 }
@@ -90,7 +98,7 @@ export default async function handler(req, res) {
   if (!isCron && !isInternal) return res.status(401).json({ error: 'Unauthorized' })
 
   try {
-    const { start, end, label, short } = getYesterdayWAT()
+    const { start, end, label, short } = getSessionWAT()
 
     const [
       { data: orders },

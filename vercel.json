@@ -12,7 +12,7 @@
   "crons": [
     {
       "path": "/api/cron/daily-report",
-      "schedule": "30 3 * * *"
+      "schedule": "0 7 * * *"
     },
     {
       "path": "/api/cron/stock-check",
