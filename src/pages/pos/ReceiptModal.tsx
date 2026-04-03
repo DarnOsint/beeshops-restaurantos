@@ -43,24 +43,37 @@ export default function ReceiptModal({
 
   const orderRef = `BSP-${String(order.id).slice(0, 8).toUpperCase()}`
 
-  // Exclude returned/return-requested items from totals
-  const billableItems = items.filter(
-    (i) =>
-      !(i as unknown as { return_accepted?: boolean }).return_accepted &&
-      !(i as unknown as { return_requested?: boolean }).return_requested
-  )
+  // For paid orders, use the stored total (what was actually charged).
+  // For open orders, recalculate excluding returned items.
+  const isPaid = order.status === 'paid'
   const returnedDisplayItems = items.filter(
     (i) =>
       (i as unknown as { return_accepted?: boolean }).return_accepted ||
       (i as unknown as { return_requested?: boolean }).return_requested
   )
-  const subtotal = billableItems.reduce(
-    (sum, i) =>
-      sum +
-      ((i as unknown as { total_price?: number }).total_price || 0) +
-      ((i as unknown as { extra_charge?: number }).extra_charge || 0),
-    0
-  )
+  const billableItems = isPaid
+    ? items // paid orders: show all items as they were charged
+    : items.filter(
+        (i) =>
+          !(i as unknown as { return_accepted?: boolean }).return_accepted &&
+          !(i as unknown as { return_requested?: boolean }).return_requested
+      )
+  const subtotal = isPaid
+    ? (order as unknown as { total_amount?: number }).total_amount ||
+      items.reduce(
+        (sum, i) =>
+          sum +
+          ((i as unknown as { total_price?: number }).total_price || 0) +
+          ((i as unknown as { extra_charge?: number }).extra_charge || 0),
+        0
+      )
+    : billableItems.reduce(
+        (sum, i) =>
+          sum +
+          ((i as unknown as { total_price?: number }).total_price || 0) +
+          ((i as unknown as { extra_charge?: number }).extra_charge || 0),
+        0
+      )
   const total = subtotal
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`${window.location.origin}/receipt/${order.id}`)}&color=000000&bgcolor=ffffff`
 
