@@ -152,17 +152,61 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
       setLoading(true)
       await loadSoldQty(d)
 
-      // Load previous day's closing for opening stock
+      // Load previous day's data to compute carry-over opening stock
       const prevDate = new Date(d)
       prevDate.setDate(prevDate.getDate() - 1)
+      const prevDateStr = prevDate.toISOString().slice(0, 10)
       const { data: prevData } = await supabase
         .from('bar_chiller_stock')
-        .select('item_name, closing_qty')
-        .eq('date', prevDate.toISOString().slice(0, 10))
+        .select('item_name, opening_qty, received_qty, sold_qty, void_qty, closing_qty')
+        .eq('date', prevDateStr)
+
+      // Also load previous day's POS sold for accurate computation
+      const prevDayStart = new Date(prevDateStr)
+      prevDayStart.setHours(0, 0, 0, 0)
+      const prevDayEnd = new Date(prevDateStr)
+      prevDayEnd.setHours(23, 59, 59, 999)
+      const { data: prevSoldData } = await supabase
+        .from('order_items')
+        .select('quantity, return_accepted, menu_items(name)')
+        .eq('destination', 'bar')
+        .eq('status', 'delivered')
+        .gte('created_at', prevDayStart.toISOString())
+        .lte('created_at', prevDayEnd.toISOString())
+      const prevSoldMap: Record<string, number> = {}
+      if (prevSoldData) {
+        for (const item of prevSoldData as unknown as Array<{
+          quantity: number
+          return_accepted?: boolean
+          menu_items: { name: string } | null
+        }>) {
+          if (item.return_accepted) continue
+          const name = item.menu_items?.name
+          if (name) prevSoldMap[name] = (prevSoldMap[name] || 0) + item.quantity
+        }
+      }
+
       const prevClosing: Record<string, number> = {}
       if (prevData) {
-        for (const row of prevData as Array<{ item_name: string; closing_qty: number }>) {
-          prevClosing[row.item_name] = row.closing_qty
+        for (const row of prevData as Array<{
+          item_name: string
+          opening_qty: number
+          received_qty: number
+          sold_qty: number
+          void_qty: number
+          closing_qty: number
+        }>) {
+          if (row.closing_qty > 0) {
+            // Use manual closing if entered
+            prevClosing[row.item_name] = row.closing_qty
+          } else {
+            // Auto-compute: opening + received - actual_sold - void
+            const actualSold = prevSoldMap[row.item_name] || row.sold_qty || 0
+            prevClosing[row.item_name] = Math.max(
+              0,
+              row.opening_qty + row.received_qty - actualSold - row.void_qty
+            )
+          }
         }
       }
 
