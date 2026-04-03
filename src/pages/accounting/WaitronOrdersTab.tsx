@@ -29,6 +29,14 @@ interface WaitronOrder {
   }>
 }
 
+const sessionWindow = (dateStr: string) => {
+  const start = new Date(dateStr)
+  start.setHours(8, 0, 0, 0)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 1)
+  return { start, end }
+}
+
 export default function WaitronOrdersTab() {
   const [date, setDate] = useState(todayStr())
   const [shifts, setShifts] = useState<WaitronShift[]>([])
@@ -39,10 +47,13 @@ export default function WaitronOrdersTab() {
 
   const fetchShifts = useCallback(async (d: string) => {
     setLoading(true)
+    const { start, end } = sessionWindow(d)
     const { data } = await supabase
       .from('attendance')
       .select('staff_id, staff_name, role, clock_in, clock_out')
-      .eq('date', d)
+      .or(
+        `and(clock_in.gte.${start.toISOString()},clock_in.lt.${end.toISOString()}),and(clock_in.lt.${end.toISOString()},clock_out.is.null)`
+      )
       .order('clock_in', { ascending: true })
     if (data) {
       // Deduplicate by staff_id, keep the one with the latest clock_in
@@ -64,11 +75,7 @@ export default function WaitronOrdersTab() {
   const fetchOrders = async (staffId: string) => {
     setSelectedStaff(staffId)
     setOrdersLoading(true)
-    const dayStart = new Date(date)
-    dayStart.setHours(8, 0, 0, 0)
-    if (new Date(date).getHours() < 8) dayStart.setDate(dayStart.getDate() - 1)
-    const dayEnd = new Date(dayStart)
-    dayEnd.setDate(dayEnd.getDate() + 1)
+    const { start: dayStart, end: dayEnd } = sessionWindow(date)
     const { data } = await supabase
       .from('orders')
       .select(
