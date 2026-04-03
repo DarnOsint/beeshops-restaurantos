@@ -1,11 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
-import { RotateCcw, RefreshCw, Printer } from 'lucide-react'
+import { RotateCcw, RefreshCw, Printer, CheckCircle, X, AlertTriangle } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
+import { useAuth } from '../../../context/AuthContext'
+import { audit } from '../../../lib/audit'
+import { useToast } from '../../../context/ToastContext'
+import type { Profile } from '../../../types'
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
 
 interface ReturnEntry {
   id: string
+  order_id: string
+  order_item_id: string
   item_name: string
   quantity: number
   item_total: number
@@ -19,6 +25,8 @@ interface ReturnEntry {
 }
 
 export default function ReturnedDrinksTab() {
+  const { profile } = useAuth()
+  const toast = useToast()
   const [date, setDate] = useState(todayStr())
   const [returns, setReturns] = useState<ReturnEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,6 +37,39 @@ export default function ReturnedDrinksTab() {
     dayStart.setHours(0, 0, 0, 0)
     const dayEnd = new Date(d)
     dayEnd.setHours(23, 59, 59, 999)
+
+    // Also check for bar_accepted items older than 72 hours that need reverting
+    const expiry = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString()
+    const { data: expired } = await supabase
+      .from('returns_log')
+      .select('id, order_item_id, order_id, item_total')
+      .eq('status', 'bar_accepted')
+      .lt('resolved_at', expiry)
+    if (expired && expired.length > 0) {
+      // Auto-revert expired returns
+      for (const exp of expired as Array<{
+        id: string
+        order_item_id: string
+        order_id: string
+        item_total: number
+      }>) {
+        await supabase
+          .from('order_items')
+          .update({ return_accepted: false, return_requested: false, return_reason: null })
+          .eq('id', exp.order_item_id)
+        await supabase.from('returns_log').update({ status: 'expired' }).eq('id', exp.id)
+        // Recalculate order total
+        const { data: remaining } = await supabase
+          .from('order_items')
+          .select('total_price, return_accepted')
+          .eq('order_id', exp.order_id)
+        const newTotal = (remaining || [])
+          .filter((r: { return_accepted?: boolean }) => !r.return_accepted)
+          .reduce((s: number, r: { total_price: number }) => s + (r.total_price || 0), 0)
+        await supabase.from('orders').update({ total_amount: newTotal }).eq('id', exp.order_id)
+      }
+    }
+
     const { data } = await supabase
       .from('returns_log')
       .select('*')
@@ -43,10 +84,110 @@ export default function ReturnedDrinksTab() {
     fetchReturns(date)
   }, [date, fetchReturns])
 
+  const managerApprove = async (r: ReturnEntry) => {
+    await supabase
+      .from('returns_log')
+      .update({
+        status: 'accepted',
+        manager_approved_by: profile?.full_name,
+        manager_approved_at: new Date().toISOString(),
+      })
+      .eq('id', r.id)
+    await audit({
+      action: 'RETURN_MANAGER_APPROVED',
+      entity: 'returns_log',
+      entityId: r.id,
+      entityName: r.item_name,
+      newValue: {
+        quantity: r.quantity,
+        total: r.item_total,
+        table: r.table_name,
+        approved_by: profile?.full_name,
+      },
+      performer: profile as Profile,
+    })
+    toast.success('Return Approved', `${r.quantity}x ${r.item_name} permanently removed`)
+    fetchReturns(date)
+  }
+
+  const managerReject = async (r: ReturnEntry) => {
+    // Revert — put item back on the order
+    await supabase
+      .from('order_items')
+      .update({ return_accepted: false, return_requested: false, return_reason: null })
+      .eq('id', r.order_item_id)
+    await supabase
+      .from('returns_log')
+      .update({
+        status: 'manager_rejected',
+        manager_approved_by: profile?.full_name,
+        manager_approved_at: new Date().toISOString(),
+      })
+      .eq('id', r.id)
+    // Recalculate order total
+    const { data: remaining } = await supabase
+      .from('order_items')
+      .select('total_price, return_accepted')
+      .eq('order_id', r.order_id)
+    const newTotal = (remaining || [])
+      .filter((ri: { return_accepted?: boolean }) => !ri.return_accepted)
+      .reduce((s: number, ri: { total_price: number }) => s + (ri.total_price || 0), 0)
+    await supabase.from('orders').update({ total_amount: newTotal }).eq('id', r.order_id)
+    await audit({
+      action: 'RETURN_MANAGER_REJECTED',
+      entity: 'returns_log',
+      entityId: r.id,
+      entityName: r.item_name,
+      newValue: {
+        quantity: r.quantity,
+        total: r.item_total,
+        table: r.table_name,
+        rejected_by: profile?.full_name,
+      },
+      performer: profile as Profile,
+    })
+    toast.success('Return Rejected', `${r.quantity}x ${r.item_name} added back to order`)
+    fetchReturns(date)
+  }
+
+  const barAccepted = returns.filter((r) => r.status === 'bar_accepted')
   const accepted = returns.filter((r) => r.status === 'accepted')
-  const rejected = returns.filter((r) => r.status === 'rejected')
+  const rejected = returns.filter((r) => r.status === 'rejected' || r.status === 'manager_rejected')
+  const expired = returns.filter((r) => r.status === 'expired')
   const pending = returns.filter((r) => r.status === 'pending')
-  const acceptedTotal = accepted.reduce((s, r) => s + (r.item_total || 0), 0)
+  const acceptedTotal = [...barAccepted, ...accepted].reduce((s, r) => s + (r.item_total || 0), 0)
+
+  const statusLabel = (s: string) => {
+    if (s === 'bar_accepted')
+      return {
+        text: 'Bar Accepted',
+        color: 'bg-amber-500/20 text-amber-400',
+        desc: 'Awaiting manager approval',
+      }
+    if (s === 'accepted')
+      return { text: 'Approved', color: 'bg-green-500/20 text-green-400', desc: 'Manager approved' }
+    if (s === 'rejected')
+      return { text: 'Bar Rejected', color: 'bg-red-500/20 text-red-400', desc: '' }
+    if (s === 'manager_rejected')
+      return {
+        text: 'Manager Rejected',
+        color: 'bg-red-500/20 text-red-400',
+        desc: 'Item restored to order',
+      }
+    if (s === 'expired')
+      return {
+        text: 'Expired',
+        color: 'bg-gray-500/20 text-gray-400',
+        desc: 'Auto-reverted after 72h',
+      }
+    if (s === 'pending')
+      return {
+        text: 'Pending',
+        color: 'bg-amber-500/20 text-amber-400',
+        desc: 'Waiting for barman',
+      }
+    return { text: s, color: 'bg-gray-500/20 text-gray-400', desc: '' }
+  }
 
   const printReport = () => {
     const W = 40
@@ -71,14 +212,15 @@ export default function ReturnedDrinksTab() {
       div,
       row('Date:', fmtDate),
       row('Total Returns:', String(returns.length)),
-      row('Accepted:', `${accepted.length} (N${acceptedTotal.toLocaleString()})`),
+      row('Bar Accepted:', String(barAccepted.length)),
+      row('Manager Approved:', String(accepted.length)),
       row('Rejected:', String(rejected.length)),
-      row('Pending:', String(pending.length)),
+      row('Expired:', String(expired.length)),
       div,
       ...returns.map((r, idx) =>
         [
           row(`${idx + 1}. ${r.quantity}x ${r.item_name}`, `N${r.item_total.toLocaleString()}`),
-          row(`   Status: ${r.status.toUpperCase()}`, fmtTime(r.requested_at)),
+          row(`   Status: ${statusLabel(r.status).text}`, fmtTime(r.requested_at)),
           `   Waitron: ${r.waitron_name || '?'}`,
           `   Barman: ${r.barman_name || 'Pending'}`,
           `   Table: ${r.table_name || '?'}`,
@@ -89,10 +231,10 @@ export default function ReturnedDrinksTab() {
           .join('\n')
       ),
       sol,
-      row('ACCEPTED VALUE:', `N${acceptedTotal.toLocaleString()}`),
+      row('TOTAL VALUE:', `N${acceptedTotal.toLocaleString()}`),
       sol,
       '',
-      ctr('*** END OF REPORT ***'),
+      ctr('*** END ***'),
       '',
     ].join('\n')
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Returns — ${fmtDate}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;color:#000;background:#fff;width:80mm;padding:4mm;white-space:pre}@media print{body{width:80mm}@page{margin:0;size:80mm auto}}</style></head><body>${lines}</body></html>`
@@ -151,24 +293,56 @@ export default function ReturnedDrinksTab() {
         )}
       </div>
 
+      {/* Pending manager approval banner */}
+      {barAccepted.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle size={14} className="text-amber-400" />
+            <span className="text-amber-400 text-sm font-bold">
+              {barAccepted.length} return{barAccepted.length > 1 ? 's' : ''} awaiting your approval
+            </span>
+          </div>
+          <p className="text-amber-400/70 text-xs">
+            Bar accepted these returns tentatively. Approve to confirm or reject to restore items to
+            the order. Auto-reverts after 72 hours if not approved.
+          </p>
+        </div>
+      )}
+
       {/* Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-center">
-          <p className="text-lg font-bold text-white">{returns.length}</p>
-          <p className="text-gray-500 text-[9px] uppercase tracking-wider">Total</p>
-        </div>
-        <div className="bg-gray-900 border border-green-500/20 rounded-xl p-2.5 text-center">
-          <p className="text-lg font-bold text-green-400">{accepted.length}</p>
-          <p className="text-gray-500 text-[9px] uppercase tracking-wider">Accepted</p>
-        </div>
-        <div className="bg-gray-900 border border-red-500/20 rounded-xl p-2.5 text-center">
-          <p className="text-lg font-bold text-red-400">{rejected.length}</p>
-          <p className="text-gray-500 text-[9px] uppercase tracking-wider">Rejected</p>
-        </div>
-        <div className="bg-gray-900 border border-amber-500/20 rounded-xl p-2.5 text-center">
-          <p className="text-lg font-bold text-amber-400">N{acceptedTotal.toLocaleString()}</p>
-          <p className="text-gray-500 text-[9px] uppercase tracking-wider">Value Returned</p>
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
+        {[
+          { label: 'Total', value: returns.length, color: 'text-white', border: 'border-gray-800' },
+          {
+            label: 'Bar Accepted',
+            value: barAccepted.length,
+            color: 'text-amber-400',
+            border: 'border-amber-500/20',
+          },
+          {
+            label: 'Approved',
+            value: accepted.length,
+            color: 'text-green-400',
+            border: 'border-green-500/20',
+          },
+          {
+            label: 'Rejected',
+            value: rejected.length,
+            color: 'text-red-400',
+            border: 'border-red-500/20',
+          },
+          {
+            label: 'Value',
+            value: `N${acceptedTotal.toLocaleString()}`,
+            color: 'text-amber-400',
+            border: 'border-amber-500/20',
+          },
+        ].map(({ label, value, color, border }) => (
+          <div key={label} className={`bg-gray-900 border ${border} rounded-xl p-2.5 text-center`}>
+            <p className={`text-lg font-bold ${color}`}>{value}</p>
+            <p className="text-gray-500 text-[9px] uppercase tracking-wider">{label}</p>
+          </div>
+        ))}
       </div>
 
       {loading ? (
@@ -180,60 +354,69 @@ export default function ReturnedDrinksTab() {
         </div>
       ) : (
         <div className="space-y-2">
-          {returns.map((r) => (
-            <div
-              key={r.id}
-              className={`bg-gray-900 border rounded-xl p-3 ${
-                r.status === 'accepted'
-                  ? 'border-green-500/20'
-                  : r.status === 'rejected'
-                    ? 'border-red-500/20'
-                    : 'border-amber-500/20'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3 mb-1.5">
-                <div>
-                  <p className="text-white text-sm font-semibold">
-                    {r.quantity}x {r.item_name}
-                  </p>
-                  <p className="text-gray-400 text-xs">
-                    {r.table_name || '?'} — by {r.waitron_name || '?'}
-                  </p>
+          {returns.map((r) => {
+            const st = statusLabel(r.status)
+            return (
+              <div
+                key={r.id}
+                className={`bg-gray-900 border rounded-xl p-3 ${r.status === 'bar_accepted' ? 'border-amber-500/40' : r.status === 'accepted' ? 'border-green-500/20' : r.status === 'rejected' || r.status === 'manager_rejected' ? 'border-red-500/20' : 'border-gray-800'}`}
+              >
+                <div className="flex items-start justify-between gap-3 mb-1.5">
+                  <div>
+                    <p className="text-white text-sm font-semibold">
+                      {r.quantity}x {r.item_name}
+                    </p>
+                    <p className="text-gray-400 text-xs">
+                      {r.table_name || '?'} — by {r.waitron_name || '?'}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${st.color}`}
+                    >
+                      {st.text}
+                    </span>
+                    <p className="text-gray-400 text-xs mt-1">N{r.item_total.toLocaleString()}</p>
+                  </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                      r.status === 'accepted'
-                        ? 'bg-green-500/20 text-green-400'
-                        : r.status === 'rejected'
-                          ? 'bg-red-500/20 text-red-400'
-                          : 'bg-amber-500/20 text-amber-400'
-                    }`}
-                  >
-                    {r.status}
+                <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
+                  <span>Barman: {r.barman_name || 'Pending'}</span>
+                  <span>·</span>
+                  <span>
+                    {new Date(r.requested_at).toLocaleTimeString('en-NG', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: true,
+                    })}
                   </span>
-                  <p className="text-gray-400 text-xs mt-1">N{r.item_total.toLocaleString()}</p>
+                  {r.return_reason && (
+                    <>
+                      <span>·</span>
+                      <span className="italic">{r.return_reason}</span>
+                    </>
+                  )}
                 </div>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-gray-500">
-                <span>Barman: {r.barman_name || 'Pending'}</span>
-                <span>·</span>
-                <span>
-                  {new Date(r.requested_at).toLocaleTimeString('en-NG', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true,
-                  })}
-                </span>
-                {r.return_reason && (
-                  <>
-                    <span>·</span>
-                    <span className="italic">{r.return_reason}</span>
-                  </>
+                {/* Manager approval buttons for bar_accepted items */}
+                {r.status === 'bar_accepted' && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => managerApprove(r)}
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 text-green-400 font-semibold text-xs py-2 rounded-xl transition-colors"
+                    >
+                      <CheckCircle size={13} /> Approve Return
+                    </button>
+                    <button
+                      onClick={() => managerReject(r)}
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 font-semibold text-xs py-2 rounded-xl transition-colors"
+                    >
+                      <X size={13} /> Reject & Restore
+                    </button>
+                  </div>
                 )}
+                {st.desc && <p className="text-gray-600 text-[10px] mt-1">{st.desc}</p>}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

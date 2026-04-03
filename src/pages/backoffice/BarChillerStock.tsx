@@ -180,7 +180,12 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
       const stock: Record<string, StockEntry> = {}
       for (const drink of menuDrinks) {
         if (existing[drink.name]) {
-          stock[drink.name] = existing[drink.name]
+          const entry = { ...existing[drink.name] }
+          // If opening stock is 0 but previous day has a closing, carry it over
+          if (entry.opening_qty === 0 && prevClosing[drink.name] > 0) {
+            entry.opening_qty = prevClosing[drink.name]
+          }
+          stock[drink.name] = entry
         } else {
           stock[drink.name] = {
             item_name: drink.name,

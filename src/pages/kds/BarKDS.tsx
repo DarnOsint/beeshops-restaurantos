@@ -226,6 +226,7 @@ function BarKDSInner() {
   }
 
   const acceptReturn = async (itemId: string, staffId?: string | null, tableName?: string) => {
+    // Barman accepts tentatively — item deducted from total but needs manager final approval
     const { error } = await supabase
       .from('order_items')
       .update({ return_accepted: true, return_accepted_at: new Date().toISOString() })
@@ -235,14 +236,13 @@ function BarKDSInner() {
       return
     }
 
-    // Recalculate order total — deduct returned item
+    // Recalculate order total — deduct returned item tentatively
     const { data: itemData } = await supabase
       .from('order_items')
       .select('order_id, total_price')
       .eq('id', itemId)
       .single()
     if (itemData) {
-      // Sum all non-returned items on this order
       const { data: remaining } = await supabase
         .from('order_items')
         .select('total_price, return_accepted')
@@ -256,23 +256,23 @@ function BarKDSInner() {
         .eq('id', itemData.order_id)
     }
 
-    // Update returns_log — mark resolved
+    // Update returns_log — mark as bar_accepted (pending manager final approval)
     await supabase
       .from('returns_log')
       .update({
-        status: 'accepted',
+        status: 'bar_accepted',
         barman_id: profile?.id ?? null,
         barman_name: profile?.full_name ?? null,
         resolved_at: new Date().toISOString(),
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
-    toast.success('Return Accepted', 'Item removed from bill')
+    toast.success('Return Accepted', 'Item tentatively removed — awaiting manager final approval')
     if (staffId)
       await sendPushToStaff(
         staffId,
-        '↩ Return Accepted',
-        `Return accepted for ${tableName ?? 'table'} — item removed from total`
+        '↩ Return Accepted by Bar',
+        `Return accepted for ${tableName ?? 'table'} — pending manager approval`
       )
     fetchOrders()
   }

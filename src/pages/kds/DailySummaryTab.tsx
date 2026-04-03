@@ -39,6 +39,7 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
           `
         quantity,
         status,
+        return_accepted,
         menu_items(name, menu_categories(destination)),
         orders(created_at, order_type, profiles(full_name), tables(table_categories(name)))
       `
@@ -52,6 +53,7 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
           data as unknown as {
             quantity: number
             status: string
+            return_accepted?: boolean
             menu_items: { name: string; menu_categories: { destination: string } } | null
             orders: {
               created_at: string
@@ -60,7 +62,12 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
               tables: { table_categories: { name: string } | null } | null
             } | null
           }[]
-        ).filter((i) => i.menu_items?.menu_categories?.destination === destination && i.orders)
+        ).filter(
+          (i) =>
+            i.menu_items?.menu_categories?.destination === destination &&
+            i.orders &&
+            !i.return_accepted
+        )
 
         const itemMap = new Map<string, Map<string, number>>()
         for (const item of filtered) {
