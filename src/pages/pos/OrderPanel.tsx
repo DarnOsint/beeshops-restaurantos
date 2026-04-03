@@ -126,7 +126,11 @@ export default function OrderPanel({
       id: i.menu_item_id || i.id || crypto.randomUUID(),
       _dbId: i.id,
       status: i.status,
-      name: i.menu_items?.name || i.menu_item_id,
+      name:
+        i.menu_items?.name ||
+        (i as unknown as { modifier_notes?: string }).modifier_notes ||
+        i.menu_item_id ||
+        'Custom Item',
       quantity: i.quantity,
       price: i.unit_price,
       total: i.total_price,
@@ -390,7 +394,7 @@ export default function OrderPanel({
       const allItems = [
         ...newItems,
         ...packItems.map((p) => ({
-          id: `takeaway_pack:${p.id}`,
+          id: crypto.randomUUID(),
           name: `Takeaway Pack — ${p.name}`,
           price: p.price,
           quantity: p.qty,
@@ -399,7 +403,8 @@ export default function OrderPanel({
           modifier_notes: `Takeaway Pack — ${p.name}`,
           _existing: false,
           _newId: `takeaway_pack:${p.id}:${crypto.randomUUID()}`,
-          menu_item_id: `takeaway_pack:${p.id}`,
+          // Store as custom line with no menu_item_id to avoid FK issues
+          menu_item_id: null,
           unit_price: p.price,
           total_price: p.qty * p.price,
           order_id: '',
