@@ -122,7 +122,8 @@ export default function OrderPanel({
   const [orderItems, setOrderItems] = useState<OrderItemLocal[]>(() => {
     if (!activeOrder?.order_items) return []
     return activeOrder.order_items.map((i) => ({
-      id: i.menu_item_id,
+      // Ensure an id even when menu_item_id is empty (e.g., takeaway packs)
+      id: i.menu_item_id || i.id || crypto.randomUUID(),
       _dbId: i.id,
       status: i.status,
       name: i.menu_items?.name || i.menu_item_id,
@@ -175,12 +176,12 @@ export default function OrderPanel({
     .filter((p) => (packQuantities[p.id] || 0) > 0)
     .map((p) => ({ ...p, qty: packQuantities[p.id] }))
 
-  // Clear packs after a successful place to avoid duplication on next order
+  // Clear packs when the section is hidden
   useEffect(() => {
     if (!showPacks && Object.keys(packQuantities).length > 0) {
       setPackQuantities({})
     }
-  }, [showPacks])
+  }, [showPacks, packQuantities])
 
   const categories = [
     'All',
@@ -376,9 +377,11 @@ export default function OrderPanel({
     if (isSubmitting.current) return
     isSubmitting.current = true
     try {
-      if (orderItems.length === 0) return
+      const packOnly =
+        orderItems.length === 0 && packItems.reduce((s, p) => s + (p.qty || 0), 0) > 0
+      if (orderItems.length === 0 && !packOnly) return
       const newItems = orderItems.filter((i) => !i._existing)
-      if (newItems.length === 0 && activeOrder) {
+      if (newItems.length === 0 && activeOrder && !packOnly) {
         await onPlaceOrder({ table, items: [], notes, total: 0 })
         return
       }
@@ -387,7 +390,7 @@ export default function OrderPanel({
       const allItems = [
         ...newItems,
         ...packItems.map((p) => ({
-          id: crypto.randomUUID(),
+          id: `takeaway_pack:${p.id}`,
           name: `Takeaway Pack — ${p.name}`,
           price: p.price,
           quantity: p.qty,
@@ -395,8 +398,8 @@ export default function OrderPanel({
           menu_categories: null,
           modifier_notes: `Takeaway Pack — ${p.name}`,
           _existing: false,
-          _newId: crypto.randomUUID(),
-          menu_item_id: '',
+          _newId: `takeaway_pack:${p.id}:${crypto.randomUUID()}`,
+          menu_item_id: `takeaway_pack:${p.id}`,
           unit_price: p.price,
           total_price: p.qty * p.price,
           order_id: '',
