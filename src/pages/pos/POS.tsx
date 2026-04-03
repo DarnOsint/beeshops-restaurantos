@@ -326,14 +326,14 @@ export default function POS() {
       return
     }
 
-    // Use WAT (UTC+1) date to match Lagos timezone
-    const today = new Date(Date.now() + 60 * 60 * 1000).toISOString().split('T')[0]
+    // Allow overnight shifts: treat any open attendance row (clock_out is null) as clocked-in,
+    // even if the attendance.date is yesterday.
     const { data: attendance } = await supabase
       .from('attendance')
-      .select('id')
+      .select('id, clock_in, date')
       .eq('staff_id', staffId)
-      .eq('date', today)
       .is('clock_out', null)
+      .order('clock_in', { ascending: false })
       .limit(1)
     // Only update if we haven't already confirmed clocked-in — prevents mid-session flicker
     const clockedIn = attendance !== null && attendance.length > 0
