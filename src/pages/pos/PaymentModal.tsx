@@ -117,9 +117,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       })
   })
 
-  // Exclude items where return has been accepted by bar
+  // Exclude items where return has been requested or accepted (both remove from payable)
   const returnedTotal = (order?.order_items || [])
-    .filter((i) => i.return_accepted)
+    .filter((i) => i.return_requested || i.return_accepted)
     .reduce((sum, i) => sum + (i.total_price || 0), 0)
   const subtotal = (order?.total_amount || 0) - returnedTotal
   const total = subtotal
@@ -289,7 +289,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       return ' '.repeat(pad) + str
     }
 
-    const activeItems = (order.order_items || []).filter((i) => !i.return_accepted)
+    const activeItems = (order.order_items || []).filter(
+      (i) => !i.return_requested && !i.return_accepted
+    )
     const adjustedTotal = activeItems.reduce((sum, i) => sum + (i.total_price || 0), 0)
 
     // Group items by name
@@ -311,7 +313,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
 
     const returnedGrouped = new Map<string, number>()
     ;(order.order_items || [])
-      .filter((i) => i.return_accepted)
+      .filter((i) => i.return_requested || i.return_accepted)
       .forEach((item) => {
         const name =
           item.menu_items?.name ||

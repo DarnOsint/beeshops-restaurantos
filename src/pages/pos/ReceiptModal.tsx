@@ -120,10 +120,14 @@ export default function ReceiptModal({
             : pmRaw.toUpperCase()
 
     const activeItems = items.filter(
-      (i) => !(i as unknown as { return_accepted?: boolean }).return_accepted
+      (i) =>
+        !(i as unknown as { return_accepted?: boolean }).return_accepted &&
+        !(i as unknown as { return_requested?: boolean }).return_requested
     )
     const returnedItems = items.filter(
-      (i) => (i as unknown as { return_accepted?: boolean }).return_accepted
+      (i) =>
+        (i as unknown as { return_accepted?: boolean }).return_accepted ||
+        (i as unknown as { return_requested?: boolean }).return_requested
     )
 
     // Group items by name — combine duplicates
