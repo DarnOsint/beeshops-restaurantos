@@ -32,9 +32,9 @@ export default function VoidsTab() {
   const fetchVoids = useCallback(async (d: string) => {
     setLoading(true)
     const dayStart = new Date(d)
-    dayStart.setHours(0, 0, 0, 0)
-    const dayEnd = new Date(d)
-    dayEnd.setHours(23, 59, 59, 999)
+    dayStart.setHours(8, 0, 0, 0)
+    const dayEnd = new Date(dayStart)
+    dayEnd.setDate(dayEnd.getDate() + 1)
     const { data } = await supabase
       .from('void_requests')
       .select('*')

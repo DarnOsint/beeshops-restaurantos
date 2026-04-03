@@ -40,6 +40,17 @@ import ActivityLogTab from './mgmt/ActivityLogTab'
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
+const sessionWindow = () => {
+  const now = new Date()
+  const lagosNow = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+  const start = new Date(lagosNow)
+  start.setHours(8, 0, 0, 0)
+  if (lagosNow.getHours() < 8) start.setDate(start.getDate() - 1)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 1)
+  return { start, end }
+}
+
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'shifts', label: 'Shifts', icon: Clock },
@@ -80,10 +91,11 @@ export default function Management() {
   const [activityDate, setActivityDate] = useState(() => new Date().toISOString().slice(0, 10))
   const activityRange = useMemo(() => {
     const d = new Date(activityDate)
-    return {
-      start: new Date(d.setHours(0, 0, 0, 0)).toISOString(),
-      end: new Date(d.setHours(23, 59, 59, 999)).toISOString(),
-    }
+    d.setHours(8, 0, 0, 0)
+    const start = new Date(d)
+    const end = new Date(d)
+    end.setDate(end.getDate() + 1)
+    return { start: start.toISOString(), end: end.toISOString() }
   }, [activityDate])
   const { status: syncStatus, pendingCount, lastSynced, manualSync } = useSyncStatus()
 
@@ -109,8 +121,7 @@ export default function Management() {
 
   const fetchStats = useCallback(async () => {
     void supabase.rpc('free_orphaned_tables')
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const { start } = sessionWindow()
     const [ordersRes, tablesRes, roomsRes, staffRes, revenueRes] = await Promise.all([
       supabase.from('orders').select('id').eq('status', 'open'),
       supabase.from('tables').select('id').eq('status', 'occupied'),
@@ -118,13 +129,13 @@ export default function Management() {
       supabase
         .from('attendance')
         .select('staff_id')
-        .eq('date', new Date().toISOString().split('T')[0])
-        .is('clock_out', null),
+        .or(`clock_out.is.null,clock_out.gte.${start.toISOString()}`)
+        .gte('clock_in', start.toISOString()),
       supabase
         .from('orders')
         .select('total_amount')
         .eq('status', 'paid')
-        .gte('created_at', today.toISOString()),
+        .gte('created_at', start.toISOString()),
     ])
     setStats({
       openOrders: ordersRes.data?.length || 0,

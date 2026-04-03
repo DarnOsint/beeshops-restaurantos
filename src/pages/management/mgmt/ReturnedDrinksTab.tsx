@@ -34,9 +34,9 @@ export default function ReturnedDrinksTab() {
   const fetchReturns = useCallback(async (d: string) => {
     setLoading(true)
     const dayStart = new Date(d)
-    dayStart.setHours(0, 0, 0, 0)
-    const dayEnd = new Date(d)
-    dayEnd.setHours(23, 59, 59, 999)
+    dayStart.setHours(8, 0, 0, 0)
+    const dayEnd = new Date(dayStart)
+    dayEnd.setDate(dayEnd.getDate() + 1)
 
     // Also check for bar_accepted items older than 72 hours that need reverting
     const expiry = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString()
