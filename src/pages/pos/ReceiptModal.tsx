@@ -126,23 +126,40 @@ export default function ReceiptModal({
       (i) => (i as unknown as { return_accepted?: boolean }).return_accepted
     )
 
-    const itemLines = activeItems
-      .map((item) => {
-        const iName = `${item.quantity}x ${(item as unknown as { menu_items?: { name: string } }).menu_items?.name || (item as unknown as { modifier_notes?: string }).modifier_notes || 'Item'}`
-        const iPrice = `N${((item as unknown as { total_price?: number }).total_price || 0).toLocaleString()}`
-        return fmtRow(iName, iPrice)
-      })
+    // Group items by name — combine duplicates
+    const grouped = new Map<string, { qty: number; total: number }>()
+    activeItems.forEach((item) => {
+      const name =
+        (item as unknown as { menu_items?: { name: string } }).menu_items?.name ||
+        (item as unknown as { modifier_notes?: string }).modifier_notes ||
+        'Item'
+      const existing = grouped.get(name)
+      const qty = item.quantity || 1
+      const price = (item as unknown as { total_price?: number }).total_price || 0
+      if (existing) {
+        existing.qty += qty
+        existing.total += price
+      } else {
+        grouped.set(name, { qty, total: price })
+      }
+    })
+    const itemLines = Array.from(grouped.entries())
+      .map(([name, { qty, total }]) => fmtRow(`${qty}x ${name}`, `N${total.toLocaleString()}`))
       .join('\n')
 
+    // Group returned items too
+    const returnedGrouped = new Map<string, number>()
+    returnedItems.forEach((item) => {
+      const name =
+        (item as unknown as { menu_items?: { name: string } }).menu_items?.name ||
+        (item as unknown as { modifier_notes?: string }).modifier_notes ||
+        'Item'
+      returnedGrouped.set(name, (returnedGrouped.get(name) || 0) + (item.quantity || 1))
+    })
     const returnedLines =
-      returnedItems.length > 0
-        ? returnedItems
-            .map((item) =>
-              fmtRow(
-                `${item.quantity}x ${(item as unknown as { menu_items?: { name: string } }).menu_items?.name || (item as unknown as { modifier_notes?: string }).modifier_notes || 'Item'} [RETURNED]`,
-                'N0'
-              )
-            )
+      returnedGrouped.size > 0
+        ? Array.from(returnedGrouped.entries())
+            .map(([name, qty]) => fmtRow(`${qty}x ${name} [RETURNED]`, 'N0'))
             .join('\n')
         : ''
 

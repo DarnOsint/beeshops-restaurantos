@@ -357,10 +357,17 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
             : o.paymentMethod.toUpperCase()
     const orderRef = `BSP-${o.order.id.slice(0, 8).toUpperCase()}`
 
-    const itemLines = o.items
-      .map((i) =>
-        fmtRow(`${i.quantity}x ${i.name}`, `N${(i.total || i.price * i.quantity).toLocaleString()}`)
-      )
+    // Group items by name
+    const grouped = new Map<string, { qty: number; total: number }>()
+    o.items.forEach((i) => {
+      const existing = grouped.get(i.name)
+      if (existing) {
+        existing.qty += i.quantity
+        existing.total += i.total || i.price * i.quantity
+      } else grouped.set(i.name, { qty: i.quantity, total: i.total || i.price * i.quantity })
+    })
+    const itemLines = Array.from(grouped.entries())
+      .map(([name, { qty, total }]) => fmtRow(`${qty}x ${name}`, `N${total.toLocaleString()}`))
       .join('\n')
 
     const packLines = packItems

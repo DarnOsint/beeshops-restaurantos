@@ -244,21 +244,35 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     const activeItems = (order.order_items || []).filter((i) => !i.return_accepted)
     const adjustedTotal = activeItems.reduce((sum, i) => sum + (i.total_price || 0), 0)
 
-    const itemLines = activeItems
-      .map((item) => {
-        const name = `${item.quantity}x ${item.menu_items?.name || (item as unknown as { modifier_notes?: string }).modifier_notes || 'Item'}`
-        const price = `N${(item.total_price || 0).toLocaleString()}`
-        return fmtRow(name, price)
-      })
+    // Group items by name
+    const grouped = new Map<string, { qty: number; total: number }>()
+    activeItems.forEach((item) => {
+      const name =
+        item.menu_items?.name ||
+        (item as unknown as { modifier_notes?: string }).modifier_notes ||
+        'Item'
+      const existing = grouped.get(name)
+      if (existing) {
+        existing.qty += item.quantity
+        existing.total += item.total_price || 0
+      } else grouped.set(name, { qty: item.quantity, total: item.total_price || 0 })
+    })
+    const itemLines = Array.from(grouped.entries())
+      .map(([name, { qty, total }]) => fmtRow(`${qty}x ${name}`, `N${total.toLocaleString()}`))
       .join('\n')
 
-    // Show returned items struck through
-    const returnedLines = (order.order_items || [])
+    const returnedGrouped = new Map<string, number>()
+    ;(order.order_items || [])
       .filter((i) => i.return_accepted)
-      .map((item) => {
-        const name = `${item.quantity}x ${item.menu_items?.name || (item as unknown as { modifier_notes?: string }).modifier_notes || 'Item'} [RETURNED]`
-        return fmtRow(name, `N0`)
+      .forEach((item) => {
+        const name =
+          item.menu_items?.name ||
+          (item as unknown as { modifier_notes?: string }).modifier_notes ||
+          'Item'
+        returnedGrouped.set(name, (returnedGrouped.get(name) || 0) + item.quantity)
       })
+    const returnedLines = Array.from(returnedGrouped.entries())
+      .map(([name, qty]) => fmtRow(`${qty}x ${name} [RETURNED]`, 'N0'))
       .join('\n')
 
     const bankLines =
