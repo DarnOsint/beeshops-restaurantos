@@ -203,12 +203,16 @@ export default function Accounting() {
     const split = paidOrders
       .filter((o) => o.payment_method === 'split')
       .reduce((s, o) => s + (o.total_amount || 0), 0)
+    // Orders with no payment method (force-closed) count as transfer
+    const nullPayment = paidOrders
+      .filter((o) => !o.payment_method)
+      .reduce((s, o) => s + (o.total_amount || 0), 0)
 
     setSummary({
       total,
       cash,
       card,
-      transfer,
+      transfer: transfer + nullPayment,
       credit,
       split,
       orders: paidOrders.length,

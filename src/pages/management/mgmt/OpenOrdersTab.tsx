@@ -92,16 +92,14 @@ export default function OpenOrdersTab() {
 
     // Remove from pending list
     const updated = deleteRequests.filter((r) => r.id !== req.id)
-    await supabase
-      .from('settings')
-      .upsert(
-        {
-          id: 'pending_delete_requests',
-          value: JSON.stringify(updated),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'id' }
-      )
+    await supabase.from('settings').upsert(
+      {
+        id: 'pending_delete_requests',
+        value: JSON.stringify(updated),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    )
     setDeleteRequests(updated)
 
     await audit({
@@ -119,16 +117,14 @@ export default function OpenOrdersTab() {
 
   const rejectDelete = async (req: DeleteRequest) => {
     const updated = deleteRequests.filter((r) => r.id !== req.id)
-    await supabase
-      .from('settings')
-      .upsert(
-        {
-          id: 'pending_delete_requests',
-          value: JSON.stringify(updated),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'id' }
-      )
+    await supabase.from('settings').upsert(
+      {
+        id: 'pending_delete_requests',
+        value: JSON.stringify(updated),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    )
     setDeleteRequests(updated)
     await audit({
       action: 'ITEM_DELETE_REJECTED',
@@ -285,7 +281,11 @@ export default function OpenOrdersTab() {
                           return
                         const { error } = await supabase
                           .from('orders')
-                          .update({ status: 'paid', closed_at: new Date().toISOString() })
+                          .update({
+                            status: 'paid',
+                            payment_method: 'transfer',
+                            closed_at: new Date().toISOString(),
+                          })
                           .eq('id', order.id)
                         if (error) {
                           toast.error('Error', 'Failed: ' + error.message)
