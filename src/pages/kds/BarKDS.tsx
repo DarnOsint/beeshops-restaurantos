@@ -117,6 +117,7 @@ function BarKDSInner() {
       .select(
         `id, created_at, notes, staff_id, order_type, customer_name,
         tables(name),
+        profiles(full_name),
         order_items(id, quantity, status, destination, notes, return_requested, return_accepted, return_reason,
           menu_items(name, menu_categories(name, destination)))`
       )
@@ -234,6 +235,48 @@ function BarKDSInner() {
         '✅ Order Ready',
         `Bar order for ${order.tables?.name || 'a table'} is ready to collect`
       )
+    fetchOrders()
+  }
+
+  const rejectOrder = async (order: KdsOrder) => {
+    // Barman rejects all pending bar items on this order
+    const barItemIds = order.order_items
+      .filter(
+        (i) =>
+          i.menu_items?.menu_categories?.destination === 'bar' &&
+          i.status !== 'ready' &&
+          i.status !== 'delivered'
+      )
+      .map((i) => i.id)
+    if (!barItemIds.length) return
+    // Mark items as cancelled
+    const { error } = await supabase
+      .from('order_items')
+      .update({ status: 'cancelled' })
+      .in('id', barItemIds)
+    if (error) {
+      toast.error('Error', 'Failed to reject order: ' + error.message)
+      return
+    }
+    // Recalculate order total without cancelled items
+    const { data: remaining } = await supabase
+      .from('order_items')
+      .select('total_price, status')
+      .eq('order_id', order.id)
+    const newTotal = (remaining || [])
+      .filter((r: { status: string }) => r.status !== 'cancelled')
+      .reduce((s: number, r: { total_price: number }) => s + (r.total_price || 0), 0)
+    await supabase
+      .from('orders')
+      .update({ total_amount: newTotal, updated_at: new Date().toISOString() })
+      .eq('id', order.id)
+    if (order.staff_id)
+      await sendPushToStaff(
+        order.staff_id,
+        '❌ Order Rejected by Bar',
+        `Bar rejected drinks for ${order.tables?.name || order.customer_name || 'an order'}`
+      )
+    toast.success('Order Rejected', 'Bar items cancelled and total updated')
     fetchOrders()
   }
 
@@ -677,6 +720,12 @@ function BarKDSInner() {
                       </span>
                     </div>
                   </div>
+                  {order.profiles?.full_name && (
+                    <p className="text-gray-400 text-xs -mt-1">
+                      Waitron:{' '}
+                      <span className="text-white font-medium">{order.profiles.full_name}</span>
+                    </p>
+                  )}
                   {order.notes && (
                     <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                       <p className="text-amber-400 text-xs">📝 {order.notes}</p>
@@ -705,12 +754,27 @@ function BarKDSInner() {
                     ))}
                   </div>
                   {order.order_items.some((i) => i.status !== 'ready') && (
-                    <button
-                      onClick={() => markAllReady(order)}
-                      className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl py-2.5 flex items-center justify-center gap-2 transition-colors"
-                    >
-                      <CheckCircle size={16} /> All Ready
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => markAllReady(order)}
+                        className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl py-2.5 flex items-center justify-center gap-2 transition-colors"
+                      >
+                        <CheckCircle size={16} /> All Ready
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (
+                            confirm(
+                              `Reject all bar items for ${order.tables?.name || order.customer_name || 'this order'}?`
+                            )
+                          )
+                            rejectOrder(order)
+                        }}
+                        className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 font-bold rounded-xl px-4 py-2.5 flex items-center justify-center gap-1.5 transition-colors text-sm"
+                      >
+                        <X size={14} /> Reject
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}

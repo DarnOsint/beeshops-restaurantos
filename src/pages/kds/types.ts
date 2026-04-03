@@ -21,6 +21,7 @@ export interface KdsOrder {
   order_type?: string | null
   customer_name?: string | null
   tables?: { name: string } | null
+  profiles?: { full_name: string } | null
   order_items: KdsOrderItem[]
 }
 
