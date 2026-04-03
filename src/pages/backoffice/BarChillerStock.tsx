@@ -249,10 +249,8 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         const carryOver = prevClosing[drink.name] || 0
         if (existing[drink.name]) {
           const entry = { ...existing[drink.name] }
-          // Always set opening to carry-over if entry's opening is 0
-          if (entry.opening_qty === 0 && carryOver > 0) {
-            entry.opening_qty = carryOver
-          }
+          // Always set opening to computed carry-over so stale openings get corrected
+          entry.opening_qty = carryOver
           // Always reset closing to 0 on load — closing is always auto-computed
           // from live POS data. Barman sets it fresh via stepper only for physical counts.
           entry.closing_qty = 0
