@@ -64,7 +64,21 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
       .from('profiles')
       .select('id, full_name, role, is_active')
       .eq('is_active', true)
-      .in('role', ['waitron', 'kitchen', 'bar', 'griller', 'manager', 'supervisor'])
+      .in('role', [
+        'waitron',
+        'kitchen',
+        'bar',
+        'griller',
+        'manager',
+        'supervisor',
+        'floor_staff',
+        'dj',
+        'hypeman',
+        'social_media_manager',
+        'games_master',
+        'shisha_attendant',
+        'apartment_manager',
+      ])
       .order('full_name')
     if (data) setStaff(data)
   }
