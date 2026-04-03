@@ -75,12 +75,10 @@ export default function TableAssignment({ onClose }: Props) {
   }
 
   const fetchActiveStaff = async () => {
-    // Use WAT date to match how attendance.date is stored (via todayWAT())
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+    // Use open attendance regardless of date (overnight)
     const { data: attendance } = await supabase
       .from('attendance')
       .select('staff_id')
-      .eq('date', today)
       .is('clock_out', null)
     if (!attendance || attendance.length === 0) {
       setStaff([])
