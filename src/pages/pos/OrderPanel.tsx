@@ -381,11 +381,11 @@ export default function OrderPanel({
     if (isSubmitting.current) return
     isSubmitting.current = true
     try {
-      const packOnly =
-        orderItems.length === 0 && packItems.reduce((s, p) => s + (p.qty || 0), 0) > 0
+      const hasPacks = packItems.reduce((s, p) => s + (p.qty || 0), 0) > 0
+      const packOnly = orderItems.length === 0 && hasPacks
       if (orderItems.length === 0 && !packOnly) return
       const newItems = orderItems.filter((i) => !i._existing)
-      if (newItems.length === 0 && activeOrder && !packOnly) {
+      if (newItems.length === 0 && activeOrder && !hasPacks) {
         await onPlaceOrder({ table, items: [], notes, total: 0 })
         return
       }
