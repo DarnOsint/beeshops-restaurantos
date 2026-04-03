@@ -43,7 +43,7 @@ export default function StockSummaryTab({ type }: Props) {
         supabase.from(tableName).select('*').eq('date', d).order('item_name'),
         supabase
           .from('order_items')
-          .select('quantity, menu_items(name)')
+          .select('quantity, return_accepted, menu_items(name)')
           .eq('destination', destination)
           .eq('status', 'delivered')
           .gte('created_at', dayStart.toISOString())
@@ -56,8 +56,10 @@ export default function StockSummaryTab({ type }: Props) {
       if (soldRes.data) {
         for (const item of soldRes.data as unknown as Array<{
           quantity: number
+          return_accepted?: boolean
           menu_items: { name: string } | null
         }>) {
+          if (item.return_accepted) continue
           const name = item.menu_items?.name
           if (name) map[name] = (map[name] || 0) + item.quantity
         }

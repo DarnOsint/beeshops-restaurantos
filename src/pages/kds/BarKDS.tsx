@@ -163,20 +163,28 @@ function BarKDSInner() {
     setLoading(false)
   }, [])
 
-  const fetchReturnHistory = useCallback(async () => {
-    if (!profile) return
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const { data } = await supabase
-      .from('returns_log')
-      .select(
-        'id, item_name, quantity, item_total, table_name, waitron_name, return_reason, status, requested_at, resolved_at'
-      )
-      .or(`barman_id.eq.${profile.id},status.eq.pending`)
-      .gte('requested_at', today.toISOString())
-      .order('requested_at', { ascending: false })
-    if (data) setReturnHistory(data)
-  }, [profile])
+  const [historyDate, setHistoryDate] = useState(new Date().toISOString().slice(0, 10))
+
+  const fetchReturnHistory = useCallback(
+    async (d?: string) => {
+      if (!profile) return
+      const targetDate = d || historyDate
+      const dayStart = new Date(targetDate)
+      dayStart.setHours(0, 0, 0, 0)
+      const dayEnd = new Date(targetDate)
+      dayEnd.setHours(23, 59, 59, 999)
+      const { data } = await supabase
+        .from('returns_log')
+        .select(
+          'id, item_name, quantity, item_total, table_name, waitron_name, return_reason, status, requested_at, resolved_at'
+        )
+        .gte('requested_at', dayStart.toISOString())
+        .lte('requested_at', dayEnd.toISOString())
+        .order('requested_at', { ascending: false })
+      if (data) setReturnHistory(data)
+    },
+    [profile, historyDate]
+  )
 
   const updateItemStatus = async (itemId: string, currentStatus: string, orderId: string) => {
     const nextStatus = getNextStatus(currentStatus)
@@ -432,19 +440,58 @@ function BarKDSInner() {
       {/* Return History Tab */}
       {activeTab === 'history' && (
         <div className="flex-1 p-4 overflow-y-auto">
+          <div className="max-w-lg mx-auto">
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <input
+                type="date"
+                value={historyDate}
+                max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => {
+                  setHistoryDate(e.target.value)
+                  fetchReturnHistory(e.target.value)
+                }}
+                className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+              />
+              <button
+                onClick={() => {
+                  const d = new Date().toISOString().slice(0, 10)
+                  setHistoryDate(d)
+                  fetchReturnHistory(d)
+                }}
+                className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${historyDate === new Date().toISOString().slice(0, 10) ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+              >
+                Today
+              </button>
+              <button
+                onClick={() => {
+                  const d = new Date(historyDate)
+                  d.setDate(d.getDate() - 1)
+                  const ds = d.toISOString().slice(0, 10)
+                  setHistoryDate(ds)
+                  fetchReturnHistory(ds)
+                }}
+                className="px-3 py-2 rounded-xl text-xs bg-gray-800 text-gray-400 hover:text-white transition-colors"
+              >
+                Prev Day
+              </button>
+            </div>
+          </div>
           {returnHistory.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center py-16">
+            <div className="flex flex-col items-center justify-center text-center py-12">
               <div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mb-4">
                 <History size={28} className="text-gray-600" />
               </div>
-              <p className="text-gray-400 font-medium">No returns today</p>
+              <p className="text-gray-400 font-medium">
+                No returns for{' '}
+                {historyDate === new Date().toISOString().slice(0, 10) ? 'today' : historyDate}
+              </p>
               <p className="text-gray-600 text-sm mt-1">Processed returns will appear here</p>
             </div>
           ) : (
             <div className="max-w-lg mx-auto space-y-2">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-gray-500 text-xs uppercase tracking-wider">
-                  Today's Returns — {returnHistory.length} total
+                  Returns — {returnHistory.length} total
                 </p>
                 <p className="text-gray-400 text-xs font-bold">
                   ₦

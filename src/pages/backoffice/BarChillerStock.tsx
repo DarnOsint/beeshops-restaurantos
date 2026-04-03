@@ -126,7 +126,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     dayEnd.setHours(23, 59, 59, 999)
     const { data } = await supabase
       .from('order_items')
-      .select('quantity, menu_items(name)')
+      .select('quantity, return_accepted, menu_items(name)')
       .eq('destination', 'bar')
       .eq('status', 'delivered')
       .gte('created_at', dayStart.toISOString())
@@ -135,8 +135,11 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     const map: Record<string, number> = {}
     for (const item of data as unknown as Array<{
       quantity: number
+      return_accepted?: boolean
       menu_items: { name: string } | null
     }>) {
+      // Exclude returned items from sold count
+      if (item.return_accepted) continue
       const name = item.menu_items?.name
       if (name) map[name] = (map[name] || 0) + item.quantity
     }
@@ -233,15 +236,21 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
       )
         continue
 
+      const actualSold = soldMap[name] || entry.sold_qty || 0
+      // Auto-compute closing stock: opening + received - sold - void
+      const autoClosing = Math.max(
+        0,
+        entry.opening_qty + entry.received_qty - actualSold - entry.void_qty
+      )
       const row = {
         date,
         item_name: name,
         unit: entry.unit || 'bottles',
         opening_qty: entry.opening_qty,
         received_qty: entry.received_qty,
-        sold_qty: soldMap[name] || entry.sold_qty || 0,
+        sold_qty: actualSold,
         void_qty: entry.void_qty,
-        closing_qty: entry.closing_qty,
+        closing_qty: entry.closing_qty > 0 ? entry.closing_qty : autoClosing,
         note: entry.note || null,
         recorded_by: profile?.id,
         updated_at: new Date().toISOString(),
@@ -359,12 +368,17 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
             {drinks.map((drink) => {
               const isExpanded = expanded === drink.name
               const sold = drink.autoSold || drink.sold_qty || 0
-              const expected = drink.opening_qty + drink.received_qty - sold - drink.void_qty
-              const variance = expected - drink.closing_qty
+              const expected = Math.max(
+                0,
+                drink.opening_qty + drink.received_qty - sold - drink.void_qty
+              )
+              // Use manual closing if entered, otherwise auto-compute
+              const effectiveClosing = drink.closing_qty > 0 ? drink.closing_qty : expected
+              const variance = expected - effectiveClosing
               const hasActivity =
                 drink.opening_qty > 0 ||
                 drink.received_qty > 0 ||
-                drink.closing_qty > 0 ||
+                effectiveClosing > 0 ||
                 drink.void_qty > 0
 
               return (
@@ -388,9 +402,9 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
                       {hasActivity && (
                         <p className="text-gray-500 text-xs">
                           Open: {drink.opening_qty} + Rcvd: {drink.received_qty} − Sold: {sold} =
-                          Exp: {expected}
-                          {drink.closing_qty > 0 && (
-                            <span className="ml-1">| Count: {drink.closing_qty}</span>
+                          Left: {effectiveClosing}
+                          {drink.closing_qty > 0 && drink.closing_qty !== expected && (
+                            <span className="ml-1">| Manual: {drink.closing_qty}</span>
                           )}
                         </p>
                       )}

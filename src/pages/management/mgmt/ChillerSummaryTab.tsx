@@ -35,7 +35,7 @@ export default function ChillerSummaryTab() {
       supabase.from('bar_chiller_stock').select('*').eq('date', d).order('item_name'),
       supabase
         .from('order_items')
-        .select('quantity, menu_items(name)')
+        .select('quantity, return_accepted, menu_items(name)')
         .eq('destination', 'bar')
         .eq('status', 'delivered')
         .gte('created_at', dayStart.toISOString())
@@ -47,9 +47,11 @@ export default function ChillerSummaryTab() {
     const map: Record<string, number> = {}
     if (soldRes.data) {
       for (const item of soldRes.data as unknown as Array<{
+        return_accepted?: boolean
         quantity: number
         menu_items: { name: string } | null
       }>) {
+        if (item.return_accepted) continue
         const name = item.menu_items?.name
         if (name) map[name] = (map[name] || 0) + item.quantity
       }
