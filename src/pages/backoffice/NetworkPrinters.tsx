@@ -399,6 +399,14 @@ export default function NetworkPrinters({ onBack }: Props) {
               the POS to send print jobs to the local print server on that computer.
             </p>
           </div>
+          <a
+            href="https://github.com/DarnOsint/beeshops-restaurantos/releases/download/v1.0-print-server/SETUP_AUTO_OPEN.bat"
+            className="flex items-center justify-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-medium rounded-xl py-3 text-sm transition-colors border border-gray-700 w-full"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Printer size={16} /> Download Auto-Open on Boot (opens beeshop.place on startup)
+          </a>
         </div>
 
         {/* Setup guide */}
