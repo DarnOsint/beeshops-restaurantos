@@ -625,7 +625,10 @@ export default function POS() {
 
       // Print the configured number of copies — kitchen/griller default to 2
       const defaultCopies = station === 'kitchen' || station === 'griller' ? 2 : 1
-      const copies = printCopiesConfig[station] || defaultCopies
+      const configuredRaw = printCopiesConfig[station]
+      const configured = Number(configuredRaw)
+      const copies =
+        Number.isFinite(configured) && configured > 0 ? Math.trunc(configured) : defaultCopies
       for (let c = 0; c < copies; c++) {
         printToStation(station, ticket).catch(() => {
           /* silent — station printer offline is not a blocker */

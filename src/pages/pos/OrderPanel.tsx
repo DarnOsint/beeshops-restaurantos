@@ -175,6 +175,13 @@ export default function OrderPanel({
     .filter((p) => (packQuantities[p.id] || 0) > 0)
     .map((p) => ({ ...p, qty: packQuantities[p.id] }))
 
+  // Clear packs after a successful place to avoid duplication on next order
+  useEffect(() => {
+    if (!showPacks && Object.keys(packQuantities).length > 0) {
+      setPackQuantities({})
+    }
+  }, [showPacks])
+
   const categories = [
     'All',
     ...new Set(
@@ -396,6 +403,9 @@ export default function OrderPanel({
         })),
       ]
       await onPlaceOrder({ table, items: allItems as typeof newItems, notes, total: newTotal })
+      // Reset pack selections after a successful submit to avoid duplicate adds
+      setPackQuantities({})
+      setShowPacks(false)
     } finally {
       isSubmitting.current = false
     }

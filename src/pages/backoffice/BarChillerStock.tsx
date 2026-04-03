@@ -153,10 +153,44 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
   }, [])
 
   // Load existing entries for the day
+  // Helper: fetch sold map for an arbitrary date (used for carry-over accuracy)
+  const fetchSoldMapForDate = useCallback(async (d: string) => {
+    const dayStart = new Date(d)
+    dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(d)
+    dayEnd.setHours(23, 59, 59, 999)
+    const { data } = await supabase
+      .from('order_items')
+      .select('quantity, return_accepted, menu_items(name), orders(status)')
+      .eq('destination', 'bar')
+      .gte('created_at', dayStart.toISOString())
+      .lte('created_at', dayEnd.toISOString())
+    const map: Record<string, number> = {}
+    if (data) {
+      for (const item of data as unknown as Array<{
+        quantity: number
+        return_accepted?: boolean
+        menu_items: { name: string } | null
+        orders: { status: string } | null
+      }>) {
+        if (item.return_accepted) continue
+        if (item.orders?.status === 'cancelled') continue
+        const name = item.menu_items?.name
+        if (name) map[name] = (map[name] || 0) + item.quantity
+      }
+    }
+    return map
+  }, [])
+
   const loadEntries = useCallback(
     async (d: string) => {
       setLoading(true)
       await loadSoldQty(d)
+      // Also fetch yesterday's sold map to prevent stale carry-over when prior-day entries weren't saved after late sales
+      const prevDay = new Date(d)
+      prevDay.setDate(prevDay.getDate() - 1)
+      const prevDayStr = prevDay.toISOString().slice(0, 10)
+      const prevSoldMap = await fetchSoldMapForDate(prevDayStr)
 
       // Find the most recent stock entry ever saved for each item (no date limit)
       const { data: prevData } = await supabase
@@ -186,10 +220,11 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
             // Use the manually entered closing count
             prevClosing[row.item_name] = row.closing_qty
           } else {
-            // Auto-compute from saved data: opening + received - sold(saved) - void
+            // Auto-compute using live POS sold for that date (fallback to saved sold_qty)
+            const actualSold = prevSoldMap[row.item_name] ?? row.sold_qty ?? 0
             prevClosing[row.item_name] = Math.max(
               0,
-              row.opening_qty + row.received_qty - (row.sold_qty || 0) - row.void_qty
+              row.opening_qty + row.received_qty - actualSold - row.void_qty
             )
           }
         }
