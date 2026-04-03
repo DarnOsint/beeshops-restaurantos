@@ -93,6 +93,8 @@ export default function Accounting() {
     cash: 0,
     card: 0,
     transfer: 0,
+    credit: 0,
+    split: 0,
     orders: 0,
     avgOrder: 0,
   })
@@ -190,10 +192,16 @@ export default function Accounting() {
       .filter((o) => o.payment_method === 'cash')
       .reduce((s, o) => s + (o.total_amount || 0), 0)
     const card = paidOrders
-      .filter((o) => o.payment_method === 'card')
+      .filter((o) => ['card', 'bank_pos'].includes(o.payment_method || ''))
       .reduce((s, o) => s + (o.total_amount || 0), 0)
     const transfer = paidOrders
-      .filter((o) => o.payment_method === 'transfer')
+      .filter((o) => (o.payment_method || '').startsWith('transfer'))
+      .reduce((s, o) => s + (o.total_amount || 0), 0)
+    const credit = paidOrders
+      .filter((o) => o.payment_method === 'credit')
+      .reduce((s, o) => s + (o.total_amount || 0), 0)
+    const split = paidOrders
+      .filter((o) => o.payment_method === 'split')
       .reduce((s, o) => s + (o.total_amount || 0), 0)
 
     setSummary({
@@ -201,6 +209,8 @@ export default function Accounting() {
       cash,
       card,
       transfer,
+      credit,
+      split,
       orders: paidOrders.length,
       avgOrder: paidOrders.length ? Math.round(total / paidOrders.length) : 0,
     })

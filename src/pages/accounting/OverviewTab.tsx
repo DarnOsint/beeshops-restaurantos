@@ -82,6 +82,8 @@ export default function OverviewTab({
     { label: 'Cash', value: summary.cash, color: 'bg-emerald-500' },
     { label: 'Bank POS', value: summary.card, color: 'bg-blue-500' },
     { label: 'Bank Transfer', value: summary.transfer, color: 'bg-purple-500' },
+    { label: 'Credit (Pay Later)', value: summary.credit, color: 'bg-amber-500' },
+    { label: 'Split Payment', value: summary.split, color: 'bg-cyan-500' },
   ]
 
   return (
