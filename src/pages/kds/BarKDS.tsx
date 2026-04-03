@@ -136,6 +136,7 @@ function BarKDSInner() {
               i.menu_items?.menu_categories?.destination === 'bar' &&
               i.status !== 'delivered' &&
               i.status !== 'ready' &&
+              i.status !== 'cancelled' &&
               !i.return_accepted
           ),
         }))

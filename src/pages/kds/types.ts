@@ -1,7 +1,7 @@
 export interface KdsOrderItem {
   id: string
   quantity: number
-  status: 'pending' | 'preparing' | 'ready' | 'delivered'
+  status: 'pending' | 'preparing' | 'ready' | 'delivered' | 'cancelled'
   destination: string
   notes?: string | null
   return_requested?: boolean
