@@ -119,8 +119,9 @@ export default function ReturnedDrinksTab() {
         .from('returns_log')
         .update({
           status: 'accepted',
-          manager_approved_by: profile?.full_name,
-          manager_approved_at: new Date().toISOString(),
+          reviewed: true,
+          reviewed_by_name: profile?.full_name ?? null,
+          reviewed_at: new Date().toISOString(),
         })
         .eq('id', r.id)
       if (retErr) throw retErr
@@ -157,8 +158,9 @@ export default function ReturnedDrinksTab() {
         .from('returns_log')
         .update({
           status: 'manager_rejected',
-          manager_approved_by: profile?.full_name,
-          manager_approved_at: new Date().toISOString(),
+          reviewed: true,
+          reviewed_by_name: profile?.full_name ?? null,
+          reviewed_at: new Date().toISOString(),
         })
         .eq('id', r.id)
       if (retErr) throw retErr
