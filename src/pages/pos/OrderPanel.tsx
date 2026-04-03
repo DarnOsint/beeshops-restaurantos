@@ -609,7 +609,7 @@ export default function OrderPanel({
         </div>
 
         {/* Takeaway packs for table orders */}
-        {packSizes.length > 0 && orderItems.some((i) => !i._existing) && (
+        {packSizes.length > 0 && (
           <div className="px-3 py-2 border-t border-gray-800 bg-gray-900 shrink-0">
             <button
               onClick={() => setShowPacks(!showPacks)}
