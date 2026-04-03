@@ -595,18 +595,20 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     setProcessing(true)
     try {
       // Verify total against server-side order_items sum before processing
-      // Prevents client-side total manipulation
+      // Excludes returned/return-requested items from the billable total
       const { data: serverItems } = await supabase
         .from('order_items')
-        .select('total_price')
+        .select('total_price, return_requested, return_accepted')
         .eq('order_id', order.id)
       if (serverItems && serverItems.length > 0) {
-        const serverTotal = serverItems.reduce(
-          (s: number, i: { total_price: number }) => s + (i.total_price || 0),
-          0
-        )
-        if (Math.abs(serverTotal - order.total_amount) > 1) {
-          // Total mismatch — use the server total
+        const serverTotal = serverItems
+          .filter(
+            (i: { return_requested?: boolean; return_accepted?: boolean }) =>
+              !i.return_requested && !i.return_accepted
+          )
+          .reduce((s: number, i: { total_price: number }) => s + (i.total_price || 0), 0)
+        if (Math.abs(serverTotal - total) > 1) {
+          // Update order total to reflect actual billable amount
           await supabase.from('orders').update({ total_amount: serverTotal }).eq('id', order.id)
           setOrder({ ...order, total_amount: serverTotal })
         }

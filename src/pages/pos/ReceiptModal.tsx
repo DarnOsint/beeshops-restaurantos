@@ -43,15 +43,25 @@ export default function ReceiptModal({
 
   const orderRef = `BSP-${String(order.id).slice(0, 8).toUpperCase()}`
 
-  const subtotal = items.reduce(
+  // Exclude returned/return-requested items from totals
+  const billableItems = items.filter(
+    (i) =>
+      !(i as unknown as { return_accepted?: boolean }).return_accepted &&
+      !(i as unknown as { return_requested?: boolean }).return_requested
+  )
+  const returnedDisplayItems = items.filter(
+    (i) =>
+      (i as unknown as { return_accepted?: boolean }).return_accepted ||
+      (i as unknown as { return_requested?: boolean }).return_requested
+  )
+  const subtotal = billableItems.reduce(
     (sum, i) =>
       sum +
       ((i as unknown as { total_price?: number }).total_price || 0) +
       ((i as unknown as { extra_charge?: number }).extra_charge || 0),
     0
   )
-  // Total is order.total_amount (what was actually charged)
-  const total = (order as unknown as { total_amount?: number }).total_amount || subtotal
+  const total = subtotal
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(`${window.location.origin}/receipt/${order.id}`)}&color=000000&bgcolor=ffffff`
 
   const handleThermalPrint = async () => {
@@ -461,7 +471,7 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
                   <span style={{ width: '64px', textAlign: 'right' }}>TOTAL</span>
                 </div>
                 <div style={{ borderTop: '1px solid #000', margin: '3px 0' }} />
-                {items.map((item, i) => (
+                {billableItems.map((item, i) => (
                   <div
                     key={i}
                     style={{
@@ -485,6 +495,27 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
                     </span>
                   </div>
                 ))}
+                {returnedDisplayItems.length > 0 &&
+                  returnedDisplayItems.map((item, i) => (
+                    <div
+                      key={`ret-${i}`}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '10px',
+                        margin: '2px 0',
+                        color: '#999',
+                        textDecoration: 'line-through',
+                      }}
+                    >
+                      <span style={{ flex: 1 }}>
+                        {(item as unknown as { menu_items?: { name: string } }).menu_items?.name ||
+                          item.id}{' '}
+                        [RETURNED]
+                      </span>
+                      <span style={{ width: '64px', textAlign: 'right' }}>₦0</span>
+                    </div>
+                  ))}
                 <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
                 {[['Subtotal', `₦${subtotal.toLocaleString()}`]].map(([l, v]) => (
                   <div
@@ -666,7 +697,7 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
                 <div style={{ fontWeight: 'bold', fontSize: '10px', marginBottom: '4px' }}>
                   ITEMS ORDERED
                 </div>
-                {items.map((item, i) => (
+                {billableItems.map((item, i) => (
                   <div
                     key={i}
                     style={{
@@ -683,6 +714,27 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
                     <span style={{ fontWeight: 'bold' }}>x{item.quantity}</span>
                   </div>
                 ))}
+                {returnedDisplayItems.length > 0 &&
+                  returnedDisplayItems.map((item, i) => (
+                    <div
+                      key={`wret-${i}`}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '11px',
+                        margin: '2px 0',
+                        color: '#999',
+                        textDecoration: 'line-through',
+                      }}
+                    >
+                      <span style={{ flex: 1 }}>
+                        {(item as unknown as { menu_items?: { name: string } }).menu_items?.name ||
+                          item.id}{' '}
+                        [RETURNED]
+                      </span>
+                      <span>x{item.quantity}</span>
+                    </div>
+                  ))}
                 <div style={{ borderTop: '2px solid #000', margin: '6px 0' }} />
                 {[['Subtotal', `₦${subtotal.toLocaleString()}`]].map(([l, v]) => (
                   <div
