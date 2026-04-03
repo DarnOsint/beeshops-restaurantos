@@ -11,6 +11,7 @@ import {
   Users,
   AlertTriangle,
   CheckCircle,
+  Printer,
 } from 'lucide-react'
 import {
   LineChart,
@@ -132,6 +133,117 @@ export default function OverviewTab({
   const totalReceived = totalCashCollected + totalBankReceived + totalPOSReceived
   const expectedRevenue = summary.total
   const shortfall = expectedRevenue - totalReceived - totalDebts - totalPayouts
+
+  const printDailySummary = () => {
+    const W = 40
+    const div = '-'.repeat(W)
+    const sol = '='.repeat(W)
+    const row = (l: string, r: string) => {
+      const left = l.substring(0, W - r.length - 1)
+      return left + ' '.repeat(Math.max(1, W - left.length - r.length)) + r
+    }
+    const ctr = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
+    const fmtDate = new Date(reconDate).toLocaleDateString('en-NG', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
+    const lines = [
+      '',
+      ctr("BEESHOP'S PLACE"),
+      ctr('DAILY RECONCILIATION'),
+      div,
+      row('Date:', fmtDate),
+      row('Printed:', new Date().toLocaleString('en-NG')),
+      div,
+      ctr('SALES SUMMARY'),
+      div,
+      row('Gross Revenue:', `N${summary.total.toLocaleString()}`),
+      row('Net Revenue:', `N${netRevenue.toLocaleString()}`),
+      row('Total Orders:', String(summary.orders)),
+      row('Avg Order Value:', `N${summary.avgOrder.toLocaleString()}`),
+      div,
+      ctr('PAYMENT BREAKDOWN'),
+      div,
+      row('Cash:', `N${summary.cash.toLocaleString()}`),
+      row('Bank POS:', `N${summary.card.toLocaleString()}`),
+      row('Bank Transfer:', `N${summary.transfer.toLocaleString()}`),
+      row('Credit:', `N${summary.credit.toLocaleString()}`),
+      row('Split:', `N${summary.split.toLocaleString()}`),
+      div,
+      ctr('STAFF SALES'),
+      div,
+      ...waitronStats.map((w) => row(w.name, `N${w.revenue.toLocaleString()} (${w.orders})`)),
+      div,
+      ctr('CASH COLLECTED'),
+      div,
+      ...Object.entries(recon.cashCollected)
+        .filter(([, v]) => v > 0)
+        .map(([name, amt]) => row(name, `N${amt.toLocaleString()}`)),
+      row('TOTAL CASH:', `N${totalCashCollected.toLocaleString()}`),
+      div,
+      ctr('BANK TRANSFERS RECEIVED'),
+      div,
+      ...Object.entries(recon.bankEntries)
+        .filter(([, v]) => v > 0)
+        .map(([name, amt]) => row(name, `N${amt.toLocaleString()}`)),
+      row('TOTAL BANK:', `N${totalBankReceived.toLocaleString()}`),
+      div,
+      ctr('POS RECEIPTS'),
+      div,
+      ...Object.entries(recon.posEntries)
+        .filter(([, v]) => v > 0)
+        .map(([name, amt]) => row(name, `N${amt.toLocaleString()}`)),
+      row('TOTAL POS:', `N${totalPOSReceived.toLocaleString()}`),
+      div,
+      ctr('EXPENSES & PAYOUTS'),
+      div,
+      row('Total Payouts:', `N${totalPayouts.toLocaleString()}`),
+      div,
+      ...(recon.debts.length > 0
+        ? [
+            ctr('OUTSTANDING DEBTS'),
+            div,
+            ...recon.debts
+              .filter((d) => d.amount > 0)
+              .map((d) => row(`${d.name}: ${d.note || ''}`, `N${d.amount.toLocaleString()}`)),
+            row('TOTAL DEBTS:', `N${totalDebts.toLocaleString()}`),
+            div,
+          ]
+        : []),
+      sol,
+      ctr('END OF DAY RECONCILIATION'),
+      sol,
+      row('Total Sales (POS):', `N${expectedRevenue.toLocaleString()}`),
+      row('Total Received:', `N${totalReceived.toLocaleString()}`),
+      row('Payouts:', `N${totalPayouts.toLocaleString()}`),
+      row('Debts:', `N${totalDebts.toLocaleString()}`),
+      row('Accounted For:', `N${(totalReceived + totalDebts + totalPayouts).toLocaleString()}`),
+      sol,
+      row(
+        shortfall > 0 ? 'SHORTFALL:' : shortfall < 0 ? 'SURPLUS:' : 'BALANCED:',
+        `N${Math.abs(shortfall).toLocaleString()}`
+      ),
+      sol,
+      '',
+      ctr('*** END OF REPORT ***'),
+      '',
+    ].join('\n')
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Daily Recon — ${fmtDate}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;color:#000;background:#fff;width:80mm;padding:4mm;white-space:pre}@media print{body{width:80mm}@page{margin:0;size:80mm auto}}</style></head><body>${lines}</body></html>`
+    const w = window.open('', '_blank', 'width=500,height=800')
+    if (!w) return
+    w.document.open('text/html', 'replace')
+    w.document.write(html)
+    w.document.close()
+    w.onload = () =>
+      setTimeout(() => {
+        try {
+          w.print()
+        } catch {
+          /* */
+        }
+      }, 200)
+  }
 
   const cards = [
     {
@@ -268,6 +380,12 @@ export default function OverviewTab({
               className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs px-3 py-1.5 rounded-lg transition-colors"
             >
               <Save size={12} /> {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              onClick={printDailySummary}
+              className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Printer size={12} /> Print
             </button>
           </div>
         </div>
