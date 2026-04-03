@@ -656,8 +656,9 @@ export default function POS() {
         const newItems = items.map((item) => ({
           id: crypto.randomUUID(),
           order_id: activeOrder.id,
-          menu_item_id:
-            (item as unknown as { menu_item_id?: string | null }).menu_item_id ?? item.id,
+          menu_item_id: Object.prototype.hasOwnProperty.call(item, 'menu_item_id')
+            ? (item as unknown as { menu_item_id: string | null }).menu_item_id
+            : item.id,
           quantity: item.quantity,
           unit_price: item.price,
           total_price: item.total,
@@ -770,8 +771,9 @@ export default function POS() {
         ...items.map((item) => ({
           id: crypto.randomUUID(),
           order_id: (newOrder as Order).id,
-          menu_item_id:
-            (item as unknown as { menu_item_id?: string | null }).menu_item_id ?? item.id,
+          menu_item_id: Object.prototype.hasOwnProperty.call(item, 'menu_item_id')
+            ? (item as unknown as { menu_item_id: string | null }).menu_item_id
+            : item.id,
           quantity: item.quantity,
           unit_price: item.price,
           total_price: item.total,

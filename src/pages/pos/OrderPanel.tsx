@@ -394,7 +394,7 @@ export default function OrderPanel({
       const allItems = [
         ...newItems,
         ...packItems.map((p) => ({
-          id: crypto.randomUUID(),
+          id: `takeaway_pack:${p.id}`,
           name: `Takeaway Pack — ${p.name}`,
           price: p.price,
           quantity: p.qty,
@@ -403,7 +403,7 @@ export default function OrderPanel({
           modifier_notes: `Takeaway Pack — ${p.name}`,
           _existing: false,
           _newId: `takeaway_pack:${p.id}:${crypto.randomUUID()}`,
-          // Store as custom line with no menu_item_id to avoid FK issues
+          // Preserve explicit null to satisfy menu_item_id null paths
           menu_item_id: null,
           unit_price: p.price,
           total_price: p.qty * p.price,
