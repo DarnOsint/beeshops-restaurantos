@@ -20,6 +20,7 @@ interface Shift {
   role: string
   clock_in: string
   clock_out?: string | null
+  confirmed_at?: string | null
   duration_minutes?: number | null
   date?: string
   pos_machine?: string | null
@@ -287,34 +288,49 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
               <p>No staff currently on shift</p>
             </div>
           ) : (
-            activeShifts.map((shift) => (
-              <div
-                key={shift.id}
-                className="flex items-center justify-between bg-green-500/10 border border-green-500/20 rounded-xl p-3"
-              >
-                <div>
-                  <p className="text-white font-medium">{shift.staff_name}</p>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-gray-400 text-xs capitalize">{shift.role}</p>
-                    {shift.pos_machine && (
-                      <span className="flex items-center gap-1 text-cyan-400 text-xs">
-                        <Monitor size={10} />
-                        {shift.pos_machine}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-green-400 text-xs mt-0.5 flex items-center gap-1">
-                    <Timer size={10} /> Since {formatTime(shift.clock_in)}
-                  </p>
-                </div>
-                <button
-                  onClick={() => clockOut(shift)}
-                  className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg px-3 py-1.5 text-sm transition-colors"
+            activeShifts.map((shift) => {
+              const confirmed = !!shift.confirmed_at
+              return (
+                <div
+                  key={shift.id}
+                  className={`flex items-center justify-between rounded-xl p-3 ${confirmed ? 'bg-green-500/10 border border-green-500/20' : 'bg-amber-500/10 border border-amber-500/30'}`}
                 >
-                  <UserX size={14} /> Clock Out
-                </button>
-              </div>
-            ))
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-white font-medium">{shift.staff_name}</p>
+                      {!confirmed && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-semibold">
+                          AWAITING LOGIN
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-gray-400 text-xs capitalize">{shift.role}</p>
+                      {shift.pos_machine && (
+                        <span className="flex items-center gap-1 text-cyan-400 text-xs">
+                          <Monitor size={10} />
+                          {shift.pos_machine}
+                        </span>
+                      )}
+                    </div>
+                    <p
+                      className={`text-xs mt-0.5 flex items-center gap-1 ${confirmed ? 'text-green-400' : 'text-amber-400'}`}
+                    >
+                      <Timer size={10} />
+                      {confirmed
+                        ? 'Logged in at ' + formatTime(shift.confirmed_at || shift.clock_in)
+                        : 'Clocked in at ' + formatTime(shift.clock_in) + ' — not yet logged in'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => clockOut(shift)}
+                    className="flex items-center gap-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-lg px-3 py-1.5 text-sm transition-colors"
+                  >
+                    <UserX size={14} /> Clock Out
+                  </button>
+                </div>
+              )
+            })
           )}
         </div>
       )}
@@ -442,8 +458,19 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
                     )}
                   </div>
                   <p className="text-gray-500 text-xs mt-0.5">
-                    {formatTime(entry.clock_in)} →{' '}
+                    {formatTime(entry.clock_in)}
+                    {(entry as Shift).confirmed_at &&
+                    (entry as Shift).confirmed_at !== entry.clock_in ? (
+                      <span className="text-amber-400">
+                        {' '}
+                        (logged in {formatTime((entry as Shift).confirmed_at as string)})
+                      </span>
+                    ) : null}
+                    {' → '}
                     {entry.clock_out ? formatTime(entry.clock_out) : 'Still on shift'}
+                    {!(entry as Shift).confirmed_at && !entry.clock_out ? (
+                      <span className="text-amber-400 ml-1"> not confirmed</span>
+                    ) : null}
                   </p>
                 </div>
                 <div className="text-right flex flex-col items-end gap-1.5">

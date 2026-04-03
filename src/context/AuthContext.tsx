@@ -142,6 +142,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!error && data) {
         setProfile(data as Profile)
         setLoading(false)
+        // Auto-confirm attendance on login (proves staff is physically present)
+        void supabase
+          .from('attendance')
+          .update({ confirmed_at: new Date().toISOString() })
+          .eq('staff_id', userId)
+          .is('clock_out', null)
+          .is('confirmed_at', null)
         return
       }
       if (attempt < 2) await new Promise((r) => setTimeout(r, 500))
