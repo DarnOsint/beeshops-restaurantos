@@ -118,7 +118,8 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
       })
   }, [])
 
-  // Load sold quantities from POS
+  // Load sold quantities from POS — count all items in open/paid orders
+  // (bar items are removed from chiller the moment the order is confirmed)
   const loadSoldQty = useCallback(async (d: string) => {
     const dayStart = new Date(d)
     dayStart.setHours(0, 0, 0, 0)
@@ -126,20 +127,25 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     dayEnd.setHours(23, 59, 59, 999)
     const { data } = await supabase
       .from('order_items')
-      .select('quantity, return_accepted, menu_items(name)')
+      .select('quantity, status, return_accepted, menu_items(name), orders(status)')
       .eq('destination', 'bar')
-      .eq('status', 'delivered')
       .gte('created_at', dayStart.toISOString())
       .lte('created_at', dayEnd.toISOString())
     if (!data) return
     const map: Record<string, number> = {}
     for (const item of data as unknown as Array<{
       quantity: number
+      status: string
       return_accepted?: boolean
       menu_items: { name: string } | null
+      orders: { status: string } | null
     }>) {
-      // Exclude returned items from sold count
+      // Exclude returned items
       if (item.return_accepted) continue
+      // Exclude items from cancelled orders
+      if (item.orders?.status === 'cancelled') continue
+      // Exclude cancelled order items
+      if (item.status === 'cancelled') continue
       const name = item.menu_items?.name
       if (name) map[name] = (map[name] || 0) + item.quantity
     }
@@ -152,43 +158,20 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
       setLoading(true)
       await loadSoldQty(d)
 
-      // Load previous day's data to compute carry-over opening stock
-      const prevDate = new Date(d)
-      prevDate.setDate(prevDate.getDate() - 1)
-      const prevDateStr = prevDate.toISOString().slice(0, 10)
+      // Find the most recent stock entry ever saved for each item (no date limit)
       const { data: prevData } = await supabase
         .from('bar_chiller_stock')
-        .select('item_name, opening_qty, received_qty, sold_qty, void_qty, closing_qty')
-        .eq('date', prevDateStr)
+        .select('date, item_name, opening_qty, received_qty, sold_qty, void_qty, closing_qty')
+        .lt('date', d)
+        .order('date', { ascending: false })
 
-      // Also load previous day's POS sold for accurate computation
-      const prevDayStart = new Date(prevDateStr)
-      prevDayStart.setHours(0, 0, 0, 0)
-      const prevDayEnd = new Date(prevDateStr)
-      prevDayEnd.setHours(23, 59, 59, 999)
-      const { data: prevSoldData } = await supabase
-        .from('order_items')
-        .select('quantity, return_accepted, menu_items(name)')
-        .eq('destination', 'bar')
-        .eq('status', 'delivered')
-        .gte('created_at', prevDayStart.toISOString())
-        .lte('created_at', prevDayEnd.toISOString())
-      const prevSoldMap: Record<string, number> = {}
-      if (prevSoldData) {
-        for (const item of prevSoldData as unknown as Array<{
-          quantity: number
-          return_accepted?: boolean
-          menu_items: { name: string } | null
-        }>) {
-          if (item.return_accepted) continue
-          const name = item.menu_items?.name
-          if (name) prevSoldMap[name] = (prevSoldMap[name] || 0) + item.quantity
-        }
-      }
-
+      // For each item, find the most recent entry and compute its closing
       const prevClosing: Record<string, number> = {}
+      const seenItems = new Set<string>()
       if (prevData) {
+        // Data is sorted by date desc — first occurrence of each item is the most recent
         for (const row of prevData as Array<{
+          date: string
           item_name: string
           opening_qty: number
           received_qty: number
@@ -196,15 +179,17 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
           void_qty: number
           closing_qty: number
         }>) {
+          if (seenItems.has(row.item_name)) continue
+          seenItems.add(row.item_name)
+
           if (row.closing_qty > 0) {
-            // Use manual closing if entered
+            // Use the manually entered closing count
             prevClosing[row.item_name] = row.closing_qty
           } else {
-            // Auto-compute: opening + received - actual_sold - void
-            const actualSold = prevSoldMap[row.item_name] || row.sold_qty || 0
+            // Auto-compute from saved data: opening + received - sold(saved) - void
             prevClosing[row.item_name] = Math.max(
               0,
-              row.opening_qty + row.received_qty - actualSold - row.void_qty
+              row.opening_qty + row.received_qty - (row.sold_qty || 0) - row.void_qty
             )
           }
         }
@@ -226,18 +211,22 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
       // Build stock data for all bar drinks
       const stock: Record<string, StockEntry> = {}
       for (const drink of menuDrinks) {
+        const carryOver = prevClosing[drink.name] || 0
         if (existing[drink.name]) {
           const entry = { ...existing[drink.name] }
-          // If opening stock is 0 but previous day has a closing, carry it over
-          if (entry.opening_qty === 0 && prevClosing[drink.name] > 0) {
-            entry.opening_qty = prevClosing[drink.name]
+          // Always set opening to carry-over if entry's opening is 0
+          if (entry.opening_qty === 0 && carryOver > 0) {
+            entry.opening_qty = carryOver
           }
+          // Always reset closing to 0 on load — closing is always auto-computed
+          // from live POS data. Barman sets it fresh via stepper only for physical counts.
+          entry.closing_qty = 0
           stock[drink.name] = entry
         } else {
           stock[drink.name] = {
             item_name: drink.name,
             unit: drink.unit,
-            opening_qty: prevClosing[drink.name] || 0,
+            opening_qty: carryOver,
             received_qty: 0,
             sold_qty: 0,
             void_qty: 0,
@@ -270,22 +259,21 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     setSaving(true)
     let saved = 0
     for (const [name, entry] of Object.entries(stockData)) {
-      // Only save entries that have any activity
+      // Save entries that have any activity (including POS sold)
+      const actualSoldCheck = soldMap[name] || 0
       if (
         entry.opening_qty === 0 &&
         entry.received_qty === 0 &&
         entry.closing_qty === 0 &&
         entry.void_qty === 0 &&
+        actualSoldCheck === 0 &&
         !entry.id
       )
         continue
 
       const actualSold = soldMap[name] || entry.sold_qty || 0
-      // Auto-compute closing stock: opening + received - sold - void
-      const autoClosing = Math.max(
-        0,
-        entry.opening_qty + entry.received_qty - actualSold - entry.void_qty
-      )
+      // Only save closing_qty if the barman manually entered a physical count.
+      // Keep it as 0 otherwise — views will always auto-compute from live POS data.
       const row = {
         date,
         item_name: name,
@@ -294,7 +282,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         received_qty: entry.received_qty,
         sold_qty: actualSold,
         void_qty: entry.void_qty,
-        closing_qty: entry.closing_qty > 0 ? entry.closing_qty : autoClosing,
+        closing_qty: entry.closing_qty,
         note: entry.note || null,
         recorded_by: profile?.id,
         updated_at: new Date().toISOString(),
@@ -412,18 +400,17 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
             {drinks.map((drink) => {
               const isExpanded = expanded === drink.name
               const sold = drink.autoSold || drink.sold_qty || 0
-              const expected = Math.max(
-                0,
-                drink.opening_qty + drink.received_qty - sold - drink.void_qty
-              )
-              // Use manual closing if entered, otherwise auto-compute
+              const rawExpected = drink.opening_qty + drink.received_qty - sold - drink.void_qty
+              const expected = Math.max(0, rawExpected)
+              // closing_qty is only non-zero if barman sets it this session via stepper
               const effectiveClosing = drink.closing_qty > 0 ? drink.closing_qty : expected
-              const variance = expected - effectiveClosing
+              const variance = drink.closing_qty > 0 ? expected - effectiveClosing : 0
               const hasActivity =
                 drink.opening_qty > 0 ||
                 drink.received_qty > 0 ||
                 effectiveClosing > 0 ||
-                drink.void_qty > 0
+                drink.void_qty > 0 ||
+                sold > 0
 
               return (
                 <div
@@ -443,15 +430,12 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
                   >
                     <div className="flex-1 min-w-0">
                       <p className="text-white text-sm font-semibold truncate">{drink.name}</p>
-                      {hasActivity && (
+                      {hasActivity ? (
                         <p className="text-gray-500 text-xs">
                           Open: {drink.opening_qty} + Rcvd: {drink.received_qty} − Sold: {sold} =
                           Left: {effectiveClosing}
-                          {drink.closing_qty > 0 && drink.closing_qty !== expected && (
-                            <span className="ml-1">| Manual: {drink.closing_qty}</span>
-                          )}
                         </p>
-                      )}
+                      ) : null}
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
                       {hasActivity && variance !== 0 && drink.closing_qty > 0 && (
@@ -475,12 +459,15 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
                     <div className="px-4 pb-4 pt-2 border-t border-gray-800 space-y-4">
                       {/* Steppers row */}
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 justify-items-center">
-                        <Stepper
-                          label="Opening"
-                          value={drink.opening_qty}
-                          onChange={(v) => updateField(drink.name, 'opening_qty', v)}
-                          color="text-white"
-                        />
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-gray-500 text-[9px] uppercase tracking-wider">
+                            Opening
+                          </span>
+                          <div className="w-12 h-9 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center text-sm font-bold text-white">
+                            {drink.opening_qty}
+                          </div>
+                          <span className="text-gray-600 text-[8px]">auto from yesterday</span>
+                        </div>
                         <Stepper
                           label="Received"
                           value={drink.received_qty}
@@ -507,8 +494,23 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
                         <span className="text-blue-400 text-sm font-bold">{sold}</span>
                       </div>
 
+                      {/* Warning if formula produces negative */}
+                      {rawExpected < 0 && (
+                        <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                          <p className="text-red-400 text-xs font-medium">
+                            ⚠ More sold ({sold}) than available ({drink.opening_qty} +{' '}
+                            {drink.received_qty})
+                          </p>
+                          <p className="text-red-400/70 text-xs mt-0.5">
+                            {drink.opening_qty === 0
+                              ? 'No previous stock data found — this may be the first time tracking this item.'
+                              : 'Stock may have been added without recording it as Received.'}
+                          </p>
+                        </div>
+                      )}
+
                       {/* Expected vs actual */}
-                      {drink.closing_qty > 0 && (
+                      {drink.closing_qty > 0 && rawExpected >= 0 && (
                         <div className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
                           <span className="text-gray-400 text-xs">Expected remaining</span>
                           <span

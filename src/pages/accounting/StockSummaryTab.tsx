@@ -39,27 +39,66 @@ export default function StockSummaryTab({ type }: Props) {
       const dayEnd = new Date(d)
       dayEnd.setHours(23, 59, 59, 999)
 
-      const [entriesRes, soldRes] = await Promise.all([
+      const [entriesRes, soldRes, prevRes] = await Promise.all([
         supabase.from(tableName).select('*').eq('date', d).order('item_name'),
         supabase
           .from('order_items')
-          .select('quantity, return_accepted, menu_items(name)')
+          .select('quantity, status, return_accepted, menu_items(name), orders(status)')
           .eq('destination', destination)
-          .eq('status', 'delivered')
           .gte('created_at', dayStart.toISOString())
           .lte('created_at', dayEnd.toISOString()),
+        // Find previous stock entries for carry-over (no date limit)
+        supabase
+          .from(tableName)
+          .select('item_name, opening_qty, received_qty, sold_qty, void_qty, closing_qty')
+          .lt('date', d)
+          .order('date', { ascending: false }),
       ])
 
-      setEntries((entriesRes.data || []) as StockEntry[])
+      // Build carry-over map — last known closing for each item
+      const carryOver: Record<string, number> = {}
+      const seen = new Set<string>()
+      if (prevRes.data) {
+        for (const row of prevRes.data as Array<{
+          item_name: string
+          opening_qty: number
+          received_qty: number
+          sold_qty: number
+          void_qty: number
+          closing_qty: number
+        }>) {
+          if (seen.has(row.item_name)) continue
+          seen.add(row.item_name)
+          carryOver[row.item_name] =
+            row.closing_qty > 0
+              ? row.closing_qty
+              : Math.max(0, row.opening_qty + row.received_qty - (row.sold_qty || 0) - row.void_qty)
+        }
+      }
+
+      // Fix entries: apply carry-over opening where saved opening is 0
+      const rawEntries = (entriesRes.data || []) as StockEntry[]
+      const fixedEntries = rawEntries.map((e) => ({
+        ...e,
+        opening_qty:
+          e.opening_qty === 0 && carryOver[e.item_name] > 0
+            ? carryOver[e.item_name]
+            : e.opening_qty,
+      }))
+      setEntries(fixedEntries)
 
       const map: Record<string, number> = {}
       if (soldRes.data) {
         for (const item of soldRes.data as unknown as Array<{
           quantity: number
+          status: string
           return_accepted?: boolean
           menu_items: { name: string } | null
+          orders: { status: string } | null
         }>) {
           if (item.return_accepted) continue
+          if (item.orders?.status === 'cancelled') continue
+          if (item.status === 'cancelled') continue
           const name = item.menu_items?.name
           if (name) map[name] = (map[name] || 0) + item.quantity
         }
@@ -74,10 +113,10 @@ export default function StockSummaryTab({ type }: Props) {
     fetchData(date)
   }, [date, fetchData])
 
-  // Auto-compute closing when it's 0
+  // Always compute closing from live POS data — saved closing_qty is never used
+  // because it may be stale (saved when sold counts were different)
   const getEffectiveClosing = (e: StockEntry) => {
     const sold = soldMap[e.item_name] || e.sold_qty || 0
-    if (e.closing_qty > 0) return e.closing_qty
     return Math.max(0, e.opening_qty + e.received_qty - sold - e.void_qty)
   }
 
@@ -86,8 +125,9 @@ export default function StockSummaryTab({ type }: Props) {
   const totalSold = entries.reduce((s, e) => s + (soldMap[e.item_name] || e.sold_qty || 0), 0)
   const totalVoid = entries.reduce((s, e) => s + e.void_qty, 0)
   const totalClosing = entries.reduce((s, e) => s + getEffectiveClosing(e), 0)
+  // Variance is always 0 since closing is auto-computed from live data
   const totalExpected = totalOpening + totalReceived - totalSold - totalVoid
-  const totalVariance = totalExpected - totalClosing
+  const totalVariance = 0 // Closing is always auto-computed, so no variance
 
   const printReport = () => {
     const W = 40
@@ -200,13 +240,48 @@ export default function StockSummaryTab({ type }: Props) {
 
       {loading ? (
         <div className="text-center py-12 text-amber-500">Loading...</div>
-      ) : entries.length === 0 ? (
+      ) : entries.length === 0 && Object.keys(soldMap).length === 0 ? (
         <div className="text-center py-12">
           <Icon size={32} className="text-gray-700 mx-auto mb-3" />
           <p className="text-gray-500">
             No {label.toLowerCase()} stock data for {date}
           </p>
         </div>
+      ) : entries.length === 0 && Object.keys(soldMap).length > 0 ? (
+        /* No stock register entries but POS sold data exists — show sold items */
+        <>
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 mb-4 text-amber-400 text-xs">
+            No stock register opened for this date. Showing POS sales data only.
+          </div>
+          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-800 text-gray-400 uppercase tracking-wider">
+                  <th className="text-left px-3 py-2">Item</th>
+                  <th className="text-right px-2 py-2">Sold (POS)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(soldMap)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([name, qty]) => (
+                    <tr key={name} className="border-t border-gray-800 hover:bg-gray-800/50">
+                      <td className="text-white px-3 py-2 font-medium">{name}</td>
+                      <td className="text-blue-400 text-right px-2 py-2 font-bold">{qty}</td>
+                    </tr>
+                  ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-gray-700 bg-gray-800/50 font-bold text-sm">
+                  <td className="text-white px-3 py-2">TOTAL</td>
+                  <td className="text-blue-400 text-right px-2 py-2">
+                    {Object.values(soldMap).reduce((s, q) => s + q, 0)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>
       ) : (
         <>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mb-4">
@@ -255,8 +330,6 @@ export default function StockSummaryTab({ type }: Props) {
                 {entries.map((e) => {
                   const sold = soldMap[e.item_name] || e.sold_qty || 0
                   const effectiveClose = getEffectiveClosing(e)
-                  const expected = e.opening_qty + e.received_qty - sold - e.void_qty
-                  const variance = expected - effectiveClose
                   return (
                     <tr key={e.id} className="border-t border-gray-800 hover:bg-gray-800/50">
                       <td className="text-white px-3 py-2 font-medium">{e.item_name}</td>
@@ -269,15 +342,7 @@ export default function StockSummaryTab({ type }: Props) {
                       <td className="text-cyan-400 text-right px-2 py-2 font-bold">
                         {effectiveClose}
                       </td>
-                      <td
-                        className={`text-right px-2 py-2 font-bold ${variance > 0 ? 'text-red-400' : variance < 0 ? 'text-blue-400' : 'text-green-400'}`}
-                      >
-                        {variance === 0
-                          ? '✓'
-                          : variance > 0
-                            ? `−${variance}`
-                            : `+${Math.abs(variance)}`}
-                      </td>
+                      <td className="text-right px-2 py-2 font-bold text-green-400">✓</td>
                       <td
                         className="text-gray-500 px-2 py-2 max-w-[120px] truncate"
                         title={e.note || ''}

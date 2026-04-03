@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import type { MenuItem, ItemDestination } from '../../types'
 import { useToast } from '../../context/ToastContext'
-import { printToStation, hasStationPrinters } from '../../lib/networkPrinter'
+import { printToStation, getStationPrinterUrl } from '../../lib/networkPrinter'
 import { buildOrderTicket, type TicketItem } from '../../lib/orderTicket'
 
 interface OrderItemLocal {
@@ -236,22 +236,24 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         if (error) throw error
       }
       await depleteInventory(orderItems)
-      // Auto-print station tickets
-      if (hasStationPrinters()) {
-        const stations: ItemDestination[] = ['kitchen', 'griller']
-        for (const station of stations) {
-          const stationItems: TicketItem[] = orderItems
-            .filter((i) => (i.menu_categories?.destination || 'bar') === station)
-            .map((i) => ({ quantity: i.quantity, name: i.name, modifier_notes: null }))
-          if (stationItems.length === 0) continue
-          const ticket = buildOrderTicket({
-            station,
-            tableName: type === 'takeaway' ? `Takeaway — ${customerName || ''}` : 'Counter',
-            orderRef: (order as { id: string }).id.slice(0, 8).toUpperCase(),
-            staffName: profile?.full_name || '',
-            items: stationItems,
-            createdAt: new Date().toISOString(),
-          })
+      // Auto-print station tickets — always 2 copies for kitchen/griller
+      const stations: ItemDestination[] = ['kitchen', 'griller']
+      for (const station of stations) {
+        if (!getStationPrinterUrl(station)) continue
+        const stationItems: TicketItem[] = orderItems
+          .filter((i) => (i.menu_categories?.destination || 'bar') === station)
+          .map((i) => ({ quantity: i.quantity, name: i.name, modifier_notes: null }))
+        if (stationItems.length === 0) continue
+        const ticket = buildOrderTicket({
+          station,
+          tableName: type === 'takeaway' ? `Takeaway — ${customerName || ''}` : 'Counter',
+          orderRef: (order as { id: string }).id.slice(0, 8).toUpperCase(),
+          staffName: profile?.full_name || '',
+          items: stationItems,
+          createdAt: new Date().toISOString(),
+        })
+        // 2 copies for kitchen/griller
+        for (let c = 0; c < 2; c++) {
           printToStation(station, ticket).catch(() => {})
         }
       }

@@ -136,12 +136,39 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     const item = (order?.order_items || []).find((i) => i.id === itemId)
     if (!item) return
     const reason = returnReason || 'No reason given'
+    const itemDest =
+      (item as unknown as { menu_items?: { menu_categories?: { destination?: string } } })
+        .menu_items?.menu_categories?.destination ||
+      item.destination ||
+      'bar'
+
+    // Check station mode — if printer-only (no screen), auto-accept since nobody is there to approve
+    let autoAccept = false
+    if (itemDest === 'kitchen' || itemDest === 'griller') {
+      const { data: modeRow } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('id', 'station_modes')
+        .single()
+      if (modeRow?.value) {
+        try {
+          const modes = JSON.parse(modeRow.value)
+          if (modes[itemDest] === 'printer') autoAccept = true
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
     await supabase
       .from('order_items')
       .update({
         return_requested: true,
         return_reason: reason,
         return_requested_at: new Date().toISOString(),
+        ...(autoAccept
+          ? { return_accepted: true, return_accepted_at: new Date().toISOString() }
+          : {}),
       })
       .eq('id', itemId)
 
@@ -159,9 +186,30 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       waitron_id: profile?.id ?? null,
       waitron_name: profile?.full_name ?? null,
       return_reason: reason,
-      status: 'pending',
+      status: autoAccept ? 'bar_accepted' : 'pending',
       requested_at: new Date().toISOString(),
+      ...(autoAccept ? { resolved_at: new Date().toISOString() } : {}),
     })
+
+    // If auto-accepted, recalculate order total immediately
+    if (autoAccept) {
+      const { data: remaining } = await supabase
+        .from('order_items')
+        .select('total_price, return_accepted')
+        .eq('order_id', order.id)
+      const newTotal = (remaining || [])
+        .filter((r: { return_accepted?: boolean }) => !r.return_accepted)
+        .reduce((s: number, r: { total_price: number }) => s + (r.total_price || 0), 0)
+      await supabase
+        .from('orders')
+        .update({ total_amount: newTotal, updated_at: new Date().toISOString() })
+        .eq('id', order.id)
+      toast.success(
+        'Auto-accepted',
+        `${itemDest === 'kitchen' ? 'Kitchen' : 'Grill'} station is printer-only — return auto-accepted, awaiting manager approval`
+      )
+    }
+
     setReturningItemId(null)
     setReturnReason('')
     await refreshOrder()
@@ -1124,72 +1172,92 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
             </div>
           )}
 
-          {/* Returned items section */}
-          {(order?.order_items || []).some((i) => i.destination === 'bar') && (
+          {/* Returned items section — all destinations */}
+          {(order?.order_items || []).length > 0 && (
             <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
               <p className="text-gray-300 font-semibold text-sm mb-3">↩ Returned Items</p>
-              <div className="space-y-2">
-                {(order?.order_items || [])
-                  .filter((i) => i.destination === 'bar')
-                  .map((item) => {
-                    const isReturned = item.return_accepted
-                    const isPending = item.return_requested && !item.return_accepted
-                    const isRequesting = returningItemId === item.id
-                    return (
-                      <div
-                        key={item.id}
-                        className={`rounded-lg px-3 py-2 flex items-center justify-between gap-2 ${isReturned ? 'bg-red-500/10 border border-red-500/20' : isPending ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-gray-800'}`}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p
-                            className={`text-sm font-medium truncate ${isReturned ? 'line-through text-gray-500' : 'text-white'}`}
+              {['bar', 'kitchen', 'griller'].map((dest) => {
+                const destItems = (order?.order_items || []).filter((i) => {
+                  const itemDest =
+                    (
+                      i as unknown as {
+                        menu_items?: { menu_categories?: { destination?: string } }
+                      }
+                    ).menu_items?.menu_categories?.destination || i.destination
+                  return itemDest === dest
+                })
+                if (destItems.length === 0) return null
+                const destLabel = dest === 'bar' ? 'Bar' : dest === 'kitchen' ? 'Kitchen' : 'Grill'
+                return (
+                  <div key={dest} className="mb-3 last:mb-0">
+                    <p className="text-gray-500 text-xs uppercase tracking-wider mb-1.5">
+                      {destLabel}
+                    </p>
+                    <div className="space-y-2">
+                      {destItems.map((item) => {
+                        const isReturned = item.return_accepted
+                        const isPending = item.return_requested && !item.return_accepted
+                        const isRequesting = returningItemId === item.id
+                        return (
+                          <div
+                            key={item.id}
+                            className={`rounded-lg px-3 py-2 flex items-center justify-between gap-2 ${isReturned ? 'bg-red-500/10 border border-red-500/20' : isPending ? 'bg-amber-500/10 border border-amber-500/20' : 'bg-gray-800'}`}
                           >
-                            {item.quantity}x{' '}
-                            {item.menu_items?.name ||
-                              (item as unknown as { modifier_notes?: string }).modifier_notes ||
-                              'Item'}
-                          </p>
-                          {isPending && (
-                            <p className="text-amber-400 text-xs">
-                              ⏳ Awaiting bar confirmation...
-                            </p>
-                          )}
-                          {isReturned && (
-                            <p className="text-red-400 text-xs">
-                              ✓ Return accepted — excluded from total
-                            </p>
-                          )}
-                          {item.return_reason && (isPending || isReturned) && (
-                            <p className="text-gray-500 text-xs italic">"{item.return_reason}"</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {!isReturned && !isPending && !isRequesting && (
-                            <button
-                              onClick={() => setReturningItemId(item.id)}
-                              className="text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 px-2 py-1 rounded-lg transition-colors"
-                            >
-                              Mark Returned
-                            </button>
-                          )}
-                          {isPending && (
-                            <button
-                              onClick={() => cancelReturn(item.id)}
-                              className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-400 px-2 py-1 rounded-lg transition-colors"
-                            >
-                              Cancel
-                            </button>
-                          )}
-                          {isReturned && (
-                            <span className="text-red-400 text-xs font-bold">
-                              -N{(item.total_price || 0).toLocaleString()}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-              </div>
+                            <div className="flex-1 min-w-0">
+                              <p
+                                className={`text-sm font-medium truncate ${isReturned ? 'line-through text-gray-500' : 'text-white'}`}
+                              >
+                                {item.quantity}x{' '}
+                                {item.menu_items?.name ||
+                                  (item as unknown as { modifier_notes?: string }).modifier_notes ||
+                                  'Item'}
+                              </p>
+                              {isPending && (
+                                <p className="text-amber-400 text-xs">
+                                  ⏳ Awaiting {destLabel.toLowerCase()} confirmation...
+                                </p>
+                              )}
+                              {isReturned && (
+                                <p className="text-red-400 text-xs">
+                                  ✓ Return accepted — excluded from total
+                                </p>
+                              )}
+                              {item.return_reason && (isPending || isReturned) && (
+                                <p className="text-gray-500 text-xs italic">
+                                  "{item.return_reason}"
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {!isReturned && !isPending && !isRequesting && (
+                                <button
+                                  onClick={() => setReturningItemId(item.id)}
+                                  className="text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 px-2 py-1 rounded-lg transition-colors"
+                                >
+                                  Mark Returned
+                                </button>
+                              )}
+                              {isPending && (
+                                <button
+                                  onClick={() => cancelReturn(item.id)}
+                                  className="text-xs bg-gray-700 hover:bg-gray-600 text-gray-400 px-2 py-1 rounded-lg transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                              {isReturned && (
+                                <span className="text-red-400 text-xs font-bold">
+                                  -N{(item.total_price || 0).toLocaleString()}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
               {/* Inline reason input */}
               {returningItemId && (
                 <div className="mt-3 space-y-2">
@@ -1204,7 +1272,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
                       onClick={() => requestReturn(returningItemId)}
                       className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm font-semibold py-2 rounded-lg transition-colors"
                     >
-                      Send Return Request to Bar
+                      Send Return Request
                     </button>
                     <button
                       onClick={() => {

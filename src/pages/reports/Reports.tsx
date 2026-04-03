@@ -73,6 +73,7 @@ interface ItemStat {
   name: string
   quantity: number
   revenue: number
+  returned: number
 }
 interface StaffStat {
   name: string
@@ -132,6 +133,8 @@ interface Report {
   paidOrders: PaidOrder[]
   paidOrdersCount: number
   cancelledOrders: number
+  returnedItems: number
+  returnedValue: number
   avgOrderValue: number
   byPayment: { cash: number; bank_pos: number; transfer: number; credit: number; split: number }
   byCategory: CategoryStat[]
@@ -231,6 +234,7 @@ export default function Reports() {
         roomStaysRes,
         voidsRes,
         attendanceRes,
+        returnsRes,
       ] = await Promise.all([
         supabase
           .from('orders')
@@ -254,6 +258,11 @@ export default function Reports() {
         supabase.from('room_stays').select('*').gte('created_at', start).lte('created_at', end),
         supabase.from('void_log').select('*').gte('created_at', start).lte('created_at', end),
         supabase.from('attendance').select('*').gte('clock_in', start).lte('clock_in', end),
+        supabase
+          .from('returns_log')
+          .select('id, item_name, quantity, item_total, status, requested_at')
+          .gte('requested_at', start)
+          .lte('requested_at', end),
       ])
 
       const orders = (ordersRes.data || []) as PaidOrder[]
@@ -283,6 +292,25 @@ export default function Reports() {
       const roomStays = (roomStaysRes.data || []) as { status?: string; total_amount?: number }[]
       const voids = (voidsRes.data || []) as VoidEntry[]
       const attendance = (attendanceRes.data || []) as AttendanceEntry[]
+      const returnsData = (returnsRes.data || []) as Array<{
+        id: string
+        item_name: string
+        quantity: number
+        item_total: number
+        status: string
+        requested_at: string
+      }>
+      // Accepted returns (bar_accepted or accepted by manager)
+      const acceptedReturns = returnsData.filter(
+        (r) => r.status === 'accepted' || r.status === 'bar_accepted'
+      )
+      const returnedItems = acceptedReturns.reduce((s, r) => s + (r.quantity || 0), 0)
+      const returnedValue = acceptedReturns.reduce((s, r) => s + (r.item_total || 0), 0)
+      // Build return count per item name for return rate
+      const returnCountMap: Record<string, number> = {}
+      acceptedReturns.forEach((r) => {
+        returnCountMap[r.item_name] = (returnCountMap[r.item_name] || 0) + (r.quantity || 0)
+      })
 
       const grossRevenue = paidOrders.reduce((s, o) => s + (o.total_amount || 0), 0)
       const totalExpenses = payouts.reduce((s, p) => s + (p.amount || 0), 0)
@@ -323,10 +351,18 @@ export default function Reports() {
         .filter((i) => i.orders?.status === 'paid')
         .forEach((item) => {
           const n = item.menu_items?.name || 'Unknown'
-          if (!itemMap[n]) itemMap[n] = { name: n, quantity: 0, revenue: 0 }
+          if (!itemMap[n]) itemMap[n] = { name: n, quantity: 0, revenue: 0, returned: 0 }
           itemMap[n].quantity += item.quantity || 0
           itemMap[n].revenue += item.total_price || 0
         })
+      // Merge return counts into item stats
+      for (const [name, count] of Object.entries(returnCountMap)) {
+        if (itemMap[name]) {
+          itemMap[name].returned = count
+        } else {
+          itemMap[name] = { name, quantity: 0, revenue: 0, returned: count }
+        }
+      }
 
       const staffMap: Record<string, StaffStat> = {}
       paidOrders.forEach((o) => {
@@ -383,18 +419,16 @@ export default function Reports() {
         paidOrders,
         paidOrdersCount: paidOrders.length,
         cancelledOrders,
+        returnedItems,
+        returnedValue,
         avgOrderValue: paidOrders.length ? Math.round(grossRevenue / paidOrders.length) : 0,
         byPayment,
         byCategory: Object.values(categoryMap).sort((a, b) => b.revenue - a.revenue),
-        topItems: Object.values(itemMap)
-          .sort((a, b) => b.quantity - a.quantity)
-          .slice(0, 10),
+        topItems: Object.values(itemMap).sort((a, b) => b.quantity - a.quantity),
         staffPerformance: Object.values(staffMap).sort((a, b) => b.revenue - a.revenue),
         hourlyData: Object.values(hourMap).filter((h) => h.orders > 0),
         dailyBreakdown: Object.values(dayMap),
-        tableStats: Object.values(tableMap)
-          .sort((a, b) => b.revenue - a.revenue)
-          .slice(0, 10),
+        tableStats: Object.values(tableMap).sort((a, b) => b.revenue - a.revenue),
         totalDebt: debtors.reduce((s, d) => s + (d.current_balance || 0), 0),
         totalDebtCreated: debtors.reduce((s, d) => s + (d.credit_limit || 0), 0),
         debtorCount: debtors.length,
@@ -446,6 +480,8 @@ export default function Reports() {
       ['Total Orders', report.totalOrders],
       ['Paid Orders', report.paidOrdersCount],
       ['Cancelled Orders', report.cancelledOrders],
+      ['Returned Items', report.returnedItems],
+      ['Return Value', '₦' + report.returnedValue.toLocaleString()],
       ['Avg Order Value', '₦' + report.avgOrderValue.toLocaleString()],
       [],
       ['PAYMENT METHODS'],
@@ -455,9 +491,18 @@ export default function Reports() {
       ['Credit (Pay Later)', '₦' + report.byPayment.credit.toLocaleString()],
       ['Split Payment', '₦' + report.byPayment.split.toLocaleString()],
       [],
-      ['TOP SELLING ITEMS'],
-      ['Item', 'Qty Sold', 'Revenue'],
-      ...report.topItems.map((i) => [i.name, i.quantity, '₦' + i.revenue.toLocaleString()]),
+      ['ITEMS SOLD'],
+      ['Item', 'Qty Sold', 'Returned', 'Return Rate', 'Revenue'],
+      ...report.topItems.map((i) => {
+        const rate = i.quantity > 0 ? Math.round((i.returned / i.quantity) * 100) : 0
+        return [
+          i.name,
+          i.quantity,
+          i.returned,
+          rate > 0 ? `${rate}%` : '–',
+          '₦' + i.revenue.toLocaleString(),
+        ]
+      }),
       [],
       ['STAFF PERFORMANCE'],
       ['Staff', 'Orders', 'Revenue'],
@@ -504,9 +549,7 @@ export default function Reports() {
       addTable(
         doc,
         ['Item', 'Qty', 'Revenue'],
-        r.topItems
-          .slice(0, 10)
-          .map((i) => [i.name, String(i.quantity), '₦' + i.revenue.toLocaleString()]),
+        r.topItems.map((i) => [i.name, String(i.quantity), '₦' + i.revenue.toLocaleString()]),
         y + 2
       )
     }
@@ -741,6 +784,12 @@ export default function Reports() {
                     icon: ShoppingBag,
                   },
                   {
+                    label: 'Returned Items',
+                    value: `${report.returnedItems} (₦${report.returnedValue.toLocaleString()})`,
+                    color: 'text-orange-400',
+                    icon: ShoppingBag,
+                  },
+                  {
                     label: 'Avg Order Value',
                     value: '₦' + report.avgOrderValue.toLocaleString(),
                     color: 'text-purple-400',
@@ -959,9 +1008,9 @@ export default function Reports() {
 
             {report.topItems.length > 0 && (
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <h3 className="text-white font-semibold mb-4">Top Selling Items</h3>
+                <h3 className="text-white font-semibold mb-4">Items Sold</h3>
                 <div className="overflow-x-auto -mx-2">
-                  <table className="w-full min-w-[280px]">
+                  <table className="w-full min-w-[380px]">
                     <thead>
                       <tr className="border-b border-gray-800">
                         <th className="text-left text-gray-500 text-xs uppercase px-3 py-2">#</th>
@@ -969,7 +1018,13 @@ export default function Reports() {
                           Item
                         </th>
                         <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
-                          Qty
+                          Sold
+                        </th>
+                        <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
+                          Returned
+                        </th>
+                        <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
+                          Rate
                         </th>
                         <th className="text-right text-gray-500 text-xs uppercase px-3 py-2">
                           Revenue
@@ -977,20 +1032,34 @@ export default function Reports() {
                       </tr>
                     </thead>
                     <tbody>
-                      {report.topItems.map((item, i) => (
-                        <tr key={item.name} className="border-b border-gray-800 last:border-0">
-                          <td className="px-3 py-2.5 text-gray-500 text-sm">{i + 1}</td>
-                          <td className="px-3 py-2.5 text-white text-sm font-medium">
-                            {item.name}
-                          </td>
-                          <td className="px-3 py-2.5 text-right text-amber-400 font-bold">
-                            {item.quantity}
-                          </td>
-                          <td className="px-3 py-2.5 text-right text-white text-sm">
-                            ₦{item.revenue.toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
+                      {report.topItems.map((item, i) => {
+                        const returnRate =
+                          item.quantity > 0 ? Math.round((item.returned / item.quantity) * 100) : 0
+                        return (
+                          <tr key={item.name} className="border-b border-gray-800 last:border-0">
+                            <td className="px-3 py-2.5 text-gray-500 text-sm">{i + 1}</td>
+                            <td className="px-3 py-2.5 text-white text-sm font-medium">
+                              {item.name}
+                            </td>
+                            <td className="px-3 py-2.5 text-right text-amber-400 font-bold">
+                              {item.quantity}
+                            </td>
+                            <td
+                              className={`px-3 py-2.5 text-right text-sm font-medium ${item.returned > 0 ? 'text-red-400' : 'text-gray-600'}`}
+                            >
+                              {item.returned > 0 ? item.returned : '–'}
+                            </td>
+                            <td
+                              className={`px-3 py-2.5 text-right text-xs ${returnRate >= 20 ? 'text-red-400 font-bold' : returnRate > 0 ? 'text-orange-400' : 'text-gray-600'}`}
+                            >
+                              {returnRate > 0 ? `${returnRate}%` : '–'}
+                            </td>
+                            <td className="px-3 py-2.5 text-right text-white text-sm">
+                              ₦{item.revenue.toLocaleString()}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1046,7 +1115,7 @@ export default function Reports() {
 
             {report.tableStats.length > 0 && (
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <h3 className="text-white font-semibold mb-4">Top Tables by Revenue</h3>
+                <h3 className="text-white font-semibold mb-4">Tables by Revenue</h3>
                 <div className="overflow-x-auto -mx-2">
                   <table className="w-full min-w-[260px]">
                     <thead>
@@ -1234,6 +1303,10 @@ export default function Reports() {
                             div,
                             row('Total Orders:', String(report.paidOrders.length)),
                             row('Cancelled:', String(report.cancelledOrders)),
+                            row(
+                              'Returned:',
+                              `${report.returnedItems} (N${report.returnedValue.toLocaleString()})`
+                            ),
                             row('Gross Revenue:', `N${report.grossRevenue.toLocaleString()}`),
                             row(
                               'VAT (7.5%):',
@@ -1252,8 +1325,10 @@ export default function Reports() {
                             row('Credit:', `N${creditTotal.toLocaleString()}`),
                             row('Split:', `N${report.byPayment.split.toLocaleString()}`),
                             div,
-                            ctr('VOIDS & CANCELLATIONS'),
+                            ctr('RETURNS & VOIDS'),
                             div,
+                            row('Items Returned:', String(report.returnedItems)),
+                            row('Return Value:', `N${report.returnedValue.toLocaleString()}`),
                             row('Total Voids:', String((report.voids || []).length)),
                             row('Value Voided:', `N${totalVoids.toLocaleString()}`),
                             div,
@@ -1336,6 +1411,10 @@ export default function Reports() {
                         [
                           ['Total Orders', report.paidOrders.length],
                           ['Cancelled Orders', report.cancelledOrders],
+                          [
+                            'Returned Items',
+                            `${report.returnedItems} (₦${report.returnedValue.toLocaleString()})`,
+                          ],
                           ['Gross Revenue', '₦' + report.grossRevenue.toLocaleString()],
                           [
                             'VAT Collected (7.5%)',
@@ -1370,7 +1449,17 @@ export default function Reports() {
                         </div>
                       ))}
                       <div className="border-t border-dashed border-gray-400 my-3" />
-                      <div className="font-bold text-xs uppercase mb-2">Voids & Cancellations</div>
+                      <div className="font-bold text-xs uppercase mb-2">Returns & Voids</div>
+                      <div className="flex justify-between my-1 text-sm">
+                        <span>Items Returned</span>
+                        <span>{report.returnedItems}</span>
+                      </div>
+                      <div className="flex justify-between my-1 text-sm">
+                        <span>Return Value</span>
+                        <span className="text-orange-600 font-bold">
+                          ₦{report.returnedValue.toLocaleString()}
+                        </span>
+                      </div>
                       <div className="flex justify-between my-1 text-sm">
                         <span>Total Voids</span>
                         <span>{(report.voids || []).length}</span>

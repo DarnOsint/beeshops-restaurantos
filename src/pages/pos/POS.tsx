@@ -4,7 +4,7 @@ import {
   setPrintServerUrl,
   setStationPrinterUrl,
   printToStation,
-  hasStationPrinters,
+  getStationPrinterUrl,
 } from '../../lib/networkPrinter'
 import { buildOrderTicket, type TicketItem } from '../../lib/orderTicket'
 import type { ItemDestination } from '../../types'
@@ -603,10 +603,11 @@ export default function POS() {
     const stations: ItemDestination[] = ['kitchen', 'griller', 'bar']
     for (const station of stations) {
       const mode = stationModes[station] || 'display'
-      // Skip printing if mode is display-only
-      if (mode === 'display') continue
+      // For bar: skip printing if display-only
+      // For kitchen/griller: ALWAYS print if a printer is configured (they need physical tickets)
+      if (station === 'bar' && mode === 'display') continue
       // Need a printer configured for this station
-      if (!hasStationPrinters() && mode !== 'both') continue
+      if (!getStationPrinterUrl(station)) continue
 
       const stationItems: TicketItem[] = items
         .filter((i) => i.destination === station)
@@ -622,8 +623,9 @@ export default function POS() {
         createdAt,
       })
 
-      // Print the configured number of copies
-      const copies = printCopiesConfig[station] || 1
+      // Print the configured number of copies — kitchen/griller default to 2
+      const defaultCopies = station === 'kitchen' || station === 'griller' ? 2 : 1
+      const copies = printCopiesConfig[station] || defaultCopies
       for (let c = 0; c < copies; c++) {
         printToStation(station, ticket).catch(() => {
           /* silent — station printer offline is not a blocker */
