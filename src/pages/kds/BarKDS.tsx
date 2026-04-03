@@ -111,15 +111,16 @@ function BarKDSInner() {
   >([])
 
   const fetchOrders = useCallback(async () => {
+    // Fetch open orders AND paid orders that still have pending bar items (cash sales/takeaway)
     const { data, error } = await supabase
       .from('orders')
       .select(
-        `id, created_at, notes, staff_id,
+        `id, created_at, notes, staff_id, order_type, customer_name,
         tables(name),
         order_items(id, quantity, status, destination, notes, return_requested, return_accepted, return_reason,
           menu_items(name, menu_categories(name, destination)))`
       )
-      .eq('status', 'open')
+      .in('status', ['open', 'paid'])
       .order('created_at', { ascending: true })
 
     if (!error && data) {
@@ -139,6 +140,9 @@ function BarKDSInner() {
         }))
         .filter((o) => o.order_items.length > 0)
       setOrders(bar)
+
+      // Also update sold count tracking for chiller — mark bar items as served
+      // when barman marks them ready (handled by updateItemStatus)
 
       // Return requests (bar items with return_requested but not yet accepted/rejected)
       const returns: typeof returnItems = []
@@ -651,7 +655,21 @@ function BarKDSInner() {
                   className={`rounded-2xl border-2 p-4 flex flex-col gap-3 transition-colors ${getUrgencyColor(order.created_at)}`}
                 >
                   <div className="flex items-center justify-between">
-                    <h2 className="text-white font-bold text-lg">{order.tables?.name}</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-white font-bold text-lg">
+                        {order.tables?.name ||
+                          (order.order_type === 'takeaway'
+                            ? `Takeaway${order.customer_name ? ' — ' + order.customer_name : ''}`
+                            : order.order_type === 'cash_sale'
+                              ? 'Cash Sale'
+                              : 'Counter')}
+                      </h2>
+                      {(order.order_type === 'cash_sale' || order.order_type === 'takeaway') && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-medium">
+                          {order.order_type === 'takeaway' ? 'TAKEAWAY' : 'CASH'}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1 text-gray-400 text-xs">
                       <Clock size={12} />
                       <span className={getTimerColor(order.created_at)}>

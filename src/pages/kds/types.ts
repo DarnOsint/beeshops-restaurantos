@@ -18,6 +18,8 @@ export interface KdsOrder {
   created_at: string
   notes?: string | null
   staff_id?: string | null
+  order_type?: string | null
+  customer_name?: string | null
   tables?: { name: string } | null
   order_items: KdsOrderItem[]
 }
