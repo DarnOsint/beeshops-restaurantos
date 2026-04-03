@@ -65,9 +65,10 @@ export default function WaitronOrdersTab() {
     setSelectedStaff(staffId)
     setOrdersLoading(true)
     const dayStart = new Date(date)
-    dayStart.setHours(0, 0, 0, 0)
-    const dayEnd = new Date(date)
-    dayEnd.setHours(23, 59, 59, 999)
+    dayStart.setHours(8, 0, 0, 0)
+    if (new Date(date).getHours() < 8) dayStart.setDate(dayStart.getDate() - 1)
+    const dayEnd = new Date(dayStart)
+    dayEnd.setDate(dayEnd.getDate() + 1)
     const { data } = await supabase
       .from('orders')
       .select(

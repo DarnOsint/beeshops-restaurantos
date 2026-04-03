@@ -35,9 +35,10 @@ export default function StockSummaryTab({ type }: Props) {
     async (d: string) => {
       setLoading(true)
       const dayStart = new Date(d)
-      dayStart.setHours(0, 0, 0, 0)
-      const dayEnd = new Date(d)
-      dayEnd.setHours(23, 59, 59, 999)
+      dayStart.setHours(8, 0, 0, 0)
+      if (new Date(d).getHours() < 8) dayStart.setDate(dayStart.getDate() - 1)
+      const dayEnd = new Date(dayStart)
+      dayEnd.setDate(dayEnd.getDate() + 1)
 
       const [entriesRes, soldRes, prevRes] = await Promise.all([
         supabase.from(tableName).select('*').eq('date', d).order('item_name'),

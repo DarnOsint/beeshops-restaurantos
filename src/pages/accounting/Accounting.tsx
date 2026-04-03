@@ -112,11 +112,19 @@ export default function Accounting() {
     const now = new Date()
     let start: Date, end: Date
 
+    // Session window: 08:00 previous day → 08:00 today (WAT), resets daily at 8am
+    const sessionStart = () => {
+      const lagosNow = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+      const s = new Date(lagosNow)
+      s.setHours(8, 0, 0, 0)
+      if (lagosNow.getHours() < 8) s.setDate(s.getDate() - 1)
+      return s
+    }
+
     if (dateRange === 'Today') {
-      start = new Date(now)
-      start.setHours(0, 0, 0, 0)
-      end = new Date(now)
-      end.setHours(23, 59, 59, 999)
+      start = sessionStart()
+      end = new Date(start)
+      end.setDate(end.getDate() + 1)
     } else if (dateRange === 'This Week') {
       start = new Date(now)
       start.setDate(now.getDate() - now.getDay())
@@ -133,10 +141,9 @@ export default function Accounting() {
       end = new Date(customEnd)
       end.setHours(23, 59, 59, 999)
     } else {
-      start = new Date(now)
-      start.setHours(0, 0, 0, 0)
-      end = new Date(now)
-      end.setHours(23, 59, 59, 999)
+      start = sessionStart()
+      end = new Date(start)
+      end.setDate(end.getDate() + 1)
     }
     return { start: start.toISOString(), end: end.toISOString() }
   }, [dateRange, customStart, customEnd])
