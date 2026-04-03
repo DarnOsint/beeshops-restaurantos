@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from 'react'
 import {
   TrendingUp,
   DollarSign,
@@ -6,6 +7,10 @@ import {
   Smartphone,
   Receipt,
   Plus,
+  Save,
+  Users,
+  AlertTriangle,
+  CheckCircle,
 } from 'lucide-react'
 import {
   LineChart,
@@ -16,14 +21,26 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import type { AccountingSummary, TrendPoint } from './types'
+import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
+import type { AccountingSummary, TrendPoint, WaitronStat } from './types'
 
 interface Props {
   summary: AccountingSummary
   trendData: TrendPoint[]
   totalPayouts: number
   netRevenue: number
+  waitronStats: WaitronStat[]
+  dateLabel: string
   onRecordPayout: () => void
+}
+
+interface Reconciliation {
+  cashCollected: Record<string, number> // waitron name → cash collected
+  bankEntries: Record<string, number> // bank name → amount received
+  posEntries: Record<string, number> // POS machine → amount received
+  debts: Array<{ name: string; amount: number; note: string }>
 }
 
 export default function OverviewTab({
@@ -31,8 +48,91 @@ export default function OverviewTab({
   trendData,
   totalPayouts,
   netRevenue,
+  waitronStats,
+  dateLabel,
   onRecordPayout,
 }: Props) {
+  const { profile } = useAuth()
+  const toast = useToast()
+  const [recon, setRecon] = useState<Reconciliation>({
+    cashCollected: {},
+    bankEntries: {},
+    posEntries: {},
+    debts: [],
+  })
+  const [bankAccounts, setBankAccounts] = useState<
+    Array<{ id: string; bank_name: string; account_number: string }>
+  >([])
+  const [posMachines, setPosMachines] = useState<string[]>([])
+  const [saving, setSaving] = useState(false)
+  const [reconDate, setReconDate] = useState(() => new Date().toISOString().slice(0, 10))
+
+  // Load bank accounts and POS machines
+  useEffect(() => {
+    supabase
+      .from('bank_accounts')
+      .select('id, bank_name, account_number')
+      .eq('is_active', true)
+      .then(({ data }) => {
+        if (data) setBankAccounts(data)
+      })
+    supabase
+      .from('settings')
+      .select('value')
+      .eq('id', 'pos_machines')
+      .single()
+      .then(({ data }) => {
+        if (data?.value) {
+          try {
+            setPosMachines(JSON.parse(data.value))
+          } catch {
+            /* */
+          }
+        }
+      })
+  }, [])
+
+  // Load saved reconciliation for the date
+  const loadRecon = useCallback(async (d: string) => {
+    const { data } = await supabase.from('settings').select('value').eq('id', `recon_${d}`).single()
+    if (data?.value) {
+      try {
+        setRecon(JSON.parse(data.value))
+      } catch {
+        /* */
+      }
+    } else {
+      setRecon({ cashCollected: {}, bankEntries: {}, posEntries: {}, debts: [] })
+    }
+  }, [])
+
+  useEffect(() => {
+    loadRecon(reconDate)
+  }, [reconDate, loadRecon])
+
+  const saveRecon = async () => {
+    setSaving(true)
+    await supabase.from('settings').upsert(
+      {
+        id: `recon_${reconDate}`,
+        value: JSON.stringify(recon),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    )
+    setSaving(false)
+    toast.success('Saved', 'Reconciliation data saved')
+  }
+
+  // Calculations
+  const totalCashCollected = Object.values(recon.cashCollected).reduce((s, v) => s + (v || 0), 0)
+  const totalBankReceived = Object.values(recon.bankEntries).reduce((s, v) => s + (v || 0), 0)
+  const totalPOSReceived = Object.values(recon.posEntries).reduce((s, v) => s + (v || 0), 0)
+  const totalDebts = recon.debts.reduce((s, d) => s + (d.amount || 0), 0)
+  const totalReceived = totalCashCollected + totalBankReceived + totalPOSReceived
+  const expectedRevenue = summary.total
+  const shortfall = expectedRevenue - totalReceived - totalDebts - totalPayouts
+
   const cards = [
     {
       label: 'Gross Revenue',
@@ -101,6 +201,29 @@ export default function OverviewTab({
         ))}
       </div>
 
+      {/* Staff Sales Summary */}
+      {waitronStats.length > 0 && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+            <Users size={16} className="text-amber-400" /> Staff Sales — {dateLabel}
+          </h3>
+          <div className="space-y-2">
+            {waitronStats.map((w) => (
+              <div
+                key={w.name}
+                className="flex items-center justify-between py-1.5 border-b border-gray-800 last:border-0"
+              >
+                <div>
+                  <span className="text-white text-sm font-medium">{w.name}</span>
+                  <span className="text-gray-500 text-xs ml-2">{w.orders} orders</span>
+                </div>
+                <span className="text-amber-400 font-bold">₦{w.revenue.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Payment breakdown */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
         <h3 className="text-white font-semibold mb-4">Payment Method Breakdown</h3>
@@ -122,6 +245,279 @@ export default function OverviewTab({
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* ═══════════════ DAILY RECONCILIATION ═══════════════ */}
+      <div className="bg-gray-900 border border-amber-500/20 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-amber-400 font-bold flex items-center gap-2">
+            <DollarSign size={16} /> Daily Reconciliation
+          </h3>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={reconDate}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setReconDate(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-amber-500"
+            />
+            <button
+              onClick={saveRecon}
+              disabled={saving}
+              className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Save size={12} /> {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+
+        {/* Cash Collected Per Waitron */}
+        <div className="mb-5">
+          <h4 className="text-gray-300 text-sm font-semibold mb-2 flex items-center gap-1.5">
+            <Banknote size={13} className="text-emerald-400" /> Cash Collected from Waitrons
+          </h4>
+          <p className="text-gray-600 text-xs mb-2">
+            Enter the actual cash each waitron handed over
+          </p>
+          <div className="space-y-1.5">
+            {waitronStats.map((w) => (
+              <div key={w.name} className="flex items-center gap-2">
+                <span className="text-gray-400 text-sm w-32 truncate">{w.name}</span>
+                <span className="text-gray-600 text-xs w-20">
+                  sold ₦{w.revenue.toLocaleString()}
+                </span>
+                <input
+                  type="number"
+                  placeholder="₦ collected"
+                  value={recon.cashCollected[w.name] || ''}
+                  onChange={(e) =>
+                    setRecon((prev) => ({
+                      ...prev,
+                      cashCollected: {
+                        ...prev.cashCollected,
+                        [w.name]: parseFloat(e.target.value) || 0,
+                      },
+                    }))
+                  }
+                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+            ))}
+            <div className="flex justify-between pt-1 border-t border-gray-700">
+              <span className="text-gray-400 text-sm font-medium">Total Cash Collected</span>
+              <span className="text-emerald-400 font-bold">
+                ₦{totalCashCollected.toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Bank Account Entries */}
+        <div className="mb-5">
+          <h4 className="text-gray-300 text-sm font-semibold mb-2 flex items-center gap-1.5">
+            <Smartphone size={13} className="text-purple-400" /> Bank Transfer Receipts
+          </h4>
+          <p className="text-gray-600 text-xs mb-2">How much entered each bank account today</p>
+          <div className="space-y-1.5">
+            {bankAccounts.map((bank) => (
+              <div key={bank.id} className="flex items-center gap-2">
+                <span className="text-gray-400 text-sm w-40 truncate">
+                  {bank.bank_name} ({bank.account_number.slice(-4)})
+                </span>
+                <input
+                  type="number"
+                  placeholder="₦ received"
+                  value={recon.bankEntries[bank.bank_name] || ''}
+                  onChange={(e) =>
+                    setRecon((prev) => ({
+                      ...prev,
+                      bankEntries: {
+                        ...prev.bankEntries,
+                        [bank.bank_name]: parseFloat(e.target.value) || 0,
+                      },
+                    }))
+                  }
+                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500"
+                />
+              </div>
+            ))}
+            {bankAccounts.length === 0 && (
+              <p className="text-gray-600 text-xs">No bank accounts configured</p>
+            )}
+            <div className="flex justify-between pt-1 border-t border-gray-700">
+              <span className="text-gray-400 text-sm font-medium">Total Bank Transfers</span>
+              <span className="text-purple-400 font-bold">
+                ₦{totalBankReceived.toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* POS Machine Entries */}
+        <div className="mb-5">
+          <h4 className="text-gray-300 text-sm font-semibold mb-2 flex items-center gap-1.5">
+            <CreditCard size={13} className="text-blue-400" /> POS Machine Receipts
+          </h4>
+          <p className="text-gray-600 text-xs mb-2">How much each POS terminal collected today</p>
+          <div className="space-y-1.5">
+            {posMachines.map((pos) => (
+              <div key={pos} className="flex items-center gap-2">
+                <span className="text-gray-400 text-sm w-32 truncate">{pos}</span>
+                <input
+                  type="number"
+                  placeholder="₦ received"
+                  value={recon.posEntries[pos] || ''}
+                  onChange={(e) =>
+                    setRecon((prev) => ({
+                      ...prev,
+                      posEntries: { ...prev.posEntries, [pos]: parseFloat(e.target.value) || 0 },
+                    }))
+                  }
+                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            ))}
+            {posMachines.length === 0 && (
+              <p className="text-gray-600 text-xs">No POS machines configured</p>
+            )}
+            <div className="flex justify-between pt-1 border-t border-gray-700">
+              <span className="text-gray-400 text-sm font-medium">Total POS</span>
+              <span className="text-blue-400 font-bold">₦{totalPOSReceived.toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Debts / IOUs */}
+        <div className="mb-5">
+          <h4 className="text-gray-300 text-sm font-semibold mb-2 flex items-center gap-1.5">
+            <AlertTriangle size={13} className="text-red-400" /> Outstanding Debts / IOUs
+          </h4>
+          <p className="text-gray-600 text-xs mb-2">Record who owes the company and how much</p>
+          <div className="space-y-1.5">
+            {recon.debts.map((debt, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Name"
+                  value={debt.name}
+                  onChange={(e) => {
+                    const updated = [...recon.debts]
+                    updated[idx] = { ...updated[idx], name: e.target.value }
+                    setRecon((prev) => ({ ...prev, debts: updated }))
+                  }}
+                  className="w-28 bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-red-500"
+                />
+                <input
+                  type="number"
+                  placeholder="₦ owed"
+                  value={debt.amount || ''}
+                  onChange={(e) => {
+                    const updated = [...recon.debts]
+                    updated[idx] = { ...updated[idx], amount: parseFloat(e.target.value) || 0 }
+                    setRecon((prev) => ({ ...prev, debts: updated }))
+                  }}
+                  className="w-24 bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-red-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Note"
+                  value={debt.note}
+                  onChange={(e) => {
+                    const updated = [...recon.debts]
+                    updated[idx] = { ...updated[idx], note: e.target.value }
+                    setRecon((prev) => ({ ...prev, debts: updated }))
+                  }}
+                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-red-500"
+                />
+                <button
+                  onClick={() => {
+                    const updated = recon.debts.filter((_, i) => i !== idx)
+                    setRecon((prev) => ({ ...prev, debts: updated }))
+                  }}
+                  className="text-red-400 hover:text-red-300 text-xs px-1"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={() =>
+                setRecon((prev) => ({
+                  ...prev,
+                  debts: [...prev.debts, { name: '', amount: 0, note: '' }],
+                }))
+              }
+              className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300"
+            >
+              <Plus size={12} /> Add Debt Entry
+            </button>
+            <div className="flex justify-between pt-1 border-t border-gray-700">
+              <span className="text-gray-400 text-sm font-medium">Total Outstanding Debts</span>
+              <span className="text-red-400 font-bold">₦{totalDebts.toLocaleString()}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ═══ RECONCILIATION SUMMARY ═══ */}
+        <div className="bg-gray-800 rounded-xl p-4 space-y-2">
+          <h4 className="text-white font-bold text-sm mb-3">End of Day Summary</h4>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-400">Total Sales (POS)</span>
+            <span className="text-white font-bold">₦{expectedRevenue.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-400">Cash Collected</span>
+            <span className="text-emerald-400">₦{totalCashCollected.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-400">Bank Transfers</span>
+            <span className="text-purple-400">₦{totalBankReceived.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-400">POS Receipts</span>
+            <span className="text-blue-400">₦{totalPOSReceived.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-400">Expenses/Payouts</span>
+            <span className="text-red-400">₦{totalPayouts.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-400">Outstanding Debts</span>
+            <span className="text-red-400">₦{totalDebts.toLocaleString()}</span>
+          </div>
+          <div className="border-t-2 border-gray-700 pt-2 mt-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-400">Total Accounted For</span>
+              <span className="text-white font-bold">
+                ₦{(totalReceived + totalDebts + totalPayouts).toLocaleString()}
+              </span>
+            </div>
+          </div>
+          <div className="border-t-2 border-gray-600 pt-2">
+            <div className="flex justify-between items-center">
+              <span
+                className={`font-bold ${shortfall > 0 ? 'text-red-400' : shortfall < 0 ? 'text-green-400' : 'text-green-400'}`}
+              >
+                {shortfall > 0 ? 'SHORTFALL' : shortfall < 0 ? 'SURPLUS' : 'BALANCED'}
+              </span>
+              <div className="flex items-center gap-2">
+                {shortfall === 0 ? (
+                  <CheckCircle size={16} className="text-green-400" />
+                ) : (
+                  <AlertTriangle
+                    size={16}
+                    className={shortfall > 0 ? 'text-red-400' : 'text-green-400'}
+                  />
+                )}
+                <span
+                  className={`text-xl font-bold ${shortfall > 0 ? 'text-red-400' : shortfall < 0 ? 'text-green-400' : 'text-green-400'}`}
+                >
+                  ₦{Math.abs(shortfall).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

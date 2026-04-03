@@ -439,6 +439,8 @@ export default function Accounting() {
             trendData={trendData}
             totalPayouts={totalPayouts}
             netRevenue={netRevenue}
+            waitronStats={waitronStats}
+            dateLabel={dateRange === 'Custom' ? `${customStart} – ${customEnd}` : dateRange}
             onRecordPayout={() => setActiveTab('payouts')}
           />
         )}

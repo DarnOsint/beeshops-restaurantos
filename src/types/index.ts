@@ -29,7 +29,7 @@ export type PaymentMethod =
   | 'card'
   | 'transfer'
   | 'split'
-export type ItemDestination = 'kitchen' | 'bar' | 'griller'
+export type ItemDestination = 'kitchen' | 'bar' | 'griller' | 'shisha'
 export type ItemStatus = 'pending' | 'preparing' | 'ready' | 'delivered'
 export type TableStatus = 'available' | 'occupied' | 'reserved'
 export type RoomStatus = 'available' | 'occupied' | 'cleaning' | 'maintenance'
