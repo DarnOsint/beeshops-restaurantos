@@ -431,15 +431,28 @@ export default function POS() {
 
   const fetchShiftStats = async () => {
     setShiftLoading(true)
-    // Use WAT (UTC+1) date to match Lagos timezone
+    // Allow overnight shifts: use the open attendance record (clock_out null) as window start.
+    // Fallback to today 00:00 WAT if none.
     const today = new Date(Date.now() + 60 * 60 * 1000).toISOString().split('T')[0]
+    const { data: attendanceOpen } = await supabase
+      .from('attendance')
+      .select('clock_in, date')
+      .eq('staff_id', profile?.id)
+      .is('clock_out', null)
+      .order('clock_in', { ascending: false })
+      .limit(1)
+    const activeClockIn = attendanceOpen?.[0]?.clock_in
+    const windowStartIso = activeClockIn
+      ? new Date(activeClockIn).toISOString()
+      : new Date(today).toISOString()
     const [attendanceRes, ordersRes] = await Promise.all([
+      // keep a single attendance record for UI display (open shift if available)
       supabase
         .from('attendance')
         .select('clock_in, date')
         .eq('staff_id', profile?.id)
-        .eq('date', today)
         .is('clock_out', null)
+        .order('clock_in', { ascending: false })
         .limit(1),
       supabase
         .from('orders')
@@ -448,7 +461,7 @@ export default function POS() {
         )
         .eq('staff_id', profile?.id)
         .eq('status', 'paid')
-        .gte('closed_at', new Date(today).toISOString()),
+        .gte('closed_at', windowStartIso),
     ])
     const attendance = attendanceRes.data?.[0] as { clock_in: string } | undefined
     const orders = (ordersRes.data || []) as unknown as ShiftOrder[]
@@ -471,14 +484,27 @@ export default function POS() {
 
   const fetchHistory = async () => {
     setHistoryLoading(true)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    // Include overnight: start from open clock-in if present, else today's 00:00
+    const { data: attendanceOpen } = await supabase
+      .from('attendance')
+      .select('clock_in')
+      .eq('staff_id', profile?.id)
+      .is('clock_out', null)
+      .order('clock_in', { ascending: false })
+      .limit(1)
+    const windowStart = attendanceOpen?.[0]?.clock_in
+      ? new Date(attendanceOpen[0].clock_in)
+      : (() => {
+          const t = new Date()
+          t.setHours(0, 0, 0, 0)
+          return t
+        })()
     const { data } = await supabase
       .from('orders')
       .select('*, tables(name), order_items(*, menu_items(name))')
       .eq('status', 'paid')
       .eq('staff_id', profile?.id)
-      .gte('closed_at', today.toISOString())
+      .gte('closed_at', windowStart.toISOString())
       .order('closed_at', { ascending: false })
     setOrderHistory((data || []) as HistoryOrder[])
     setHistoryLoading(false)
