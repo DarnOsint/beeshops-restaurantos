@@ -52,6 +52,7 @@ const FLOOR_ROLES = [
   'shisha_attendant',
   'dj',
   'hypeman',
+  'social_media_manager',
 ]
 const roleColors: Record<string, string> = {
   owner: 'bg-amber-500/20 text-amber-400',
