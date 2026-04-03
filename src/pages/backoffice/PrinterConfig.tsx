@@ -422,7 +422,9 @@ export default function PrinterConfig({ onBack }: Props) {
                   </button>
                 ))}
               </div>
-              {(stationModes[station.key] === 'printer' ||
+              {(station.key === 'kitchen' ||
+                station.key === 'griller' ||
+                stationModes[station.key] === 'printer' ||
                 stationModes[station.key] === 'both') && (
                 <div className="flex items-center gap-3 pl-6">
                   <Copy size={12} className="text-gray-500" />
@@ -450,26 +452,22 @@ export default function PrinterConfig({ onBack }: Props) {
               setModesSaving(true)
               try {
                 await Promise.all([
-                  supabase
-                    .from('settings')
-                    .upsert(
-                      {
-                        id: 'station_modes',
-                        value: JSON.stringify(stationModes),
-                        updated_at: new Date().toISOString(),
-                      },
-                      { onConflict: 'id' }
-                    ),
-                  supabase
-                    .from('settings')
-                    .upsert(
-                      {
-                        id: 'print_copies',
-                        value: JSON.stringify(printCopies),
-                        updated_at: new Date().toISOString(),
-                      },
-                      { onConflict: 'id' }
-                    ),
+                  supabase.from('settings').upsert(
+                    {
+                      id: 'station_modes',
+                      value: JSON.stringify(stationModes),
+                      updated_at: new Date().toISOString(),
+                    },
+                    { onConflict: 'id' }
+                  ),
+                  supabase.from('settings').upsert(
+                    {
+                      id: 'print_copies',
+                      value: JSON.stringify(printCopies),
+                      updated_at: new Date().toISOString(),
+                    },
+                    { onConflict: 'id' }
+                  ),
                 ])
                 toast.success('Station modes saved')
               } catch (e) {
