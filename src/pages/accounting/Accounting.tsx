@@ -19,10 +19,13 @@ import {
   Beer,
   ChefHat,
   ClipboardList,
+  CalendarDays,
 } from 'lucide-react'
 
 import WaitronOrdersTab from './WaitronOrdersTab'
 import StockSummaryTab from './StockSummaryTab'
+import AttendanceTab from './AttendanceTab'
+import TimesheetTab from './TimesheetTab'
 import Debtors from './Debtors'
 import OverviewTab from './OverviewTab'
 import OrdersTab from './OrdersTab'
@@ -54,7 +57,9 @@ type DateRange = (typeof DATE_RANGES)[number]
 const TABS = [
   { id: 'overview', label: 'Overview', icon: BarChart2 },
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
-  { id: 'staff', label: 'Staff', icon: Users },
+  { id: 'staff', label: 'Staff Sales', icon: Users },
+  { id: 'attendance', label: 'Attendance', icon: CalendarDays },
+  { id: 'timesheet', label: 'Timesheet', icon: Clock },
   { id: 'till', label: 'Till', icon: Clock },
   { id: 'payouts', label: 'Payouts', icon: DollarSign },
   { id: 'tips', label: 'Tips', icon: Heart },
@@ -426,7 +431,9 @@ export default function Accounting() {
         {activeTab === 'orders' && (
           <OrdersTab orders={orders} orderFilter={orderFilter} onFilterChange={setOrderFilter} />
         )}
-        {activeTab === 'staff' && <StaffTab waitronStats={waitronStats} timesheet={timesheet} />}
+        {activeTab === 'staff' && <StaffTab waitronStats={waitronStats} />}
+        {activeTab === 'attendance' && <AttendanceTab />}
+        {activeTab === 'timesheet' && <TimesheetTab />}
         {activeTab === 'till' && <TillTab tillSessions={tillSessions} />}
         {activeTab === 'payouts' && (
           <PayoutsTab payouts={payouts} totalPayouts={totalPayouts} onRefresh={fetchAll} />
