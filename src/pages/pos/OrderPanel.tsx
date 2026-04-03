@@ -1,6 +1,17 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { Plus, Minus, Trash2, Send, X, CheckCircle2, Circle, Search, Clock } from 'lucide-react'
+import {
+  Plus,
+  Minus,
+  Trash2,
+  Send,
+  X,
+  CheckCircle2,
+  Circle,
+  Search,
+  Clock,
+  ShoppingBag,
+} from 'lucide-react'
 import type { Table, MenuItem, Order, OrderItem, Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
 import { audit } from '../../lib/audit'
@@ -137,6 +148,33 @@ export default function OrderPanel({
   const [modifierNotes, setModifierNotes] = useState('')
   const [modifierCharge, setModifierCharge] = useState('')
 
+  // Takeaway packs for table orders
+  const [packSizes, setPackSizes] = useState<{ id: string; name: string; price: number }[]>([])
+  const [packQuantities, setPackQuantities] = useState<Record<string, number>>({})
+  const [showPacks, setShowPacks] = useState(false)
+
+  useEffect(() => {
+    supabase
+      .from('settings')
+      .select('value')
+      .eq('id', 'takeaway_pack_sizes')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.value) {
+          try {
+            setPackSizes(JSON.parse(data.value))
+          } catch {
+            /* */
+          }
+        }
+      })
+  }, [])
+
+  const packFee = packSizes.reduce((sum, p) => sum + (packQuantities[p.id] || 0) * p.price, 0)
+  const packItems = packSizes
+    .filter((p) => (packQuantities[p.id] || 0) > 0)
+    .map((p) => ({ ...p, qty: packQuantities[p.id] }))
+
   const categories = [
     'All',
     ...new Set(
@@ -271,16 +309,14 @@ export default function OrderPanel({
       waitron_name: profile?.full_name,
       requested_at: new Date().toISOString(),
     })
-    await supabase
-      .from('settings')
-      .upsert(
-        {
-          id: 'pending_delete_requests',
-          value: JSON.stringify(existing),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'id' }
-      )
+    await supabase.from('settings').upsert(
+      {
+        id: 'pending_delete_requests',
+        value: JSON.stringify(existing),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    )
     setPendingDeletes((prev) => new Set(prev).add(dbId))
     toast.success('Delete Requested', `Manager will review removal of ${item.name}`)
     await audit({
@@ -323,10 +359,11 @@ export default function OrderPanel({
     setModifierCharge('')
   }
 
-  const total = orderItems.reduce(
+  const itemsTotal = orderItems.reduce(
     (sum, item) => sum + item.quantity * item.price + (item.extra_charge || 0),
     0
   )
+  const total = itemsTotal + packFee
 
   const handlePlaceOrder = async () => {
     if (isSubmitting.current) return
@@ -338,8 +375,27 @@ export default function OrderPanel({
         await onPlaceOrder({ table, items: [], notes, total: 0 })
         return
       }
-      const newTotal = newItems.reduce((sum, i) => sum + (i.total || 0), 0)
-      await onPlaceOrder({ table, items: newItems, notes, total: newTotal })
+      const newTotal = newItems.reduce((sum, i) => sum + (i.total || 0), 0) + packFee
+      // Add pack items as order items
+      const allItems = [
+        ...newItems,
+        ...packItems.map((p) => ({
+          id: crypto.randomUUID(),
+          name: `Takeaway Pack — ${p.name}`,
+          price: p.price,
+          quantity: p.qty,
+          total: p.qty * p.price,
+          menu_categories: null,
+          modifier_notes: `Takeaway Pack — ${p.name}`,
+          _existing: false,
+          _newId: crypto.randomUUID(),
+          menu_item_id: '',
+          unit_price: p.price,
+          total_price: p.qty * p.price,
+          order_id: '',
+        })),
+      ]
+      await onPlaceOrder({ table, items: allItems as typeof newItems, notes, total: newTotal })
     } finally {
       isSubmitting.current = false
     }
@@ -538,6 +594,65 @@ export default function OrderPanel({
             />
           </div>
         </div>
+
+        {/* Takeaway packs for table orders */}
+        {packSizes.length > 0 && orderItems.some((i) => !i._existing) && (
+          <div className="px-3 py-2 border-t border-gray-800 bg-gray-900 shrink-0">
+            <button
+              onClick={() => setShowPacks(!showPacks)}
+              className="flex items-center gap-1.5 text-amber-400 hover:text-amber-300 text-xs font-medium mb-1"
+            >
+              <ShoppingBag size={12} /> {showPacks ? 'Hide' : 'Add'} Takeaway Packs
+              {packFee > 0 && (
+                <span className="text-amber-400/60 ml-1">(₦{packFee.toLocaleString()})</span>
+              )}
+            </button>
+            {showPacks && (
+              <div className="space-y-1">
+                {packSizes.map((pack) => {
+                  const qty = packQuantities[pack.id] || 0
+                  return (
+                    <div key={pack.id} className="flex items-center gap-2">
+                      <button
+                        onClick={() =>
+                          setPackQuantities((p) => ({
+                            ...p,
+                            [pack.id]: Math.max(0, (p[pack.id] || 0) - 1),
+                          }))
+                        }
+                        disabled={qty === 0}
+                        className="w-5 h-5 rounded-full bg-gray-700 hover:bg-gray-600 disabled:opacity-30 flex items-center justify-center text-white text-[10px]"
+                      >
+                        -
+                      </button>
+                      <span
+                        className={`text-xs w-4 text-center ${qty > 0 ? 'text-white font-bold' : 'text-gray-600'}`}
+                      >
+                        {qty}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setPackQuantities((p) => ({ ...p, [pack.id]: (p[pack.id] || 0) + 1 }))
+                        }
+                        className="w-5 h-5 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white text-[10px]"
+                      >
+                        +
+                      </button>
+                      <span
+                        className={`text-xs flex-1 ${qty > 0 ? 'text-white' : 'text-gray-500'}`}
+                      >
+                        {pack.name}
+                      </span>
+                      <span className={`text-xs ${qty > 0 ? 'text-amber-400' : 'text-gray-600'}`}>
+                        ₦{pack.price.toLocaleString()}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="p-3 border-t border-gray-800 bg-gray-900 shrink-0">
           <div className="flex justify-between items-center mb-2">
