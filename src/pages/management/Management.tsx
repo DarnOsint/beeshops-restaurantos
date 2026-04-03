@@ -31,7 +31,8 @@ import { HelpTooltip } from '../../components/HelpTooltip'
 
 import OverviewTab from './mgmt/OverviewTab'
 import OpenOrdersTab from './mgmt/OpenOrdersTab'
-import CctvTab from './mgmt/CctvTab'
+import CctvPanel from '../executive/exec/CctvPanel'
+import type { CvData } from '../executive/exec/types'
 import SyncTab from './mgmt/SyncTab'
 import SettingsTab from './mgmt/SettingsTab'
 import ActivityLogTab from './mgmt/ActivityLogTab'
@@ -52,14 +53,14 @@ const sessionWindow = () => {
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'shifts', label: 'Shifts', icon: Clock },
-  { id: 'tables', label: 'Tables', icon: Users },
+  { id: 'tables', label: 'Zone Assignment', icon: Users },
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
   { id: 'till', label: 'Till', icon: DollarSign },
   { id: 'kitchen', label: 'Kitchen', icon: UtensilsCrossed },
   { id: 'chiller', label: 'Chiller', icon: Beer },
   { id: 'returns', label: 'Returns', icon: RotateCcw },
   { id: 'settings', label: 'Alert Threshold', icon: Settings },
-  { id: 'cctv', label: 'CCTV', icon: Camera },
+  { id: 'cctv', label: 'CV', icon: Camera },
   { id: 'sync', label: 'Sync', icon: RefreshCw },
   { id: 'activity', label: 'Activity Log', icon: Shield },
 ] as const
@@ -73,12 +74,6 @@ interface Stats {
   staffOnShift: number
   todayRevenue: number
 }
-interface CvData {
-  alerts: Record<string, unknown>[]
-  shelfAlerts: Record<string, unknown>[]
-  occupancy: number
-}
-
 export default function Management() {
   useAuth() // profile/signOut available via context when needed
   const [activeTab, setActiveTab] = useState<TabId>('overview')
@@ -103,7 +98,13 @@ export default function Management() {
     staffOnShift: 0,
     todayRevenue: 0,
   })
-  const [cvData, setCvData] = useState<CvData>({ alerts: [], shelfAlerts: [], occupancy: 0 })
+  const [cvData, setCvData] = useState<CvData>({
+    occupancy: 0,
+    todayAlerts: [],
+    zoneHeatmaps: [],
+    tillEvents: [],
+    shelfAlerts: [],
+  })
 
   const fetchStats = useCallback(async () => {
     void supabase.rpc('free_orphaned_tables')
@@ -134,21 +135,20 @@ export default function Management() {
   }, [])
 
   const fetchCvData = useCallback(async () => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const [alertsRes, shelfRes, occupancyRes] = await Promise.all([
+    const { start } = sessionWindow()
+    const [alertsRes, shelfRes, occupancyRes, heatmapRes, tillRes] = await Promise.all([
       supabase
         .from('cv_alerts')
         .select('*')
         .eq('resolved', false)
-        .gte('created_at', today.toISOString())
+        .gte('created_at', start.toISOString())
         .order('created_at', { ascending: false })
         .limit(15),
       supabase
         .from('cv_shelf_events')
         .select('*')
         .neq('alert_level', 'normal')
-        .gte('created_at', today.toISOString())
+        .gte('created_at', start.toISOString())
         .order('created_at', { ascending: false })
         .limit(10),
       supabase
@@ -156,11 +156,26 @@ export default function Management() {
         .select('occupancy')
         .order('created_at', { ascending: false })
         .limit(1),
+      supabase
+        .from('cv_zone_heatmaps')
+        .select('zone_label, person_count, avg_dwell_seconds')
+        .gte('created_at', start.toISOString())
+        .order('person_count', { ascending: false })
+        .limit(10),
+      supabase
+        .from('cv_till_events')
+        .select('*')
+        .neq('alert_type', 'normal')
+        .gte('created_at', start.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(10),
     ])
     setCvData({
-      alerts: (alertsRes.data || []) as Record<string, unknown>[],
-      shelfAlerts: (shelfRes.data || []) as Record<string, unknown>[],
       occupancy: occupancyRes.data?.[0]?.occupancy || 0,
+      todayAlerts: (alertsRes.data || []) as Record<string, unknown>[],
+      zoneHeatmaps: (heatmapRes.data || []) as Record<string, unknown>[],
+      tillEvents: (tillRes.data || []) as Record<string, unknown>[],
+      shelfAlerts: (shelfRes.data || []) as Record<string, unknown>[],
     })
   }, [])
 
@@ -215,7 +230,10 @@ export default function Management() {
 
   const resolveAlert = async (id: string) => {
     await supabase.from('cv_alerts').update({ resolved: true }).eq('id', id)
-    setCvData((prev) => ({ ...prev, alerts: prev.alerts.filter((a) => a.id !== id) }))
+    setCvData((prev) => ({
+      ...prev,
+      todayAlerts: prev.todayAlerts.filter((a) => (a as any).id !== id),
+    }))
   }
 
   const helpTips = [
@@ -233,7 +251,7 @@ export default function Management() {
     },
     {
       id: 'mgmt-tables',
-      title: 'Tables Tab',
+      title: 'Zone Assignment',
       description:
         'Assign waitrons to zones (Outdoor, Indoor, VIP Lounge, The Nook) or to specific individual tables. A waitron only sees and serves tables in their assigned area. You can reassign mid-shift if needed.',
     },
@@ -263,9 +281,9 @@ export default function Management() {
     },
     {
       id: 'mgmt-cctv',
-      title: 'CCTV Tab',
+      title: 'CV',
       description:
-        'Live occupancy, camera alerts, and heatmaps from the CV module. Resolve alerts directly from this tab — they are also surfaced on the Executive Dashboard.',
+        'Live computer vision: occupancy, alerts, shelf warnings, and till anomalies. Resolve alerts directly here; same data is shown on the Executive Dashboard.',
     },
     {
       id: 'mgmt-settings',
@@ -378,14 +396,7 @@ export default function Management() {
         {activeTab === 'kitchen' && <KitchenStock onBack={() => setActiveTab('overview')} />}
         {activeTab === 'chiller' && <ChillerSummaryTab />}
         {activeTab === 'returns' && <ReturnedDrinksTab />}
-        {activeTab === 'cctv' && (
-          <CctvTab
-            occupancy={cvData.occupancy}
-            alerts={cvData.alerts as any}
-            shelfAlerts={cvData.shelfAlerts as any}
-            onResolve={resolveAlert}
-          />
-        )}
+        {activeTab === 'cctv' && <CctvPanel cvData={cvData} onResolve={resolveAlert} />}
         {activeTab === 'sync' && (
           <SyncTab
             syncStatus={syncStatus}
