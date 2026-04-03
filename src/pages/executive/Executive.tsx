@@ -13,12 +13,31 @@ import CctvPanel from './exec/CctvPanel'
 import GeofenceControls from './exec/GeofenceControls'
 
 import type { Stats, TrendDay, CvData } from './exec/types'
+import type { PostgrestFilterBuilder } from '@supabase/postgrest-js'
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
 function getGreeting() {
   const h = new Date().getHours()
   return h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : 'Evening'
+}
+
+// Accounting session: 08:00 WAT previous day → 08:00 WAT current day
+function getSessionWindow() {
+  const now = new Date()
+  const lagosNow = new Date(
+    now.toLocaleString('en-US', {
+      timeZone: 'Africa/Lagos',
+    })
+  )
+  const sessionStart = new Date(lagosNow)
+  sessionStart.setHours(8, 0, 0, 0)
+  if (lagosNow.getHours() < 8) {
+    sessionStart.setDate(sessionStart.getDate() - 1)
+  }
+  const sessionEnd = new Date(sessionStart)
+  sessionEnd.setDate(sessionEnd.getDate() + 1)
+  return { sessionStart, sessionEnd, sessionStartIso: sessionStart.toISOString() }
 }
 
 const HELP_TIPS = [
@@ -107,8 +126,7 @@ export default function Executive() {
 
   const fetchStats = useCallback(async () => {
     void supabase.rpc('free_orphaned_tables')
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const { sessionStartIso } = getSessionWindow()
     const [ordersRes, tablesRes, roomsRes, shiftsRes, stockRes, recentRes, revenueRes, trendRes] =
       await Promise.all([
         supabase.from('orders').select('id').eq('status', 'open'),
@@ -117,20 +135,20 @@ export default function Executive() {
         supabase
           .from('attendance')
           .select('staff_id')
-          .eq('date', new Date().toISOString().split('T')[0])
-          .is('clock_out', null),
+          .or(`clock_out.is.null,clock_out.gte.${sessionStartIso}`)
+          .gte('clock_in', sessionStartIso),
         supabase.from('inventory').select('id, current_stock, minimum_stock').eq('is_active', true),
         supabase
           .from('orders')
           .select('*, tables(name), profiles(full_name)')
-          .gte('created_at', today.toISOString())
+          .gte('created_at', sessionStartIso)
           .order('created_at', { ascending: false })
           .limit(10),
         supabase
           .from('orders')
           .select('total_amount')
           .eq('status', 'paid')
-          .gte('created_at', today.toISOString()),
+          .gte('created_at', sessionStartIso),
         supabase
           .from('orders')
           .select('created_at, total_amount')
@@ -163,8 +181,7 @@ export default function Executive() {
   }, [])
 
   const fetchCvData = useCallback(async () => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const { sessionStartIso } = getSessionWindow()
     const [occupancyRes, alertsRes, heatmapRes, tillRes, shelfRes] = await Promise.all([
       supabase
         .from('cv_people_counts')
@@ -175,27 +192,27 @@ export default function Executive() {
         .from('cv_alerts')
         .select('*')
         .eq('resolved', false)
-        .gte('created_at', today.toISOString())
+        .gte('created_at', sessionStartIso)
         .order('created_at', { ascending: false })
         .limit(20),
       supabase
         .from('cv_zone_heatmaps')
         .select('zone_label, person_count, avg_dwell_seconds')
-        .gte('created_at', today.toISOString())
+        .gte('created_at', sessionStartIso)
         .order('person_count', { ascending: false })
         .limit(10),
       supabase
         .from('cv_till_events')
         .select('*')
         .neq('alert_type', 'normal')
-        .gte('created_at', today.toISOString())
+        .gte('created_at', sessionStartIso)
         .order('created_at', { ascending: false })
         .limit(10),
       supabase
         .from('cv_shelf_events')
         .select('*')
         .neq('alert_level', 'normal')
-        .gte('created_at', today.toISOString())
+        .gte('created_at', sessionStartIso)
         .order('created_at', { ascending: false })
         .limit(10),
     ])
