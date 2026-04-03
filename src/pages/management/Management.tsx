@@ -24,6 +24,7 @@ import WaiterCalls from './WaiterCalls'
 import KitchenStock from '../backoffice/KitchenStock'
 import ChillerSummaryTab from './mgmt/ChillerSummaryTab'
 import ReturnedDrinksTab from './mgmt/ReturnedDrinksTab'
+import VoidsTab from './mgmt/VoidsTab'
 import { useLateOrders } from '../../hooks/useLateOrders'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import type { SyncQueueEntry } from '../../lib/db'
@@ -48,6 +49,7 @@ const TABS = [
   { id: 'kitchen', label: 'Kitchen', icon: UtensilsCrossed },
   { id: 'chiller', label: 'Chiller', icon: Beer },
   { id: 'returns', label: 'Returns', icon: RotateCcw },
+  { id: 'voids', label: 'Voids', icon: Trash2 },
   { id: 'service', label: 'Service', icon: Clock },
   { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'cctv', label: 'CCTV', icon: Camera },
@@ -419,6 +421,7 @@ export default function Management() {
         {activeTab === 'kitchen' && <KitchenStock onBack={() => setActiveTab('overview')} />}
         {activeTab === 'chiller' && <ChillerSummaryTab />}
         {activeTab === 'returns' && <ReturnedDrinksTab />}
+        {activeTab === 'voids' && <VoidsTab />}
         {activeTab === 'cctv' && (
           <CctvTab
             occupancy={cvData.occupancy}

@@ -95,6 +95,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
   const [stockData, setStockData] = useState<Record<string, StockEntry>>({})
   const [expanded, setExpanded] = useState<string | null>(null)
   const [hasChanges, setHasChanges] = useState(false)
+  const [savedVoidQty, setSavedVoidQty] = useState<Record<string, number>>({})
 
   // Load bar menu items
   useEffect(() => {
@@ -269,6 +270,12 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         }
       }
       setStockData(stock)
+      // Track original void quantities to detect new voids on save
+      const origVoids: Record<string, number> = {}
+      for (const [name, entry] of Object.entries(stock)) {
+        origVoids[name] = entry.void_qty
+      }
+      setSavedVoidQty(origVoids)
       setHasChanges(false)
       setLoading(false)
     },
@@ -325,6 +332,22 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         await supabase.from('bar_chiller_stock').update(row).eq('id', entry.id)
       } else {
         await supabase.from('bar_chiller_stock').insert(row)
+      }
+      // Create void request for any newly added void quantities
+      const prevVoid = savedVoidQty[name] || 0
+      if (entry.void_qty > prevVoid) {
+        const delta = entry.void_qty - prevVoid
+        await supabase.from('void_requests').insert({
+          id: crypto.randomUUID(),
+          item_name: name,
+          quantity: delta,
+          reason: entry.note || 'Not specified',
+          station: 'bar',
+          requested_by: profile?.id,
+          requested_by_name: profile?.full_name,
+          status: 'pending',
+          requested_at: new Date().toISOString(),
+        })
       }
       saved++
     }

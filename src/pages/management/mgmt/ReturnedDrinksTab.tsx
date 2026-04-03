@@ -85,6 +85,20 @@ export default function ReturnedDrinksTab() {
   }, [date, fetchReturns])
 
   const managerApprove = async (r: ReturnEntry) => {
+    // Also accept the order_item if still pending (manager overrides station)
+    await supabase
+      .from('order_items')
+      .update({ return_accepted: true, return_accepted_at: new Date().toISOString() })
+      .eq('id', r.order_item_id)
+    // Recalculate order total
+    const { data: remaining } = await supabase
+      .from('order_items')
+      .select('total_price, return_accepted')
+      .eq('order_id', r.order_id)
+    const newTotal = (remaining || [])
+      .filter((ri: { return_accepted?: boolean }) => !ri.return_accepted)
+      .reduce((s: number, ri: { total_price: number }) => s + (ri.total_price || 0), 0)
+    await supabase.from('orders').update({ total_amount: newTotal }).eq('id', r.order_id)
     await supabase
       .from('returns_log')
       .update({
@@ -396,8 +410,8 @@ export default function ReturnedDrinksTab() {
                     </>
                   )}
                 </div>
-                {/* Manager approval buttons for bar_accepted items */}
-                {r.status === 'bar_accepted' && (
+                {/* Manager approval buttons for pending and bar_accepted items */}
+                {(r.status === 'bar_accepted' || r.status === 'pending') && (
                   <div className="flex gap-2">
                     <button
                       onClick={() => managerApprove(r)}
