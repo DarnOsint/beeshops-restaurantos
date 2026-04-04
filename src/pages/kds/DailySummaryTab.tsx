@@ -51,7 +51,6 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
         )
         .gte('created_at', startUTC)
         .lte('created_at', endUTC)
-        .in('status', ['pending', 'ready', 'delivered'])
 
       if (data) {
         const filtered = (
