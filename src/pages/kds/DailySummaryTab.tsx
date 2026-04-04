@@ -51,6 +51,7 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
         )
         .gte('created_at', startUTC)
         .lte('created_at', endUTC)
+      // include all statuses so served/ready/pending all show in summary
 
       if (data) {
         const filtered = (
