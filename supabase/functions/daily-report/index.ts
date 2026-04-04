@@ -50,7 +50,7 @@ async function fetchAll(start: Date, end: Date) {
 
     // order_items — for top sellers
     sb.from('order_items')
-      .select('quantity,total_price,menu_items(name,menu_categories(name))')
+      .select('quantity,total_price,unit_price,menu_items(name,menu_categories(name))')
       .gte('created_at',s).lte('created_at',e),
 
     // void_log — columns confirmed from schema + codebase
@@ -111,10 +111,16 @@ function buildEmail(dateStr: string, d: Awaited<ReturnType<typeof fetchAll>>) {
   const n       = d.orders.length
   const avg     = n ? total/n : 0
 
-  const cash     = d.orders.filter(o=>o.payment_method==='cash').reduce((s,o)=>s+(o.total_amount||0),0)
-  const transfer = d.orders.filter(o=>o.payment_method==='transfer').reduce((s,o)=>s+(o.total_amount||0),0)
-  const card     = d.orders.filter(o=>o.payment_method==='card').reduce((s,o)=>s+(o.total_amount||0),0)
-  const credit   = d.orders.filter(o=>o.payment_method==='credit').reduce((s,o)=>s+(o.total_amount||0),0)
+  const payMap: Record<string, number> = {}
+  d.orders.forEach(o => {
+    const k = (o.payment_method || 'unspecified').toLowerCase()
+    payMap[k] = (payMap[k] || 0) + (o.total_amount || 0)
+  })
+  const paymentRows = Object.entries(payMap).sort((a,b)=>b[1]-a[1])
+  const cash     = payMap['cash'] || 0
+  const transfer = payMap['transfer'] || 0
+  const card     = payMap['card'] || payMap['pos'] || 0
+  const credit   = payMap['credit'] || payMap['tab'] || 0
 
   // Peak hour WAT
   const hMap: Record<number,number> = {}
@@ -130,7 +136,14 @@ function buildEmail(dateStr: string, d: Awaited<ReturnType<typeof fetchAll>>) {
   d.orders.forEach(o => { const z=(o.tables as any)?.table_categories?.name||(o.order_type==='takeaway'?'Takeaway':o.order_type==='cash_sale'?'Counter':'Unknown'); zMap[z]=(zMap[z]||0)+(o.total_amount||0) })
 
   const iMap: Record<string,{qty:number,rev:number,cat:string}> = {}
-  d.items.forEach(i => { const n=(i.menu_items as any)?.name||'Unknown',c=(i.menu_items as any)?.menu_categories?.name||''; if(!iMap[n])iMap[n]={qty:0,rev:0,cat:c}; iMap[n].qty+=i.quantity||0; iMap[n].rev+=i.total_price||0 })
+  d.items.forEach(i => {
+    const n=(i.menu_items as any)?.name||'Unknown',c=(i.menu_items as any)?.menu_categories?.name||''
+    const unit = (i as any).unit_price ?? 0
+    const total = (i as any).total_price ?? unit*(i.quantity||0) ?? 0
+    if(!iMap[n]) iMap[n]={qty:0,rev:0,cat:c}
+    iMap[n].qty+=i.quantity||0
+    iMap[n].rev+= total
+  })
 
   // HTML helpers
   const td = (v: string) => `<td style="padding:7px 12px;font-size:13px;color:#1e293b">${v}</td>`
@@ -206,10 +219,7 @@ function buildEmail(dateStr: string, d: Awaited<ReturnType<typeof fetchAll>>) {
         ${kpi('Peak Hour',peakStr,'','#6366f1')}
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px">
-        ${kpi('Cash',fmt(cash),pct(cash,total))}
-        ${kpi('Transfer',fmt(transfer),pct(transfer,total))}
-        ${kpi('Bank POS',fmt(card),pct(card,total))}
-        ${credit>0?kpi('Credit/Tab',fmt(credit),pct(credit,total),'#d97706'):''}
+        ${paymentRows.map(([m,v])=>kpi(m.replace(/_/g,' ').toUpperCase(),fmt(v),pct(v,total))).join('')}
         ${voided>0?kpi('Voided',fmt(voided),d.voids.length+' void(s)','#dc2626'):''}
       </div>`)}
 
