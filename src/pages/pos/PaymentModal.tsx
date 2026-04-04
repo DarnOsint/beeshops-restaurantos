@@ -122,11 +122,12 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       })
   })
 
-  // Exclude items where return has been requested or accepted (both remove from payable)
-  const returnedTotal = (order?.order_items || [])
-    .filter((i) => i.return_requested || i.return_accepted)
+  // Calculate subtotal from items directly — never trust stored total_amount alone
+  // (stored total may not be updated yet after a bar return acceptance)
+  const activeItemsTotal = (order?.order_items || [])
+    .filter((i) => !i.return_requested && !i.return_accepted)
     .reduce((sum, i) => sum + (i.total_price || 0), 0)
-  const subtotal = (order?.total_amount || 0) - returnedTotal
+  const subtotal = activeItemsTotal
   const total = subtotal
   const change = paymentMethod === 'cash' && cashTendered ? parseFloat(cashTendered) - total : 0
 
@@ -289,7 +290,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       minute: '2-digit',
       hour12: true,
     })
-    const orderTotal = order?.total_amount || subtotal
+    const orderTotal = subtotal
 
     // Fetch bank accounts for transfer details
     const { data: bankData } = await supabase
