@@ -19,20 +19,24 @@ const sb = createClient(
 const fmt = (n: number) => `₦${Number(n||0).toLocaleString('en-NG',{minimumFractionDigits:2})}`
 const pct = (p: number, w: number) => w === 0 ? '—' : `${Math.round(p/w*100)}%`
 
-function yesterdayWAT() {
-  const nowWAT = new Date(Date.now() + 3_600_000)
-  const y = new Date(nowWAT); y.setUTCDate(y.getUTCDate()-1); y.setUTCHours(0,0,0,0)
-  const start = new Date(y.getTime() - 3_600_000)
-  const end   = new Date(start.getTime() + 86_400_000 - 1)
-  return { start, end }
+function sessionWindow8to8() {
+  // WAT = UTC+1
+  const nowUTC = Date.now()
+  const nowWAT = new Date(nowUTC + 3_600_000)
+  const sessionStartWAT = new Date(nowWAT)
+  if (nowWAT.getHours() < 8) sessionStartWAT.setDate(sessionStartWAT.getDate() - 1)
+  sessionStartWAT.setHours(8, 0, 0, 0)
+  const start = new Date(sessionStartWAT.getTime() - 3_600_000) // back to UTC
+  const end = new Date(start.getTime() + 86_400_000 - 1)
+  return { start, end, label: sessionStartWAT }
 }
 
 function toWAT(iso: string) {
   return new Date(iso).toLocaleTimeString('en-NG',{hour:'2-digit',minute:'2-digit',timeZone:'Africa/Lagos'})
 }
 
-function dateLabel(start: Date) {
-  return new Date(start.getTime()+3_600_000).toLocaleDateString('en-NG',{
+function dateLabel(startWAT: Date) {
+  return new Date(startWAT.getTime()).toLocaleDateString('en-NG',{
     weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'Africa/Lagos'
   })
 }
@@ -257,8 +261,8 @@ function buildEmail(dateStr: string, d: Awaited<ReturnType<typeof fetchAll>>) {
 
 Deno.serve(async () => {
   try {
-    const { start, end } = yesterdayWAT()
-    const label = dateLabel(start)
+    const { start, end, label: labelWAT } = sessionWindow8to8()
+    const label = dateLabel(labelWAT)
     const data  = await fetchAll(start, end)
 
     const ownerEmail = Deno.env.get('OWNER_EMAIL')
