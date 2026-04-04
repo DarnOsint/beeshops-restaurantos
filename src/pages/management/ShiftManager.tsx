@@ -104,10 +104,16 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
   }
   const fetchTodayLog = async (d?: string) => {
     const dateToFetch = d || logDate
+    // 8am session window for logs
+    const start = new Date(dateToFetch)
+    start.setHours(8, 0, 0, 0)
+    const end = new Date(start)
+    end.setDate(end.getDate() + 1)
     const { data } = await supabase
       .from('attendance')
       .select('*')
-      .eq('date', dateToFetch)
+      .gte('clock_in', start.toISOString())
+      .lt('clock_in', end.toISOString())
       .order('clock_in', { ascending: false })
     if (data) setTodayLog(data)
   }
