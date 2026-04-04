@@ -208,12 +208,17 @@ export default function TableConfig({ onBack }: Props) {
 
   // ── Bulk add tables ────────────────────────────────────────
   const [bulkCount, setBulkCount] = useState('5')
-  const [bulkZone, setBulkZone] = useState('')
+  const [bulkZone, setBulkZone] = useState<string>('')
   const [bulkAdding, setBulkAdding] = useState(false)
+
+  // Set default bulk zone once zones load
+  useEffect(() => {
+    if (zones.length > 0 && !bulkZone) setBulkZone(zones[0].id)
+  }, [zones, bulkZone])
 
   const bulkAddTables = async () => {
     const count = parseInt(bulkCount)
-    const zoneId = bulkZone || zones[0]?.id
+    const zoneId = bulkZone
     if (!zoneId || !count || count < 1) return
     const zoneName = zones.find((z) => z.id === zoneId)?.name || 'Table'
     setBulkAdding(true)
@@ -303,7 +308,7 @@ export default function TableConfig({ onBack }: Props) {
             <div className="flex-1">
               <label className="text-gray-500 text-[10px] uppercase block mb-1">Zone</label>
               <select
-                value={bulkZone || zones[0]?.id || ''}
+                value={bulkZone}
                 onChange={(e) => setBulkZone(e.target.value)}
                 className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
               >
@@ -498,6 +503,9 @@ export default function TableConfig({ onBack }: Props) {
                   onChange={(e) => setForm({ ...form, category_id: e.target.value })}
                   className={inp}
                 >
+                  <option value="" disabled>
+                    Select a zone...
+                  </option>
                   {zones.map((z) => (
                     <option key={z.id} value={z.id}>
                       {z.name}
