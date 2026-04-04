@@ -33,7 +33,11 @@ const CORS_HEADERS = {
   'Content-Type': 'application/json',
 }
 
-function sendToPrinter(data) {
+const { execSync } = require('child_process')
+const os = require('os')
+
+// Method 1: Raw TCP to printer IP:port (network printers)
+function sendViaTCP(data) {
   return new Promise((resolve, reject) => {
     const socket = new net.Socket()
     const timeout = setTimeout(() => {
@@ -62,6 +66,60 @@ function sendToPrinter(data) {
       reject(err)
     })
   })
+}
+
+// Method 2: Write temp file and use Windows print command (for printers added as devices)
+function sendViaWindows(data) {
+  return new Promise((resolve, reject) => {
+    try {
+      const tmpFile = path.join(os.tmpdir(), `beeshop_print_${Date.now()}.txt`)
+      fs.writeFileSync(tmpFile, data)
+      // Try to find the printer name that matches the IP
+      // First try: direct print via Windows 'print' command
+      try {
+        execSync(`print /d:"\\\\${PRINTER_IP}\\printer" "${tmpFile}"`, { timeout: 5000, stdio: 'ignore' })
+        fs.unlinkSync(tmpFile)
+        resolve()
+        return
+      } catch {}
+      // Second try: use 'copy' to the printer port (LPT/RAW)
+      try {
+        execSync(`copy /b "${tmpFile}" "\\\\${PRINTER_IP}\\receipt"`, { timeout: 5000, stdio: 'ignore' })
+        fs.unlinkSync(tmpFile)
+        resolve()
+        return
+      } catch {}
+      // Third try: use PowerShell to print to default printer
+      try {
+        execSync(`powershell -Command "Get-Content '${tmpFile}' | Out-Printer"`, { timeout: 10000, stdio: 'ignore' })
+        fs.unlinkSync(tmpFile)
+        resolve()
+        return
+      } catch {}
+      // Fourth try: use raw TCP to port 9100 via PowerShell
+      try {
+        execSync(`powershell -Command "$c = New-Object System.Net.Sockets.TcpClient('${PRINTER_IP}', ${PRINTER_PORT}); $s = $c.GetStream(); $b = [IO.File]::ReadAllBytes('${tmpFile}'); $s.Write($b, 0, $b.Length); $s.Close(); $c.Close()"`, { timeout: 10000, stdio: 'ignore' })
+        fs.unlinkSync(tmpFile)
+        resolve()
+        return
+      } catch {}
+      try { fs.unlinkSync(tmpFile) } catch {}
+      reject(new Error('All Windows print methods failed'))
+    } catch (err) {
+      reject(err)
+    }
+  })
+}
+
+// Try TCP first, then Windows methods
+async function sendToPrinter(data) {
+  try {
+    await sendViaTCP(data)
+    return
+  } catch (tcpErr) {
+    console.log(`TCP print failed (${tcpErr.message}), trying Windows methods...`)
+  }
+  await sendViaWindows(data)
 }
 
 const server = http.createServer(async (req, res) => {
