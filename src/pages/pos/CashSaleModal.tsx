@@ -49,6 +49,15 @@ interface Props {
   onClose: () => void
 }
 
+const normalizeDestination = (dest?: string | null): ItemDestination => {
+  const d = (dest || '').trim().toLowerCase()
+  if (d === 'kitchen') return 'kitchen'
+  if (d === 'griller' || d === 'grill' || d === 'grilling') return 'griller'
+  if (d === 'shisha' || d === 'hookah') return 'shisha'
+  if (d === 'bar') return 'bar'
+  return 'bar'
+}
+
 export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onClose }: Props) {
   const { profile } = useAuth()
   const toast = useToast()
@@ -331,7 +340,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
     setProcessing(true)
     try {
       const hasBarItems = orderItems.some((i) => {
-        const dest = (i.menu_categories?.destination || 'bar').toLowerCase()
+        const dest = normalizeDestination(i.menu_categories?.destination || 'bar')
         if (dest === 'shisha') return false
         return dest === 'bar'
       })
@@ -359,7 +368,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         unit_price: item.price,
         total_price: item.total,
         status: 'pending',
-        destination: item.menu_categories?.destination || 'bar',
+        destination: normalizeDestination(item.menu_categories?.destination || 'bar'),
         created_at: new Date().toISOString(),
       }))
       // Add takeaway pack fees as line items
@@ -387,7 +396,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
       for (const station of stations) {
         if (!getStationPrinterUrl(station)) continue
         const stationItems: TicketItem[] = orderItems
-          .filter((i) => (i.menu_categories?.destination || 'bar') === station)
+          .filter((i) => normalizeDestination(i.menu_categories?.destination) === station)
           .map((i) => ({ quantity: i.quantity, name: i.name, modifier_notes: null }))
         if (stationItems.length === 0) continue
         const ticketData = {
