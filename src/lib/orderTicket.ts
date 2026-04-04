@@ -84,3 +84,56 @@ export function buildOrderTicket(data: OrderTicketData): Uint8Array {
 
   return new Uint8Array(bytes)
 }
+
+/**
+ * Build an HTML version of the kitchen/griller ticket.
+ * Reliable fallback — works with any print server that accepts HTML.
+ */
+export function buildOrderTicketHTML(data: OrderTicketData): string {
+  const { station, tableName, orderRef, staffName, items, createdAt } = data
+  const W = 40
+  const fmtRow = (l: string, r: string) => {
+    const left = l.substring(0, W - r.length - 1)
+    return left + ' '.repeat(Math.max(1, W - left.length - r.length)) + r
+  }
+  const centre = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
+  const divider = '-'.repeat(W)
+  const doubleDivider = '='.repeat(W)
+  const fmtTime = new Date(createdAt).toLocaleTimeString('en-NG', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  })
+
+  const itemLines = items
+    .map((item) => {
+      let line = `  ${item.quantity}x ${item.name}`
+      if (item.modifier_notes) line += `\n     >> ${item.modifier_notes}`
+      return line
+    })
+    .join('\n')
+
+  const lines = [
+    '',
+    centre(`*** ${station.toUpperCase()} ORDER ***`),
+    doubleDivider,
+    fmtRow('Table:', tableName),
+    fmtRow('Ref:', orderRef),
+    fmtRow('Waiter:', staffName.substring(0, 22)),
+    fmtRow('Time:', fmtTime),
+    divider,
+    '',
+    itemLines,
+    '',
+    divider,
+    centre(`${items.length} item${items.length === 1 ? '' : 's'}`),
+    '',
+  ].join('\n')
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${station.toUpperCase()} Order</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; color: #000; background: #fff; width: 80mm; padding: 3mm; white-space: pre; line-height: 1.4; }
+@media print { body { width: 80mm; } @page { margin: 0; size: 80mm auto; } }
+</style></head><body>${lines}</body></html>`
+}

@@ -20,8 +20,8 @@ import {
 } from 'lucide-react'
 import type { MenuItem, ItemDestination } from '../../types'
 import { useToast } from '../../context/ToastContext'
-import { printToStation, getStationPrinterUrl } from '../../lib/networkPrinter'
-import { buildOrderTicket, type TicketItem } from '../../lib/orderTicket'
+import { printToStation, printHtmlToStation, getStationPrinterUrl } from '../../lib/networkPrinter'
+import { buildOrderTicket, buildOrderTicketHTML, type TicketItem } from '../../lib/orderTicket'
 
 interface OrderItemLocal {
   id: string
@@ -370,7 +370,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
           unit_price: pack.price,
           total_price: pack.qty * pack.price,
           status: 'delivered',
-          destination: 'bar',
+          destination: 'kitchen',
           modifier_notes: `Takeaway Pack — ${pack.name}`,
           created_at: new Date().toISOString(),
         } as (typeof itemRows)[0])
@@ -388,20 +388,22 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
           .filter((i) => (i.menu_categories?.destination || 'bar') === station)
           .map((i) => ({ quantity: i.quantity, name: i.name, modifier_notes: null }))
         if (stationItems.length === 0) continue
-        const ticket = buildOrderTicket({
+        const ticketData = {
           station,
           tableName: type === 'takeaway' ? `Takeaway — ${customerName || ''}` : 'Counter',
           orderRef: (order as { id: string }).id.slice(0, 8).toUpperCase(),
           staffName: profile?.full_name || '',
           items: stationItems,
           createdAt: new Date().toISOString(),
-        })
+        }
+        const escPosTicket = buildOrderTicket(ticketData)
+        const htmlTicket = buildOrderTicketHTML(ticketData)
         const configuredRaw = printCopiesConfig[station]
         const configured = Number(configuredRaw)
         const copies = Number.isFinite(configured) && configured > 0 ? Math.trunc(configured) : 2
-        for (let c = 0; c < copies; c++) {
-          printToStation(station, ticket).catch(() => {})
-        }
+        printToStation(station, escPosTicket, copies).catch(() => {
+          printHtmlToStation(station, htmlTicket, copies).catch(() => {})
+        })
       }
 
       if (hasBarItems) {

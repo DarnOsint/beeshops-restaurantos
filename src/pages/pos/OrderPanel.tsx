@@ -60,6 +60,8 @@ interface Props {
       })
     | null
   profile?: Profile | null
+  compact?: boolean
+  onRegisterAddItem?: (addFn: (item: MenuItem) => void) => void
 }
 
 export default function OrderPanel({
@@ -70,6 +72,8 @@ export default function OrderPanel({
   paymentInProgress = false,
   activeOrder,
   profile,
+  compact = false,
+  onRegisterAddItem,
 }: Props) {
   const toast = useToast()
   const [servedItems, setServedItems] = useState<Record<string, boolean>>(() => {
@@ -242,6 +246,15 @@ export default function OrderPanel({
       ]
     })
   }
+
+  // Register addItem with parent so desktop menu browser can call it
+  const addItemRef = useRef(addItem)
+  addItemRef.current = addItem
+  useEffect(() => {
+    if (compact && onRegisterAddItem) {
+      onRegisterAddItem((item: MenuItem) => addItemRef.current(item))
+    }
+  }, [compact, onRegisterAddItem])
 
   const removeItem = (itemKey: string) => {
     setOrderItems((prev) => {
@@ -447,34 +460,41 @@ export default function OrderPanel({
           </button>
         </div>
 
-        <div className="flex gap-1.5 px-3 py-2 overflow-x-auto border-b border-gray-800 shrink-0">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${activeCategory === cat ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex px-3 pt-2 pb-0 shrink-0">
-          <div className="flex items-center gap-2 flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 focus-within:border-amber-500 transition-colors">
-            <Search size={14} className="text-gray-500 shrink-0" />
-            <input
-              value={menuSearch}
-              onChange={(e) => setMenuSearch(e.target.value)}
-              placeholder="Search menu…"
-              className="flex-1 bg-transparent text-white text-sm placeholder-gray-500 focus:outline-none"
-            />
-            {menuSearch && (
-              <button onClick={() => setMenuSearch('')} className="text-gray-500 hover:text-white">
-                <X size={12} />
+        {!compact && (
+          <div className="flex gap-1.5 px-3 py-2 overflow-x-auto border-b border-gray-800 shrink-0">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${activeCategory === cat ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+              >
+                {cat}
               </button>
-            )}
+            ))}
           </div>
-        </div>
+        )}
+
+        {!compact && (
+          <div className="flex px-3 pt-2 pb-0 shrink-0">
+            <div className="flex items-center gap-2 flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 focus-within:border-amber-500 transition-colors">
+              <Search size={14} className="text-gray-500 shrink-0" />
+              <input
+                value={menuSearch}
+                onChange={(e) => setMenuSearch(e.target.value)}
+                placeholder="Search menu…"
+                className="flex-1 bg-transparent text-white text-sm placeholder-gray-500 focus:outline-none"
+              />
+              {menuSearch && (
+                <button
+                  onClick={() => setMenuSearch('')}
+                  className="text-gray-500 hover:text-white"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── Zone 1: On-table items (existing) ── */}
         {orderItems.some((i) => i._existing) && (
@@ -569,8 +589,8 @@ export default function OrderPanel({
           </div>
         )}
 
-        {/* ── Zone 3: Menu grid — scrolls freely ── */}
-        <div className="flex-1 overflow-y-auto">
+        {/* ── Zone 3: Menu grid (hidden in compact mode) ── */}
+        <div className={`flex-1 overflow-y-auto ${compact ? 'hidden' : ''}`}>
           <div className="p-3">
             {filteredMenu.length === 0 ? (
               <div className="text-center py-8 text-gray-500">

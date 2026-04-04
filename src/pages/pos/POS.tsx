@@ -4,9 +4,10 @@ import {
   setPrintServerUrl,
   setStationPrinterUrl,
   printToStation,
+  printHtmlToStation,
   getStationPrinterUrl,
 } from '../../lib/networkPrinter'
-import { buildOrderTicket, type TicketItem } from '../../lib/orderTicket'
+import { buildOrderTicket, buildOrderTicketHTML, type TicketItem } from '../../lib/orderTicket'
 import type { ItemDestination } from '../../types'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import { audit } from '../../lib/audit'
@@ -26,6 +27,7 @@ import {
   Unlink,
   X,
   Check,
+  Search,
 } from 'lucide-react'
 import TableGrid from './TableGrid'
 import CoversModal from './CoversModal'
@@ -104,6 +106,91 @@ interface OrderPayload {
   }[]
   notes: string
   total: number
+}
+
+/** Desktop menu browser — shown in the left 3/4 when a table is selected */
+function DesktopMenuBrowser({
+  menuItems,
+  onAddItem,
+}: {
+  menuItems: MenuItem[]
+  onAddItem: (item: MenuItem) => void
+}) {
+  const [search, setSearch] = useState('')
+  const [activeCategory, setActiveCategory] = useState('All')
+  const categories = [
+    'All',
+    ...new Set(
+      menuItems
+        .map((i) => (i as unknown as { menu_categories?: { name?: string } }).menu_categories?.name)
+        .filter(Boolean) as string[]
+    ),
+  ]
+  const filtered = menuItems.filter((item) => {
+    const matchSearch = !search || item.name.toLowerCase().includes(search.toLowerCase())
+    const matchCat =
+      activeCategory === 'All' ||
+      (item as unknown as { menu_categories?: { name?: string } }).menu_categories?.name ===
+        activeCategory
+    return matchSearch && matchCat
+  })
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex gap-1.5 px-4 py-2.5 overflow-x-auto border-b border-gray-800 shrink-0 bg-gray-900/50">
+        {categories.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setActiveCategory(cat)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${activeCategory === cat ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+      <div className="flex px-4 py-2 border-b border-gray-800 shrink-0">
+        <div className="flex items-center gap-2 flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 focus-within:border-amber-500 transition-colors">
+          <Search size={16} className="text-gray-500 shrink-0" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search menu…"
+            className="flex-1 bg-transparent text-white text-sm placeholder-gray-500 focus:outline-none"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="text-gray-500 hover:text-white">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+          {filtered.map((item) => {
+            const stock = (item as unknown as { current_stock?: number | null }).current_stock
+            const outOfStock = stock !== null && stock !== undefined && stock <= 0
+            return (
+              <button
+                key={item.id}
+                onClick={() => onAddItem(item)}
+                disabled={outOfStock}
+                className={`rounded-xl overflow-hidden text-left transition-all border active:scale-[0.97] ${outOfStock ? 'bg-gray-900 border-gray-800 opacity-50 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-700 border-gray-700 hover:border-amber-500/50'}`}
+              >
+                <div className="p-3">
+                  <p className="text-white text-sm font-medium leading-tight truncate">
+                    {item.name}
+                  </p>
+                  <p className="text-amber-400 text-sm font-bold mt-1">₦{item.price.toFixed(2)}</p>
+                  {outOfStock && (
+                    <p className="text-red-400 text-xs mt-0.5 font-bold">Out of stock</p>
+                  )}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function POS() {
@@ -649,30 +736,33 @@ export default function POS() {
         .map((i) => ({ quantity: i.quantity, name: i.name, modifier_notes: i.modifier_notes }))
       if (stationItems.length === 0) continue
 
-      const ticket = buildOrderTicket({
+      const ticketData = {
         station,
         tableName,
         orderRef,
         staffName,
         items: stationItems,
         createdAt,
-      })
+      }
+      const escPosTicket = buildOrderTicket(ticketData)
+      const htmlTicket = buildOrderTicketHTML(ticketData)
 
       // Print the configured number of copies — kitchen/griller default to 2
-      // If print_copies is missing or zero, fallback to default to avoid under-printing
       const defaultCopies = station === 'kitchen' || station === 'griller' ? 2 : 1
       const configuredRaw = printCopiesConfig[station]
       const configured = Number(configuredRaw)
       const copies =
         Number.isFinite(configured) && configured > 0 ? Math.trunc(configured) : defaultCopies
-      for (let c = 0; c < copies; c++) {
-        printToStation(station, ticket).catch(() => {
+      // Try ESC/POS first, fall back to HTML if it fails
+      printToStation(station, escPosTicket, copies).catch(() => {
+        printHtmlToStation(station, htmlTicket, copies).catch(() => {
           /* silent — station printer offline is not a blocker */
         })
-      }
+      })
     }
   }
 
+  const orderPanelAddItemRef = useRef<((item: MenuItem) => void) | null>(null)
   const placingOrderRef = useRef(false)
   const handlePlaceOrder = async ({ table, items, notes, total }: OrderPayload) => {
     if (placingOrderRef.current) return
@@ -1134,20 +1224,31 @@ export default function POS() {
               </div>
             )}
 
-            <TableGrid
-              tables={tables}
-              onSelectTable={handleSelectTable}
-              selectedTable={selectedTable}
-              assignedTableIds={assignedTableIds}
-              assignedZoneNames={assignedZoneNames}
-              defaultCategory={defaultZone}
-              tableStaffMap={tableStaffMap}
-              currentStaffId={profile?.id || null}
-              currentRole={profile?.role || null}
-              joinMode={joinMode}
-              joinSelectedIds={joinSelection.map((t) => t.id)}
-              activeJoins={activeJoins}
-            />
+            {!selectedTable ? (
+              <TableGrid
+                tables={tables}
+                onSelectTable={handleSelectTable}
+                selectedTable={selectedTable}
+                assignedTableIds={assignedTableIds}
+                assignedZoneNames={assignedZoneNames}
+                defaultCategory={defaultZone}
+                tableStaffMap={tableStaffMap}
+                currentStaffId={profile?.id || null}
+                currentRole={profile?.role || null}
+                joinMode={joinMode}
+                joinSelectedIds={joinSelection.map((t) => t.id)}
+                activeJoins={activeJoins}
+              />
+            ) : (
+              <div className="hidden md:flex flex-1 flex-col overflow-hidden">
+                <DesktopMenuBrowser
+                  menuItems={getMenuItemsWithZonePrices(selectedTable) as MenuItem[]}
+                  onAddItem={(item) => {
+                    orderPanelAddItemRef.current?.(item)
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
 
@@ -1462,8 +1563,34 @@ export default function POS() {
           </div>
         )}
 
+        {/* Desktop: compact order sidebar (1/4 width) */}
         {selectedTable && !showPayment && (
-          <div className="fixed inset-0 z-50 bg-gray-950 flex flex-col overflow-hidden">
+          <div
+            className="hidden md:flex w-1/4 min-w-[280px] max-w-[360px] border-l border-gray-800 flex-col overflow-hidden"
+            style={{ height: '100%' }}
+          >
+            <OrderPanel
+              table={selectedTable}
+              menuItems={getMenuItemsWithZonePrices(selectedTable) as MenuItem[]}
+              paymentInProgress={showPayment}
+              profile={profile}
+              onPlaceOrder={handlePlaceOrder}
+              activeOrder={activeOrder}
+              compact
+              onRegisterAddItem={(addFn) => {
+                orderPanelAddItemRef.current = addFn
+              }}
+              onClose={() => {
+                setSelectedTable(null)
+                setActiveOrder(null)
+              }}
+            />
+          </div>
+        )}
+
+        {/* Mobile: full-screen overlay */}
+        {selectedTable && !showPayment && (
+          <div className="md:hidden fixed inset-0 z-50 bg-gray-950 flex flex-col overflow-hidden">
             <OrderPanel
               table={selectedTable}
               menuItems={getMenuItemsWithZonePrices(selectedTable) as MenuItem[]}

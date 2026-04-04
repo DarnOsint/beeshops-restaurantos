@@ -77,19 +77,58 @@ export async function printViaNetwork(data: Uint8Array): Promise<boolean> {
   }
 }
 
-/** Print to a specific station printer */
-export async function printToStation(station: ItemDestination, data: Uint8Array): Promise<boolean> {
+/** Print to a specific station printer — supports multiple copies */
+export async function printToStation(
+  station: ItemDestination,
+  data: Uint8Array,
+  copies = 1
+): Promise<boolean> {
   const url = stationPrinterUrls[station]
   if (!url) return false
   try {
-    const res = await fetch(`${url}/print`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: Array.from(data) }),
-      signal: AbortSignal.timeout(5000),
-    })
-    const json = await res.json()
-    return json.success === true
+    for (let i = 0; i < copies; i++) {
+      const res = await fetch(`${url}/print`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: Array.from(data), copies: 1 }),
+        signal: AbortSignal.timeout(5000),
+      })
+      const json = await res.json()
+      if (json.success !== true) return false
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Print HTML to a station printer (fallback for printers that don't support ESC/POS) */
+export async function printHtmlToStation(
+  station: ItemDestination,
+  html: string,
+  copies = 1
+): Promise<boolean> {
+  const url = stationPrinterUrls[station]
+  if (!url) return false
+  try {
+    for (let i = 0; i < copies; i++) {
+      const res = await fetch(`${url}/print-html`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html }),
+        signal: AbortSignal.timeout(5000),
+      })
+      const json = await res.json()
+      if (json.success !== true) {
+        await fetch(`${url}/print`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ html }),
+          signal: AbortSignal.timeout(5000),
+        })
+      }
+    }
+    return true
   } catch {
     return false
   }
