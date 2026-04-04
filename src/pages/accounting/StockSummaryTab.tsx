@@ -191,6 +191,7 @@ export default function StockSummaryTab({ type }: Props) {
           e.opening_qty === 0 && carryOver[e.item_name] > 0
             ? carryOver[e.item_name]
             : e.opening_qty,
+        sold_qty: map[e.item_name] ?? e.sold_qty ?? 0,
       }))
 
       // Add synthetic rows for items sold but missing in stock register (prevents hidden variance)

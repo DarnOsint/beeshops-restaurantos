@@ -178,6 +178,7 @@ export default function ChillerSummaryTab() {
         e.opening_qty === 0 && carryOver[e.item_name] != null
           ? carryOver[e.item_name]
           : e.opening_qty,
+      sold_qty: map[e.item_name] ?? e.sold_qty ?? 0,
     }))
 
     // Add synthetic rows for items that sold but weren't in the register to surface variance
