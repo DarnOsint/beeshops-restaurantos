@@ -18,6 +18,7 @@ import {
 import ReceiptModal from './ReceiptModal'
 import type { Table, Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
+import { buildOrderTicketHTML, type TicketItem } from '../../lib/orderTicket'
 
 interface OrderItemExtended {
   id: string
@@ -66,6 +67,14 @@ interface Props {
   onClose: () => void
 }
 
+const normalizeDestination = (dest?: string | null): 'kitchen' | 'griller' | 'bar' | 'shisha' => {
+  const d = (dest || '').trim().toLowerCase()
+  if (d === 'kitchen') return 'kitchen'
+  if (d === 'griller' || d === 'grill' || d === 'grilling') return 'griller'
+  if (d === 'shisha' || d === 'hookah') return 'shisha'
+  return 'bar'
+}
+
 export default function PaymentModal({ order: orderProp, table, onSuccess, onClose }: Props) {
   const [order, setOrder] = useState(orderProp)
   // Sync when parent refreshes the order (realtime DB update)
@@ -81,7 +90,24 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       .select('*, order_items(*, menu_items(name, price, menu_categories(name, destination)))')
       .eq('id', order.id)
       .single()
-    if (data) setOrder(data as unknown as OrderExtended)
+    if (data) {
+      setOrder(data as unknown as OrderExtended)
+      const items = (data as any).order_items || []
+      const pendingKitchen = items.filter(
+        (i: any) =>
+          normalizeDestination(
+            i.destination || i.menu_items?.menu_categories?.destination || 'bar'
+          ) === 'kitchen' && i.status === 'pending'
+      ).length
+      const pendingGrill = items.filter(
+        (i: any) =>
+          normalizeDestination(
+            i.destination || i.menu_items?.menu_categories?.destination || 'bar'
+          ) === 'griller' && i.status === 'pending'
+      ).length
+      setKitchenPendingCount(pendingKitchen)
+      setGrillPendingCount(pendingGrill)
+    }
   }
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
   const [cashTendered, setCashTendered] = useState('')
@@ -107,6 +133,10 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   const [selectedBankId, setSelectedBankId] = useState<string>('')
   const [tipAmount, setTipAmount] = useState('')
   const [amountReceived, setAmountReceived] = useState('')
+  const [cashSplit, setCashSplit] = useState('')
+  const [secondarySplit, setSecondarySplit] = useState('')
+  const [kitchenPendingCount, setKitchenPendingCount] = useState(0)
+  const [grillPendingCount, setGrillPendingCount] = useState(0)
 
   useState(() => {
     supabase
@@ -491,6 +521,53 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       }
     } catch {
       // Network print failed — browser print already handled it
+    }
+  }
+
+  const printPendingForStation = (station: 'kitchen' | 'griller') => {
+    const pending = (order?.order_items || []).filter(
+      (i) =>
+        normalizeDestination(
+          i.destination || (i as any)?.menu_items?.menu_categories?.destination || 'bar'
+        ) === station && i.status === 'pending'
+    )
+    if (pending.length === 0) {
+      toast.info('No pending items', `No waiting ${station} items to print.`)
+      return
+    }
+    const ticket: TicketItem[] = pending.map((i) => ({
+      quantity: i.quantity,
+      name:
+        i.menu_items?.name ||
+        (i as unknown as { modifier_notes?: string }).modifier_notes ||
+        'Item',
+      modifier_notes: (i as unknown as { modifier_notes?: string }).modifier_notes || null,
+    }))
+    const html = buildOrderTicketHTML({
+      station,
+      tableName: table?.name || 'Counter',
+      orderRef: (order?.id || '').slice(0, 8).toUpperCase(),
+      staffName: profile?.full_name || '',
+      items: ticket,
+      createdAt: new Date().toISOString(),
+    })
+    const copies = 2
+    for (let c = 0; c < copies; c++) {
+      const w = window.open('', '_blank', 'width=420,height=640,toolbar=no,menubar=no')
+      if (!w) continue
+      w.document.open('text/html', 'replace')
+      w.document.write(html)
+      w.document.close()
+      w.onload = () =>
+        setTimeout(() => {
+          try {
+            w.print()
+          } catch {
+            /* ignore */
+          } finally {
+            w.close()
+          }
+        }, 150)
     }
   }
 
@@ -1029,6 +1106,20 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
               title="Print receipt for customer to review before payment"
             >
               <Printer size={13} /> Print Receipt
+            </button>
+            <button
+              onClick={() => printPendingForStation('kitchen')}
+              className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors"
+              title="Print waiting kitchen items"
+            >
+              <Printer size={13} /> Kitchen ({kitchenPendingCount})
+            </button>
+            <button
+              onClick={() => printPendingForStation('griller')}
+              className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors"
+              title="Print waiting griller items"
+            >
+              <Printer size={13} /> Grill ({grillPendingCount})
             </button>
             <button onClick={onClose} className="text-gray-400 hover:text-white">
               <X size={20} />
