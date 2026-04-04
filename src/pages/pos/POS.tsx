@@ -744,7 +744,7 @@ export default function POS() {
   }
 
   /** Send order tickets to configured station printers (kitchen/griller/bar) */
-  const printStationTickets = (
+  const printStationTickets = async (
     items: Array<{
       quantity: number
       name: string
@@ -764,7 +764,10 @@ export default function POS() {
       if (station === 'bar' && mode === 'display') continue
       const stationUrl = getStationPrinterUrl(station)
       // If no dedicated station printer, fall back to main print server
-      if (!stationUrl && !(await isNetworkPrinterAvailable())) continue
+      if (!stationUrl) {
+        const available = await isNetworkPrinterAvailable()
+        if (!available) continue
+      }
 
       const stationItems: TicketItem[] = items
         .filter((i) => normalizeDestination(i.destination) === station)
@@ -789,19 +792,17 @@ export default function POS() {
       const copies =
         Number.isFinite(configured) && configured > 0 ? Math.trunc(configured) : defaultCopies
       // Try ESC/POS first, fall back to HTML if it fails
-      const sendPrint = async () => {
+      try {
         if (stationUrl) {
           await printToStation(station, escPosTicket, copies)
-          return
+        } else {
+          await printViaNetwork(escPosTicket)
         }
-        // Fallback to main print server if station printer not configured
-        await printViaNetwork(escPosTicket)
-      }
-      sendPrint().catch(() => {
+      } catch {
         if (stationUrl) {
           printHtmlToStation(station, htmlTicket, copies).catch(() => {})
         }
-      })
+      }
     }
   }
 
