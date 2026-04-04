@@ -87,6 +87,11 @@ export default function StockSummaryTab({ type }: Props) {
                       (r.void_qty || 0)
                   )
             return {
+              id:
+                r.id ||
+                (typeof crypto !== 'undefined' && crypto.randomUUID
+                  ? crypto.randomUUID()
+                  : Math.random().toString(36).slice(2)),
               date: dateKey,
               item_name: r.item_name,
               unit: r.unit,
@@ -101,8 +106,14 @@ export default function StockSummaryTab({ type }: Props) {
             }
           })
           if (seedRows.length > 0) {
-            const inserted = await supabase.from(tableName).insert(seedRows).select()
-            seededRows = (inserted.data || seedRows) as StockEntry[]
+            const { data: inserted, error } = await supabase
+              .from(tableName)
+              .insert(seedRows)
+              .select()
+            seededRows = (inserted || seedRows) as StockEntry[]
+            if (error) {
+              console.warn('Carryover insert failed, showing derived rows only', error.message)
+            }
           }
         }
       }
