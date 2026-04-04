@@ -46,6 +46,7 @@ const normalizeDestination = (dest?: string | null): ItemDestination => {
   const d = (dest || '').trim().toLowerCase()
   if (d === 'kitchen') return 'kitchen'
   if (d === 'griller' || d === 'grill' || d === 'grilling') return 'griller'
+  if (d === 'shisha' || d === 'hookah') return 'shisha'
   if (d === 'bar') return 'bar'
   return 'bar'
 }
