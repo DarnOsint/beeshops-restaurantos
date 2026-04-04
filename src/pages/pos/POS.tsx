@@ -6,6 +6,7 @@ import {
   printToStation,
   printHtmlToStation,
   getStationPrinterUrl,
+  printViaNetwork,
 } from '../../lib/networkPrinter'
 import { buildOrderTicket, buildOrderTicketHTML, type TicketItem } from '../../lib/orderTicket'
 import type { ItemDestination } from '../../types'
@@ -761,8 +762,9 @@ export default function POS() {
       // For bar: skip printing if display-only
       // For kitchen/griller: ALWAYS print if a printer is configured (they need physical tickets)
       if (station === 'bar' && mode === 'display') continue
-      // Need a printer configured for this station
-      if (!getStationPrinterUrl(station)) continue
+      const stationUrl = getStationPrinterUrl(station)
+      // If no dedicated station printer, fall back to main print server
+      if (!stationUrl && !(await isNetworkPrinterAvailable())) continue
 
       const stationItems: TicketItem[] = items
         .filter((i) => normalizeDestination(i.destination) === station)
@@ -787,10 +789,18 @@ export default function POS() {
       const copies =
         Number.isFinite(configured) && configured > 0 ? Math.trunc(configured) : defaultCopies
       // Try ESC/POS first, fall back to HTML if it fails
-      printToStation(station, escPosTicket, copies).catch(() => {
-        printHtmlToStation(station, htmlTicket, copies).catch(() => {
-          /* silent — station printer offline is not a blocker */
-        })
+      const sendPrint = async () => {
+        if (stationUrl) {
+          await printToStation(station, escPosTicket, copies)
+          return
+        }
+        // Fallback to main print server if station printer not configured
+        await printViaNetwork(escPosTicket)
+      }
+      sendPrint().catch(() => {
+        if (stationUrl) {
+          printHtmlToStation(station, htmlTicket, copies).catch(() => {})
+        }
       })
     }
   }
