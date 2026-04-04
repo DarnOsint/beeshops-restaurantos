@@ -122,8 +122,8 @@ const server = http.createServer(async (req, res) => {
     return
   }
 
-  // Print endpoint
-  if (req.method === 'POST' && req.url === '/print') {
+  // Print endpoint — accepts { data: [bytes] } or { text: "plain string" }
+  if (req.method === 'POST' && (req.url === '/print' || req.url === '/print-text')) {
     let body = []
     req.on('data', chunk => body.push(chunk))
     req.on('end', async () => {
@@ -131,15 +131,55 @@ const server = http.createServer(async (req, res) => {
         const buf = Buffer.concat(body)
         const json = JSON.parse(buf.toString())
 
-        if (!json.data || !Array.isArray(json.data)) {
+        let printData
+
+        if (json.text && typeof json.text === 'string') {
+          // Plain text — convert to bytes directly (works on all thermal printers)
+          printData = Buffer.from(json.text, 'utf8')
+        } else if (json.data && Array.isArray(json.data)) {
+          // Raw byte array (ESC/POS or plain text bytes)
+          printData = Buffer.from(json.data)
+        } else if (json.html && typeof json.html === 'string') {
+          // HTML — strip tags and send as plain text (basic fallback)
+          const plainText = json.html.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+          printData = Buffer.from(plainText, 'utf8')
+        } else {
           res.writeHead(400, CORS_HEADERS)
-          res.end(JSON.stringify({ error: 'Missing data array' }))
+          res.end(JSON.stringify({ error: 'Missing data, text, or html field' }))
           return
         }
 
-        const printData = Buffer.from(json.data)
         await sendToPrinter(printData)
         console.log(`[${new Date().toLocaleTimeString()}] Printed ${printData.length} bytes OK`)
+        res.writeHead(200, CORS_HEADERS)
+        res.end(JSON.stringify({ success: true, bytes: printData.length }))
+      } catch (err) {
+        console.error(`[${new Date().toLocaleTimeString()}] Print error:`, err.message)
+        res.writeHead(500, CORS_HEADERS)
+        res.end(JSON.stringify({ error: err.message }))
+      }
+    })
+    return
+  }
+
+  // Print HTML endpoint — strips tags and prints as text
+  if (req.method === 'POST' && req.url === '/print-html') {
+    let body = []
+    req.on('data', chunk => body.push(chunk))
+    req.on('end', async () => {
+      try {
+        const buf = Buffer.concat(body)
+        const json = JSON.parse(buf.toString())
+        if (!json.html) {
+          res.writeHead(400, CORS_HEADERS)
+          res.end(JSON.stringify({ error: 'Missing html field' }))
+          return
+        }
+        // Strip HTML tags → plain text → send to printer
+        const plainText = json.html.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+        const printData = Buffer.from(plainText, 'utf8')
+        await sendToPrinter(printData)
+        console.log(`[${new Date().toLocaleTimeString()}] Printed HTML (${printData.length} bytes) OK`)
         res.writeHead(200, CORS_HEADERS)
         res.end(JSON.stringify({ success: true, bytes: printData.length }))
       } catch (err) {
