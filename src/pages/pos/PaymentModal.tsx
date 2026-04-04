@@ -162,8 +162,6 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     .reduce((sum, i) => sum + (i.total_price || 0), 0)
   const subtotal = activeItemsTotal
   const total = subtotal
-  const [cashSplit, setCashSplit] = useState('')
-  const [secondarySplit, setSecondarySplit] = useState('')
   const change = paymentMethod === 'cash' && cashTendered ? parseFloat(cashTendered) - total : 0
 
   // Only bar items block payment — kitchen/griller have no dedicated tab so waitron can pay freely
