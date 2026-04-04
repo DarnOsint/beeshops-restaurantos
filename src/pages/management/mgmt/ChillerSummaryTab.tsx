@@ -153,16 +153,6 @@ export default function ChillerSummaryTab() {
       }
     }
 
-    const rawEntries = (seededRows || entriesRes.data || []) as ChillerEntry[]
-    const withCarry = rawEntries.map((e) => ({
-      ...e,
-      opening_qty:
-        e.opening_qty === 0 && carryOver[e.item_name] != null
-          ? carryOver[e.item_name]
-          : e.opening_qty,
-    }))
-    setEntries(withCarry)
-
     const map: Record<string, number> = {}
     if (soldRes.data) {
       for (const item of soldRes.data as unknown as Array<{
@@ -180,11 +170,40 @@ export default function ChillerSummaryTab() {
       }
     }
     setSoldMap(map)
+
+    const rawEntries = (seededRows || entriesRes.data || []) as ChillerEntry[]
+    const withCarry = rawEntries.map((e) => ({
+      ...e,
+      opening_qty:
+        e.opening_qty === 0 && carryOver[e.item_name] != null
+          ? carryOver[e.item_name]
+          : e.opening_qty,
+    }))
+
+    // Add synthetic rows for items that sold but weren't in the register to surface variance
+    const missingSold = Object.keys(map).filter(
+      (name) => !withCarry.find((e) => e.item_name === name)
+    )
+    const synthetic: ChillerEntry[] = missingSold.map((name) => ({
+      id: `synthetic-${name}`,
+      date: dateKey,
+      item_name: name,
+      unit: '',
+      opening_qty: 0,
+      received_qty: 0,
+      sold_qty: map[name],
+      void_qty: 0,
+      closing_qty: 0,
+      note: 'Auto-added (sold without stock entry)',
+      updated_at: new Date().toISOString(),
+    }))
+
+    setEntries([...withCarry, ...synthetic])
     setLoading(false)
   }, [])
 
   useEffect(() => {
-    fetchData(date)
+    void fetchData(date)
   }, [date, fetchData])
 
   const getEffectiveClosing = (e: ChillerEntry) => {

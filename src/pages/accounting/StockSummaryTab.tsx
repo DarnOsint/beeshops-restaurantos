@@ -164,17 +164,7 @@ export default function StockSummaryTab({ type }: Props) {
         }
       }
 
-      // Fix entries: apply carry-over opening where saved opening is 0
-      const rawEntries = (seededRows || entriesRes.data || []) as StockEntry[]
-      const fixedEntries = rawEntries.map((e) => ({
-        ...e,
-        opening_qty:
-          e.opening_qty === 0 && carryOver[e.item_name] > 0
-            ? carryOver[e.item_name]
-            : e.opening_qty,
-      }))
-      setEntries(fixedEntries)
-
+      // Build sold map from POS
       const map: Record<string, number> = {}
       if (soldRes.data) {
         for (const item of soldRes.data as unknown as Array<{
@@ -192,13 +182,41 @@ export default function StockSummaryTab({ type }: Props) {
         }
       }
       setSoldMap(map)
+
+      // Fix entries: apply carry-over opening where saved opening is 0
+      const rawEntries = (seededRows || entriesRes.data || []) as StockEntry[]
+      const fixedEntries = rawEntries.map((e) => ({
+        ...e,
+        opening_qty:
+          e.opening_qty === 0 && carryOver[e.item_name] > 0
+            ? carryOver[e.item_name]
+            : e.opening_qty,
+      }))
+
+      // Add synthetic rows for items sold but missing in stock register (prevents hidden variance)
+      const missingSold = Object.keys(map).filter(
+        (name) => !fixedEntries.find((e) => e.item_name === name)
+      )
+      const synthetic: StockEntry[] = missingSold.map((name) => ({
+        id: `synthetic-${name}`,
+        item_name: name,
+        unit: '',
+        opening_qty: 0,
+        received_qty: 0,
+        sold_qty: map[name],
+        void_qty: 0,
+        closing_qty: 0,
+        note: 'Auto-added (sold without stock entry)',
+      }))
+
+      setEntries([...fixedEntries, ...synthetic])
       setLoading(false)
     },
     [tableName, destination]
   )
 
   useEffect(() => {
-    fetchData(date)
+    void fetchData(date)
   }, [date, fetchData])
 
   // Always compute closing from live POS data — saved closing_qty is never used
