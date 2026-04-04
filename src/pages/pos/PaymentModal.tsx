@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
+import { sendPushToStaff } from '../../hooks/usePushNotifications'
 import { isNetworkPrinterAvailable, printViaNetwork } from '../../lib/networkPrinter'
 import { buildReceipt } from '../../hooks/useThermalPrinter'
 import {
@@ -190,6 +191,28 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       requested_at: new Date().toISOString(),
       ...(autoAccept ? { resolved_at: new Date().toISOString() } : {}),
     })
+
+    // Notify bar staff about the return request (for bar items that aren't auto-accepted)
+    if (!autoAccept && itemDest === 'bar') {
+      const { data: barStaff } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'bar')
+        .eq('is_active', true)
+      if (barStaff) {
+        const itemName =
+          item.menu_items?.name ||
+          (item as unknown as { modifier_notes?: string }).modifier_notes ||
+          'Item'
+        for (const staff of barStaff) {
+          sendPushToStaff(
+            staff.id,
+            '↩ Return Requested',
+            `${item.quantity}x ${itemName} — ${table?.name || 'Table'} — Reason: ${reason}`
+          ).catch(() => {})
+        }
+      }
+    }
 
     // If auto-accepted, recalculate order total immediately
     if (autoAccept) {

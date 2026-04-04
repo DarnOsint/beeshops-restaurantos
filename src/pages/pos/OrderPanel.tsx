@@ -15,6 +15,7 @@ import {
 import type { Table, MenuItem, Order, OrderItem, Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
 import { audit } from '../../lib/audit'
+import { sendPushToStaff } from '../../hooks/usePushNotifications'
 
 interface OrderItemLocal {
   id: string
@@ -309,10 +310,70 @@ export default function OrderPanel({
 
     // Waitron — send deletion request to manager
     if (pendingDeletes.has(dbId)) {
-      toast.warning('Already requested', 'Waiting for manager approval')
+      toast.warning('Already requested', 'Waiting for manager/bar approval')
       return
     }
 
+    // For bar items: also mark as return_requested so barman sees it on KDS + notify bar staff
+    const itemDest = item.menu_categories?.destination || 'bar'
+    if (itemDest === 'bar') {
+      await supabase
+        .from('order_items')
+        .update({
+          return_requested: true,
+          return_reason: 'Deleted by waitron',
+          return_requested_at: new Date().toISOString(),
+        })
+        .eq('id', dbId)
+      // Log to returns_log
+      await supabase.from('returns_log').insert({
+        order_id: activeOrder?.id,
+        order_item_id: dbId,
+        item_name: item.name,
+        quantity: item.quantity,
+        item_total: item.total,
+        table_name: table?.name ?? null,
+        waitron_id: profile?.id ?? null,
+        waitron_name: profile?.full_name ?? null,
+        return_reason: 'Deleted by waitron',
+        status: 'pending',
+        requested_at: new Date().toISOString(),
+      })
+      // Notify all bar staff
+      const { data: barStaff } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'bar')
+        .eq('is_active', true)
+      if (barStaff) {
+        for (const staff of barStaff) {
+          sendPushToStaff(
+            staff.id,
+            '↩ Return Requested',
+            `${item.quantity}x ${item.name} — ${table?.name || 'Table'} — Deleted by ${profile?.full_name || 'waitron'}`
+          ).catch(() => {})
+        }
+      }
+      setPendingDeletes((prev) => new Set(prev).add(dbId))
+      toast.success('Return Sent to Bar', `${item.name} — bar will review`)
+      await audit({
+        action: 'ITEM_DELETE_REQUESTED',
+        entity: 'order_item',
+        entityId: dbId,
+        entityName: item.name,
+        newValue: {
+          order_id: activeOrder?.id,
+          table: table?.name,
+          quantity: item.quantity,
+          total: item.total,
+          sentToBar: true,
+        },
+        performer: profile as Profile,
+      })
+      return
+    }
+
+    // Non-bar items: send deletion request to manager via settings
     // Load existing requests, add this one, save
     const { data: settingsRow } = await supabase
       .from('settings')
