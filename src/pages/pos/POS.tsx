@@ -810,21 +810,26 @@ export default function POS() {
             updated_at: new Date().toISOString(),
           })
           .eq('id', activeOrder.id)
-        const newItems = items.map((item) => ({
-          id: crypto.randomUUID(),
-          order_id: activeOrder.id,
-          menu_item_id: Object.prototype.hasOwnProperty.call(item, 'menu_item_id')
-            ? (item as unknown as { menu_item_id: string | null }).menu_item_id
-            : item.id,
-          quantity: item.quantity,
-          unit_price: item.price,
-          total_price: item.total,
-          status: 'pending',
-          destination: normalizeDestination(item.menu_categories?.destination),
-          modifier_notes: item.modifier_notes || null,
-          extra_charge: item.extra_charge || 0,
-          created_at: new Date().toISOString(),
-        }))
+        const newItems = items.map((item) => {
+          const isPack = (item.modifier_notes || '').startsWith('Takeaway Pack')
+          return {
+            id: crypto.randomUUID(),
+            order_id: activeOrder.id,
+            menu_item_id: Object.prototype.hasOwnProperty.call(item, 'menu_item_id')
+              ? (item as unknown as { menu_item_id: string | null }).menu_item_id
+              : item.id,
+            quantity: item.quantity,
+            unit_price: item.price,
+            total_price: item.total,
+            status: isPack ? 'delivered' : 'pending',
+            destination: isPack
+              ? 'kitchen'
+              : normalizeDestination(item.menu_categories?.destination),
+            modifier_notes: item.modifier_notes || null,
+            extra_charge: item.extra_charge || 0,
+            created_at: new Date().toISOString(),
+          }
+        })
         for (const item of newItems) {
           const { error } = await supabase.from('order_items').insert(item)
           if (error) {
@@ -925,21 +930,26 @@ export default function POS() {
 
       const orderItemRows = [
         ...baseItems,
-        ...items.map((item) => ({
-          id: crypto.randomUUID(),
-          order_id: (newOrder as Order).id,
-          menu_item_id: Object.prototype.hasOwnProperty.call(item, 'menu_item_id')
-            ? (item as unknown as { menu_item_id: string | null }).menu_item_id
-            : item.id,
-          quantity: item.quantity,
-          unit_price: item.price,
-          total_price: item.total,
-          status: 'pending',
-          destination: normalizeDestination(item.menu_categories?.destination),
-          modifier_notes: item.modifier_notes || null,
-          extra_charge: item.extra_charge || 0,
-          created_at: new Date().toISOString(),
-        })),
+        ...items.map((item) => {
+          const isPack = (item.modifier_notes || '').startsWith('Takeaway Pack')
+          return {
+            id: crypto.randomUUID(),
+            order_id: (newOrder as Order).id,
+            menu_item_id: Object.prototype.hasOwnProperty.call(item, 'menu_item_id')
+              ? (item as unknown as { menu_item_id: string | null }).menu_item_id
+              : item.id,
+            quantity: item.quantity,
+            unit_price: item.price,
+            total_price: item.total,
+            status: isPack ? 'delivered' : 'pending',
+            destination: isPack
+              ? 'kitchen'
+              : normalizeDestination(item.menu_categories?.destination),
+            modifier_notes: item.modifier_notes || null,
+            extra_charge: item.extra_charge || 0,
+            created_at: new Date().toISOString(),
+          }
+        }),
       ]
       for (const item of orderItemRows) {
         const { error } = await supabase.from('order_items').insert(item)
