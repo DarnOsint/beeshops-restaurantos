@@ -2,7 +2,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { Beer, ChefHat, Printer, RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
-const todayStr = () => new Date().toISOString().slice(0, 10)
+const todayStr = () => {
+  const now = new Date()
+  const d = new Date(now)
+  if (now.getHours() < 8) d.setDate(d.getDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
 
 interface StockEntry {
   id: string
@@ -34,14 +39,17 @@ export default function StockSummaryTab({ type }: Props) {
   const fetchData = useCallback(
     async (d: string) => {
       setLoading(true)
-      const dayStart = new Date(d)
-      dayStart.setHours(8, 0, 0, 0)
-      if (new Date(d).getHours() < 8) dayStart.setDate(dayStart.getDate() - 1)
-      const dayEnd = new Date(dayStart)
+      const todayIso = new Date().toISOString().slice(0, 10)
+      const base = new Date(d)
+      if (d === todayIso && new Date().getHours() < 8) base.setDate(base.getDate() - 1)
+      base.setHours(8, 0, 0, 0)
+      const dayStart = base
+      const dayEnd = new Date(base)
       dayEnd.setDate(dayEnd.getDate() + 1)
+      const dateKey = base.toISOString().slice(0, 10)
 
       const [entriesRes, soldRes, prevRes] = await Promise.all([
-        supabase.from(tableName).select('*').eq('date', d).order('item_name'),
+        supabase.from(tableName).select('*').eq('date', dateKey).order('item_name'),
         supabase
           .from('order_items')
           .select('quantity, status, return_accepted, menu_items(name), orders(status)')
