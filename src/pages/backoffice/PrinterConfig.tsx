@@ -484,14 +484,201 @@ export default function PrinterConfig({ onBack }: Props) {
           </button>
         </div>
 
-        {/* USB/Bluetooth thermal printer */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <p className="text-gray-300 text-sm font-medium mb-2">USB / Bluetooth Thermal Printer</p>
-          <p className="text-gray-400 text-xs">
-            If your thermal printer is connected via USB or Bluetooth, use the WebSerial print
-            button in the receipt dialog. It connects directly to the printer without needing a
-            print server. Supported on Chrome and Edge on desktop.
-          </p>
+        {/* One-click print server installer */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+          <div>
+            <p className="text-gray-300 text-sm font-medium mb-1">Print Server Installer</p>
+            <p className="text-gray-500 text-xs">
+              Download a one-click installer for each POS computer. Enter the printer IP, download
+              the .bat file, copy it to the POS computer, right-click → Run as Administrator. It
+              installs Node.js, the print server, and sets it to start automatically on boot.
+            </p>
+          </div>
+
+          {[
+            {
+              label: 'Kitchen Printer',
+              defaultIp: '192.168.0.134',
+              desc: 'For kitchen/griller ticket auto-printing',
+            },
+            { label: 'Receipt Printer', defaultIp: '192.168.0.10', desc: 'For customer receipts' },
+          ].map((printer) => {
+            const stateKey = `installer_ip_${printer.label}`
+            return (
+              <div key={printer.label} className="bg-gray-800 rounded-xl p-4 space-y-3">
+                <div>
+                  <p className="text-white text-sm font-medium">{printer.label}</p>
+                  <p className="text-gray-500 text-[10px]">{printer.desc}</p>
+                </div>
+                <input
+                  id={stateKey}
+                  type="text"
+                  defaultValue={printer.defaultIp}
+                  placeholder="Printer IP (e.g. 192.168.0.134)"
+                  className="w-full bg-gray-900 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500 font-mono"
+                />
+                <button
+                  onClick={() => {
+                    const ip =
+                      (document.getElementById(stateKey) as HTMLInputElement)?.value?.trim() ||
+                      printer.defaultIp
+
+                    // Generate the complete server.js as a string
+                    const serverJs = `// Beeshop's Place Print Server — Auto-generated
+const http = require('http')
+const net = require('net')
+const fs = require('fs')
+const path = require('path')
+
+let config = { printer_ip: '${ip}', printer_port: 9100, server_port: 6543 }
+const configPath = path.join(__dirname, 'config.json')
+try { if (fs.existsSync(configPath)) { config = { ...config, ...JSON.parse(fs.readFileSync(configPath, 'utf8')) } } } catch {}
+
+const PRINTER_IP = config.printer_ip, PRINTER_PORT = config.printer_port, SERVER_PORT = config.server_port
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Content-Type': 'application/json' }
+
+function sendToPrinter(data) {
+  return new Promise((resolve, reject) => {
+    const s = new net.Socket(), t = setTimeout(() => { s.destroy(); reject(new Error('Timeout')) }, 5000)
+    s.connect(PRINTER_PORT, PRINTER_IP, () => { s.write(data, (e) => { if (e) { clearTimeout(t); s.destroy(); reject(e); return }; setTimeout(() => { clearTimeout(t); s.destroy(); resolve() }, 500) }) })
+    s.on('error', (e) => { clearTimeout(t); reject(e) })
+  })
+}
+
+http.createServer(async (req, res) => {
+  if (req.method === 'OPTIONS') { res.writeHead(204, CORS); res.end(); return }
+  if (req.method === 'GET' && req.url === '/health') {
+    let st = 'unknown'
+    try { await new Promise((r, j) => { const s = new net.Socket(); s.setTimeout(2000); s.connect(PRINTER_PORT, PRINTER_IP, () => { st='reachable'; s.destroy(); r() }); s.on('error', () => { st='unreachable'; s.destroy(); r() }); s.on('timeout', () => { st='timeout'; s.destroy(); r() }) }) } catch { st='error' }
+    res.writeHead(200, CORS); res.end(JSON.stringify({ status: 'ok', printer: PRINTER_IP+':'+PRINTER_PORT, printer_status: st })); return
+  }
+  if (req.method === 'POST' && req.url === '/config') {
+    let b = []; req.on('data', c => b.push(c)); req.on('end', () => { try { const u = { ...config, ...JSON.parse(Buffer.concat(b).toString()) }; fs.writeFileSync(configPath, JSON.stringify(u, null, 2)); config = u; res.writeHead(200, CORS); res.end(JSON.stringify({ success: true })) } catch (e) { res.writeHead(400, CORS); res.end(JSON.stringify({ error: e.message })) } }); return
+  }
+  if (req.method === 'POST' && (req.url === '/print' || req.url === '/print-text' || req.url === '/print-html')) {
+    let b = []; req.on('data', c => b.push(c)); req.on('end', async () => {
+      try {
+        const j = JSON.parse(Buffer.concat(b).toString()); let d
+        if (j.text) d = Buffer.from(j.text, 'utf8')
+        else if (j.data && Array.isArray(j.data)) d = Buffer.from(j.data)
+        else if (j.html) d = Buffer.from(j.html.replace(/<[^>]*>/g, '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&nbsp;/g,' '), 'utf8')
+        else { res.writeHead(400, CORS); res.end(JSON.stringify({ error: 'No data' })); return }
+        await sendToPrinter(d); console.log('Printed ' + d.length + ' bytes')
+        res.writeHead(200, CORS); res.end(JSON.stringify({ success: true }))
+      } catch (e) { console.error('Print error:', e.message); res.writeHead(500, CORS); res.end(JSON.stringify({ error: e.message })) }
+    }); return
+  }
+  res.writeHead(404, CORS); res.end(JSON.stringify({ error: 'Not found' }))
+}).listen(SERVER_PORT, '0.0.0.0', () => { console.log('Print Server ready on port ' + SERVER_PORT + ' -> ' + PRINTER_IP + ':' + PRINTER_PORT) })
+`
+                      .replace(/\\/g, '\\\\')
+                      .replace(/"/g, '\\"')
+                      .replace(/\n/g, '\\n')
+
+                    const batContent = [
+                      '@echo off',
+                      'echo ================================================',
+                      'echo   Beeshop Print Server Installer',
+                      'echo   Printer IP: ' + ip,
+                      'echo ================================================',
+                      'echo.',
+                      '',
+                      'REM Kill existing print server',
+                      'taskkill /f /im node.exe 2>nul',
+                      '',
+                      'REM Create directory',
+                      'if not exist "C:\\BeeshopPrint" mkdir "C:\\BeeshopPrint"',
+                      '',
+                      'REM Write config.json',
+                      'echo {"printer_ip":"' +
+                        ip +
+                        '","printer_port":9100,"server_port":6543} > "C:\\BeeshopPrint\\config.json"',
+                      '',
+                      'REM Write server.js',
+                      'echo // Auto-generated > "C:\\BeeshopPrint\\server.js"',
+                      '(echo const http=require("http"),net=require("net"),fs=require("fs"),path=require("path");let config={printer_ip:"' +
+                        ip +
+                        '",printer_port:9100,server_port:6543};const configPath=path.join(__dirname,"config.json");try{if(fs.existsSync(configPath)){config={...config,...JSON.parse(fs.readFileSync(configPath,"utf8"))}}}catch{}const PIP=config.printer_ip,PP=config.printer_port,SP=config.server_port;const C={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"POST,GET,OPTIONS","Access-Control-Allow-Headers":"Content-Type","Content-Type":"application/json"};function stp(d){return new Promise((r,j)=^>{const s=new net.Socket(),t=setTimeout(()=^>{s.destroy();j(new Error("Timeout"))},5000);s.connect(PP,PIP,()=^>{s.write(d,e=^>{if(e){clearTimeout(t);s.destroy();j(e);return}setTimeout(()=^>{clearTimeout(t);s.destroy();r()},500)})});s.on("error",e=^>{clearTimeout(t);j(e)})})}http.createServer(async(q,r)=^>{if(q.method==="OPTIONS"){r.writeHead(204,C);r.end();return}if(q.method==="GET"^&^&q.url==="/health"){let st="unknown";try{await new Promise((rv,jt)=^>{const s=new net.Socket();s.setTimeout(2000);s.connect(PP,PIP,()=^>{st="reachable";s.destroy();rv()});s.on("error",()=^>{st="unreachable";s.destroy();rv()});s.on("timeout",()=^>{st="timeout";s.destroy();rv()})})}catch{st="error"}r.writeHead(200,C);r.end(JSON.stringify({status:"ok",printer:PIP+":"+PP,printer_status:st}));return}if(q.method==="POST"){let b=[];q.on("data",c=^>b.push(c));q.on("end",async()=^>{try{const j=JSON.parse(Buffer.concat(b).toString());let d;if(j.text)d=Buffer.from(j.text,"utf8");else if(j.data^&^&Array.isArray(j.data))d=Buffer.from(j.data);else if(j.html)d=Buffer.from(j.html.replace(/^<[^^>]*^>/g,""),"utf8");else{r.writeHead(400,C);r.end(JSON.stringify({error:"No data"}));return}await stp(d);r.writeHead(200,C);r.end(JSON.stringify({success:true}))}catch(e){r.writeHead(500,C);r.end(JSON.stringify({error:e.message}))}});return}r.writeHead(404,C);r.end(JSON.stringify({error:"Not found"}))}).listen(SP,"0.0.0.0",()=^>console.log("Print Server ready on "+SP+" -^> "+PIP+":"+PP))) > "C:\\BeeshopPrint\\server.js"',
+                      '',
+                      'REM Write start.bat',
+                      'echo @echo off > "C:\\BeeshopPrint\\start.bat"',
+                      'echo cd /d "C:\\BeeshopPrint" >> "C:\\BeeshopPrint\\start.bat"',
+                      'echo node server.js >> "C:\\BeeshopPrint\\start.bat"',
+                      '',
+                      'REM Write silent starter VBS',
+                      'echo Set WshShell = CreateObject("WScript.Shell") > "C:\\BeeshopPrint\\start-silent.vbs"',
+                      'echo WshShell.Run "cmd /c cd /d C:\\BeeshopPrint ^&^& node server.js", 0, False >> "C:\\BeeshopPrint\\start-silent.vbs"',
+                      '',
+                      'REM Create scheduled task to auto-start',
+                      'schtasks /create /tn "BeeshopPrint" /tr "wscript.exe C:\\BeeshopPrint\\start-silent.vbs" /sc onlogon /rl highest /f',
+                      '',
+                      'REM Check if Node.js is installed',
+                      'where node >nul 2>nul',
+                      'if %errorlevel% neq 0 (',
+                      '    echo.',
+                      '    echo ERROR: Node.js is not installed!',
+                      '    echo Download from: https://nodejs.org',
+                      '    echo Install it, then run this script again.',
+                      '    echo.',
+                      '    pause',
+                      '    exit /b 1',
+                      ')',
+                      '',
+                      'REM Start the print server now',
+                      'start "" wscript.exe "C:\\BeeshopPrint\\start-silent.vbs"',
+                      '',
+                      'echo.',
+                      'echo ================================================',
+                      'echo   SUCCESS! Print server installed and started.',
+                      'echo   Printer IP: ' + ip,
+                      'echo   Server port: 6543',
+                      'echo   Auto-starts on boot.',
+                      'echo ================================================',
+                      'echo.',
+                      'pause',
+                    ].join('\r\n')
+
+                    const blob = new Blob([batContent], { type: 'application/bat' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `INSTALL_PRINT_SERVER_${ip.replace(/\./g, '_')}.bat`
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    URL.revokeObjectURL(url)
+                    toast.success(
+                      'Downloaded',
+                      `Right-click the .bat file → Run as Administrator on the POS computer`
+                    )
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white font-semibold rounded-xl py-2.5 text-sm transition-colors"
+                >
+                  <Save size={14} /> Download Installer (.bat)
+                </button>
+              </div>
+            )
+          })}
+
+          <div className="bg-gray-800/50 rounded-lg p-3 space-y-1.5 text-gray-500 text-xs">
+            <p className="text-gray-400 font-medium">Instructions:</p>
+            <ol className="list-decimal list-inside space-y-0.5">
+              <li>Enter the printer IP for each POS computer above</li>
+              <li>Download the .bat file for each one</li>
+              <li>Copy each .bat to its POS computer (USB or download directly)</li>
+              <li>
+                Right-click → <span className="text-white">Run as Administrator</span>
+              </li>
+              <li>It installs Node.js check, print server, and auto-start — done!</li>
+            </ol>
+            <p className="text-gray-600 mt-2">
+              Requires{' '}
+              <a href="https://nodejs.org" target="_blank" className="text-amber-400 underline">
+                Node.js
+              </a>{' '}
+              installed on the POS computer.
+            </p>
+          </div>
         </div>
       </div>
     </div>
