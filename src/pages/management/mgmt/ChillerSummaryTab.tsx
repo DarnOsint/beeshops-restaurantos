@@ -42,7 +42,7 @@ export default function ChillerSummaryTab() {
     dayEnd.setDate(dayEnd.getDate() + 1)
     const dateKey = base.toISOString().slice(0, 10)
 
-    const [entriesRes, soldRes] = await Promise.all([
+    const [entriesRes, soldRes, prevRes] = await Promise.all([
       supabase.from('bar_chiller_stock').select('*').eq('date', dateKey).order('item_name'),
       supabase
         .from('order_items')
@@ -50,6 +50,11 @@ export default function ChillerSummaryTab() {
         .eq('destination', 'bar')
         .gte('created_at', dayStart.toISOString())
         .lte('created_at', dayEnd.toISOString()),
+      supabase
+        .from('bar_chiller_stock')
+        .select('item_name, opening_qty, received_qty, sold_qty, void_qty, closing_qty')
+        .lt('date', d)
+        .order('date', { ascending: false }),
     ])
 
     // Carry over from latest available date if empty
@@ -102,8 +107,36 @@ export default function ChillerSummaryTab() {
       }
     }
 
+    // Build carry-over map — last known closing for each item
+    const carryOver: Record<string, number> = {}
+    const seen = new Set<string>()
+    if (prevRes.data) {
+      for (const row of prevRes.data as Array<{
+        item_name: string
+        opening_qty: number
+        received_qty: number
+        sold_qty: number
+        void_qty: number
+        closing_qty: number
+      }>) {
+        if (seen.has(row.item_name)) continue
+        seen.add(row.item_name)
+        carryOver[row.item_name] =
+          row.closing_qty > 0
+            ? row.closing_qty
+            : Math.max(0, row.opening_qty + row.received_qty - (row.sold_qty || 0) - row.void_qty)
+      }
+    }
+
     const rawEntries = (seededRows || entriesRes.data || []) as ChillerEntry[]
-    setEntries(rawEntries)
+    const withCarry = rawEntries.map((e) => ({
+      ...e,
+      opening_qty:
+        e.opening_qty === 0 && carryOver[e.item_name] != null
+          ? carryOver[e.item_name]
+          : e.opening_qty,
+    }))
+    setEntries(withCarry)
 
     const map: Record<string, number> = {}
     if (soldRes.data) {
@@ -135,7 +168,8 @@ export default function ChillerSummaryTab() {
     return Math.max(0, e.opening_qty + e.received_qty - sold - e.void_qty)
   }
 
-  const totalOpening = entries.reduce((s, e) => s + e.opening_qty, 0)
+  const carryTotal = entries.reduce((s, e) => s + e.opening_qty, 0)
+  const totalOpening = carryTotal
   const totalReceived = entries.reduce((s, e) => s + e.received_qty, 0)
   const totalSold = entries.reduce((s, e) => s + (soldMap[e.item_name] || e.sold_qty || 0), 0)
   const totalVoid = entries.reduce((s, e) => s + e.void_qty, 0)
