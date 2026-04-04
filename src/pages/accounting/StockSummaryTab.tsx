@@ -39,6 +39,7 @@ export default function StockSummaryTab({ type }: Props) {
   const fetchData = useCallback(
     async (d: string) => {
       setLoading(true)
+      let seededRows: StockEntry[] | null = null
       const todayIso = new Date().toISOString().slice(0, 10)
       const base = new Date(d)
       if (d === todayIso && new Date().getHours() < 8) base.setDate(base.getDate() - 1)
@@ -100,9 +101,8 @@ export default function StockSummaryTab({ type }: Props) {
             }
           })
           if (seedRows.length > 0) {
-            await supabase.from(tableName).insert(seedRows)
-            setEntries(seedRows as StockEntry[])
-            // continue to build sold map below using soldRes
+            const inserted = await supabase.from(tableName).insert(seedRows).select()
+            seededRows = (inserted.data || seedRows) as StockEntry[]
           }
         }
       }
@@ -129,7 +129,7 @@ export default function StockSummaryTab({ type }: Props) {
       }
 
       // Fix entries: apply carry-over opening where saved opening is 0
-      const rawEntries = (entriesRes.data || []) as StockEntry[]
+      const rawEntries = (seededRows || entriesRes.data || []) as StockEntry[]
       const fixedEntries = rawEntries.map((e) => ({
         ...e,
         opening_qty:
