@@ -66,17 +66,42 @@ export default function ChillerSummaryTab() {
         .limit(400)
       if (latestRows && latestRows.length > 0) {
         const latestDate = (latestRows[0] as { date: string }).date
+        const prevStart = new Date(latestDate)
+        prevStart.setHours(8, 0, 0, 0)
+        const prevEnd = new Date(prevStart)
+        prevEnd.setDate(prevEnd.getDate() + 1)
+        const { data: prevSold } = await supabase
+          .from('order_items')
+          .select('quantity, status, return_accepted, menu_items(name), orders(status)')
+          .eq('destination', 'bar')
+          .gte('created_at', prevStart.toISOString())
+          .lte('created_at', prevEnd.toISOString())
+        const prevSoldMap: Record<string, number> = {}
+        if (prevSold) {
+          for (const item of prevSold as unknown as Array<{
+            quantity: number
+            status: string
+            return_accepted?: boolean
+            menu_items: { name: string } | null
+            orders: { status: string } | null
+          }>) {
+            if (item.return_accepted) continue
+            if (item.orders?.status === 'cancelled') continue
+            if (item.status === 'cancelled') continue
+            const name = item.menu_items?.name
+            if (name) prevSoldMap[name] = (prevSoldMap[name] || 0) + item.quantity
+          }
+        }
         const rowsForLatest = latestRows.filter((r: { date: string }) => r.date === latestDate)
         const seedRows = rowsForLatest.map((r: ChillerEntry) => {
+          const soldPrev =
+            prevSoldMap[r.item_name] != null ? prevSoldMap[r.item_name] : r.sold_qty || 0
           const carry =
             r.closing_qty > 0
               ? r.closing_qty
               : Math.max(
                   0,
-                  (r.opening_qty || 0) +
-                    (r.received_qty || 0) -
-                    (r.sold_qty || 0) -
-                    (r.void_qty || 0)
+                  (r.opening_qty || 0) + (r.received_qty || 0) - soldPrev - (r.void_qty || 0)
                 )
           return {
             id:
