@@ -137,8 +137,12 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   // Only bar items block payment — kitchen/griller have no dedicated tab so waitron can pay freely
   const unreadyItems = (order?.order_items || []).filter((i) => {
     const dest = (i.destination || '').toLowerCase()
-    // shisha items should not block payment
-    if (dest === 'shisha') return false
+    const catDest = (
+      (i as unknown as { menu_items?: { menu_categories?: { destination?: string } } }).menu_items
+        ?.menu_categories?.destination || ''
+    ).toLowerCase()
+    // shisha items (by stored destination or category) should not block payment
+    if (dest === 'shisha' || catDest === 'shisha') return false
     return dest === 'bar' && i.status === 'pending' && !i.return_requested && !i.return_accepted
   })
   const hasUnreadyItems = unreadyItems.length > 0
