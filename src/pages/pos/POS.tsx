@@ -399,6 +399,38 @@ export default function POS() {
     }
   }, [])
 
+  // Realtime: refresh active order when order_items or orders change
+  // This catches manager DB edits, bar return acceptances, etc.
+  useEffect(() => {
+    const refreshActiveOrder = () => {
+      const current = activeOrderRef.current
+      if (!current) return
+      supabase
+        .from('orders')
+        .select('*, order_items(*, menu_items(name, price, menu_categories(name, destination)))')
+        .eq('id', current.id)
+        .single()
+        .then(({ data }) => {
+          if (data) setActiveOrder(data)
+        })
+    }
+    const ch = supabase
+      .channel('active-order-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'order_items' },
+        refreshActiveOrder
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, refreshActiveOrder)
+      .subscribe()
+    // Also poll every 15s as safety net
+    const poll = setInterval(refreshActiveOrder, 15000)
+    return () => {
+      supabase.removeChannel(ch)
+      clearInterval(poll)
+    }
+  }, [])
+
   useEffect(() => {
     if (!profile) return
     fetchAssignedTables(profile.role, profile.id)

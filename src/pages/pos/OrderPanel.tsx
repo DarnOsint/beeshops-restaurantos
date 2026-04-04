@@ -150,6 +150,37 @@ export default function OrderPanel({
     }))
   })
 
+  // Sync order items when activeOrder changes (e.g. realtime DB update, manager edit)
+  useEffect(() => {
+    if (!activeOrder?.order_items) return
+    setOrderItems((prev) => {
+      // Keep any new (unconfirmed) items the waitron is adding
+      const newItems = prev.filter((i) => !i._existing)
+      const dbItems = activeOrder.order_items!.map((i) => ({
+        id: i.menu_item_id || i.id || crypto.randomUUID(),
+        _dbId: i.id,
+        status: i.status,
+        name:
+          i.menu_items?.name ||
+          (i as unknown as { modifier_notes?: string }).modifier_notes ||
+          i.menu_item_id ||
+          'Custom Item',
+        quantity: i.quantity,
+        price: i.unit_price,
+        total: i.total_price,
+        menu_categories: i.menu_items?.menu_categories || null,
+        modifier_notes: (i as unknown as { modifier_notes?: string }).modifier_notes || '',
+        extra_charge: (i as unknown as { extra_charge?: number }).extra_charge || 0,
+        _existing: true,
+        _newId: undefined as string | undefined,
+        unit_price: i.unit_price,
+        total_price: i.total_price,
+        order_id: activeOrder.id,
+      }))
+      return [...dbItems, ...newItems]
+    })
+  }, [activeOrder])
+
   const [activeCategory, setActiveCategory] = useState('All')
   const [menuSearch, setMenuSearch] = useState('')
   const [notes, setNotes] = useState('')

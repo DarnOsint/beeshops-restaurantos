@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
@@ -68,6 +68,10 @@ interface Props {
 
 export default function PaymentModal({ order: orderProp, table, onSuccess, onClose }: Props) {
   const [order, setOrder] = useState(orderProp)
+  // Sync when parent refreshes the order (realtime DB update)
+  useEffect(() => {
+    setOrder(orderProp)
+  }, [orderProp])
   const { profile } = useAuth()
   const toast = useToast()
 
