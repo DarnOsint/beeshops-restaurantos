@@ -172,9 +172,9 @@ function KitchenKDSInner() {
       if (!profile) return
       const targetDate = d || historyDate
       const dayStart = new Date(targetDate)
-      dayStart.setHours(0, 0, 0, 0)
-      const dayEnd = new Date(targetDate)
-      dayEnd.setHours(23, 59, 59, 999)
+      dayStart.setHours(8, 0, 0, 0)
+      const dayEnd = new Date(dayStart)
+      dayEnd.setDate(dayEnd.getDate() + 1)
       // Kitchen returns — filter by checking if item was kitchen-destined
       const { data } = await supabase
         .from('returns_log')

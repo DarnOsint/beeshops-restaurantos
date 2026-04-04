@@ -22,7 +22,8 @@ export async function seedLocalDB(): Promise<void> {
     )
 
     const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    today.setHours(8, 0, 0, 0)
+    if (new Date().getHours() < 8) today.setDate(today.getDate() - 1)
 
     const { data: orders } = await supabase
       .from('orders')

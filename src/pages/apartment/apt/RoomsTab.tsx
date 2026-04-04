@@ -41,7 +41,7 @@ export default function RoomsTab({
             {activeStays.map((stay) => {
               const d = new Date(stay.check_out_date),
                 t = new Date()
-              t.setHours(0, 0, 0, 0)
+              t.setHours(8, 0, 0, 0)
               const daysLeft = Math.ceil((d.getTime() - t.getTime()) / 86400000)
               const isOS = daysLeft < 0
               const balance = Math.max(0, (stay.total_amount || 0) - (stay.amount_paid || 0))

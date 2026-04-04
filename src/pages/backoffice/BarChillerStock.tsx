@@ -123,7 +123,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
   // (bar items are removed from chiller the moment the order is confirmed)
   const loadSoldQty = useCallback(async (d: string) => {
     const dayStart = new Date(d)
-    dayStart.setHours(0, 0, 0, 0)
+    dayStart.setHours(8, 0, 0, 0)
     const dayEnd = new Date(d)
     dayEnd.setHours(23, 59, 59, 999)
     const { data } = await supabase
@@ -157,7 +157,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
   // Helper: fetch sold map for an arbitrary date (used for carry-over accuracy)
   const fetchSoldMapForDate = useCallback(async (d: string) => {
     const dayStart = new Date(d)
-    dayStart.setHours(0, 0, 0, 0)
+    dayStart.setHours(8, 0, 0, 0)
     const dayEnd = new Date(d)
     dayEnd.setHours(23, 59, 59, 999)
     const { data } = await supabase

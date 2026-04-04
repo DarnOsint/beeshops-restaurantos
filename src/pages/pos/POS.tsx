@@ -496,7 +496,8 @@ export default function POS() {
       ? new Date(attendanceOpen[0].clock_in)
       : (() => {
           const t = new Date()
-          t.setHours(0, 0, 0, 0)
+          t.setHours(8, 0, 0, 0)
+          if (new Date().getHours() < 8) t.setDate(t.getDate() - 1)
           return t
         })()
     const { data } = await supabase

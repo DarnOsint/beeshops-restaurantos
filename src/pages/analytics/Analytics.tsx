@@ -96,23 +96,30 @@ interface AnalyticsData {
 
 function getRangeDates(range: string, custom: { from: string; to: string }) {
   const now = new Date()
+  const sessionStart = () => {
+    const s = new Date(now)
+    s.setHours(8, 0, 0, 0)
+    if (now.getHours() < 8) s.setDate(s.getDate() - 1)
+    return s
+  }
   const pad = (d: Date) => d.toISOString()
   if (range === 'today') {
-    const s = new Date(now)
-    s.setHours(0, 0, 0, 0)
-    return { from: pad(s), to: pad(now) }
+    const s = sessionStart()
+    const e = new Date(s)
+    e.setDate(e.getDate() + 1)
+    return { from: pad(s), to: pad(e) }
   }
   if (range === 'week') {
-    const s = new Date(now)
-    s.setDate(now.getDate() - 6)
-    s.setHours(0, 0, 0, 0)
-    return { from: pad(s), to: pad(now) }
+    const e = sessionStart()
+    const s = new Date(e)
+    s.setDate(s.getDate() - 6)
+    return { from: pad(s), to: pad(e) }
   }
   if (range === 'month') {
-    const s = new Date(now)
+    const e = sessionStart()
+    const s = new Date(e)
     s.setDate(1)
-    s.setHours(0, 0, 0, 0)
-    return { from: pad(s), to: pad(now) }
+    return { from: pad(s), to: pad(e) }
   }
   if (range === 'custom' && custom.from && custom.to)
     return {

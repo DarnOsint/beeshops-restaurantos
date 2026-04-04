@@ -104,9 +104,12 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
   }
   const fetchTodayLog = async (d?: string) => {
     const dateToFetch = d || logDate
-    // 8am session window for logs
+    const now = new Date()
     const start = new Date(dateToFetch)
     start.setHours(8, 0, 0, 0)
+    // If user selected “today” but current time is before 8am, shift window back a day
+    const todayStr = new Date().toISOString().slice(0, 10)
+    if (dateToFetch === todayStr && now.getHours() < 8) start.setDate(start.getDate() - 1)
     const end = new Date(start)
     end.setDate(end.getDate() + 1)
     const { data } = await supabase

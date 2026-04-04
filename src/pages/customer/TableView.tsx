@@ -193,7 +193,7 @@ export default function TableView() {
   const fetchAll = async () => {
     try {
       const today = new Date()
-      today.setHours(0, 0, 0, 0)
+      today.setHours(8, 0, 0, 0)
       const [tableRes, menuRes, catRes, custOrderRes, liveOrderRes] = await Promise.all([
         supabase
           .from('tables')

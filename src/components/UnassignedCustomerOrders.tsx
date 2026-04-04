@@ -17,7 +17,7 @@ export default function UnassignedCustomerOrders() {
   const fetchData = async () => {
     try {
       const today = new Date()
-      today.setHours(0, 0, 0, 0)
+      today.setHours(8, 0, 0, 0)
       const { data: pending } = await supabase
         .from('customer_orders')
         .select('*, tables(id, name, assigned_staff, table_categories(name))')

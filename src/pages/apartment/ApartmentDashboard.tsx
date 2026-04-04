@@ -141,7 +141,7 @@ export default function ApartmentDashboard() {
 
   const [calStart, setCalStart] = useState<Date>(() => {
     const d = new Date()
-    d.setHours(0, 0, 0, 0)
+    d.setHours(8, 0, 0, 0)
     return d
   })
 
@@ -200,7 +200,7 @@ export default function ApartmentDashboard() {
   const dueToday = activeStays.filter((s) => {
     const d = new Date(s.check_out_date),
       t = new Date()
-    t.setHours(0, 0, 0, 0)
+    t.setHours(8, 0, 0, 0)
     const tmr = new Date(t)
     tmr.setDate(tmr.getDate() + 1)
     return d >= t && d < tmr
@@ -535,7 +535,7 @@ export default function ApartmentDashboard() {
               onNext={() => shiftCal(7)}
               onToday={() => {
                 const d = new Date()
-                d.setHours(0, 0, 0, 0)
+                d.setHours(8, 0, 0, 0)
                 setCalStart(d)
               }}
             />

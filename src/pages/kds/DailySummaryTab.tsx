@@ -27,10 +27,14 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
     async (d?: string) => {
       setLoading(true)
       const targetDate = new Date(d || date)
-      targetDate.setHours(0, 0, 0, 0)
+      targetDate.setHours(8, 0, 0, 0)
+      const todayStr = new Date().toISOString().slice(0, 10)
+      if ((d || date) === todayStr && new Date().getHours() < 8) {
+        targetDate.setDate(targetDate.getDate() - 1)
+      }
       const startUTC = targetDate.toISOString()
       const endDate = new Date(targetDate)
-      endDate.setHours(23, 59, 59, 999)
+      endDate.setDate(endDate.getDate() + 1)
       const endUTC = endDate.toISOString()
 
       const { data } = await supabase
