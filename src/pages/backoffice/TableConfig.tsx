@@ -56,12 +56,19 @@ export default function TableConfig({ onBack }: Props) {
   const [zoneSaving, setZoneSaving] = useState(false)
 
   const fetchAll = async () => {
-    const [tablesRes, zonesRes] = await Promise.all([
-      supabase.from('tables').select('*, table_categories(id, name, hire_fee)').order('name'),
-      supabase.from('table_categories').select('id, name, hire_fee, min_spend').order('name'),
-    ])
-    if (tablesRes.data) setTables(tablesRes.data as Table[])
-    if (zonesRes.data) setZones(zonesRes.data as Zone[])
+    try {
+      const [tablesRes, zonesRes] = await Promise.all([
+        supabase.from('tables').select('*, table_categories(id, name, hire_fee)').order('name'),
+        supabase.from('table_categories').select('id, name, hire_fee').order('name'),
+      ])
+      if (tablesRes.error) console.error('Tables fetch error:', tablesRes.error)
+      if (zonesRes.error) console.error('Zones fetch error:', zonesRes.error)
+      setTables((tablesRes.data || []) as Table[])
+      setZones((zonesRes.data || []) as Zone[])
+    } catch (err) {
+      console.error('fetchAll error:', err)
+      toast.error('Error', 'Failed to load tables and zones')
+    }
     setLoading(false)
   }
 
@@ -290,44 +297,57 @@ export default function TableConfig({ onBack }: Props) {
           ))}
         </div>
 
-        {/* Bulk add */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <p className="text-white text-sm font-medium mb-3">Quick Add Multiple Tables</p>
-          <div className="flex gap-2 items-end">
-            <div>
-              <label className="text-gray-500 text-[10px] uppercase block mb-1">Count</label>
-              <input
-                type="number"
-                min="1"
-                max="50"
-                value={bulkCount}
-                onChange={(e) => setBulkCount(e.target.value)}
-                className="w-20 bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="text-gray-500 text-[10px] uppercase block mb-1">Zone</label>
-              <select
-                value={bulkZone}
-                onChange={(e) => setBulkZone(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
-              >
-                {zones.map((z) => (
-                  <option key={z.id} value={z.id}>
-                    {z.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button
-              onClick={bulkAddTables}
-              disabled={bulkAdding}
-              className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold px-4 py-2.5 rounded-xl text-sm"
-            >
-              {bulkAdding ? 'Adding...' : `Add ${bulkCount} Tables`}
-            </button>
+        {/* No zones warning */}
+        {!loading && zones.length === 0 && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-center">
+            <p className="text-red-400 font-bold mb-1">No zones found</p>
+            <p className="text-gray-400 text-sm">
+              You need to create at least one zone before you can add tables. Scroll down to the
+              Zones section and click "Add Zone".
+            </p>
           </div>
-        </div>
+        )}
+
+        {/* Bulk add */}
+        {zones.length > 0 && (
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <p className="text-white text-sm font-medium mb-3">Quick Add Multiple Tables</p>
+            <div className="flex gap-2 items-end">
+              <div>
+                <label className="text-gray-500 text-[10px] uppercase block mb-1">Count</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={bulkCount}
+                  onChange={(e) => setBulkCount(e.target.value)}
+                  className="w-20 bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-gray-500 text-[10px] uppercase block mb-1">Zone</label>
+                <select
+                  value={bulkZone}
+                  onChange={(e) => setBulkZone(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+                >
+                  {zones.map((z) => (
+                    <option key={z.id} value={z.id}>
+                      {z.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={bulkAddTables}
+                disabled={bulkAdding}
+                className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold px-4 py-2.5 rounded-xl text-sm"
+              >
+                {bulkAdding ? 'Adding...' : `Add ${bulkCount} Tables`}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Tables grid */}
         {loading ? (
