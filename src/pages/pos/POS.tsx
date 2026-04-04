@@ -1523,10 +1523,13 @@ export default function POS() {
                               : pmRaw === 'split'
                                 ? 'Split'
                                 : pmRaw || '—'
-                    const itemCount = (order.order_items || []).reduce(
-                      (s, i) => s + (i.quantity || 0),
-                      0
+                    const activeItems = (order.order_items || []).filter(
+                      (i) =>
+                        !(i as unknown as { return_requested?: boolean }).return_requested &&
+                        !(i as unknown as { return_accepted?: boolean }).return_accepted
                     )
+                    const itemCount = activeItems.reduce((s, i) => s + (i.quantity || 0), 0)
+                    const displayTotal = activeItems.reduce((s, i) => s + (i.total_price || 0), 0)
                     return (
                       <div
                         key={order.id}
@@ -1560,7 +1563,7 @@ export default function POS() {
                           </div>
                           <div className="text-right flex items-center gap-3">
                             <p className="text-amber-400 font-bold">
-                              ₦{(order.total_amount || 0).toLocaleString()}
+                              ₦{displayTotal.toLocaleString()}
                             </p>
                             <button
                               onClick={() => setReprintOrder(order)}
@@ -1570,12 +1573,12 @@ export default function POS() {
                             </button>
                           </div>
                         </div>
-                        {/* Item breakdown */}
-                        {(order.order_items || []).length > 0 && (
+                        {/* Item breakdown — only active items (not returned) */}
+                        {activeItems.length > 0 && (
                           <div className="px-4 py-2.5 bg-gray-950 border-t border-gray-800">
                             <table className="w-full text-xs">
                               <tbody>
-                                {(order.order_items || []).map((item) => (
+                                {activeItems.map((item) => (
                                   <tr key={item.id}>
                                     <td className="text-gray-500 py-0.5 pr-2 w-8 text-right">
                                       {item.quantity}x

@@ -127,6 +127,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   const activeItemsTotal = (order?.order_items || [])
     .filter((i) => !i.return_requested && !i.return_accepted)
     .reduce((sum, i) => sum + (i.total_price || 0), 0)
+  const returnedTotal = (order?.order_items || [])
+    .filter((i) => i.return_requested || i.return_accepted)
+    .reduce((sum, i) => sum + (i.total_price || 0), 0)
   const subtotal = activeItemsTotal
   const total = subtotal
   const change = paymentMethod === 'cash' && cashTendered ? parseFloat(cashTendered) - total : 0
