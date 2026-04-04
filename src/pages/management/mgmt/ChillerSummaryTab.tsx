@@ -188,8 +188,9 @@ export default function ChillerSummaryTab() {
   }, [date, fetchData])
 
   const getEffectiveClosing = (e: ChillerEntry) => {
+    // Prefer the recorded closing (even zero) to surface variance; only fall back if missing
+    if (e.closing_qty !== null && e.closing_qty !== undefined) return e.closing_qty
     const sold = soldMap[e.item_name] || e.sold_qty || 0
-    if (e.closing_qty > 0) return e.closing_qty
     return Math.max(0, e.opening_qty + e.received_qty - sold - e.void_qty)
   }
 
