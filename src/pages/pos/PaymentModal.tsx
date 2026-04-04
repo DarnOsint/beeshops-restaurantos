@@ -132,6 +132,8 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     .reduce((sum, i) => sum + (i.total_price || 0), 0)
   const subtotal = activeItemsTotal
   const total = subtotal
+  const [cashSplit, setCashSplit] = useState('')
+  const [secondarySplit, setSecondarySplit] = useState('')
   const change = paymentMethod === 'cash' && cashTendered ? parseFloat(cashTendered) - total : 0
 
   // Only bar items block payment — kitchen/griller have no dedicated tab so waitron can pay freely
@@ -283,6 +285,11 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     if (processing) return false
     if (hasUnreadyItems && paymentMethod !== 'run_tab') return false
     if (paymentMethod === 'cash') return parseFloat(cashTendered) >= total
+    if (paymentMethod === 'cash+transfer' || paymentMethod === 'cash+card') {
+      const c = parseFloat(cashSplit || '0')
+      const s = parseFloat(secondarySplit || '0')
+      return c + s >= total && c >= 0 && s >= 0
+    }
     if (paymentMethod === 'credit') return debtorName.trim().length > 0
     return true
   }
@@ -735,7 +742,11 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           payment_method:
             paymentMethod === 'transfer'
               ? `transfer:${bankAccounts.find((b) => b.id === selectedBankId)?.bank_name || 'Bank Transfer'}`
-              : paymentMethod,
+              : paymentMethod === 'cash+transfer'
+                ? `cash+transfer:${parseFloat(cashSplit || '0')}+${parseFloat(secondarySplit || '0')}`
+                : paymentMethod === 'cash+card'
+                  ? `cash+card:${parseFloat(cashSplit || '0')}+${parseFloat(secondarySplit || '0')}`
+                  : paymentMethod,
           closed_at: new Date().toISOString(),
         })
         .eq('id', order.id)
@@ -769,7 +780,11 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           payment_method:
             paymentMethod === 'transfer'
               ? `transfer:${bankAccounts.find((b) => b.id === selectedBankId)?.bank_name || 'Bank Transfer'}`
-              : paymentMethod,
+              : paymentMethod === 'cash+transfer'
+                ? `cash+transfer:${parseFloat(cashSplit || '0')}+${parseFloat(secondarySplit || '0')}`
+                : paymentMethod === 'cash+card'
+                  ? `cash+card:${parseFloat(cashSplit || '0')}+${parseFloat(secondarySplit || '0')}`
+                  : paymentMethod,
           shift_date: new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 10), // WAT = UTC+1
           status: 'pending',
         })
@@ -799,6 +814,8 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     { id: 'transfer', label: 'Bank Transfer', icon: Smartphone, color: 'text-amber-400' },
     { id: 'credit', label: 'Pay Later (Debt)', icon: Clock, color: 'text-red-400' },
     { id: 'run_tab', label: 'Run Tab', icon: Beer, color: 'text-amber-400' },
+    { id: 'cash+transfer', label: 'Cash + Transfer', icon: Smartphone, color: 'text-amber-400' },
+    { id: 'cash+card', label: 'Cash + POS', icon: CreditCard, color: 'text-blue-400' },
   ]
 
   if (splitMode && !success)
@@ -1103,6 +1120,58 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
                   </p>
                 </div>
               )}
+            </div>
+          )}
+          {(paymentMethod === 'cash+transfer' || paymentMethod === 'cash+card') && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-gray-400 text-xs uppercase tracking-wide mb-2 block">
+                    Cash Received (₦)
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={cashSplit}
+                    onChange={(e) => setCashSplit(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 text-lg font-bold focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs uppercase tracking-wide mb-2 block">
+                    {paymentMethod === 'cash+transfer'
+                      ? 'Transfer Received (₦)'
+                      : 'POS Received (₦)'}
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={secondarySplit}
+                    onChange={(e) => setSecondarySplit(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 text-lg font-bold focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-3 text-sm text-gray-300">
+                <div className="flex justify-between">
+                  <span>Total</span>
+                  <span className="text-white font-bold">₦{total.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Entered</span>
+                  <span className="text-amber-400 font-bold">
+                    ₦
+                    {(
+                      parseFloat(cashSplit || '0') + parseFloat(secondarySplit || '0')
+                    ).toLocaleString()}
+                  </span>
+                </div>
+                {parseFloat(cashSplit || '0') + parseFloat(secondarySplit || '0') < total && (
+                  <p className="text-red-400 text-xs mt-2">
+                    Short — enter full amount before confirming.
+                  </p>
+                )}
+              </div>
             </div>
           )}
           {paymentMethod === 'card' && (
