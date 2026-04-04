@@ -102,7 +102,7 @@ export default function Debtors({ onBack, embedded = false }: Props) {
   const [payments, setPayments] = useState<Record<string, DebtPayment[]>>({})
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('outstanding')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState<Debtor | null>(null)
@@ -129,17 +129,14 @@ export default function Debtors({ onBack, embedded = false }: Props) {
 
   useEffect(() => {
     fetchAll()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fetchAll = async () => {
-    let query = supabase
+    const { data } = await supabase
       .from('debtors')
       .select('*')
       .eq('is_active', true)
       .order('created_at', { ascending: false })
-    if (profile?.role === 'waitron') query = query.eq('recorded_by', profile.id)
-    const { data } = await query
     setDebtors((data || []) as Debtor[])
     if (data?.length) {
       const { data: pmts } = await supabase
