@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Edit2, X, Save } from 'lucide-react'
+import { ArrowLeft, Edit2, X, Save, Plus, Trash2 } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
 
 interface Zone {
@@ -15,6 +15,7 @@ interface Table {
   name: string
   capacity: number
   category_id: string
+  status: string
   table_categories?: { id: string; name: string; hire_fee?: number | null }
 }
 
@@ -35,81 +36,28 @@ const zoneColorMap: Record<string, string> = {
   'The Nook': 'bg-amber-500/20 text-amber-400',
 }
 
-interface ZoneHireFeeFormProps {
-  zone: Zone
-  onSaved: () => void
-}
-
-function ZoneHireForm({ zone, onSaved }: ZoneHireFeeFormProps) {
-  const [hireFee, setHireFee] = useState(zone.hire_fee != null ? String(zone.hire_fee) : '')
-  const [saving, setSaving] = useState(false)
-  const toast = useToast()
-
-  const save = async () => {
-    setSaving(true)
-    try {
-      const { error } = await supabase
-        .from('table_categories')
-        .update({ hire_fee: hireFee ? parseFloat(hireFee) : null })
-        .eq('id', zone.id)
-      if (error) throw error
-      onSaved()
-    } catch (err) {
-      toast.error('Error', 'Failed: ' + (err instanceof Error ? err.message : String(err)))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-      <p className="text-white font-semibold text-sm mb-3">{zone.name}</p>
-      <div className="flex gap-2 items-center">
-        <div className="flex-1">
-          <label className="text-gray-500 text-xs block mb-1">
-            Hire Fee (₦) — leave blank if none
-          </label>
-          <input
-            type="number"
-            min="0"
-            value={hireFee}
-            onChange={(e) => setHireFee(e.target.value)}
-            placeholder="e.g. 5000"
-            className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
-          />
-        </div>
-        <button
-          onClick={save}
-          disabled={saving}
-          className="mt-5 px-3 py-2 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black font-bold rounded-xl text-sm"
-        >
-          {saving ? '…' : 'Save'}
-        </button>
-      </div>
-      {zone.hire_fee ? (
-        <p className="text-amber-400 text-xs mt-2">
-          Current: ₦{zone.hire_fee.toLocaleString()} hire fee
-        </p>
-      ) : (
-        <p className="text-gray-600 text-xs mt-2">No hire fee — free to sit</p>
-      )}
-    </div>
-  )
-}
-
 export default function TableConfig({ onBack }: Props) {
   const [tables, setTables] = useState<Table[]>([])
   const toast = useToast()
   const [zones, setZones] = useState<Zone[]>([])
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Table | null>(null)
-  const [form, setForm] = useState<TableForm>({ name: '', capacity: '', category_id: '' })
+  const [showAdd, setShowAdd] = useState(false)
+  const [form, setForm] = useState<TableForm>({ name: '', capacity: '4', category_id: '' })
   const [saving, setSaving] = useState(false)
   const [filterZone, setFilterZone] = useState('All')
 
+  // Zone management
+  const [showAddZone, setShowAddZone] = useState(false)
+  const [newZoneName, setNewZoneName] = useState('')
+  const [newZoneHireFee, setNewZoneHireFee] = useState('')
+  const [editingZone, setEditingZone] = useState<Zone | null>(null)
+  const [zoneForm, setZoneForm] = useState({ name: '', hire_fee: '' })
+  const [zoneSaving, setZoneSaving] = useState(false)
+
   const fetchAll = async () => {
     const [tablesRes, zonesRes] = await Promise.all([
-      supabase.from('tables').select('*, table_categories(id, name)').order('name'),
+      supabase.from('tables').select('*, table_categories(id, name, hire_fee)').order('name'),
       supabase.from('table_categories').select('id, name, hire_fee, min_spend').order('name'),
     ])
     if (tablesRes.data) setTables(tablesRes.data as Table[])
@@ -121,8 +69,10 @@ export default function TableConfig({ onBack }: Props) {
     fetchAll()
   }, [])
 
+  // ── Table CRUD ─────────────────────────────────────────────
   const openEdit = (table: Table) => {
     setEditing(table)
+    setShowAdd(false)
     setForm({
       name: table.name,
       capacity: table.capacity.toString(),
@@ -130,68 +80,251 @@ export default function TableConfig({ onBack }: Props) {
     })
   }
 
-  const save = async () => {
-    if (!form.name || !form.capacity || !editing) return
+  const openAdd = () => {
+    setEditing(null)
+    setShowAdd(true)
+    setForm({ name: '', capacity: '4', category_id: zones[0]?.id || '' })
+  }
+
+  const saveTable = async () => {
+    if (!form.name || !form.capacity || !form.category_id) {
+      toast.warning('Required', 'Name, capacity, and zone are required')
+      return
+    }
     setSaving(true)
     try {
-      const { error } = await supabase
-        .from('tables')
-        .update({
+      if (editing) {
+        const { error } = await supabase
+          .from('tables')
+          .update({
+            name: form.name,
+            capacity: parseInt(form.capacity),
+            category_id: form.category_id,
+          })
+          .eq('id', editing.id)
+        if (error) throw error
+        toast.success('Updated', `${form.name} updated`)
+      } else {
+        const { error } = await supabase.from('tables').insert({
           name: form.name,
           capacity: parseInt(form.capacity),
           category_id: form.category_id,
+          status: 'available',
         })
-        .eq('id', editing.id)
-      if (error) throw error
+        if (error) throw error
+        toast.success('Added', `${form.name} added`)
+      }
       await fetchAll()
       setEditing(null)
+      setShowAdd(false)
     } catch (err) {
-      toast.error(
-        'Error',
-        'Failed to save table: ' + (err instanceof Error ? err.message : String(err))
-      )
+      toast.error('Error', err instanceof Error ? err.message : String(err))
     } finally {
       setSaving(false)
     }
   }
 
+  const deleteTable = async (table: Table) => {
+    if (!confirm(`Delete "${table.name}"? This cannot be undone.`)) return
+    const { error } = await supabase.from('tables').delete().eq('id', table.id)
+    if (error) {
+      toast.error('Error', 'Cannot delete — table may have orders. Try renaming instead.')
+      return
+    }
+    toast.success('Deleted', `${table.name} removed`)
+    fetchAll()
+  }
+
+  // ── Zone CRUD ──────────────────────────────────────────────
+  const addZone = async () => {
+    if (!newZoneName.trim()) {
+      toast.warning('Required', 'Zone name is required')
+      return
+    }
+    setZoneSaving(true)
+    try {
+      const { error } = await supabase.from('table_categories').insert({
+        name: newZoneName.trim(),
+        hire_fee: newZoneHireFee ? parseFloat(newZoneHireFee) : null,
+      })
+      if (error) throw error
+      toast.success('Zone Added', newZoneName)
+      setNewZoneName('')
+      setNewZoneHireFee('')
+      setShowAddZone(false)
+      fetchAll()
+    } catch (err) {
+      toast.error('Error', err instanceof Error ? err.message : String(err))
+    } finally {
+      setZoneSaving(false)
+    }
+  }
+
+  const openEditZone = (zone: Zone) => {
+    setEditingZone(zone)
+    setZoneForm({ name: zone.name, hire_fee: zone.hire_fee != null ? String(zone.hire_fee) : '' })
+  }
+
+  const saveZone = async () => {
+    if (!editingZone || !zoneForm.name.trim()) return
+    setZoneSaving(true)
+    try {
+      const { error } = await supabase
+        .from('table_categories')
+        .update({
+          name: zoneForm.name.trim(),
+          hire_fee: zoneForm.hire_fee ? parseFloat(zoneForm.hire_fee) : null,
+        })
+        .eq('id', editingZone.id)
+      if (error) throw error
+      toast.success('Zone Updated', zoneForm.name)
+      setEditingZone(null)
+      fetchAll()
+    } catch (err) {
+      toast.error('Error', err instanceof Error ? err.message : String(err))
+    } finally {
+      setZoneSaving(false)
+    }
+  }
+
+  const deleteZone = async (zone: Zone) => {
+    const tablesInZone = tables.filter((t) => t.category_id === zone.id).length
+    if (tablesInZone > 0) {
+      toast.error(
+        'Cannot Delete',
+        `${zone.name} has ${tablesInZone} table(s). Move or delete them first.`
+      )
+      return
+    }
+    if (!confirm(`Delete zone "${zone.name}"?`)) return
+    const { error } = await supabase.from('table_categories').delete().eq('id', zone.id)
+    if (error) {
+      toast.error('Error', error.message)
+      return
+    }
+    toast.success('Deleted', `${zone.name} removed`)
+    fetchAll()
+  }
+
+  // ── Bulk add tables ────────────────────────────────────────
+  const [bulkCount, setBulkCount] = useState('5')
+  const [bulkZone, setBulkZone] = useState('')
+  const [bulkAdding, setBulkAdding] = useState(false)
+
+  const bulkAddTables = async () => {
+    const count = parseInt(bulkCount)
+    const zoneId = bulkZone || zones[0]?.id
+    if (!zoneId || !count || count < 1) return
+    const zoneName = zones.find((z) => z.id === zoneId)?.name || 'Table'
+    setBulkAdding(true)
+    try {
+      // Find the highest existing table number in this zone
+      const zoneTables = tables.filter((t) => t.category_id === zoneId)
+      const maxNum = zoneTables.reduce((max, t) => {
+        const match = t.name.match(/(\d+)$/)
+        return match ? Math.max(max, parseInt(match[1])) : max
+      }, 0)
+
+      const newTables = Array.from({ length: count }, (_, i) => ({
+        name: `Table ${maxNum + i + 1}`,
+        capacity: 4,
+        category_id: zoneId,
+        status: 'available',
+      }))
+      const { error } = await supabase.from('tables').insert(newTables)
+      if (error) throw error
+      toast.success('Added', `${count} tables added to ${zoneName}`)
+      fetchAll()
+    } catch (err) {
+      toast.error('Error', err instanceof Error ? err.message : String(err))
+    } finally {
+      setBulkAdding(false)
+    }
+  }
+
   const filtered =
     filterZone === 'All' ? tables : tables.filter((t) => t.table_categories?.name === filterZone)
-
   const zoneColor = (name?: string) =>
     name ? (zoneColorMap[name] ?? 'bg-gray-700 text-gray-400') : 'bg-gray-700 text-gray-400'
+  const inp =
+    'w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500'
 
   return (
     <div className="min-h-full bg-gray-950">
-      <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center gap-3">
-        <button onClick={onBack} className="text-gray-400 hover:text-white">
-          <ArrowLeft size={20} />
-        </button>
-        <div>
-          <h1 className="text-white font-bold">Table Configuration</h1>
-          <p className="text-gray-400 text-xs">
-            {tables.length} tables across {zones.length} zones
-          </p>
+      <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="text-gray-400 hover:text-white">
+            <ArrowLeft size={20} />
+          </button>
+          <div>
+            <h1 className="text-white font-bold">Table & Zone Management</h1>
+            <p className="text-gray-400 text-xs">
+              {tables.length} tables across {zones.length} zones
+            </p>
+          </div>
         </div>
+        <button
+          onClick={openAdd}
+          className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-black font-bold px-3 py-2 rounded-xl text-sm"
+        >
+          <Plus size={14} /> Add Table
+        </button>
       </div>
 
-      <div className="p-6">
-        <div className="flex gap-2 mb-6 overflow-x-auto">
+      <div className="p-6 space-y-6">
+        {/* Zone filter */}
+        <div className="flex gap-2 overflow-x-auto">
           {['All', ...zones.map((z) => z.name)].map((zone) => (
             <button
               key={zone}
               onClick={() => setFilterZone(zone)}
-              className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${
-                filterZone === zone
-                  ? 'bg-amber-500 text-black'
-                  : 'bg-gray-900 border border-gray-800 text-gray-400 hover:text-white'
-              }`}
+              className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${filterZone === zone ? 'bg-amber-500 text-black' : 'bg-gray-900 border border-gray-800 text-gray-400 hover:text-white'}`}
             >
               {zone}
             </button>
           ))}
         </div>
 
+        {/* Bulk add */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <p className="text-white text-sm font-medium mb-3">Quick Add Multiple Tables</p>
+          <div className="flex gap-2 items-end">
+            <div>
+              <label className="text-gray-500 text-[10px] uppercase block mb-1">Count</label>
+              <input
+                type="number"
+                min="1"
+                max="50"
+                value={bulkCount}
+                onChange={(e) => setBulkCount(e.target.value)}
+                className="w-20 bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-gray-500 text-[10px] uppercase block mb-1">Zone</label>
+              <select
+                value={bulkZone || zones[0]?.id || ''}
+                onChange={(e) => setBulkZone(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+              >
+                {zones.map((z) => (
+                  <option key={z.id} value={z.id}>
+                    {z.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={bulkAddTables}
+              disabled={bulkAdding}
+              className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold px-4 py-2.5 rounded-xl text-sm"
+            >
+              {bulkAdding ? 'Adding...' : `Add ${bulkCount} Tables`}
+            </button>
+          </div>
+        </div>
+
+        {/* Tables grid */}
         {loading ? (
           <div className="text-amber-500 text-center py-12">Loading...</div>
         ) : (
@@ -207,12 +340,20 @@ export default function TableConfig({ onBack }: Props) {
                   >
                     {table.table_categories?.name}
                   </span>
-                  <button
-                    onClick={() => openEdit(table)}
-                    className="text-gray-400 hover:text-white"
-                  >
-                    <Edit2 size={13} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openEdit(table)}
+                      className="text-gray-400 hover:text-white"
+                    >
+                      <Edit2 size={13} />
+                    </button>
+                    <button
+                      onClick={() => deleteTable(table)}
+                      className="text-gray-400 hover:text-red-400"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 </div>
                 <p className="text-white font-semibold text-sm">{table.name}</p>
                 <p className="text-gray-500 text-xs">👥 {table.capacity} seats</p>
@@ -225,24 +366,102 @@ export default function TableConfig({ onBack }: Props) {
             ))}
           </div>
         )}
-      </div>
 
-      {/* Zone Settings — hire fees */}
-      <div className="px-6 pb-6">
-        <h2 className="text-white font-bold text-sm mb-3">Zone Settings</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {zones.map((zone) => (
-            <ZoneHireForm key={zone.id} zone={zone} onSaved={fetchAll} />
-          ))}
+        {/* Zone Management */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-white font-bold text-sm">Zones</h2>
+            <button
+              onClick={() => setShowAddZone(true)}
+              className="flex items-center gap-1 text-amber-400 hover:text-amber-300 text-xs font-medium"
+            >
+              <Plus size={13} /> Add Zone
+            </button>
+          </div>
+
+          {showAddZone && (
+            <div className="bg-gray-900 border border-amber-500/30 rounded-xl p-4 mb-3 space-y-3">
+              <p className="text-amber-400 font-semibold text-sm">New Zone</p>
+              <input
+                value={newZoneName}
+                onChange={(e) => setNewZoneName(e.target.value)}
+                placeholder="Zone name (e.g. Rooftop, Garden)"
+                className={inp}
+              />
+              <input
+                type="number"
+                min="0"
+                value={newZoneHireFee}
+                onChange={(e) => setNewZoneHireFee(e.target.value)}
+                placeholder="Hire fee (₦) — leave blank if none"
+                className={inp}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={addZone}
+                  disabled={zoneSaving}
+                  className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-bold rounded-xl py-2.5 text-sm"
+                >
+                  {zoneSaving ? 'Adding...' : 'Add Zone'}
+                </button>
+                <button
+                  onClick={() => setShowAddZone(false)}
+                  className="flex-1 bg-gray-800 text-gray-300 rounded-xl py-2.5 text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {zones.map((zone) => {
+              const count = tables.filter((t) => t.category_id === zone.id).length
+              return (
+                <div key={zone.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <p className="text-white font-semibold text-sm">{zone.name}</p>
+                      <p className="text-gray-500 text-xs">
+                        {count} table{count !== 1 ? 's' : ''}
+                        {zone.hire_fee ? ` · Hire: ₦${zone.hire_fee.toLocaleString()}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => openEditZone(zone)}
+                        className="text-gray-400 hover:text-white p-1"
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                      <button
+                        onClick={() => deleteZone(zone)}
+                        className="text-gray-400 hover:text-red-400 p-1"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
 
-      {editing && (
+      {/* Add/Edit Table Modal */}
+      {(editing || showAdd) && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 rounded-2xl w-full max-w-sm border border-gray-800">
             <div className="flex items-center justify-between p-5 border-b border-gray-800">
-              <h3 className="text-white font-bold">Edit Table</h3>
-              <button onClick={() => setEditing(null)} className="text-gray-400 hover:text-white">
+              <h3 className="text-white font-bold">{editing ? 'Edit Table' : 'Add New Table'}</h3>
+              <button
+                onClick={() => {
+                  setEditing(null)
+                  setShowAdd(false)
+                }}
+                className="text-gray-400 hover:text-white"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -254,18 +473,20 @@ export default function TableConfig({ onBack }: Props) {
                 <input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
+                  placeholder="e.g. Table 1"
+                  className={inp}
                 />
               </div>
               <div>
                 <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
-                  Capacity
+                  Capacity (seats)
                 </label>
                 <input
                   type="number"
+                  min="1"
                   value={form.capacity}
                   onChange={(e) => setForm({ ...form, capacity: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
+                  className={inp}
                 />
               </div>
               <div>
@@ -275,7 +496,7 @@ export default function TableConfig({ onBack }: Props) {
                 <select
                   value={form.category_id}
                   onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
+                  className={inp}
                 >
                   {zones.map((z) => (
                     <option key={z.id} value={z.id}>
@@ -285,11 +506,60 @@ export default function TableConfig({ onBack }: Props) {
                 </select>
               </div>
               <button
-                onClick={save}
+                onClick={saveTable}
                 disabled={saving}
                 className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl py-3 flex items-center justify-center gap-2"
               >
-                <Save size={16} /> {saving ? 'Saving...' : 'Save Changes'}
+                <Save size={16} /> {saving ? 'Saving...' : editing ? 'Save Changes' : 'Add Table'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Zone Modal */}
+      {editingZone && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 rounded-2xl w-full max-w-sm border border-gray-800">
+            <div className="flex items-center justify-between p-5 border-b border-gray-800">
+              <h3 className="text-white font-bold">Edit Zone</h3>
+              <button
+                onClick={() => setEditingZone(null)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                  Zone Name
+                </label>
+                <input
+                  value={zoneForm.name}
+                  onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })}
+                  className={inp}
+                />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                  Hire Fee (₦) — leave blank if none
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={zoneForm.hire_fee}
+                  onChange={(e) => setZoneForm({ ...zoneForm, hire_fee: e.target.value })}
+                  placeholder="0"
+                  className={inp}
+                />
+              </div>
+              <button
+                onClick={saveZone}
+                disabled={zoneSaving}
+                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl py-3 flex items-center justify-center gap-2"
+              >
+                <Save size={16} /> {zoneSaving ? 'Saving...' : 'Save Zone'}
               </button>
             </div>
           </div>
