@@ -64,6 +64,49 @@ export default function StockSummaryTab({ type }: Props) {
           .order('date', { ascending: false }),
       ])
 
+      // If no rows exist for this session date, seed from latest previous date (opening = prior closing)
+      if (!entriesRes.data || entriesRes.data.length === 0) {
+        const { data: latestRows } = await supabase
+          .from(tableName)
+          .select('*')
+          .order('date', { ascending: false })
+          .limit(400)
+        if (latestRows && latestRows.length > 0) {
+          const latestDate = (latestRows[0] as { date: string }).date
+          const rowsForLatest = latestRows.filter((r: { date: string }) => r.date === latestDate)
+          const seedRows = rowsForLatest.map((r: StockEntry) => {
+            const carry =
+              r.closing_qty > 0
+                ? r.closing_qty
+                : Math.max(
+                    0,
+                    (r.opening_qty || 0) +
+                      (r.received_qty || 0) -
+                      (r.sold_qty || 0) -
+                      (r.void_qty || 0)
+                  )
+            return {
+              date: dateKey,
+              item_name: r.item_name,
+              unit: r.unit,
+              opening_qty: carry,
+              received_qty: 0,
+              sold_qty: 0,
+              void_qty: 0,
+              closing_qty: carry,
+              note: r.note,
+              recorded_by: r.recorded_by,
+              updated_at: new Date().toISOString(),
+            }
+          })
+          if (seedRows.length > 0) {
+            await supabase.from(tableName).insert(seedRows)
+            setEntries(seedRows as StockEntry[])
+            // continue to build sold map below using soldRes
+          }
+        }
+      }
+
       // Build carry-over map — last known closing for each item
       const carryOver: Record<string, number> = {}
       const seen = new Set<string>()
