@@ -48,8 +48,8 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
         orders(created_at, order_type, profiles(full_name), tables(table_categories(name)))
       `
         )
-        .gte('orders.created_at', startUTC)
-        .lte('orders.created_at', endUTC)
+        .gte('created_at', startUTC)
+        .lte('created_at', endUTC)
         .in('status', ['ready', 'delivered'])
 
       if (data) {
