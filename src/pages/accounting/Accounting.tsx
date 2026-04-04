@@ -65,7 +65,7 @@ const TABS = [
   { id: 'tips', label: 'Tips', icon: Heart },
   { id: 'returns', label: 'Returns', icon: RotateCcw },
   { id: 'trends', label: 'Trends', icon: TrendingUp },
-  { id: 'debtors', label: 'Debtors', icon: AlertTriangle },
+  { id: 'debtors', label: 'Outstanding', icon: AlertTriangle },
   { id: 'ledger', label: 'Ledger', icon: BookOpen },
   { id: 'audit', label: 'Audit', icon: Shield },
   { id: 'pos', label: 'POS Recon', icon: Monitor },
@@ -397,9 +397,9 @@ export default function Accounting() {
               },
               {
                 id: 'acc-debtors',
-                title: 'Debtors Tab',
+                title: 'Outstanding',
                 description:
-                  'Account customers who pay at the end of a period. When a credit payment is made at the POS, the system checks if a debtor already exists for that phone number — if so, it adds to their existing balance instead of creating a duplicate. Record payments and send statements from here.',
+                  'All outstanding credit sales. Shows who recorded each debt, payments received, and lets you send statements or mark paid.',
               },
               {
                 id: 'acc-voids',
