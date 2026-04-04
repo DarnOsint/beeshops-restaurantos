@@ -2,7 +2,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { Beer, RefreshCw, Printer } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 
-const todayStr = () => new Date().toISOString().slice(0, 10)
+const todayStr = () => {
+  const now = new Date()
+  const d = new Date(now)
+  if (now.getHours() < 8) d.setDate(d.getDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
 
 interface ChillerEntry {
   id: string
@@ -26,32 +31,92 @@ export default function ChillerSummaryTab() {
 
   const fetchData = useCallback(async (d: string) => {
     setLoading(true)
-    const dayStart = new Date(d)
-    dayStart.setHours(8, 0, 0, 0)
-    const dayEnd = new Date(dayStart)
+    let seededRows: ChillerEntry[] | null = null
+
+    const todayIso = new Date().toISOString().slice(0, 10)
+    const base = new Date(d)
+    if (d === todayIso && new Date().getHours() < 8) base.setDate(base.getDate() - 1)
+    base.setHours(8, 0, 0, 0)
+    const dayStart = base
+    const dayEnd = new Date(base)
     dayEnd.setDate(dayEnd.getDate() + 1)
+    const dateKey = base.toISOString().slice(0, 10)
 
     const [entriesRes, soldRes] = await Promise.all([
-      supabase.from('bar_chiller_stock').select('*').eq('date', d).order('item_name'),
+      supabase.from('bar_chiller_stock').select('*').eq('date', dateKey).order('item_name'),
       supabase
         .from('order_items')
-        .select('quantity, return_accepted, menu_items(name)')
+        .select('quantity, status, return_accepted, menu_items(name), orders(status)')
         .eq('destination', 'bar')
-        .eq('status', 'delivered')
         .gte('created_at', dayStart.toISOString())
         .lte('created_at', dayEnd.toISOString()),
     ])
 
-    setEntries((entriesRes.data || []) as ChillerEntry[])
+    // Carry over from latest available date if empty
+    if (!entriesRes.data || entriesRes.data.length === 0) {
+      const { data: latestRows } = await supabase
+        .from('bar_chiller_stock')
+        .select('*')
+        .order('date', { ascending: false })
+        .limit(400)
+      if (latestRows && latestRows.length > 0) {
+        const latestDate = (latestRows[0] as { date: string }).date
+        const rowsForLatest = latestRows.filter((r: { date: string }) => r.date === latestDate)
+        const seedRows = rowsForLatest.map((r: ChillerEntry) => {
+          const carry =
+            r.closing_qty > 0
+              ? r.closing_qty
+              : Math.max(
+                  0,
+                  (r.opening_qty || 0) +
+                    (r.received_qty || 0) -
+                    (r.sold_qty || 0) -
+                    (r.void_qty || 0)
+                )
+          return {
+            id:
+              r.id ||
+              (typeof crypto !== 'undefined' && crypto.randomUUID
+                ? crypto.randomUUID()
+                : Math.random().toString(36).slice(2)),
+            date: dateKey,
+            item_name: r.item_name,
+            unit: r.unit,
+            opening_qty: carry,
+            received_qty: 0,
+            sold_qty: 0,
+            void_qty: 0,
+            closing_qty: carry,
+            note: r.note,
+            updated_at: new Date().toISOString(),
+          }
+        })
+        if (seedRows.length > 0) {
+          const { data: inserted, error } = await supabase
+            .from('bar_chiller_stock')
+            .insert(seedRows)
+            .select()
+          seededRows = (inserted || seedRows) as ChillerEntry[]
+          if (error) console.warn('Carryover insert failed', error.message)
+        }
+      }
+    }
+
+    const rawEntries = (seededRows || entriesRes.data || []) as ChillerEntry[]
+    setEntries(rawEntries)
 
     const map: Record<string, number> = {}
     if (soldRes.data) {
       for (const item of soldRes.data as unknown as Array<{
-        return_accepted?: boolean
         quantity: number
+        status: string
+        return_accepted?: boolean
         menu_items: { name: string } | null
+        orders: { status: string } | null
       }>) {
         if (item.return_accepted) continue
+        if (item.orders?.status === 'cancelled') continue
+        if (item.status === 'cancelled') continue
         const name = item.menu_items?.name
         if (name) map[name] = (map[name] || 0) + item.quantity
       }
