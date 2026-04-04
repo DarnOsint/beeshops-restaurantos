@@ -135,10 +135,12 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   const change = paymentMethod === 'cash' && cashTendered ? parseFloat(cashTendered) - total : 0
 
   // Only bar items block payment — kitchen/griller have no dedicated tab so waitron can pay freely
-  const unreadyItems = (order?.order_items || []).filter(
-    (i) =>
-      i.destination === 'bar' && i.status === 'pending' && !i.return_requested && !i.return_accepted
-  )
+  const unreadyItems = (order?.order_items || []).filter((i) => {
+    const dest = (i.destination || '').toLowerCase()
+    // shisha items should not block payment
+    if (dest === 'shisha') return false
+    return dest === 'bar' && i.status === 'pending' && !i.return_requested && !i.return_accepted
+  })
   const hasUnreadyItems = unreadyItems.length > 0
 
   const requestReturn = async (itemId: string) => {

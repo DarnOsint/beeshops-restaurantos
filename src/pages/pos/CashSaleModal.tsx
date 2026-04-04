@@ -330,9 +330,11 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
       return toast.warning('Required', 'Customer name is required for credit')
     setProcessing(true)
     try {
-      const hasBarItems = orderItems.some(
-        (i) => (i.menu_categories?.destination || 'bar') === 'bar'
-      )
+      const hasBarItems = orderItems.some((i) => {
+        const dest = (i.menu_categories?.destination || 'bar').toLowerCase()
+        if (dest === 'shisha') return false
+        return dest === 'bar'
+      })
       const orderId = crypto.randomUUID()
       // If order has bar items, create as 'open' so barman must approve first
       const { data: order, error: orderError } = await offlineInsert('orders', {
