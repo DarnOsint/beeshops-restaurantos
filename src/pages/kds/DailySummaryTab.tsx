@@ -68,8 +68,11 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
             } | null
           }[]
         ).filter((i) => {
-          const itemDest =
-            i.menu_items?.menu_categories?.destination || (i as any).destination || 'bar'
+          const itemDest = (
+            i.menu_items?.menu_categories?.destination ||
+            (i as any).destination ||
+            'bar'
+          )?.toLowerCase()
           return itemDest === destination && i.orders && !i.return_accepted
         })
 
