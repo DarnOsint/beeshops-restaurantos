@@ -20,25 +20,26 @@ const fmt = (n: number) => `₦${Number(n||0).toLocaleString('en-NG',{minimumFra
 const pct = (p: number, w: number) => w === 0 ? '—' : `${Math.round(p/w*100)}%`
 
 function sessionWindow8to8() {
-  // WAT = UTC+1
-  const nowUTC = Date.now()
-  const nowWAT = new Date(nowUTC + 3_600_000)
-  const sessionStartWAT = new Date(nowWAT)
-  if (nowWAT.getHours() < 8) sessionStartWAT.setDate(sessionStartWAT.getDate() - 1)
-  sessionStartWAT.setHours(8, 0, 0, 0)
-  const start = new Date(sessionStartWAT.getTime() - 3_600_000) // back to UTC
-  const end = new Date(start.getTime() + 86_400_000 - 1)
-  return { start, end, label: sessionStartWAT }
+  // Always report the last complete 8am–8am window (WAT, UTC+1)
+  const now = new Date(Date.now() + 3_600_000) // WAT
+  const endWAT = new Date(now)
+  endWAT.setHours(8, 0, 0, 0) // today 08:00 WAT
+  // If we're before 08:00 WAT, keep end as today 08:00; if after, we still report the window ending today 08:00
+  const startWAT = new Date(endWAT)
+  startWAT.setDate(startWAT.getDate() - 1)
+  const start = new Date(startWAT.getTime() - 3_600_000) // back to UTC
+  const end = new Date(endWAT.getTime() - 3_600_000)
+  return { start, end, labelStart: startWAT, labelEnd: endWAT }
 }
 
 function toWAT(iso: string) {
   return new Date(iso).toLocaleTimeString('en-NG',{hour:'2-digit',minute:'2-digit',timeZone:'Africa/Lagos'})
 }
 
-function dateLabel(startWAT: Date) {
-  return new Date(startWAT.getTime()).toLocaleDateString('en-NG',{
-    weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'Africa/Lagos'
-  })
+function dateLabel(startWAT: Date, endWAT: Date) {
+  const s = startWAT.toLocaleDateString('en-NG',{day:'2-digit',month:'short',year:'numeric',timeZone:'Africa/Lagos'})
+  const e = endWAT.toLocaleDateString('en-NG',{day:'2-digit',month:'short',year:'numeric',timeZone:'Africa/Lagos'})
+  return `${s} → ${e} (8am–8am)`
 }
 
 async function fetchAll(start: Date, end: Date) {
@@ -261,8 +262,8 @@ function buildEmail(dateStr: string, d: Awaited<ReturnType<typeof fetchAll>>) {
 
 Deno.serve(async () => {
   try {
-    const { start, end, label: labelWAT } = sessionWindow8to8()
-    const label = dateLabel(labelWAT)
+    const { start, end, labelStart, labelEnd } = sessionWindow8to8()
+    const label = dateLabel(labelStart, labelEnd)
     const data  = await fetchAll(start, end)
 
     const ownerEmail = Deno.env.get('OWNER_EMAIL')
