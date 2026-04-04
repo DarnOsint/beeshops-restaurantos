@@ -44,13 +44,14 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
         quantity,
         status,
         return_accepted,
+        destination,
         menu_items(name, menu_categories(destination)),
         orders(created_at, order_type, profiles(full_name), tables(table_categories(name)))
       `
         )
         .gte('created_at', startUTC)
         .lte('created_at', endUTC)
-        .in('status', ['ready', 'delivered'])
+        .in('status', ['pending', 'ready', 'delivered'])
 
       if (data) {
         const filtered = (
@@ -66,12 +67,11 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
               tables: { table_categories: { name: string } | null } | null
             } | null
           }[]
-        ).filter(
-          (i) =>
-            i.menu_items?.menu_categories?.destination === destination &&
-            i.orders &&
-            !i.return_accepted
-        )
+        ).filter((i) => {
+          const itemDest =
+            i.menu_items?.menu_categories?.destination || (i as any).destination || 'bar'
+          return itemDest === destination && i.orders && !i.return_accepted
+        })
 
         const itemMap = new Map<string, Map<string, number>>()
         for (const item of filtered) {
