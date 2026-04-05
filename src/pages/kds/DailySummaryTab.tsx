@@ -175,7 +175,14 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
       }, 200)
   }
 
-  const label = destination === 'bar' ? 'drinks' : destination === 'kitchen' ? 'dishes' : 'grills'
+  const label =
+    destination === 'bar'
+      ? 'drinks'
+      : destination === 'kitchen'
+        ? 'dishes'
+        : destination === 'griller'
+          ? 'grills'
+          : 'mixologist items'
 
   return (
     <div ref={printRef} className="flex-1 p-4 overflow-y-auto">
@@ -210,7 +217,7 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-4 flex items-center justify-between">
         <div>
           <p className="text-gray-400 text-xs capitalize">
-            Total {label} served{' '}
+            Total {label}{' '}
             {date === todayStr()
               ? 'today'
               : `on ${new Date(date).toLocaleDateString('en-NG', { day: '2-digit', month: 'short' })}`}
