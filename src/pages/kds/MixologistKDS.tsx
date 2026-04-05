@@ -56,8 +56,16 @@ function MixologistKDSInner() {
   const [requestLines, setRequestLines] = useState<
     Array<{ id: string; item: string; qty: number }>
   >([{ id: crypto.randomUUID(), item: '', qty: 1 }])
+  const [barItems, setBarItems] = useState<Array<{ id: string; name: string }>>([])
   const [sentRequests, setSentRequests] = useState<
-    Array<{ id: string; items: string; status: 'pending' | 'approved' | 'rejected'; at: string }>
+    Array<{
+      id: string
+      items: Array<{ item: string; qty: number }>
+      status: 'pending' | 'approved' | 'rejected'
+      at: string
+      requested_by?: string | null
+      resolved_by?: string | null
+    }>
   >([])
   const addRequestLine = () =>
     setRequestLines((prev) => [...prev, { id: crypto.randomUUID(), item: '', qty: 1 }])
@@ -69,16 +77,40 @@ function MixologistKDSInner() {
     )
   const removeRequestLine = (id: string) =>
     setRequestLines((prev) => (prev.length === 1 ? prev : prev.filter((l) => l.id !== id)))
-  const submitRequest = () => {
+  const loadRequests = useCallback(async () => {
+    const { data } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('id', 'mixologist_requests')
+      .single()
+    if (data?.value) {
+      try {
+        setSentRequests(JSON.parse(data.value))
+      } catch {
+        setSentRequests([])
+      }
+    } else {
+      setSentRequests([])
+    }
+  }, [])
+
+  const submitRequest = async () => {
     const valid = requestLines.filter((l) => l.item && l.qty > 0)
     if (!valid.length) return toast.warning('Add at least one drink and quantity')
     const record = {
       id: crypto.randomUUID(),
-      items: valid.map((l) => `${l.qty}x ${l.item}`).join(', '),
+      items: valid.map((l) => ({ item: l.item, qty: l.qty })),
       status: 'pending' as const,
       at: new Date().toISOString(),
+      requested_by: profile?.full_name || null,
     }
-    setSentRequests((prev) => [record, ...prev])
+    const updated = [record, ...(sentRequests || [])].slice(0, 50)
+    await supabase.from('settings').upsert({
+      id: 'mixologist_requests',
+      value: JSON.stringify(updated),
+      updated_at: new Date().toISOString(),
+    })
+    await loadRequests()
     setRequestLines([{ id: crypto.randomUUID(), item: '', qty: 1 }])
     toast.success('Sent to bar', 'Waiting for bar approval to release drinks')
   }
@@ -272,15 +304,27 @@ function MixologistKDSInner() {
 
   useEffect(() => {
     fetchOrders()
+    loadRequests()
     fetchReturnHistory()
+    supabase
+      .from('menu_items')
+      .select('id,name,menu_categories(destination)')
+      .then(({ data }) => {
+        const barList =
+          data?.filter(
+            (m: any) => (m.menu_categories?.destination || '').toLowerCase() === 'bar'
+          ) || []
+        setBarItems(barList.map((b: any) => ({ id: b.id, name: b.name })))
+      })
     const sub = supabase
       .channel('mixologist-kds')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchOrders)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, loadRequests)
       .subscribe()
     return () => {
       supabase.removeChannel(sub)
     }
-  }, [fetchOrders, fetchReturnHistory])
+  }, [fetchOrders, fetchReturnHistory, loadRequests])
 
   if (geoStatus === 'outside')
     return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
@@ -502,19 +546,35 @@ function MixologistKDSInner() {
             <div className="space-y-2">
               {requestLines.map((line) => (
                 <div key={line.id} className="grid grid-cols-7 gap-2 items-center">
-                  <input
-                    placeholder="e.g. Jameson, Smirnoff Ice"
+                  <select
                     value={line.item}
                     onChange={(e) => updateRequestLine(line.id, 'item', e.target.value)}
                     className="col-span-5 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    value={line.qty}
-                    onChange={(e) => updateRequestLine(line.id, 'qty', Number(e.target.value))}
-                    className="col-span-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
-                  />
+                  >
+                    <option value="">Tap to choose a drink</option>
+                    {barItems.map((b) => (
+                      <option key={b.id} value={b.name}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="col-span-1 flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1">
+                    <button
+                      onClick={() =>
+                        updateRequestLine(line.id, 'qty', Math.max(1, (line.qty || 1) - 1))
+                      }
+                      className="text-gray-300 hover:text-white text-sm"
+                    >
+                      −
+                    </button>
+                    <span className="text-white text-sm w-6 text-center">{line.qty}</span>
+                    <button
+                      onClick={() => updateRequestLine(line.id, 'qty', (line.qty || 1) + 1)}
+                      className="text-gray-300 hover:text-white text-sm"
+                    >
+                      +
+                    </button>
+                  </div>
                   <button
                     onClick={() => removeRequestLine(line.id)}
                     className="text-red-400 hover:text-red-300 text-xs"
@@ -547,13 +607,16 @@ function MixologistKDSInner() {
                     className="bg-gray-800 rounded-xl px-3 py-2 flex items-center justify-between"
                   >
                     <div>
-                      <p className="text-white text-sm font-semibold">{r.items}</p>
+                      <p className="text-white text-sm font-semibold">
+                        {r.items.map((it) => `${it.qty}x ${it.item}`).join(', ')}
+                      </p>
                       <p className="text-gray-500 text-xs">
                         {new Date(r.at).toLocaleTimeString('en-NG', {
                           hour: '2-digit',
                           minute: '2-digit',
                           hour12: true,
-                        })}
+                        })}{' '}
+                        · {r.requested_by || 'Mixologist'}
                       </p>
                     </div>
                     <span
