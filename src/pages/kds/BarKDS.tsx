@@ -65,6 +65,15 @@ const HELP_TIPS = [
   },
 ]
 
+interface MixoRequest {
+  id: string
+  items: Array<{ item: string; qty: number }>
+  status: 'pending' | 'approved' | 'rejected'
+  at: string
+  requested_by?: string | null
+  resolved_by?: string | null
+}
+
 function getElapsed(createdAt: string): string {
   const total = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000)
   if (total < 60) return `${total}s`
@@ -102,7 +111,7 @@ function BarKDSInner() {
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
   const [activeTab, setActiveTab] = useState<
-    'orders' | 'returns' | 'summary' | 'history' | 'chiller'
+    'orders' | 'returns' | 'summary' | 'history' | 'chiller' | 'requests'
   >('orders')
   const [returnHistory, setReturnHistory] = useState<
     Array<{
@@ -118,6 +127,7 @@ function BarKDSInner() {
       resolved_at: string | null
     }>
   >([])
+  const [mixoRequests, setMixoRequests] = useState<MixoRequest[]>([])
 
   const fetchOrders = useCallback(async () => {
     // Fetch open orders AND paid orders that still have pending bar items (cash sales/takeaway)
@@ -173,6 +183,48 @@ function BarKDSInner() {
     }
     setLoading(false)
   }, [])
+
+  const loadMixoRequests = useCallback(async () => {
+    const { data } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('id', 'mixologist_requests')
+      .single()
+    if (data?.value) {
+      try {
+        setMixoRequests(JSON.parse(data.value))
+      } catch {
+        setMixoRequests([])
+      }
+    } else {
+      setMixoRequests([])
+    }
+  }, [])
+
+  const updateMixoRequests = async (updated: MixoRequest[]) => {
+    await supabase.from('settings').upsert({
+      id: 'mixologist_requests',
+      value: JSON.stringify(updated.slice(0, 50)),
+      updated_at: new Date().toISOString(),
+    })
+    setMixoRequests(updated.slice(0, 50))
+  }
+
+  const approveMixoRequest = async (id: string) => {
+    const updated = mixoRequests.map((r) =>
+      r.id === id ? { ...r, status: 'approved', resolved_by: profile?.full_name || null } : r
+    )
+    await updateMixoRequests(updated)
+    toast.success('Approved', 'Released from chiller')
+  }
+
+  const rejectMixoRequest = async (id: string) => {
+    const updated = mixoRequests.map((r) =>
+      r.id === id ? { ...r, status: 'rejected', resolved_by: profile?.full_name || null } : r
+    )
+    await updateMixoRequests(updated)
+    toast.success('Rejected', 'Request declined')
+  }
 
   const [historyDate, setHistoryDate] = useState(new Date().toISOString().slice(0, 10))
 
@@ -378,16 +430,19 @@ function BarKDSInner() {
     fetchOrders()
 
     fetchReturnHistory()
+    loadMixoRequests()
     const tickTimer = setInterval(() => setTick((t) => t + 1), 1000)
     // Poll every 10s as safety net — realtime can drop silently
     const pollTimer = setInterval(() => {
       fetchOrders()
       fetchReturnHistory()
+      loadMixoRequests()
     }, 10000)
     const channel = supabase
       .channel('bar-channel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchOrders)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, loadMixoRequests)
       .subscribe()
     const onVisible = () => {
       if (document.visibilityState === 'visible') fetchOrders()
@@ -480,6 +535,24 @@ function BarKDSInner() {
           className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${activeTab === 'chiller' ? 'border-cyan-500 text-cyan-400' : 'border-transparent text-gray-400 hover:text-white'}`}
         >
           <Snowflake size={14} /> Chiller
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab('requests')
+            loadMixoRequests()
+          }}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'requests'
+              ? 'border-emerald-500 text-emerald-400'
+              : 'border-transparent text-gray-400 hover:text-white'
+          }`}
+        >
+          <BarChart2 size={14} /> Requests
+          {mixoRequests.filter((r) => r.status === 'pending').length > 0 && (
+            <span className="bg-emerald-500 text-black text-xs font-bold px-1.5 py-0.5 rounded-full">
+              {mixoRequests.filter((r) => r.status === 'pending').length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -616,6 +689,65 @@ function BarKDSInner() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Mixologist Requests Tab */}
+      {activeTab === 'requests' && (
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {mixoRequests.length === 0 ? (
+            <div className="text-center text-gray-500 text-sm">No mixologist requests yet.</div>
+          ) : (
+            mixoRequests.map((r) => (
+              <div
+                key={r.id}
+                className="bg-gray-900 border border-gray-800 rounded-2xl p-3 flex items-center justify-between gap-3"
+              >
+                <div>
+                  <p className="text-white font-semibold text-sm">
+                    {r.items.map((it) => `${it.qty}x ${it.item}`).join(', ')}
+                  </p>
+                  <p className="text-gray-500 text-xs">
+                    {new Date(r.at).toLocaleTimeString('en-NG', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: true,
+                    })}{' '}
+                    · {r.requested_by || 'Mixologist'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-[11px] px-2 py-1 rounded-lg border ${
+                      r.status === 'approved'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                        : r.status === 'rejected'
+                          ? 'bg-red-500/10 text-red-400 border-red-500/30'
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    }`}
+                  >
+                    {r.status}
+                  </span>
+                  {r.status === 'pending' && (
+                    <>
+                      <button
+                        onClick={() => approveMixoRequest(r.id)}
+                        className="px-2 py-1 text-xs rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => rejectMixoRequest(r.id)}
+                        className="px-2 py-1 text-xs rounded-lg bg-red-500/20 text-red-400 border border-red-500/30"
+                      >
+                        Reject
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))
           )}
         </div>
       )}
