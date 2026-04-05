@@ -1200,52 +1200,56 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-4">
       <div className="bg-gray-900 rounded-2xl w-full max-w-md border border-gray-800 overflow-y-auto max-h-[90vh]">
-        <div className="flex items-center justify-between p-5 border-b border-gray-800">
+        <div className="flex flex-col gap-3 p-5 border-b border-gray-800 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-white font-bold text-lg">Process Payment</h3>
             <p className="text-gray-400 text-sm">{table.name}</p>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
             <button
               onClick={printPreReceipt}
-              className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors"
+              className="flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors w-full sm:w-auto"
               title="Print receipt for customer to review before payment"
             >
               <Printer size={13} /> Print Receipt
             </button>
-            <div className="flex flex-col gap-1">
+
+            <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
               <button
                 onClick={() => printAllForStation('kitchen')}
-                className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors"
+                className="flex items-center justify-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors"
                 title="Print all kitchen items for this order"
               >
                 <Printer size={13} /> Kitchen — All ({kitchenTotalCount})
               </button>
               <button
                 onClick={() => printPendingForStation('kitchen')}
-                className="flex items-center gap-1 bg-emerald-800/40 hover:bg-emerald-700/40 text-emerald-200 text-xs font-medium px-3 py-2 rounded-xl border border-emerald-700 transition-colors"
+                className="flex items-center justify-center gap-1 bg-emerald-800/40 hover:bg-emerald-700/40 text-emerald-200 text-[11px] font-medium px-3 py-2 rounded-xl border border-emerald-700 transition-colors"
                 title="Print only newly added / pending kitchen items"
               >
                 <Printer size={13} /> Kitchen — New ({kitchenPendingCount})
               </button>
-            </div>
-            <div className="flex flex-col gap-1">
               <button
                 onClick={() => printAllForStation('griller')}
-                className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors"
+                className="flex items-center justify-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors"
                 title="Print all grill items for this order"
               >
                 <Printer size={13} /> Grill — All ({grillTotalCount})
               </button>
               <button
                 onClick={() => printPendingForStation('griller')}
-                className="flex items-center gap-1 bg-amber-800/40 hover:bg-amber-700/40 text-amber-200 text-xs font-medium px-3 py-2 rounded-xl border border-amber-700 transition-colors"
+                className="flex items-center justify-center gap-1 bg-amber-800/40 hover:bg-amber-700/40 text-amber-200 text-[11px] font-medium px-3 py-2 rounded-xl border border-amber-700 transition-colors"
                 title="Print only newly added / pending grill items"
               >
                 <Printer size={13} /> Grill — New ({grillPendingCount})
               </button>
             </div>
-            <button onClick={onClose} className="text-gray-400 hover:text-white">
+
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white flex items-center justify-center w-full sm:w-auto"
+            >
               <X size={20} />
             </button>
           </div>
