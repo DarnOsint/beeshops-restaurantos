@@ -94,7 +94,7 @@ export default function ReturnedDrinksTab() {
       const inWindow =
         (req >= dayStart.getTime() && req < dayEnd.getTime()) ||
         (res !== null && res >= dayStart.getTime() && res < dayEnd.getTime())
-      return inWindow && r.status !== 'pending'
+      return inWindow
     })
     setReturns(filtered)
     setLoading(false)
