@@ -13,13 +13,13 @@ export const auditClient = createClient(supabaseUrl, supabaseAnonKey)
 const originalFrom = supabase.from.bind(supabase)
 
 supabase.from = ((table: string) => {
-  const query = originalFrom(table)
+  const query: any = originalFrom(table)
 
-  const wrap =
-    (method: 'insert' | 'update' | 'delete') =>
-    async (...args: any[]) => {
-      const result = await (query as any)[method](...args)
-      // Avoid logging audit table itself or failed operations
+  const wrap = (method: 'insert' | 'update' | 'delete') => {
+    const original = query[method]?.bind(query)
+    if (!original) return
+    query[method] = async (...args: any[]) => {
+      const result = await original(...args)
       if (!result?.error && table !== 'audit_log') {
         try {
           await auditClient.from('audit_log').insert({
@@ -38,11 +38,11 @@ supabase.from = ((table: string) => {
       }
       return result
     }
-
-  return {
-    ...query,
-    insert: wrap('insert'),
-    update: wrap('update'),
-    delete: wrap('delete'),
   }
+
+  wrap('insert')
+  wrap('update')
+  wrap('delete')
+
+  return query
 }) as typeof supabase.from
