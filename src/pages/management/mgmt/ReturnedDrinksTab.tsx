@@ -85,7 +85,8 @@ export default function ReturnedDrinksTab() {
       .gte('requested_at', dayStart.toISOString())
       .lte('requested_at', dayEnd.toISOString())
       .order('requested_at', { ascending: false })
-    setReturns((data || []) as ReturnEntry[])
+    // Hide items until barman has accepted/rejected them (status becomes bar_accepted/rejected/manager_rejected/accepted)
+    setReturns(((data || []) as ReturnEntry[]).filter((r) => r.status !== 'pending'))
     setLoading(false)
   }, [])
 
