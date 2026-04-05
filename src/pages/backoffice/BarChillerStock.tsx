@@ -1,8 +1,20 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, Beer, RefreshCw, Save, Minus, Plus, ChevronDown, ChevronUp } from 'lucide-react'
+import {
+  ArrowLeft,
+  Beer,
+  RefreshCw,
+  Save,
+  Minus,
+  Plus,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+  PlusCircle,
+} from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
+import { audit } from '../../lib/audit'
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
 
@@ -87,6 +99,7 @@ const NOTE_PRESETS = ['Broken bottle', 'Expired', 'Given out free', 'Damaged lab
 export default function BarChillerStock({ onBack, embedded = false }: Props) {
   const { profile } = useAuth()
   const toast = useToast()
+  const isManager = profile?.role === 'owner' || profile?.role === 'manager'
   const [date, setDate] = useState(todayStr())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -330,8 +343,29 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
 
       if (entry.id) {
         await supabase.from('bar_chiller_stock').update(row).eq('id', entry.id)
+        await audit({
+          action: 'update',
+          entity: 'bar_chiller_stock',
+          entityId: entry.id,
+          entityName: name,
+          newValue: row,
+          performer: profile ?? undefined,
+        })
       } else {
-        await supabase.from('bar_chiller_stock').insert(row)
+        const { data: inserted } = await supabase
+          .from('bar_chiller_stock')
+          .insert(row)
+          .select('id')
+          .single()
+        const newId = inserted?.id
+        await audit({
+          action: 'create',
+          entity: 'bar_chiller_stock',
+          entityId: newId,
+          entityName: name,
+          newValue: row,
+          performer: profile ?? undefined,
+        })
       }
       // Create void request for any newly added void quantities
       const prevVoid = savedVoidQty[name] || 0
@@ -364,6 +398,55 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
   )
   const totalVoid = Object.values(stockData).reduce((s, e) => s + e.void_qty, 0)
 
+  const handleDelete = async (itemName: string) => {
+    if (!isManager) return
+    const entry = stockData[itemName]
+    setStockData((prev) => {
+      const copy = { ...prev }
+      delete copy[itemName]
+      return copy
+    })
+    setHasChanges(true)
+    if (entry?.id) {
+      await supabase.from('bar_chiller_stock').delete().eq('id', entry.id)
+      await audit({
+        action: 'delete',
+        entity: 'bar_chiller_stock',
+        entityId: entry.id,
+        entityName: itemName,
+        oldValue: entry,
+        performer: profile ?? undefined,
+      })
+    }
+    toast.success('Removed', `${itemName} removed from ${date}`)
+  }
+
+  const handleAddItem = () => {
+    if (!isManager) return
+    const name = prompt('New item name')
+    if (!name) return
+    const trimmed = name.trim()
+    if (!trimmed) return
+    if (stockData[trimmed]) {
+      toast.info('Exists', `${trimmed} already in list`)
+      return
+    }
+    setStockData((prev) => ({
+      ...prev,
+      [trimmed]: {
+        item_name: trimmed,
+        unit: 'bottles',
+        opening_qty: 0,
+        received_qty: 0,
+        sold_qty: 0,
+        void_qty: 0,
+        closing_qty: 0,
+        note: '',
+      },
+    }))
+    setHasChanges(true)
+  }
+
   const drinks = menuDrinks.map((d) => ({
     ...d,
     ...(stockData[d.name] || {
@@ -389,6 +472,14 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
             <h1 className="text-white font-bold">Bar Chiller Stock</h1>
             <p className="text-gray-400 text-xs">Tap +/- to enter stock counts</p>
           </div>
+          {isManager && (
+            <button
+              onClick={handleAddItem}
+              className="flex items-center gap-1 text-sm bg-gray-800 border border-gray-700 text-white px-3 py-2 rounded-xl hover:border-amber-500"
+            >
+              <PlusCircle size={16} /> Add Item
+            </button>
+          )}
           <input
             type="date"
             value={date}
@@ -577,6 +668,15 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
                               `(${variance > 0 ? '−' : '+'}${Math.abs(variance)} variance)`}
                           </span>
                         </div>
+                      )}
+
+                      {isManager && (
+                        <button
+                          onClick={() => handleDelete(drink.name)}
+                          className="w-full flex items-center justify-center gap-2 bg-gray-800 border border-red-600/40 text-red-300 rounded-lg py-2 text-xs hover:bg-red-900/20 transition-colors"
+                        >
+                          <Trash2 size={14} /> Delete entry
+                        </button>
                       )}
 
                       {/* Notes — quick-select presets */}

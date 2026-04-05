@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { supabase } from '../lib/supabase'
 import { audit } from '../lib/audit'
+import { setAuditPerformer } from '../lib/auditContext'
 import type { Profile } from '../types'
 import type { User } from '@supabase/supabase-js'
 
@@ -94,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const doSignOut = useCallback(async (reason: 'timeout' | 'manual' = 'timeout') => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
     setMfaVerifiedState(false)
+    setAuditPerformer(null)
     // Only clear MFA on explicit sign-out — timeout re-login should not re-trigger OTP
     if (reason === 'manual') {
       localStorage.removeItem('mfa_verified')
@@ -141,6 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single()
       if (!error && data) {
         setProfile(data as Profile)
+        setAuditPerformer(data as Profile)
         setLoading(false)
         // Auto-confirm attendance on login (proves staff is physically present)
         void supabase
