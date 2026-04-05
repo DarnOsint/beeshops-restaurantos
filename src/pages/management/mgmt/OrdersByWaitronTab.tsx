@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { RefreshCw, Download } from 'lucide-react'
+import React from 'react'
 
 type Dest = 'bar' | 'kitchen' | 'griller' | 'shisha' | 'games'
 
@@ -41,6 +42,7 @@ export default function OrdersByWaitronTab({
   const [rows, setRows] = useState<Row[]>([])
   const [itemsByWaitron, setItemsByWaitron] = useState<Record<string, Item[]>>({})
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [modalWaitron, setModalWaitron] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [startDate, setStartDate] = useState<string>(() =>
     new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
@@ -212,7 +214,10 @@ export default function OrdersByWaitronTab({
                   <tr
                     key={r.waitron}
                     className="border-t border-gray-800 hover:bg-gray-800/60 cursor-pointer"
-                    onClick={() => setExpanded(expanded === r.waitron ? null : r.waitron)}
+                    onClick={() => {
+                      setExpanded(expanded === r.waitron ? null : r.waitron)
+                      setModalWaitron(r.waitron)
+                    }}
                   >
                     <td className="px-3 py-2">{r.waitron}</td>
                     <td className="px-3 py-2 text-right">{r.count}</td>
@@ -252,6 +257,98 @@ export default function OrdersByWaitronTab({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {modalWaitron && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
+          <div className="bg-gray-950 border border-gray-800 rounded-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+              <div>
+                <p className="text-white font-bold">{modalWaitron}</p>
+                <p className="text-xs text-gray-500">
+                  {start.slice(0, 10)} to {end.slice(0, 10)} (8am–8am WAT)
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const items = itemsByWaitron[modalWaitron] || []
+                    const html = `
+                      <html><head><style>
+                        body{font-family:Inter,Arial,sans-serif;font-size:12px;margin:16px;}
+                        h2{margin:0 0 8px;}
+                        table{width:100%;border-collapse:collapse;}
+                        th,td{padding:6px;border:1px solid #ddd;text-align:left;}
+                      </style></head><body>
+                        <h2>${modalWaitron} — Orders</h2>
+                        <p>Window: ${start} to ${end} (8am–8am WAT)</p>
+                        <table>
+                          <thead><tr><th>Time</th><th>Item</th><th>Qty</th><th>Value</th></tr></thead>
+                          <tbody>
+                            ${items
+                              .map(
+                                (it) =>
+                                  `<tr><td>${new Date(it.at).toLocaleString('en-NG', { timeZone: 'Africa/Lagos' })}</td><td>${it.name}</td><td>${it.qty}</td><td>₦${it.total.toLocaleString()}</td></tr>`
+                              )
+                              .join('')}
+                          </tbody>
+                        </table>
+                      </body></html>`
+                    const w = window.open('', '_blank')
+                    if (w) {
+                      w.document.write(html)
+                      w.document.close()
+                      w.focus()
+                      w.print()
+                    }
+                  }}
+                  className="px-3 py-1.5 text-xs bg-amber-500 text-black font-semibold rounded-lg"
+                >
+                  Print
+                </button>
+                <button
+                  onClick={() => setModalWaitron(null)}
+                  className="px-3 py-1.5 text-xs bg-gray-800 text-gray-200 rounded-lg"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {(itemsByWaitron[modalWaitron] || []).length === 0 ? (
+                <div className="p-4 text-gray-500 text-sm">No items</div>
+              ) : (
+                <table className="w-full text-sm text-white">
+                  <thead className="bg-gray-900 text-gray-300 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Time</th>
+                      <th className="px-3 py-2 text-left">Item</th>
+                      <th className="px-3 py-2 text-right">Qty</th>
+                      <th className="px-3 py-2 text-right">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(itemsByWaitron[modalWaitron] || [])
+                      .sort((a, b) => (a.at > b.at ? 1 : -1))
+                      .map((it, idx) => (
+                        <tr key={idx} className="border-t border-gray-800">
+                          <td className="px-3 py-2 text-gray-300">
+                            {new Date(it.at).toLocaleTimeString('en-NG', {
+                              timeZone: 'Africa/Lagos',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </td>
+                          <td className="px-3 py-2">{it.name}</td>
+                          <td className="px-3 py-2 text-right">{it.qty}</td>
+                          <td className="px-3 py-2 text-right">₦{it.total.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
