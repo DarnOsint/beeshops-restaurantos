@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { supabase } from '../../../lib/supabase'
 import { RefreshCw, Download } from 'lucide-react'
 
@@ -10,13 +10,16 @@ interface Row {
   total: number
 }
 
-const sessionWindow = () => {
-  const now = new Date()
-  const lagos = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
-  const start = new Date(lagos)
-  start.setHours(8, 0, 0, 0)
-  if (lagos.getHours() < 8) start.setDate(start.getDate() - 1)
-  const end = new Date(start)
+const dayWindow = (dateStr: string) => {
+  // 8am–8am WAT window for a given YYYY-MM-DD; if date is today and time < 8am, use yesterday
+  const lagosNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+  const base = new Date(`${dateStr}T08:00:00+01:00`)
+  const todayStr = lagosNow.toISOString().slice(0, 10)
+  if (dateStr === todayStr && lagosNow.getHours() < 8) {
+    base.setDate(base.getDate() - 1)
+  }
+  const start = base
+  const end = new Date(base)
   end.setDate(end.getDate() + 1)
   return { start: start.toISOString(), end: end.toISOString() }
 }
@@ -30,9 +33,21 @@ export default function OrdersByWaitronTab({
 }) {
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
-  const { start, end } = useMemo(() => sessionWindow(), [])
+  const [startDate, setStartDate] = useState<string>(() =>
+    new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+  )
+  const [endDate, setEndDate] = useState<string>(() =>
+    new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+  )
 
-  const load = async () => {
+  const { start, end } = useMemo(() => {
+    // if range spans multiple days, end is endDate+1 at 08:00
+    const { start: s } = dayWindow(startDate)
+    const { end: e } = dayWindow(endDate)
+    return { start: s, end: e }
+  }, [startDate, endDate])
+
+  const load = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase
       .from('order_items')
@@ -65,7 +80,7 @@ export default function OrdersByWaitronTab({
     )
     setRows(Object.values(map).sort((a, b) => b.total - a.total))
     setLoading(false)
-  }
+  }, [destinations, start, end])
 
   useEffect(() => {
     void load()
@@ -90,7 +105,7 @@ export default function OrdersByWaitronTab({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <h3 className="text-white font-bold text-lg">{title}</h3>
         <button
           onClick={load}
@@ -104,6 +119,45 @@ export default function OrdersByWaitronTab({
         >
           <Download size={15} />
         </button>
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={startDate}
+            max={endDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="bg-gray-900 border border-gray-800 text-white text-xs rounded-lg px-2 py-1"
+          />
+          <span className="text-gray-500 text-xs">to</span>
+          <input
+            type="date"
+            value={endDate}
+            min={startDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="bg-gray-900 border border-gray-800 text-white text-xs rounded-lg px-2 py-1"
+          />
+          <button
+            onClick={() => {
+              const d = new Date(startDate)
+              d.setDate(d.getDate() - 1)
+              const prev = d.toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+              setStartDate(prev)
+              setEndDate(prev)
+            }}
+            className="px-2 py-1 text-xs bg-gray-900 border border-gray-800 text-gray-300 rounded-lg hover:text-white"
+          >
+            Prev Day
+          </button>
+          <button
+            onClick={() => {
+              const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+              setStartDate(today)
+              setEndDate(today)
+            }}
+            className="px-2 py-1 text-xs bg-amber-500 text-black rounded-lg"
+          >
+            Today
+          </button>
+        </div>
       </div>
       {loading ? (
         <div className="text-amber-500">Loading…</div>
