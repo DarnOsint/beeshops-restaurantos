@@ -23,6 +23,15 @@ import type { KdsOrder } from './types'
 import DailySummaryTab from './DailySummaryTab'
 import { useToast } from '../../context/ToastContext'
 
+const isBarItem = (item: KdsOrder['order_items'][number]): boolean => {
+  const dest = (item.destination || '').toLowerCase()
+  if (dest === 'mixologist') return false
+  if (dest === 'bar') return true
+  const catDest = item.menu_items?.menu_categories?.destination?.toLowerCase()
+  if (catDest === 'mixologist') return false
+  return catDest === 'bar'
+}
+
 const HELP_TIPS = [
   {
     id: 'bar-incoming',
@@ -133,7 +142,7 @@ function BarKDSInner() {
           ...o,
           order_items: o.order_items.filter(
             (i) =>
-              i.menu_items?.menu_categories?.destination === 'bar' &&
+              isBarItem(i) &&
               i.status !== 'delivered' &&
               i.status !== 'ready' &&
               i.status !== 'cancelled' &&
@@ -150,11 +159,7 @@ function BarKDSInner() {
       const returns: typeof returnItems = []
       allOrders.forEach((o) => {
         o.order_items.forEach((i) => {
-          if (
-            i.menu_items?.menu_categories?.destination === 'bar' &&
-            i.return_requested &&
-            !i.return_accepted
-          ) {
+          if (isBarItem(i) && i.return_requested && !i.return_accepted) {
             returns.push({
               ...i,
               tableName: (o.tables as { name: string } | null)?.name ?? 'Unknown',
