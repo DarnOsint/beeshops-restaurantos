@@ -131,6 +131,13 @@ export default function TableAssignment({ onClose }: Props) {
       .from('zone_assignments')
       .insert({ category_id: categoryId, staff_id: staffId, is_active: true })
     if (!error) {
+      void audit({
+        action: 'ASSIGN_ZONE',
+        entity: 'zone_assignments',
+        entityName: categoryId,
+        newValue: { staff_id: staffId, category_id: categoryId },
+        performer: profile as import('../../types').Profile,
+      })
       setSelectedStaff((prev) => ({ ...prev, [categoryId]: '' }))
       fetchAssignments()
     }
@@ -142,6 +149,12 @@ export default function TableAssignment({ onClose }: Props) {
       toast.error('Error', 'Failed to remove assignment: ' + error.message)
       return
     }
+    void audit({
+      action: 'UNASSIGN_ZONE',
+      entity: 'zone_assignments',
+      entityId: assignmentId,
+      performer: profile as import('../../types').Profile,
+    })
     fetchAssignments()
   }
 

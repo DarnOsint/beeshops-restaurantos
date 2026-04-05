@@ -149,13 +149,16 @@ export default function Login() {
         .then((r) => r.json())
         .catch(() => ({ ip: 'unknown' }))
         .then(({ ip }) =>
-          supabase.from('audit_log').insert({
-            action: 'LOGIN_EMAIL',
-            entity: 'auth',
-            entity_name: email,
-            ip_address: ip,
-            new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
-          })
+          supabase
+            .from('audit_log')
+            .insert({
+              action: 'LOGIN_EMAIL',
+              entity: 'auth',
+              entity_name: email,
+              ip_address: ip,
+              new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 120) },
+            })
+            .select()
         )
       // Navigate immediately — AuthContext will fetch profile in the background.
       // PrivateRoute waits for profile before rendering, so no flicker.
@@ -247,16 +250,19 @@ export default function Login() {
       .then((r) => r.json())
       .catch(() => ({ ip: 'unknown' }))
       .then(({ ip }) =>
-        supabase.from('audit_log').insert({
-          action: 'LOGIN_PIN',
-          entity: 'auth',
-          entity_name: profile.full_name,
-          performed_by: profile.id,
-          performed_by_name: profile.full_name,
-          performed_by_role: profile.role,
-          ip_address: ip,
-          new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 80) },
-        })
+        supabase
+          .from('audit_log')
+          .insert({
+            action: 'LOGIN_PIN',
+            entity: 'auth',
+            entity_name: profile.full_name,
+            performed_by: profile.id,
+            performed_by_name: profile.full_name,
+            performed_by_role: profile.role,
+            ip_address: ip,
+            new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 120) },
+          })
+          .select()
       )
     localStorage.setItem(
       'pin_session',
