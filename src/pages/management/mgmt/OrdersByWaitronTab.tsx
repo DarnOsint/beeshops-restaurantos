@@ -210,9 +210,8 @@ export default function OrdersByWaitronTab({
             </thead>
             <tbody>
               {rows.map((r) => (
-                <>
+                <React.Fragment key={r.waitron}>
                   <tr
-                    key={r.waitron}
                     className="border-t border-gray-800 hover:bg-gray-800/60 cursor-pointer"
                     onClick={() => {
                       setExpanded(expanded === r.waitron ? null : r.waitron)
@@ -223,37 +222,7 @@ export default function OrdersByWaitronTab({
                     <td className="px-3 py-2 text-right">{r.count}</td>
                     <td className="px-3 py-2 text-right">₦{r.total.toLocaleString()}</td>
                   </tr>
-                  {expanded === r.waitron && (
-                    <tr className="bg-gray-900/60 border-t border-gray-800">
-                      <td colSpan={3} className="px-3 py-3">
-                        {(itemsByWaitron[r.waitron] || []).length === 0 ? (
-                          <p className="text-gray-500 text-xs">No items</p>
-                        ) : (
-                          <div className="space-y-1">
-                            {(itemsByWaitron[r.waitron] || []).map((it, idx) => (
-                              <div
-                                key={idx}
-                                className="flex justify-between text-xs text-gray-200 border border-gray-800 rounded-lg px-2 py-1"
-                              >
-                                <span className="font-semibold">{it.name}</span>
-                                <span className="text-gray-400">
-                                  {it.qty} × ₦{it.total.toLocaleString()}
-                                </span>
-                                <span className="text-gray-500">
-                                  {new Date(it.at).toLocaleTimeString('en-NG', {
-                                    timeZone: 'Africa/Lagos',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  })}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  )}
-                </>
+                </React.Fragment>
               ))}
             </tbody>
           </table>
@@ -328,22 +297,35 @@ export default function OrdersByWaitronTab({
                     </tr>
                   </thead>
                   <tbody>
-                    {(itemsByWaitron[modalWaitron] || [])
-                      .sort((a, b) => (a.at > b.at ? 1 : -1))
-                      .map((it, idx) => (
-                        <tr key={idx} className="border-t border-gray-800">
-                          <td className="px-3 py-2 text-gray-300">
-                            {new Date(it.at).toLocaleTimeString('en-NG', {
-                              timeZone: 'Africa/Lagos',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </td>
-                          <td className="px-3 py-2">{it.name}</td>
-                          <td className="px-3 py-2 text-right">{it.qty}</td>
-                          <td className="px-3 py-2 text-right">₦{it.total.toLocaleString()}</td>
-                        </tr>
-                      ))}
+                    {(() => {
+                      const aggregated: {
+                        [name: string]: { qty: number; total: number; at: string }
+                      } = {}
+                      ;(itemsByWaitron[modalWaitron] || []).forEach((it) => {
+                        const key = it.name
+                        if (!aggregated[key]) aggregated[key] = { qty: 0, total: 0, at: it.at }
+                        aggregated[key].qty += it.qty
+                        aggregated[key].total += it.total
+                        // keep earliest time for display
+                        if (it.at < aggregated[key].at) aggregated[key].at = it.at
+                      })
+                      return Object.entries(aggregated)
+                        .sort((a, b) => (a[0] > b[0] ? 1 : -1))
+                        .map(([name, v], idx) => (
+                          <tr key={idx} className="border-t border-gray-800">
+                            <td className="px-3 py-2 text-gray-300">
+                              {new Date(v.at).toLocaleTimeString('en-NG', {
+                                timeZone: 'Africa/Lagos',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </td>
+                            <td className="px-3 py-2">{name}</td>
+                            <td className="px-3 py-2 text-right">{v.qty}</td>
+                            <td className="px-3 py-2 text-right">₦{v.total.toLocaleString()}</td>
+                          </tr>
+                        ))
+                    })()}
                   </tbody>
                 </table>
               )}
