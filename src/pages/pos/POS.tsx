@@ -43,9 +43,27 @@ import GeofenceBlock from '../../components/GeofenceBlock'
 import type { Table, MenuItem, Order, OrderItem, Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
 
-const normalizeDestination = (dest?: string | null, name?: string): ItemDestination => {
+const normalizeDestination = (
+  dest?: string | null,
+  name?: string,
+  catName?: string
+): ItemDestination => {
   const lowerName = (name || '').toLowerCase()
-  if (lowerName.includes('cocktail') || lowerName.includes('mocktail')) return 'mixologist'
+  const lowerCat = (catName || '').toLowerCase()
+  const isMixologistItem =
+    lowerName.includes('cocktail') ||
+    lowerName.includes('mocktail') ||
+    lowerName.includes('milkshake') ||
+    lowerName.includes('shake') ||
+    lowerName.includes('smoothie') ||
+    lowerName.includes('fruit punch') ||
+    lowerName.includes('punch') ||
+    lowerCat.includes('cocktail') ||
+    lowerCat.includes('mocktail') ||
+    lowerCat.includes('milkshake') ||
+    lowerCat.includes('smoothie') ||
+    lowerCat.includes('punch')
+  if (isMixologistItem) return 'mixologist'
 
   const d = (dest || '').trim().toLowerCase()
   if (d === 'kitchen') return 'kitchen'
@@ -841,7 +859,11 @@ export default function POS() {
             status: isPack ? 'pending' : 'pending',
             destination: isPack
               ? 'kitchen'
-              : normalizeDestination(item.menu_categories?.destination, item.name),
+              : normalizeDestination(
+                  item.menu_categories?.destination,
+                  item.name,
+                  item.menu_categories?.name
+                ),
             modifier_notes: item.modifier_notes || null,
             extra_charge: item.extra_charge || 0,
             created_at: new Date().toISOString(),
@@ -861,7 +883,8 @@ export default function POS() {
             modifier_notes: i.modifier_notes || null,
             destination: normalizeDestination(
               i.destination || i.menu_categories?.destination,
-              i.name
+              i.name,
+              i.menu_categories?.name
             ),
           })),
           table.name,
@@ -964,7 +987,11 @@ export default function POS() {
             status: isPack ? 'pending' : 'pending',
             destination: isPack
               ? 'kitchen'
-              : normalizeDestination(item.menu_categories?.destination, item.name),
+              : normalizeDestination(
+                  item.menu_categories?.destination,
+                  item.name,
+                  item.menu_categories?.name
+                ),
             modifier_notes: item.modifier_notes || null,
             extra_charge: item.extra_charge || 0,
             created_at: new Date().toISOString(),
@@ -985,7 +1012,8 @@ export default function POS() {
           modifier_notes: i.modifier_notes || null,
           destination: normalizeDestination(
             i.destination || i.menu_categories?.destination,
-            i.name
+            i.name,
+            i.menu_categories?.name
           ),
         })),
         table.name,

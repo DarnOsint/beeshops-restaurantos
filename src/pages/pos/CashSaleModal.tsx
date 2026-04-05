@@ -376,7 +376,11 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         unit_price: item.price,
         total_price: item.total,
         status: 'pending',
-        destination: normalizeDestination(item.menu_categories?.destination || 'bar', item.name),
+        destination: normalizeDestination(
+          item.menu_categories?.destination || 'bar',
+          item.name,
+          item.menu_categories?.name
+        ),
         created_at: new Date().toISOString(),
       }))
       // Add takeaway pack fees as line items
@@ -400,13 +404,17 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
       }
       await depleteInventory(orderItems)
       // Auto-print station tickets — kitchen/griller
-      const stations: ItemDestination[] = ['kitchen', 'griller']
+      const stations: ItemDestination[] = ['kitchen', 'griller', 'mixologist', 'games']
       for (const station of stations) {
         if (!getStationPrinterUrl(station)) continue
         const stationItems: TicketItem[] = orderItems
           .filter(
             (i) =>
-              normalizeDestination(i.menu_categories?.destination, i.menu_items?.name) === station
+              normalizeDestination(
+                i.menu_categories?.destination,
+                i.menu_items?.name,
+                i.menu_categories?.name
+              ) === station
           )
           .map((i) => ({ quantity: i.quantity, name: i.name, modifier_notes: null }))
         if (stationItems.length === 0) continue
