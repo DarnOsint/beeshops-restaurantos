@@ -22,8 +22,9 @@ supabase.from = ((table: string) => {
       const result = await original(...args)
       if (!result?.error && table !== 'audit_log') {
         try {
+          const action = `${method.toUpperCase()}_${table}`
           await auditClient.from('audit_log').insert({
-            action: method.toUpperCase(),
+            action,
             entity: table,
             entity_name: Array.isArray(args[0]) ? undefined : (args[0]?.name ?? null),
             new_value: method === 'delete' ? null : (args[0] ?? null),

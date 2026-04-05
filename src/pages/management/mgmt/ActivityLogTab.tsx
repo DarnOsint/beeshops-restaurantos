@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../../../lib/supabase'
-import { Search, Filter, Download, RefreshCw } from 'lucide-react'
+import { Search, Download, RefreshCw } from 'lucide-react'
 
 interface LogEntry {
   id: string
@@ -13,23 +13,6 @@ interface LogEntry {
   performed_by_role: string | null
   created_at: string
   device?: string | null
-}
-
-const ACTION_GROUPS: Record<string, string[]> = {
-  All: [],
-  Login: ['LOGIN_EMAIL', 'LOGIN_PIN', 'LOGOUT', 'SESSION_TIMEOUT', 'MFA_VERIFIED'],
-  Sales: ['ORDER_CREATED', 'ORDER_PAID', 'ORDER_UPDATED', 'CASH_SALE'],
-  Voids: ['VOID_ITEM', 'VOID_ORDER'],
-  Shifts: ['CLOCK_IN', 'CLOCK_OUT'],
-  BackOffice: [
-    'SUPPLIER_CREATED',
-    'SUPPLIER_UPDATED',
-    'PO_CREATED',
-    'PO_RECEIVED',
-    'MENU_ITEM_SAVED',
-    'MENU_CAT_SAVED',
-  ],
-  System: ['DEBTOR_ADDED', 'PAYMENT_RECORDED'],
 }
 
 const ACTION_COLOR: Record<string, string> = {
@@ -89,43 +72,55 @@ export default function ActivityLogTab({ dateRange }: Props) {
   const [entries, setEntries] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [group, setGroup] = useState('All')
+  const [actionFilter, setActionFilter] = useState('All')
+  const [actions, setActions] = useState<string[]>(['All'])
   const [page, setPage] = useState(0)
   const [newCount, setNewCount] = useState(0)
   const PAGE_SIZE = 50
   const latestIdRef = useRef<string | null>(null)
 
-  const fetchLog = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true)
-    const q = supabase
-      .from('audit_log')
-      .select(
-        'id, action, entity, entity_name, new_value, old_value, performed_by_name, performed_by_role, created_at'
-      )
-      .gte('created_at', dateRange.start)
-      .lte('created_at', dateRange.end)
-      .order('created_at', { ascending: false })
-      .limit(500)
+  const fetchLog = useCallback(
+    async (silent = false) => {
+      if (!silent) setLoading(true)
+      const q = supabase
+        .from('audit_log')
+        .select(
+          'id, action, entity, entity_name, new_value, old_value, performed_by_name, performed_by_role, created_at'
+        )
+        .gte('created_at', dateRange.start)
+        .lte('created_at', dateRange.end)
+        .order('created_at', { ascending: false })
+        .limit(500)
 
-    const actions = ACTION_GROUPS[group]
-    if (actions && actions.length > 0) {
-      void q.in('action', actions)
-    }
+      if (actionFilter !== 'All') {
+        void q.eq('action', actionFilter)
+      }
 
-    const { data } = await q
-    const rows = (data || []) as LogEntry[]
-    setEntries(rows)
-    setPage(0)
-    setNewCount(0)
-    if (rows.length > 0) latestIdRef.current = rows[0].id
-    if (!silent) setLoading(false)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange.start, dateRange.end, group])
+      const { data } = await q
+      const rows = (data || []) as LogEntry[]
+      setEntries(rows)
+      setPage(0)
+      setNewCount(0)
+      if (rows.length > 0) latestIdRef.current = rows[0].id
+      if (!silent) setLoading(false)
+    },
+    [dateRange.start, dateRange.end, actionFilter]
+  )
 
   // Initial load
   useEffect(() => {
-    void fetchLog() // eslint-disable-line react-hooks/set-state-in-effect
-  }, [fetchLog])
+    void fetchLog()
+    supabase
+      .from('audit_log')
+      .select('action')
+      .gte('created_at', dateRange.start)
+      .lte('created_at', dateRange.end)
+      .limit(500)
+      .then(({ data }) => {
+        const list = Array.from(new Set((data || []).map((r: any) => r.action))).sort()
+        setActions(['All', ...list])
+      })
+  }, [fetchLog, dateRange.start, dateRange.end])
 
   // Real-time: new audit_log rows arrive → prepend silently, show badge
   useEffect(() => {
@@ -152,8 +147,10 @@ export default function ActivityLogTab({ dateRange }: Props) {
         }
       )
       .subscribe()
-    return () => { void supabase.removeChannel(channel) }
-  }, [dateRange.start, dateRange.end, group])
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [dateRange.start, dateRange.end, actionFilter])
 
   const filtered = entries.filter((e) => {
     if (!search) return true
@@ -231,17 +228,16 @@ export default function ActivityLogTab({ dateRange }: Props) {
 
       {/* Group filter */}
       <div className="flex gap-1.5 overflow-x-auto pb-1">
-        <Filter size={13} className="text-gray-600 shrink-0 mt-1" />
-        {Object.keys(ACTION_GROUPS).map((g) => (
+        {actions.map((a) => (
           <button
-            key={g}
+            key={a}
             onClick={() => {
-              setGroup(g)
+              setActionFilter(a)
               setPage(0)
             }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${group === g ? 'bg-amber-500 text-black' : 'bg-gray-900 border border-gray-800 text-gray-400 hover:text-white'}`}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${actionFilter === a ? 'bg-amber-500 text-black' : 'bg-gray-900 border border-gray-800 text-gray-400 hover:text-white'}`}
           >
-            {g}
+            {a}
           </button>
         ))}
       </div>

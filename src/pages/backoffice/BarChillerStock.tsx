@@ -109,6 +109,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [hasChanges, setHasChanges] = useState(false)
   const [savedVoidQty, setSavedVoidQty] = useState<Record<string, number>>({})
+  const [search, setSearch] = useState('')
 
   // Load bar menu items
   useEffect(() => {
@@ -447,7 +448,11 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     setHasChanges(true)
   }
 
-  const drinks = menuDrinks.map((d) => ({
+  const filtered = search
+    ? menuDrinks.filter((d) => d.name.toLowerCase().includes(search.toLowerCase()))
+    : menuDrinks
+
+  const drinks = filtered.map((d) => ({
     ...d,
     ...(stockData[d.name] || {
       opening_qty: 0,
@@ -472,6 +477,12 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
             <h1 className="text-white font-bold">Bar Chiller Stock</h1>
             <p className="text-gray-400 text-xs">Tap +/- to enter stock counts</p>
           </div>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search drink…"
+            className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500 w-48"
+          />
           {isManager && (
             <button
               onClick={handleAddItem}
