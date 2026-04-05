@@ -211,7 +211,7 @@ export default function Reports() {
 
   const getPeriodLabel = () => {
     if (reportType === 'daily' || reportType === 'zreport')
-      return `${selectedDay} ${MONTHS[selectedMonth]} ${selectedYear}`
+      return `${selectedDay} ${MONTHS[selectedMonth]} ${selectedYear} · 8:00 AM – 8:00 AM`
     if (reportType === 'month') return `${MONTHS[selectedMonth]} ${selectedYear}`
     return `Year ${selectedYear}`
   }
@@ -335,23 +335,44 @@ export default function Reports() {
       const roomRevenue = roomStays
         .filter((r) => r.status === 'checked_out')
         .reduce((s, r) => s + (r.total_amount || 0), 0)
+      // Payment aggregation
+      const paymentTotals: Record<string, number> = {}
+      paidOrders.forEach((o) => {
+        const key = (o.payment_method || 'unknown').toLowerCase()
+        paymentTotals[key] = (paymentTotals[key] || 0) + (o.total_amount || 0)
+      })
       const byPayment = {
-        cash: paidOrders
-          .filter((o) => o.payment_method === 'cash')
-          .reduce((s, o) => s + (o.total_amount || 0), 0),
-        bank_pos: paidOrders
-          .filter((o) => ['card', 'bank_pos'].includes(o.payment_method || ''))
-          .reduce((s, o) => s + (o.total_amount || 0), 0),
-        transfer: paidOrders
-          .filter((o) => (o.payment_method || '').startsWith('transfer'))
-          .reduce((s, o) => s + (o.total_amount || 0), 0),
-        credit: paidOrders
-          .filter((o) => o.payment_method === 'credit')
-          .reduce((s, o) => s + (o.total_amount || 0), 0),
-        split: paidOrders
-          .filter((o) => o.payment_method === 'split')
-          .reduce((s, o) => s + (o.total_amount || 0), 0),
+        cash:
+          (paymentTotals['cash'] || 0) +
+          (paymentTotals['cash_sale'] || 0) +
+          (paymentTotals['cash_sale_cash'] || 0),
+        bank_pos:
+          (paymentTotals['card'] || 0) +
+          (paymentTotals['bank_pos'] || 0) +
+          (paymentTotals['pos'] || 0) +
+          (paymentTotals['cash_sale_card'] || 0),
+        transfer:
+          (paymentTotals['transfer'] || 0) +
+          (paymentTotals['bank_transfer'] || 0) +
+          (paymentTotals['cash_sale_transfer'] || 0),
+        credit: paymentTotals['credit'] || 0,
+        split: paymentTotals['split'] || 0,
       }
+      const knownTotal =
+        byPayment.cash +
+        byPayment.bank_pos +
+        byPayment.transfer +
+        byPayment.credit +
+        byPayment.split
+      const otherTotal = Object.values(paymentTotals).reduce((s, v) => s + v, 0) - knownTotal
+      const paymentList = [
+        { label: 'Cash', value: byPayment.cash },
+        { label: 'Bank POS', value: byPayment.bank_pos },
+        { label: 'Transfer', value: byPayment.transfer },
+        { label: 'Credit', value: byPayment.credit },
+        { label: 'Split', value: byPayment.split },
+      ]
+      if (otherTotal > 0) paymentList.push({ label: 'Other', value: otherTotal })
 
       const categoryMap: Record<string, CategoryStat> = {}
       allItems
@@ -359,8 +380,8 @@ export default function Reports() {
         .forEach((item) => {
           const cat = item.menu_items?.menu_categories?.name || 'Unknown'
           if (!categoryMap[cat]) categoryMap[cat] = { name: cat, revenue: 0, quantity: 0 }
-          categoryMap[cat].revenue +=
-            item.total_price || (item.unit_price || 0) * (item.quantity || 0)
+          const revenue = item.total_price || (item.unit_price || 0) * (item.quantity || 0)
+          categoryMap[cat].revenue += revenue
           categoryMap[cat].quantity += item.quantity || 0
         })
 
@@ -370,8 +391,9 @@ export default function Reports() {
         .forEach((item) => {
           const n = item.menu_items?.name || 'Unknown'
           if (!itemMap[n]) itemMap[n] = { name: n, quantity: 0, revenue: 0, returned: 0 }
+          const revenue = item.total_price || (item.unit_price || 0) * (item.quantity || 0)
           itemMap[n].quantity += item.quantity || 0
-          itemMap[n].revenue += item.total_price || 0
+          itemMap[n].revenue += revenue
         })
       // Merge return counts into item stats
       for (const [name, count] of Object.entries(returnCountMap)) {
@@ -1177,7 +1199,7 @@ export default function Reports() {
                             ₦{s.revenue.toLocaleString()}
                           </td>
                           <td className="px-3 py-2.5 text-right text-gray-400 text-sm whitespace-nowrap hidden sm:table-cell">
-                            ₦{Math.round(s.revenue / s.orders).toLocaleString()}
+                            ₦{s.orders ? Math.round(s.revenue / s.orders).toLocaleString() : '0'}
                           </td>
                         </tr>
                       ))}
@@ -1338,10 +1360,7 @@ export default function Reports() {
               (() => {
                 const vat = report.grossRevenue * 0.075
                 const totalWithVat = report.grossRevenue + vat
-                const totalVoids = (report.voids || []).reduce(
-                  (s, v) => s + (v.total_value || 0),
-                  0
-                )
+                const totalReturnsValue = report.returnedValue || 0
                 const cashTotal = report.paidOrders
                   .filter((o) => o.payment_method === 'cash')
                   .reduce((s, o) => s + (o.total_amount || 0), 0)
@@ -1399,12 +1418,10 @@ export default function Reports() {
                             row('Credit:', `N${creditTotal.toLocaleString()}`),
                             row('Split:', `N${report.byPayment.split.toLocaleString()}`),
                             div,
-                            ctr('RETURNS & VOIDS'),
+                            ctr('RETURNS & DELETIONS'),
                             div,
-                            row('Items Returned:', String(report.returnedItems)),
-                            row('Return Value:', `N${report.returnedValue.toLocaleString()}`),
-                            row('Total Voids:', String((report.voids || []).length)),
-                            row('Value Voided:', `N${totalVoids.toLocaleString()}`),
+                            row('Items Returned/Deleted:', String(report.returnedItems)),
+                            row('Value Returned:', `N${report.returnedValue.toLocaleString()}`),
                             div,
                             ctr('CASH RECONCILIATION'),
                             div,
