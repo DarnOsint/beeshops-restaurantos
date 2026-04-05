@@ -137,7 +137,8 @@ function KitchenKDSInner() {
         )
       )
       .join('\n')
-    const lines = [
+
+    const ticket = [
       '',
       centre('** KITCHEN ORDER **'),
       divider,
@@ -155,25 +156,33 @@ function KitchenKDSInner() {
       divider,
       '',
     ].join('\n')
+
+    const copies = Array.from({ length: 2 })
+      .map(() => `<div class="copy">${ticket}</div><div class="pagebreak"></div>`)
+      .join('')
+
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Kitchen Ticket</title>
-<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:13px;width:80mm;padding:4mm;white-space:pre;}
-@media print{body{width:80mm;}@page{margin:0;size:80mm auto;}}</style></head><body>${lines}</body></html>`
-    for (let copy = 0; copy < 2; copy++) {
-      const win = window.open('', '_blank', 'width=400,height=500,toolbar=no,menubar=no')
-      if (!win) continue
-      win.document.open('text/html', 'replace')
-      win.document.write(html)
-      win.document.close()
-      win.onload = () =>
-        setTimeout(() => {
-          try {
-            win.print()
-          } catch {
-            /* ignore */
-          }
-          win.close()
-        }, 200)
-    }
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Courier New',monospace;font-size:13px;width:80mm;padding:4mm;}
+.copy{white-space:pre;margin-bottom:8mm;}
+.pagebreak{page-break-after: always;}
+@media print{body{width:80mm;}@page{margin:0;size:80mm auto;}}
+</style></head><body>${copies}</body></html>`
+    const win = window.open('', '_blank', 'width=400,height=500,toolbar=no,menubar=no')
+    if (!win) return
+    win.document.open('text/html', 'replace')
+    win.document.write(html)
+    win.document.close()
+    win.onload = () =>
+      setTimeout(() => {
+        try {
+          win.print()
+        } catch {
+          /* ignore */
+        }
+        win.close()
+      }, 200)
   }
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
   const [tab, setTab] = useState<'orders' | 'stock' | 'summary' | 'returns' | 'history'>('orders')
