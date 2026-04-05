@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Printer,
+  Download,
 } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
 import {
@@ -33,6 +34,7 @@ import {
   Pie,
   Cell,
 } from 'recharts'
+import * as XLSX from 'xlsx'
 
 const MONTHS = [
   'January',
@@ -532,6 +534,56 @@ export default function Reports() {
     a.download = 'beeshops-' + report.period.toLowerCase().replace(/ /g, '-') + '.csv'
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const exportXLSX = () => {
+    if (!report) return
+    const sheets: Record<string, any[][]> = {
+      Summary: [
+        ['BEESHOPS PLACE', report.period],
+        ['Generated', report.generatedAt],
+        [],
+        ['Metric', 'Value'],
+        ['Gross Revenue (F&B)', report.grossRevenue],
+        ['Room Revenue', report.roomRevenue],
+        ['Total Revenue', report.totalRevenue],
+        ['Total Expenses', report.totalExpenses],
+        ['Net Revenue', report.netRevenue],
+        ['Total Orders', report.totalOrders],
+        ['Paid Orders', report.paidOrdersCount],
+        ['Cancelled Orders', report.cancelledOrders],
+        ['Returned Items', report.returnedItems],
+        ['Return Value', report.returnedValue],
+        ['Avg Order Value', report.avgOrderValue],
+      ],
+      Payments: [
+        ['Method', 'Value'],
+        ['Cash', report.byPayment.cash],
+        ['Bank POS', report.byPayment.bank_pos],
+        ['Bank Transfer', report.byPayment.transfer],
+        ['Credit', report.byPayment.credit],
+        ['Split', report.byPayment.split],
+      ],
+      Items: [['Item', 'Qty', 'Revenue', 'Returned']],
+      Staff: [['Staff', 'Orders', 'Revenue']],
+      Tables: [['Table', 'Orders', 'Revenue']],
+    }
+
+    ;(report.topItems || []).forEach((i) =>
+      sheets.Items.push([i.name, i.quantity, i.revenue, i.returned])
+    )
+    ;(report.staffPerformance || []).forEach((s) =>
+      sheets.Staff.push([s.name, s.orders, s.revenue])
+    )
+    ;(report.tableStats || []).forEach((t) => sheets.Tables.push([t.table, t.orders, t.revenue]))
+
+    const wb = XLSX.utils.book_new()
+    Object.entries(sheets).forEach(([name, data]) => {
+      const ws = XLSX.utils.aoa_to_sheet(data)
+      XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31))
+    })
+    const fname = `beeshops_${report.period.replace(/\s+/g, '_')}.xlsx`
+    XLSX.writeFile(wb, fname)
   }
 
   const exportReportPDF = (r: Report) => {
