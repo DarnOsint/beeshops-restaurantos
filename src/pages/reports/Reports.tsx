@@ -184,6 +184,15 @@ export default function Reports() {
 
   const getDateBounds = () => {
     if (reportType === 'daily' || reportType === 'zreport') {
+      // If the selected day is "today" before 8am WAT, show yesterday's session window
+      const lagosNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+      const selectedStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`
+      const todayStr = lagosNow.toISOString().slice(0, 10)
+      if (selectedStr === todayStr && lagosNow.getHours() < 8) {
+        const d = new Date(lagosNow)
+        d.setDate(d.getDate() - 1)
+        return lagosDayWindow(d.getFullYear(), d.getMonth(), d.getDate())
+      }
       return lagosDayWindow(selectedYear, selectedMonth, selectedDay)
     } else if (reportType === 'month') {
       return {
