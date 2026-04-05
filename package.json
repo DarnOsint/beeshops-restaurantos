@@ -35,7 +35,8 @@
     "resend": "^6.9.3",
     "tailwindcss": "^4.2.1",
     "vite-plugin-pwa": "^1.2.0",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
