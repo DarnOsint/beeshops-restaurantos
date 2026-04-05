@@ -90,6 +90,19 @@ function getStatusColor(status: string): string {
   if (status === 'preparing') return 'bg-amber-500/20 text-amber-400'
   return 'bg-gray-700 text-gray-400'
 }
+
+// Treat takeaway packs (no menu relation) as kitchen items
+const isKitchenItem = (item: KdsOrder['order_items'][number]): boolean => {
+  const dest = item.menu_items?.menu_categories?.destination || item.destination
+  if (dest && dest.toLowerCase() === 'kitchen') return true
+  // Fallback: takeaway packs have null menu_items and a modifier label
+  return (
+    !item.menu_items &&
+    ((item.modifier_notes || '').toLowerCase().includes('takeaway pack') ||
+      (item.notes || '').toLowerCase().includes('takeaway pack') ||
+      (item as any).name?.toLowerCase?.().includes('takeaway pack'))
+  )
+}
 function getNextStatus(status: string): string | null {
   if (status === 'pending') return 'preparing'
   if (status === 'preparing') return 'ready'
@@ -108,8 +121,13 @@ function KitchenKDSInner() {
       return l + ' '.repeat(Math.max(1, space)) + r
     }
     const itemLines = order.order_items
-      .filter((i) => i.menu_items?.menu_categories?.destination === 'kitchen')
-      .map((i) => fmtRow(`${i.quantity}x ${(i.menu_items?.name ?? '').substring(0, 28)}`, ''))
+      .filter((i) => isKitchenItem(i))
+      .map((i) =>
+        fmtRow(
+          `${i.quantity}x ${(i.menu_items?.name ?? i.modifier_notes ?? 'Item').substring(0, 28)}`,
+          ''
+        )
+      )
       .join('\n')
     const lines = [
       '',
@@ -132,16 +150,22 @@ function KitchenKDSInner() {
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Kitchen Ticket</title>
 <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:13px;width:80mm;padding:4mm;white-space:pre;}
 @media print{body{width:80mm;}@page{margin:0;size:80mm auto;}}</style></head><body>${lines}</body></html>`
-    const win = window.open('', '_blank', 'width=400,height:500,toolbar=no,menubar=no')
-    if (!win) return
-    win.document.open('text/html', 'replace')
-    win.document.write(html)
-    win.document.close()
-    win.onload = () =>
-      setTimeout(() => {
-        win.print()
-        win.close()
-      }, 200)
+    for (let copy = 0; copy < 2; copy++) {
+      const win = window.open('', '_blank', 'width=400,height=500,toolbar=no,menubar=no')
+      if (!win) continue
+      win.document.open('text/html', 'replace')
+      win.document.write(html)
+      win.document.close()
+      win.onload = () =>
+        setTimeout(() => {
+          try {
+            win.print()
+          } catch {
+            /* ignore */
+          }
+          win.close()
+        }, 200)
+    }
   }
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
   const [tab, setTab] = useState<'orders' | 'stock' | 'summary' | 'returns' | 'history'>('orders')
@@ -190,12 +214,12 @@ function KitchenKDSInner() {
         if (itemIds.length > 0) {
           const { data: items } = await supabase
             .from('order_items')
-            .select('id, menu_items(menu_categories(destination))')
+            .select(
+              'id, destination, modifier_notes, notes, menu_items(menu_categories(destination))'
+            )
             .in('id', itemIds)
           const kitchenIds = new Set(
-            (items || [])
-              .filter((i: any) => i.menu_items?.menu_categories?.destination === 'kitchen')
-              .map((i: any) => i.id)
+            (items || []).filter((i: any) => isKitchenItem(i as any)).map((i: any) => i.id)
           )
           setReturnHistory(data.filter((r) => kitchenIds.has(r.order_item_id)))
         } else {
@@ -294,7 +318,7 @@ function KitchenKDSInner() {
       .select(
         `id, created_at, notes, staff_id,
         tables(name),
-        order_items(id, quantity, status, destination, notes, return_requested, return_accepted, return_reason,
+        order_items(id, quantity, status, destination, notes, modifier_notes, return_requested, return_accepted, return_reason,
           menu_items(name, menu_categories(name, destination)))`
       )
       .eq('status', 'open')
@@ -309,7 +333,7 @@ function KitchenKDSInner() {
           ...o,
           order_items: o.order_items.filter(
             (i) =>
-              i.menu_items?.menu_categories?.destination === 'kitchen' &&
+              isKitchenItem(i) &&
               i.status !== 'delivered' &&
               i.status !== 'ready' &&
               !i.return_accepted
@@ -322,11 +346,7 @@ function KitchenKDSInner() {
       const returns: typeof returnItems = []
       allOrders.forEach((o) => {
         o.order_items.forEach((i) => {
-          if (
-            i.menu_items?.menu_categories?.destination === 'kitchen' &&
-            i.return_requested &&
-            !i.return_accepted
-          ) {
+          if (isKitchenItem(i) && i.return_requested && !i.return_accepted) {
             returns.push({
               ...i,
               tableName: (o.tables as { name: string } | null)?.name ?? 'Unknown',

@@ -4,6 +4,7 @@ export interface KdsOrderItem {
   status: 'pending' | 'preparing' | 'ready' | 'delivered' | 'cancelled'
   destination: string
   notes?: string | null
+  modifier_notes?: string | null
   return_requested?: boolean
   return_accepted?: boolean
   return_reason?: string | null

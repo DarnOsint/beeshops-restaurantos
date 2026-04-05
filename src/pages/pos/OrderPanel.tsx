@@ -506,6 +506,7 @@ export default function OrderPanel({
           total: p.qty * p.price,
           menu_categories: null,
           modifier_notes: `Takeaway Pack — ${p.name}`,
+          destination: 'kitchen', // ensure it shows on kitchen KDS/prints
           _existing: false,
           _newId: `takeaway_pack:${p.id}:${crypto.randomUUID()}`,
           // Preserve explicit null to satisfy menu_item_id null paths

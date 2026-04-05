@@ -854,7 +854,9 @@ export default function POS() {
             quantity: i.quantity,
             name: i.name,
             modifier_notes: i.modifier_notes || null,
-            destination: (i.menu_categories?.destination || 'bar') as ItemDestination,
+            destination: (i.destination ||
+              i.menu_categories?.destination ||
+              'bar') as ItemDestination,
           })),
           table.name,
           activeOrder.id.slice(0, 8).toUpperCase(),
@@ -975,7 +977,9 @@ export default function POS() {
           quantity: i.quantity,
           name: i.name,
           modifier_notes: i.modifier_notes || null,
-          destination: (i.menu_categories?.destination || 'bar') as ItemDestination,
+          destination: (i.destination ||
+            i.menu_categories?.destination ||
+            'bar') as ItemDestination,
         })),
         table.name,
         (newOrder as Order).id.slice(0, 8).toUpperCase(),
