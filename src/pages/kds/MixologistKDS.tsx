@@ -408,6 +408,12 @@ function MixologistKDSInner() {
                     >
                       All Ready
                     </button>
+                    <button
+                      onClick={() => rejectOrder(order)}
+                      className="px-3 py-1.5 text-xs rounded-lg bg-red-500/20 text-red-400 border border-red-500/30"
+                    >
+                      Reject Order
+                    </button>
                   </div>
                 </div>
                 <div className="space-y-1">
@@ -648,9 +654,3 @@ export default function MixologistKDS() {
     </ErrorBoundary>
   )
 }
-;<button
-  onClick={() => rejectOrder(order)}
-  className="px-3 py-1.5 text-xs rounded-lg bg-red-500/20 text-red-400 border border-red-500/30"
->
-  Reject Order
-</button>
