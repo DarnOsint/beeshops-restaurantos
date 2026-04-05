@@ -39,6 +39,7 @@ interface Props {
 
 interface Reconciliation {
   cashCollected: Record<string, number> // waitron name → cash collected
+  outstanding: Record<string, number> // waitron name → outstanding/shortage for the day
   bankEntries: Record<string, number> // bank name → amount received
   posEntries: Record<string, number> // POS machine → amount received
   debts: Array<{ name: string; amount: number; note: string }>
@@ -57,6 +58,7 @@ export default function OverviewTab({
   const toast = useToast()
   const [recon, setRecon] = useState<Reconciliation>({
     cashCollected: {},
+    outstanding: {},
     bankEntries: {},
     posEntries: {},
     debts: [],
@@ -103,7 +105,7 @@ export default function OverviewTab({
         /* */
       }
     } else {
-      setRecon({ cashCollected: {}, bankEntries: {}, posEntries: {}, debts: [] })
+      setRecon({ cashCollected: {}, outstanding: {}, bankEntries: {}, posEntries: {}, debts: [] })
     }
   }, [])
 
@@ -130,6 +132,7 @@ export default function OverviewTab({
   const totalBankReceived = Object.values(recon.bankEntries).reduce((s, v) => s + (v || 0), 0)
   const totalPOSReceived = Object.values(recon.posEntries).reduce((s, v) => s + (v || 0), 0)
   const totalDebts = recon.debts.reduce((s, d) => s + (d.amount || 0), 0)
+  const totalOutstanding = Object.values(recon.outstanding).reduce((s, v) => s + (v || 0), 0)
   const totalReceived = totalCashCollected + totalBankReceived + totalPOSReceived
   const expectedRevenue = summary.total
   const shortfall = expectedRevenue - totalReceived - totalDebts - totalPayouts
@@ -181,6 +184,13 @@ export default function OverviewTab({
         .filter(([, v]) => v > 0)
         .map(([name, amt]) => row(name, `N${amt.toLocaleString()}`)),
       row('TOTAL CASH:', `N${totalCashCollected.toLocaleString()}`),
+      div,
+      ctr('OUTSTANDING PER WAITRON'),
+      div,
+      ...Object.entries(recon.outstanding)
+        .filter(([, v]) => v > 0)
+        .map(([name, amt]) => row(name, `N${amt.toLocaleString()}`)),
+      row('TOTAL OUTSTANDING:', `N${totalOutstanding.toLocaleString()}`),
       div,
       ctr('BANK TRANSFERS RECEIVED'),
       div,
@@ -375,6 +385,16 @@ export default function OverviewTab({
               className="bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-amber-500"
             />
             <button
+              onClick={() => {
+                const d = new Date(reconDate)
+                d.setDate(d.getDate() - 1)
+                setReconDate(d.toISOString().slice(0, 10))
+              }}
+              className="text-xs px-2 py-1 rounded-lg border border-gray-700 text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700"
+            >
+              Prev Day
+            </button>
+            <button
               onClick={saveRecon}
               disabled={saving}
               className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs px-3 py-1.5 rounded-lg transition-colors"
@@ -428,6 +448,39 @@ export default function OverviewTab({
                 ₦{totalCashCollected.toLocaleString()}
               </span>
             </div>
+          </div>
+        </div>
+
+        {/* Outstanding per Waitron */}
+        <div className="mb-5">
+          <h4 className="text-gray-300 text-sm font-semibold mb-2 flex items-center gap-1.5">
+            <AlertTriangle size={13} className="text-red-400" /> Outstanding / Shortage per Waitron
+          </h4>
+          <p className="text-gray-600 text-xs mb-2">
+            Enter shortages for today (8am–8am). Tracked separately; does not affect shortfall math.
+          </p>
+          <div className="space-y-1.5">
+            {waitronStats.map((w) => (
+              <div key={w.name} className="flex items-center gap-2">
+                <span className="text-gray-400 text-sm w-32 truncate">{w.name}</span>
+                <input
+                  type="number"
+                  placeholder="₦ outstanding"
+                  value={recon.outstanding[w.name] ?? ''}
+                  onChange={(e) =>
+                    setRecon((prev) => ({
+                      ...prev,
+                      outstanding: { ...prev.outstanding, [w.name]: Number(e.target.value) || 0 },
+                    }))
+                  }
+                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            ))}
+          </div>
+          <div className="text-right text-sm text-gray-300 mt-2">
+            Total Outstanding:{' '}
+            <span className="text-red-400 font-semibold">₦{totalOutstanding.toLocaleString()}</span>
           </div>
         </div>
 
