@@ -50,6 +50,19 @@ const sessionWindow = () => {
   return { start, end }
 }
 
+const activityWindow = (dateStr: string) => {
+  const lagosNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+  const base = new Date(`${dateStr}T08:00:00+01:00`) // WAT no DST
+  const todayStr = lagosNow.toISOString().slice(0, 10)
+  if (dateStr === todayStr && lagosNow.getHours() < 8) {
+    base.setDate(base.getDate() - 1)
+  }
+  const start = base
+  const end = new Date(base)
+  end.setDate(end.getDate() + 1)
+  return { start, end }
+}
+
 const TABS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'shifts', label: 'Shifts', icon: Clock },
@@ -81,11 +94,7 @@ export default function Management() {
 
   const [activityDate, setActivityDate] = useState(() => new Date().toISOString().slice(0, 10))
   const activityRange = useMemo(() => {
-    const d = new Date(activityDate)
-    d.setHours(8, 0, 0, 0)
-    const start = new Date(d)
-    const end = new Date(d)
-    end.setDate(end.getDate() + 1)
+    const { start, end } = activityWindow(activityDate)
     return { start: start.toISOString(), end: end.toISOString() }
   }, [activityDate])
   const { status: syncStatus, pendingCount, lastSynced, manualSync } = useSyncStatus()
