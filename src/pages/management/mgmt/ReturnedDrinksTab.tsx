@@ -79,16 +79,24 @@ export default function ReturnedDrinksTab() {
       }
     }
 
-    // Include returns requested OR resolved in the 8am→8am window so late approvals still show
+    // Pull wider range (last 3 days) then filter locally to catch items approved today but requested earlier
+    const wideStart = new Date(dayStart)
+    wideStart.setDate(wideStart.getDate() - 2)
     const { data } = await supabase
       .from('returns_log')
       .select('*')
-      .or(
-        `and(requested_at.gte.${dayStart.toISOString()},requested_at.lt.${dayEnd.toISOString()}),and(resolved_at.gte.${dayStart.toISOString()},resolved_at.lt.${dayEnd.toISOString()})`
-      )
+      .gte('requested_at', wideStart.toISOString())
       .order('requested_at', { ascending: false })
-    // Hide items until barman has accepted/rejected them (status becomes bar_accepted/rejected/manager_rejected/accepted)
-    setReturns(((data || []) as ReturnEntry[]).filter((r) => r.status !== 'pending'))
+
+    const filtered = ((data || []) as ReturnEntry[]).filter((r) => {
+      const req = new Date(r.requested_at).getTime()
+      const res = r.resolved_at ? new Date(r.resolved_at).getTime() : null
+      const inWindow =
+        (req >= dayStart.getTime() && req < dayEnd.getTime()) ||
+        (res !== null && res >= dayStart.getTime() && res < dayEnd.getTime())
+      return inWindow && r.status !== 'pending'
+    })
+    setReturns(filtered)
     setLoading(false)
   }, [])
 
