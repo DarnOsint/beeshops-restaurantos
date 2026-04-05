@@ -95,22 +95,22 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     if (data) {
       setOrder(data as unknown as OrderExtended)
       const items = (data as any).order_items || []
-      const pendingKitchen = items.filter(
-        (i: any) =>
-          normalizeDestination(
-            i.destination || i.menu_items?.menu_categories?.destination || 'bar',
-            i.menu_items?.name
-          ) === 'kitchen' && i.status === 'pending'
-      ).length
-      const pendingGrill = items.filter(
-        (i: any) =>
-          normalizeDestination(
-            i.destination || i.menu_items?.menu_categories?.destination || 'bar',
-            i.menu_items?.name
-          ) === 'griller' && i.status === 'pending'
-      ).length
-      setKitchenPendingCount(pendingKitchen)
-      setGrillPendingCount(pendingGrill)
+      const isKitchen = (i: any) =>
+        normalizeDestination(
+          i.destination || i.menu_items?.menu_categories?.destination || 'bar',
+          i.menu_items?.name
+        ) === 'kitchen'
+      const isGrill = (i: any) =>
+        normalizeDestination(
+          i.destination || i.menu_items?.menu_categories?.destination || 'bar',
+          i.menu_items?.name
+        ) === 'griller'
+      setKitchenPendingCount(
+        items.filter((i: any) => isKitchen(i) && i.status === 'pending').length
+      )
+      setGrillPendingCount(items.filter((i: any) => isGrill(i) && i.status === 'pending').length)
+      setKitchenTotalCount(items.filter(isKitchen).length)
+      setGrillTotalCount(items.filter(isGrill).length)
     }
   }
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
@@ -138,9 +138,30 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   const [tipAmount, setTipAmount] = useState('')
   const [amountReceived, setAmountReceived] = useState('')
   const [cashSplit, setCashSplit] = useState('')
+
+  // keep station counts in sync on initial load and when items change
+  useEffect(() => {
+    const items = (order?.order_items as any[]) || []
+    const isKitchen = (i: any) =>
+      normalizeDestination(
+        i.destination || i.menu_items?.menu_categories?.destination || 'bar',
+        i.menu_items?.name
+      ) === 'kitchen'
+    const isGrill = (i: any) =>
+      normalizeDestination(
+        i.destination || i.menu_items?.menu_categories?.destination || 'bar',
+        i.menu_items?.name
+      ) === 'griller'
+    setKitchenTotalCount(items.filter(isKitchen).length)
+    setGrillTotalCount(items.filter(isGrill).length)
+    setKitchenPendingCount(items.filter((i) => isKitchen(i) && i.status === 'pending').length)
+    setGrillPendingCount(items.filter((i) => isGrill(i) && i.status === 'pending').length)
+  }, [order?.order_items])
   const [secondarySplit, setSecondarySplit] = useState('')
   const [kitchenPendingCount, setKitchenPendingCount] = useState(0)
   const [grillPendingCount, setGrillPendingCount] = useState(0)
+  const [kitchenTotalCount, setKitchenTotalCount] = useState(0)
+  const [grillTotalCount, setGrillTotalCount] = useState(0)
 
   useState(() => {
     supabase
@@ -536,6 +557,54 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     }
   }
 
+  const printAllForStation = (station: 'kitchen' | 'griller') => {
+    const stationItems = (order?.order_items || []).filter(
+      (i) =>
+        normalizeDestination(
+          i.destination || (i as any)?.menu_items?.menu_categories?.destination || 'bar'
+        ) === station
+    )
+    if (stationItems.length === 0) {
+      toast.info('No items', `No ${station} items to print.`)
+      return
+    }
+    const stationLabel = station === 'kitchen' ? 'Kitchen — All Items' : 'Grill — All Items'
+    const ticket: TicketItem[] = stationItems.map((i) => ({
+      quantity: i.quantity,
+      name:
+        i.menu_items?.name ||
+        (i as unknown as { modifier_notes?: string }).modifier_notes ||
+        'Item',
+      modifier_notes: (i as unknown as { modifier_notes?: string }).modifier_notes || null,
+    }))
+    const html = buildOrderTicketHTML({
+      station: stationLabel,
+      tableName: table?.name || 'Counter',
+      orderRef: (order?.id || '').slice(0, 8).toUpperCase(),
+      staffName: profile?.full_name || '',
+      items: ticket,
+      createdAt: new Date().toISOString(),
+    })
+    const copies = 2
+    for (let c = 0; c < copies; c++) {
+      const w = window.open('', '_blank', 'width=420,height=640,toolbar=no,menubar=no')
+      if (!w) continue
+      w.document.open('text/html', 'replace')
+      w.document.write(html)
+      w.document.close()
+      w.onload = () =>
+        setTimeout(() => {
+          try {
+            w.print()
+          } catch {
+            /* ignore */
+          } finally {
+            w.close()
+          }
+        }, 150)
+    }
+  }
+
   const printPendingForStation = (station: 'kitchen' | 'griller') => {
     const pending = (order?.order_items || []).filter(
       (i) =>
@@ -547,6 +616,8 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       toast.info('No pending items', `No waiting ${station} items to print.`)
       return
     }
+    const stationLabel =
+      station === 'kitchen' ? 'Kitchen — New Items Only' : 'Grill — New Items Only'
     const ticket: TicketItem[] = pending.map((i) => ({
       quantity: i.quantity,
       name:
@@ -556,7 +627,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       modifier_notes: (i as unknown as { modifier_notes?: string }).modifier_notes || null,
     }))
     const html = buildOrderTicketHTML({
-      station,
+      station: stationLabel,
       tableName: table?.name || 'Counter',
       orderRef: (order?.id || '').slice(0, 8).toUpperCase(),
       staffName: profile?.full_name || '',
@@ -1119,20 +1190,38 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
             >
               <Printer size={13} /> Print Receipt
             </button>
-            <button
-              onClick={() => printPendingForStation('kitchen')}
-              className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors"
-              title="Print waiting kitchen items"
-            >
-              <Printer size={13} /> Kitchen ({kitchenPendingCount})
-            </button>
-            <button
-              onClick={() => printPendingForStation('griller')}
-              className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors"
-              title="Print waiting griller items"
-            >
-              <Printer size={13} /> Grill ({grillPendingCount})
-            </button>
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => printAllForStation('kitchen')}
+                className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors"
+                title="Print all kitchen items for this order"
+              >
+                <Printer size={13} /> Kitchen — All ({kitchenTotalCount})
+              </button>
+              <button
+                onClick={() => printPendingForStation('kitchen')}
+                className="flex items-center gap-1 bg-emerald-800/40 hover:bg-emerald-700/40 text-emerald-200 text-xs font-medium px-3 py-2 rounded-xl border border-emerald-700 transition-colors"
+                title="Print only newly added / pending kitchen items"
+              >
+                <Printer size={13} /> Kitchen — New ({kitchenPendingCount})
+              </button>
+            </div>
+            <div className="flex flex-col gap-1">
+              <button
+                onClick={() => printAllForStation('griller')}
+                className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors"
+                title="Print all grill items for this order"
+              >
+                <Printer size={13} /> Grill — All ({grillTotalCount})
+              </button>
+              <button
+                onClick={() => printPendingForStation('griller')}
+                className="flex items-center gap-1 bg-amber-800/40 hover:bg-amber-700/40 text-amber-200 text-xs font-medium px-3 py-2 rounded-xl border border-amber-700 transition-colors"
+                title="Print only newly added / pending grill items"
+              >
+                <Printer size={13} /> Grill — New ({grillPendingCount})
+              </button>
+            </div>
             <button onClick={onClose} className="text-gray-400 hover:text-white">
               <X size={20} />
             </button>
