@@ -172,12 +172,19 @@ export default function Reports() {
   const years = Array.from({ length: 5 }, (_, i) => now.getFullYear() - i)
   const getDaysInMonth = (month: number, year: number) => new Date(year, month + 1, 0).getDate()
 
+  // Build 8am–8am window in Africa/Lagos for a given calendar day
+  const lagosDayWindow = (y: number, m: number, d: number) => {
+    const start = new Date(
+      `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}T08:00:00+01:00`
+    )
+    const end = new Date(start)
+    end.setDate(end.getDate() + 1)
+    return { start: start.toISOString(), end: end.toISOString() }
+  }
+
   const getDateBounds = () => {
     if (reportType === 'daily' || reportType === 'zreport') {
-      return {
-        start: new Date(selectedYear, selectedMonth, selectedDay, 0, 0, 0, 0).toISOString(),
-        end: new Date(selectedYear, selectedMonth, selectedDay, 23, 59, 59, 999).toISOString(),
-      }
+      return lagosDayWindow(selectedYear, selectedMonth, selectedDay)
     } else if (reportType === 'month') {
       return {
         start: new Date(selectedYear, selectedMonth, 1).toISOString(),
