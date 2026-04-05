@@ -641,6 +641,28 @@ function MixologistKDSInner() {
               </div>
             )}
           </div>
+
+          {sentRequests.length > 0 && (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-2">
+              <p className="text-white font-semibold text-sm">Summary of requests (today)</p>
+              {Object.entries(
+                sentRequests.reduce(
+                  (acc, r) => {
+                    r.items.forEach((it) => {
+                      acc[it.item] = (acc[it.item] || 0) + it.qty
+                    })
+                    return acc
+                  },
+                  {} as Record<string, number>
+                )
+              ).map(([name, qty]) => (
+                <div key={name} className="flex items-center justify-between text-sm text-gray-300">
+                  <span>{name}</span>
+                  <span className="text-amber-400">{qty}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
