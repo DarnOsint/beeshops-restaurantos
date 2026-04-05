@@ -16,6 +16,7 @@ const POS = lazy(() => import('./pages/pos/POS'))
 const KitchenKDS = lazy(() => import('./pages/kds/KitchenKDS'))
 const BarKDS = lazy(() => import('./pages/kds/BarKDS'))
 const GrillerKDS = lazy(() => import('./pages/kds/GrillerKDS'))
+const MixologistKDS = lazy(() => import('./pages/kds/MixologistKDS'))
 // Management — managers only
 const Management = lazy(() => import('./pages/management/Management'))
 // Executive — owner only
@@ -260,6 +261,18 @@ function AppRoutes() {
                 <RoleGuard allowed={['owner', 'manager', 'bar']}>
                   <EB title="Bar display error">
                     <BarKDS />
+                  </EB>
+                </RoleGuard>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/kds/mixologist"
+            element={
+              <PrivateRoute>
+                <RoleGuard allowed={['owner', 'manager', 'mixologist']}>
+                  <EB title="Mixologist display error">
+                    <MixologistKDS />
                   </EB>
                 </RoleGuard>
               </PrivateRoute>

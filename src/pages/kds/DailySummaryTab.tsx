@@ -9,7 +9,7 @@ interface SummaryItem {
 }
 
 interface Props {
-  destination: 'bar' | 'kitchen' | 'griller'
+  destination: 'bar' | 'kitchen' | 'griller' | 'mixologist'
   icon: React.ReactNode
   color: string
 }
