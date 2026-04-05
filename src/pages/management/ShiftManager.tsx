@@ -169,7 +169,13 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
       action: 'CLOCK_IN',
       entity: 'attendance',
       entityName: member.full_name,
-      newValue: { role: member.role, recorded_by: profile?.full_name },
+      newValue: {
+        role: member.role,
+        recorded_by: profile?.full_name,
+        recorded_by_id: profile?.id,
+        staff_id: member.id,
+        staff_name: member.full_name,
+      },
       performer: profile as import('../../types').Profile,
     })
     fetchAll()
@@ -216,7 +222,14 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
       action: 'CLOCK_OUT',
       entity: 'attendance',
       entityName: shift.staff_name,
-      newValue: { role: shift.role, duration_minutes: duration },
+      newValue: {
+        role: shift.role,
+        duration_minutes: duration,
+        recorded_by: profile?.full_name,
+        recorded_by_id: profile?.id,
+        staff_id: shift.staff_id,
+        staff_name: shift.staff_name,
+      },
       performer: profile as import('../../types').Profile,
     })
     if (shift.role === 'waitron') {
