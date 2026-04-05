@@ -750,6 +750,12 @@ export default function Reports() {
                   >
                     <Printer size={13} /> Export PDF
                   </button>
+                  <button
+                    onClick={exportCSV}
+                    className="mt-2 flex items-center gap-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-100 font-bold px-3 py-1.5 rounded-xl ml-auto border border-gray-700"
+                  >
+                    <Download size={13} /> Export CSV
+                  </button>
                 </div>
               </div>
             </div>

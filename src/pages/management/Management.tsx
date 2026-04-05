@@ -15,6 +15,9 @@ import {
   Shield,
   Beer,
   RotateCcw,
+  Flame,
+  Wind,
+  Gamepad2,
 } from 'lucide-react'
 import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
@@ -36,6 +39,7 @@ import type { CvData } from '../executive/exec/types'
 import SyncTab from './mgmt/SyncTab'
 import SettingsTab from './mgmt/SettingsTab'
 import ActivityLogTab from './mgmt/ActivityLogTab'
+import OrdersByWaitronTab from './mgmt/OrdersByWaitronTab'
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
@@ -68,6 +72,11 @@ const TABS = [
   { id: 'shifts', label: 'Shifts', icon: Clock },
   { id: 'tables', label: 'Zone Assignment', icon: Users },
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
+  { id: 'barwaitron', label: 'Bar Orders', icon: Beer },
+  { id: 'kitchenwaitron', label: 'Kitchen Orders', icon: UtensilsCrossed },
+  { id: 'grillwaitron', label: 'Grill Orders', icon: Flame },
+  { id: 'shishawaitron', label: 'Shisha Orders', icon: Wind },
+  { id: 'gameswaitron', label: 'Games Orders', icon: Gamepad2 },
   { id: 'till', label: 'Till', icon: DollarSign },
   { id: 'kitchen', label: 'Kitchen', icon: UtensilsCrossed },
   { id: 'chiller', label: 'Chiller', icon: Beer },
@@ -241,7 +250,7 @@ export default function Management() {
     await supabase.from('cv_alerts').update({ resolved: true }).eq('id', id)
     setCvData((prev) => ({
       ...prev,
-      todayAlerts: prev.todayAlerts.filter((a) => (a as any).id !== id),
+      todayAlerts: prev.todayAlerts.filter((a) => (a as { id?: string }).id !== id),
     }))
   }
 
@@ -401,6 +410,21 @@ export default function Management() {
         {activeTab === 'shifts' && <ShiftManager onRefreshStats={fetchStats} />}
         {activeTab === 'tables' && <TableAssignment />}
         {activeTab === 'orders' && <OpenOrdersTab />}
+        {activeTab === 'barwaitron' && (
+          <OrdersByWaitronTab destinations={['bar']} title="Bar Orders per Waitron" />
+        )}
+        {activeTab === 'kitchenwaitron' && (
+          <OrdersByWaitronTab destinations={['kitchen']} title="Kitchen Orders per Waitron" />
+        )}
+        {activeTab === 'grillwaitron' && (
+          <OrdersByWaitronTab destinations={['griller']} title="Griller Orders per Waitron" />
+        )}
+        {activeTab === 'shishawaitron' && (
+          <OrdersByWaitronTab destinations={['shisha']} title="Shisha Orders per Waitron" />
+        )}
+        {activeTab === 'gameswaitron' && (
+          <OrdersByWaitronTab destinations={['games']} title="Games Orders per Waitron" />
+        )}
         {activeTab === 'till' && <TillManagement />}
         {activeTab === 'kitchen' && <KitchenStock onBack={() => setActiveTab('overview')} />}
         {activeTab === 'chiller' && <ChillerSummaryTab />}
