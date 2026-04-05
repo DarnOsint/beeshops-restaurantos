@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Beer, RefreshCw, Printer } from 'lucide-react'
+import { Beer, RefreshCw, Printer, Wrench } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
+import { useAuth } from '../../../context/AuthContext'
+import BarChillerStock from '../../backoffice/BarChillerStock'
 
 const todayStr = () => {
   const now = new Date()
@@ -24,10 +26,13 @@ interface ChillerEntry {
 }
 
 export default function ChillerSummaryTab() {
+  const { profile } = useAuth()
+  const isManager = profile?.role === 'owner' || profile?.role === 'manager'
   const [date, setDate] = useState(todayStr())
   const [entries, setEntries] = useState<ChillerEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [soldMap, setSoldMap] = useState<Record<string, number>>({})
+  const [editMode, setEditMode] = useState(false)
 
   const fetchData = useCallback(async (d: string) => {
     setLoading(true)
@@ -223,6 +228,10 @@ export default function ChillerSummaryTab() {
   const totalExpected = totalOpening + totalReceived - totalSold - totalVoid
   const totalVariance = totalExpected - totalClosing
 
+  if (editMode && isManager) {
+    return <BarChillerStock onBack={() => setEditMode(false)} embedded />
+  }
+
   const printReport = () => {
     const W = 40
     const div = '-'.repeat(W)
@@ -334,6 +343,14 @@ export default function ChillerSummaryTab() {
         <button onClick={() => fetchData(date)} className="text-gray-400 hover:text-white p-2">
           <RefreshCw size={14} />
         </button>
+        {isManager && (
+          <button
+            onClick={() => setEditMode(true)}
+            className="flex items-center gap-1 px-3 py-2 bg-gray-900 border border-gray-800 text-gray-300 hover:text-white rounded-xl text-xs transition-colors"
+          >
+            <Wrench size={12} /> Manage stock
+          </button>
+        )}
         {entries.length > 0 && (
           <button
             onClick={printReport}
