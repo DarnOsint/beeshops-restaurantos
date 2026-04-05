@@ -125,7 +125,7 @@ export default function Management() {
       supabase
         .from('attendance')
         .select('staff_id')
-        .or(`clock_out.is.null,clock_out.gte.${start.toISOString()}`)
+        .is('clock_out', null)
         .gte('clock_in', start.toISOString()),
       supabase
         .from('orders')
