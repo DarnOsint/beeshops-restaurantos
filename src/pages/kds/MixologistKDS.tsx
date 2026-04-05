@@ -17,6 +17,14 @@ const isMixologistItem = (item: KdsOrder['order_items'][number]): boolean => {
   return catDest === 'mixologist'
 }
 
+const dayWindow = (dateStr: string) => {
+  // 8am–8am WAT window
+  const base = new Date(`${dateStr}T08:00:00+01:00`)
+  const end = new Date(base)
+  end.setDate(end.getDate() + 1)
+  return { start: base.toISOString(), end: end.toISOString() }
+}
+
 function MixologistKDSInner() {
   const { profile, signOut } = useAuth()
   const toast = useToast()
@@ -144,6 +152,41 @@ function MixologistKDSInner() {
     fetchOrders()
   }
 
+  const rejectOrder = async (order: KdsOrder) => {
+    // Reject all pending mixologist items on this order
+    const mixoItemIds = order.order_items
+      .filter((i) => isMixologistItem(i) && i.status !== 'ready' && i.status !== 'delivered')
+      .map((i) => i.id)
+    if (!mixoItemIds.length) return
+    const { error } = await supabase
+      .from('order_items')
+      .update({ status: 'cancelled' })
+      .in('id', mixoItemIds)
+    if (error) {
+      toast.error('Error', 'Failed to reject order: ' + error.message)
+      return
+    }
+    const { data: remaining } = await supabase
+      .from('order_items')
+      .select('total_price, status')
+      .eq('order_id', order.id)
+    const newTotal = (remaining || [])
+      .filter((r: { status: string }) => r.status !== 'cancelled')
+      .reduce((s: number, r: { total_price: number }) => s + (r.total_price || 0), 0)
+    await supabase
+      .from('orders')
+      .update({ total_amount: newTotal, updated_at: new Date().toISOString() })
+      .eq('id', order.id)
+    if (order.staff_id)
+      await sendPushToStaff(
+        order.staff_id,
+        '❌ Mixologist Rejected Order',
+        `Mixologist rejected drinks for ${order.tables?.name || order.customer_name || 'an order'}`
+      ).catch(() => {})
+    toast.success('Order Rejected', 'Mixologist items cancelled and total updated')
+    fetchOrders()
+  }
+
   const rejectReturn = async (itemId: string, staffId?: string | null, tableName?: string) => {
     const { error } = await supabase
       .from('order_items')
@@ -182,17 +225,14 @@ function MixologistKDSInner() {
     async (d?: string) => {
       if (!profile) return
       const targetDate = d || historyDate
-      const dayStart = new Date(targetDate)
-      dayStart.setHours(8, 0, 0, 0)
-      const dayEnd = new Date(dayStart)
-      dayEnd.setDate(dayEnd.getDate() + 1)
+      const { start, end } = dayWindow(targetDate)
 
       const { data } = await supabase
         .from('returns_log')
         .select('*')
         .eq('status', 'accepted')
-        .gte('requested_at', dayStart.toISOString())
-        .lte('requested_at', dayEnd.toISOString())
+        .gte('requested_at', start)
+        .lte('requested_at', end)
         .order('requested_at', { ascending: false })
       setReturnHistory(((data || []) as any[]).filter((r) => r.barman_name))
     },
@@ -420,3 +460,9 @@ export default function MixologistKDS() {
     </ErrorBoundary>
   )
 }
+;<button
+  onClick={() => rejectOrder(order)}
+  className="px-3 py-1.5 text-xs rounded-lg bg-red-500/20 text-red-400 border border-red-500/30"
+>
+  Reject Order
+</button>
