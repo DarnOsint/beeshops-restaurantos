@@ -44,6 +44,7 @@ export default function OrdersByWaitronTab({
   const [expanded, setExpanded] = useState<string | null>(null)
   const [modalWaitron, setModalWaitron] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [startDate, setStartDate] = useState<string>(() =>
     new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
   )
@@ -60,6 +61,7 @@ export default function OrdersByWaitronTab({
 
   const load = useCallback(async () => {
     setLoading(true)
+    setErrorMsg(null)
     try {
       const { data, error } = await supabase
         .from('order_items')
@@ -112,6 +114,7 @@ export default function OrdersByWaitronTab({
       console.warn('Load waitron orders failed:', e)
       setRows([])
       setItemsByWaitron({})
+      setErrorMsg('Could not load data. Check connection and retry.')
     } finally {
       setLoading(false)
     }
@@ -196,6 +199,10 @@ export default function OrdersByWaitronTab({
       </div>
       {loading ? (
         <div className="text-amber-500">Loading…</div>
+      ) : errorMsg ? (
+        <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/30 px-3 py-2 rounded-lg">
+          {errorMsg}
+        </div>
       ) : rows.length === 0 ? (
         <div className="text-gray-500">No orders in this session.</div>
       ) : (
