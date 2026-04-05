@@ -69,6 +69,8 @@ export default function OverviewTab({
   const [posMachines, setPosMachines] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [reconDate, setReconDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const activeWaitrons =
+    waitronStats.filter((w) => (w.revenue || 0) > 0 || (w.orders || 0) > 0) || waitronStats
 
   // Load bank accounts and POS machines
   useEffect(() => {
@@ -419,7 +421,7 @@ export default function OverviewTab({
             Enter the actual cash each waitron handed over
           </p>
           <div className="space-y-1.5">
-            {waitronStats.map((w) => (
+            {activeWaitrons.map((w) => (
               <div key={w.name} className="flex items-center gap-2">
                 <span className="text-gray-400 text-sm w-32 truncate">{w.name}</span>
                 <span className="text-gray-600 text-xs w-20">
@@ -460,7 +462,7 @@ export default function OverviewTab({
             Enter shortages for today (8am–8am). Tracked separately; does not affect shortfall math.
           </p>
           <div className="space-y-1.5">
-            {waitronStats.map((w) => (
+            {activeWaitrons.map((w) => (
               <div key={w.name} className="flex items-center gap-2">
                 <span className="text-gray-400 text-sm w-32 truncate">{w.name}</span>
                 <input
