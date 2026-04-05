@@ -156,12 +156,19 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     setGrillTotalCount(items.filter(isGrill).length)
     setKitchenPendingCount(items.filter((i) => isKitchen(i) && i.status === 'pending').length)
     setGrillPendingCount(items.filter((i) => isGrill(i) && i.status === 'pending').length)
+
+    // If order refreshed (new items came in) and no manual print has occurred yet,
+    // keep the last-printed markers at first load only.
+    if (!lastPrintedKitchenAt) setLastPrintedKitchenAt(new Date().toISOString())
+    if (!lastPrintedGrillAt) setLastPrintedGrillAt(new Date().toISOString())
   }, [order?.order_items])
   const [secondarySplit, setSecondarySplit] = useState('')
   const [kitchenPendingCount, setKitchenPendingCount] = useState(0)
   const [grillPendingCount, setGrillPendingCount] = useState(0)
   const [kitchenTotalCount, setKitchenTotalCount] = useState(0)
   const [grillTotalCount, setGrillTotalCount] = useState(0)
+  const [lastPrintedKitchenAt, setLastPrintedKitchenAt] = useState<string | null>(null)
+  const [lastPrintedGrillAt, setLastPrintedGrillAt] = useState<string | null>(null)
 
   useState(() => {
     supabase
@@ -603,15 +610,28 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           }
         }, 150)
     }
+    // After printing full docket, advance the station's last-printed marker
+    if (station === 'kitchen') setLastPrintedKitchenAt(new Date().toISOString())
+    else setLastPrintedGrillAt(new Date().toISOString())
   }
 
   const printPendingForStation = (station: 'kitchen' | 'griller') => {
-    const pending = (order?.order_items || []).filter(
-      (i) =>
+    const lastPrinted =
+      station === 'kitchen'
+        ? lastPrintedKitchenAt
+        : station === 'griller'
+          ? lastPrintedGrillAt
+          : null
+    const pending = (order?.order_items || []).filter((i) => {
+      const isStation =
         normalizeDestination(
           i.destination || (i as any)?.menu_items?.menu_categories?.destination || 'bar'
-        ) === station && i.status === 'pending'
-    )
+        ) === station
+      if (!isStation || i.status !== 'pending') return false
+      if (!lastPrinted) return true
+      const created = new Date((i as any).created_at || (order as any)?.created_at || Date.now())
+      return created.getTime() > new Date(lastPrinted).getTime()
+    })
     if (pending.length === 0) {
       toast.info('No pending items', `No waiting ${station} items to print.`)
       return
@@ -652,6 +672,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           }
         }, 150)
     }
+    // Move marker so subsequent "New" prints only later additions
+    if (station === 'kitchen') setLastPrintedKitchenAt(new Date().toISOString())
+    else setLastPrintedGrillAt(new Date().toISOString())
   }
 
   const orderItems = order?.order_items || []
