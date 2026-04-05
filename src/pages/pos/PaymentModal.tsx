@@ -98,13 +98,15 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       const pendingKitchen = items.filter(
         (i: any) =>
           normalizeDestination(
-            i.destination || i.menu_items?.menu_categories?.destination || 'bar'
+            i.destination || i.menu_items?.menu_categories?.destination || 'bar',
+            i.menu_items?.name
           ) === 'kitchen' && i.status === 'pending'
       ).length
       const pendingGrill = items.filter(
         (i: any) =>
           normalizeDestination(
-            i.destination || i.menu_items?.menu_categories?.destination || 'bar'
+            i.destination || i.menu_items?.menu_categories?.destination || 'bar',
+            i.menu_items?.name
           ) === 'griller' && i.status === 'pending'
       ).length
       setKitchenPendingCount(pendingKitchen)

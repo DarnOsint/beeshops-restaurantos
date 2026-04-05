@@ -49,7 +49,10 @@ interface Props {
   onClose: () => void
 }
 
-const normalizeDestination = (dest?: string | null): ItemDestination => {
+const normalizeDestination = (dest?: string | null, name?: string): ItemDestination => {
+  const lowerName = (name || '').toLowerCase()
+  if (lowerName.includes('cocktail') || lowerName.includes('mocktail')) return 'mixologist'
+
   const d = (dest || '').trim().toLowerCase()
   if (d === 'kitchen') return 'kitchen'
   if (d === 'griller' || d === 'grill' || d === 'grilling') return 'griller'
@@ -342,7 +345,10 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
     setProcessing(true)
     try {
       const hasBarItems = orderItems.some((i) => {
-        const dest = normalizeDestination(i.menu_categories?.destination || 'bar')
+        const dest = normalizeDestination(
+          i.menu_categories?.destination || 'bar',
+          i.menu_items?.name
+        )
         if (dest === 'shisha') return false
         return dest === 'bar'
       })
@@ -370,7 +376,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         unit_price: item.price,
         total_price: item.total,
         status: 'pending',
-        destination: normalizeDestination(item.menu_categories?.destination || 'bar'),
+        destination: normalizeDestination(item.menu_categories?.destination || 'bar', item.name),
         created_at: new Date().toISOString(),
       }))
       // Add takeaway pack fees as line items
@@ -398,7 +404,10 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
       for (const station of stations) {
         if (!getStationPrinterUrl(station)) continue
         const stationItems: TicketItem[] = orderItems
-          .filter((i) => normalizeDestination(i.menu_categories?.destination) === station)
+          .filter(
+            (i) =>
+              normalizeDestination(i.menu_categories?.destination, i.menu_items?.name) === station
+          )
           .map((i) => ({ quantity: i.quantity, name: i.name, modifier_notes: null }))
         if (stationItems.length === 0) continue
         const ticketData = {

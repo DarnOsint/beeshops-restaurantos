@@ -43,7 +43,10 @@ import GeofenceBlock from '../../components/GeofenceBlock'
 import type { Table, MenuItem, Order, OrderItem, Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
 
-const normalizeDestination = (dest?: string | null): ItemDestination => {
+const normalizeDestination = (dest?: string | null, name?: string): ItemDestination => {
+  const lowerName = (name || '').toLowerCase()
+  if (lowerName.includes('cocktail') || lowerName.includes('mocktail')) return 'mixologist'
+
   const d = (dest || '').trim().toLowerCase()
   if (d === 'kitchen') return 'kitchen'
   if (d === 'griller' || d === 'grill' || d === 'grilling') return 'griller'
@@ -838,7 +841,7 @@ export default function POS() {
             status: isPack ? 'pending' : 'pending',
             destination: isPack
               ? 'kitchen'
-              : normalizeDestination(item.menu_categories?.destination),
+              : normalizeDestination(item.menu_categories?.destination, item.name),
             modifier_notes: item.modifier_notes || null,
             extra_charge: item.extra_charge || 0,
             created_at: new Date().toISOString(),
@@ -856,9 +859,10 @@ export default function POS() {
             quantity: i.quantity,
             name: i.name,
             modifier_notes: i.modifier_notes || null,
-            destination: (i.destination ||
-              i.menu_categories?.destination ||
-              'bar') as ItemDestination,
+            destination: normalizeDestination(
+              i.destination || i.menu_categories?.destination,
+              i.name
+            ),
           })),
           table.name,
           activeOrder.id.slice(0, 8).toUpperCase(),
@@ -960,7 +964,7 @@ export default function POS() {
             status: isPack ? 'pending' : 'pending',
             destination: isPack
               ? 'kitchen'
-              : normalizeDestination(item.menu_categories?.destination),
+              : normalizeDestination(item.menu_categories?.destination, item.name),
             modifier_notes: item.modifier_notes || null,
             extra_charge: item.extra_charge || 0,
             created_at: new Date().toISOString(),
@@ -979,9 +983,10 @@ export default function POS() {
           quantity: i.quantity,
           name: i.name,
           modifier_notes: i.modifier_notes || null,
-          destination: (i.destination ||
-            i.menu_categories?.destination ||
-            'bar') as ItemDestination,
+          destination: normalizeDestination(
+            i.destination || i.menu_categories?.destination,
+            i.name
+          ),
         })),
         table.name,
         (newOrder as Order).id.slice(0, 8).toUpperCase(),
