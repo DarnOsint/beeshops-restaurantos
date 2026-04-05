@@ -833,7 +833,7 @@ export default function POS() {
             quantity: item.quantity,
             unit_price: item.price,
             total_price: item.total,
-            status: isPack ? 'delivered' : 'pending',
+            status: isPack ? 'pending' : 'pending',
             destination: isPack
               ? 'kitchen'
               : normalizeDestination(item.menu_categories?.destination),
@@ -955,7 +955,7 @@ export default function POS() {
             quantity: item.quantity,
             unit_price: item.price,
             total_price: item.total,
-            status: isPack ? 'delivered' : 'pending',
+            status: isPack ? 'pending' : 'pending',
             destination: isPack
               ? 'kitchen'
               : normalizeDestination(item.menu_categories?.destination),

@@ -103,6 +103,14 @@ const isKitchenItem = (item: KdsOrder['order_items'][number]): boolean => {
       (item as any).name?.toLowerCase?.().includes('takeaway pack'))
   )
 }
+
+const isTakeawayPack = (item: KdsOrder['order_items'][number]): boolean => {
+  return (
+    (item.modifier_notes || '').toLowerCase().includes('takeaway pack') ||
+    (item.notes || '').toLowerCase().includes('takeaway pack') ||
+    (item as any).name?.toLowerCase?.().includes('takeaway pack')
+  )
+}
 function getNextStatus(status: string): string | null {
   if (status === 'pending') return 'preparing'
   if (status === 'preparing') return 'ready'
@@ -334,7 +342,7 @@ function KitchenKDSInner() {
           order_items: o.order_items.filter(
             (i) =>
               isKitchenItem(i) &&
-              i.status !== 'delivered' &&
+              (i.status !== 'delivered' || isTakeawayPack(i)) &&
               i.status !== 'ready' &&
               !i.return_accepted
           ),
