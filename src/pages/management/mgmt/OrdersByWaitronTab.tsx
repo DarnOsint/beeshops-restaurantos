@@ -9,6 +9,13 @@ interface Row {
   count: number
   total: number
 }
+interface Item {
+  name: string
+  qty: number
+  total: number
+  at: string
+  dest: string
+}
 
 const dayWindow = (dateStr: string) => {
   // 8am–8am WAT window for a given YYYY-MM-DD; if date is today and time < 8am, use yesterday
@@ -32,6 +39,8 @@ export default function OrdersByWaitronTab({
   title: string
 }) {
   const [rows, setRows] = useState<Row[]>([])
+  const [itemsByWaitron, setItemsByWaitron] = useState<Record<string, Item[]>>({})
+  const [expanded, setExpanded] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [startDate, setStartDate] = useState<string>(() =>
     new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
@@ -49,37 +58,61 @@ export default function OrdersByWaitronTab({
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('order_items')
-      .select(
-        'quantity, total_price, destination, orders(profiles(full_name)), menu_items(menu_categories(destination))'
-      )
-      .gte('created_at', start)
-      .lte('created_at', end)
+    try {
+      const { data, error } = await supabase
+        .from('order_items')
+        .select(
+          'quantity, total_price, destination, created_at, menu_items(name, menu_categories(destination)), orders(profiles(full_name))'
+        )
+        .gte('created_at', start)
+        .lte('created_at', end)
+      if (error) throw error
 
-    const map: Record<string, Row> = {}
-    ;(data || []).forEach(
-      (oi: {
-        quantity?: number
-        total_price?: number
-        destination?: string | null
-        orders?: { profiles?: { full_name?: string | null } | null } | null
-        menu_items?: { menu_categories?: { destination?: string | null } | null } | null
-      }) => {
-        const dest = (
-          oi.destination ||
-          oi.menu_items?.menu_categories?.destination ||
-          ''
-        ).toLowerCase()
-        if (!destinations.includes(dest as Dest)) return
-        const name = oi.orders?.profiles?.full_name || 'Unknown'
-        if (!map[name]) map[name] = { waitron: name, count: 0, total: 0 }
-        map[name].count += oi.quantity || 0
-        map[name].total += oi.total_price || 0
-      }
-    )
-    setRows(Object.values(map).sort((a, b) => b.total - a.total))
-    setLoading(false)
+      const map: Record<string, Row> = {}
+      const itemsMap: Record<string, Item[]> = {}
+      ;(data || []).forEach(
+        (oi: {
+          quantity?: number
+          total_price?: number
+          destination?: string | null
+          created_at?: string
+          orders?: { profiles?: { full_name?: string | null } | null } | null
+          menu_items?: {
+            name?: string | null
+            menu_categories?: { destination?: string | null } | null
+          } | null
+        }) => {
+          const dest = (
+            oi.destination ||
+            oi.menu_items?.menu_categories?.destination ||
+            ''
+          ).toLowerCase()
+          if (!destinations.includes(dest as Dest)) return
+          const name = oi.orders?.profiles?.full_name || 'Unknown'
+          if (!map[name]) map[name] = { waitron: name, count: 0, total: 0 }
+          map[name].count += oi.quantity || 0
+          map[name].total += oi.total_price || 0
+
+          const arr = itemsMap[name] || []
+          arr.push({
+            name: oi.menu_items?.name || 'Item',
+            qty: oi.quantity || 0,
+            total: oi.total_price || 0,
+            at: oi.created_at || '',
+            dest,
+          })
+          itemsMap[name] = arr
+        }
+      )
+      setRows(Object.values(map).sort((a, b) => b.total - a.total))
+      setItemsByWaitron(itemsMap)
+    } catch (e) {
+      console.warn('Load waitron orders failed:', e)
+      setRows([])
+      setItemsByWaitron({})
+    } finally {
+      setLoading(false)
+    }
   }, [destinations, start, end])
 
   useEffect(() => {
@@ -175,11 +208,47 @@ export default function OrdersByWaitronTab({
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.waitron} className="border-t border-gray-800">
-                  <td className="px-3 py-2">{r.waitron}</td>
-                  <td className="px-3 py-2 text-right">{r.count}</td>
-                  <td className="px-3 py-2 text-right">₦{r.total.toLocaleString()}</td>
-                </tr>
+                <>
+                  <tr
+                    key={r.waitron}
+                    className="border-t border-gray-800 hover:bg-gray-800/60 cursor-pointer"
+                    onClick={() => setExpanded(expanded === r.waitron ? null : r.waitron)}
+                  >
+                    <td className="px-3 py-2">{r.waitron}</td>
+                    <td className="px-3 py-2 text-right">{r.count}</td>
+                    <td className="px-3 py-2 text-right">₦{r.total.toLocaleString()}</td>
+                  </tr>
+                  {expanded === r.waitron && (
+                    <tr className="bg-gray-900/60 border-t border-gray-800">
+                      <td colSpan={3} className="px-3 py-3">
+                        {(itemsByWaitron[r.waitron] || []).length === 0 ? (
+                          <p className="text-gray-500 text-xs">No items</p>
+                        ) : (
+                          <div className="space-y-1">
+                            {(itemsByWaitron[r.waitron] || []).map((it, idx) => (
+                              <div
+                                key={idx}
+                                className="flex justify-between text-xs text-gray-200 border border-gray-800 rounded-lg px-2 py-1"
+                              >
+                                <span className="font-semibold">{it.name}</span>
+                                <span className="text-gray-400">
+                                  {it.qty} × ₦{it.total.toLocaleString()}
+                                </span>
+                                <span className="text-gray-500">
+                                  {new Date(it.at).toLocaleTimeString('en-NG', {
+                                    timeZone: 'Africa/Lagos',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
               ))}
             </tbody>
           </table>
