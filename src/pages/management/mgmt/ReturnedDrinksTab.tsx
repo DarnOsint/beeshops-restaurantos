@@ -79,11 +79,13 @@ export default function ReturnedDrinksTab() {
       }
     }
 
+    // Include returns requested OR resolved in the 8am→8am window so late approvals still show
     const { data } = await supabase
       .from('returns_log')
       .select('*')
-      .gte('requested_at', dayStart.toISOString())
-      .lte('requested_at', dayEnd.toISOString())
+      .or(
+        `and(requested_at.gte.${dayStart.toISOString()},requested_at.lt.${dayEnd.toISOString()}),and(resolved_at.gte.${dayStart.toISOString()},resolved_at.lt.${dayEnd.toISOString()})`
+      )
       .order('requested_at', { ascending: false })
     // Hide items until barman has accepted/rejected them (status becomes bar_accepted/rejected/manager_rejected/accepted)
     setReturns(((data || []) as ReturnEntry[]).filter((r) => r.status !== 'pending'))
