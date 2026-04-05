@@ -170,14 +170,23 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
 
   // Only bar items block payment — kitchen/griller have no dedicated tab so waitron can pay freely
   const unreadyItems = (order?.order_items || []).filter((i) => {
-    const dest = (i.destination || '').toLowerCase()
-    const catDest = (
-      (i as unknown as { menu_items?: { menu_categories?: { destination?: string } } }).menu_items
-        ?.menu_categories?.destination || ''
-    ).toLowerCase()
-    // shisha items (by stored destination or category) should not block payment
-    if (dest === 'shisha' || catDest === 'shisha') return false
-    return dest === 'bar' && i.status === 'pending' && !i.return_requested && !i.return_accepted
+    const catDest =
+      (
+        i as unknown as {
+          menu_items?: { menu_categories?: { destination?: string; name?: string } }
+        }
+      ).menu_items?.menu_categories?.destination || ''
+    const catName =
+      (i as unknown as { menu_items?: { menu_categories?: { name?: string } } }).menu_items
+        ?.menu_categories?.name || ''
+    const normDest = normalizeDestination(
+      i.destination || catDest || 'bar',
+      i.menu_items?.name,
+      catName
+    )
+    // shisha and games/mixologist items should not block payment
+    if (normDest === 'shisha' || normDest === 'games' || normDest === 'mixologist') return false
+    return normDest === 'bar' && i.status === 'pending' && !i.return_requested && !i.return_accepted
   })
   const hasUnreadyItems = unreadyItems.length > 0
 
