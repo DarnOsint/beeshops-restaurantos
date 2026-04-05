@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { sendPushToStaff } from '../../hooks/usePushNotifications'
+import { supabase as supa } from '../../lib/supabase'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
@@ -215,7 +216,37 @@ function BarKDSInner() {
       r.id === id ? { ...r, status: 'approved', resolved_by: profile?.full_name || null } : r
     )
     await updateMixoRequests(updated)
-    // TODO: auto-deduct from chiller once chiller stock is linked to menu items
+    const today = new Date().toISOString().slice(0, 10)
+    const req = updated.find((r) => r.id === id)
+    if (req) {
+      for (const it of req.items) {
+        const { data: row } = await supabase
+          .from('bar_chiller_stock')
+          .select('id, sold_qty')
+          .eq('date', today)
+          .eq('item_name', it.item)
+          .single()
+        const newSold = (row?.sold_qty || 0) + it.qty
+        if (row?.id) {
+          await supabase
+            .from('bar_chiller_stock')
+            .update({ sold_qty: newSold, updated_at: new Date().toISOString() })
+            .eq('id', row.id)
+        } else {
+          await supabase.from('bar_chiller_stock').insert({
+            date: today,
+            item_name: it.item,
+            unit: 'units',
+            opening_qty: 0,
+            received_qty: 0,
+            sold_qty: it.qty,
+            void_qty: 0,
+            closing_qty: 0,
+            created_at: new Date().toISOString(),
+          })
+        }
+      }
+    }
     toast.success('Approved', 'Released from chiller')
   }
 
