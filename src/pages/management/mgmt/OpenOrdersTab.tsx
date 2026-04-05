@@ -225,7 +225,9 @@ export default function OpenOrdersTab() {
           </div>
         ) : (
           orders.map((order) => {
-            const itemsSum = (order.order_items || []).reduce((s, i) => s + (i.total_price || 0), 0)
+            // Hide items that are pending return review by barman
+            const visibleItems = (order.order_items || []).filter((i) => !i.return_requested)
+            const itemsSum = visibleItems.reduce((s, i) => s + (i.total_price || 0), 0)
             const totalMismatch = Math.abs((order.total_amount || 0) - itemsSum) > 1
             const zoneName = (order.tables as unknown as { table_categories?: { name: string } })
               ?.table_categories?.name
@@ -309,7 +311,7 @@ export default function OpenOrdersTab() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  {order.order_items?.map((item) => (
+                  {visibleItems.map((item) => (
                     <div key={String(item.id)} className="flex justify-between text-sm">
                       <span className="text-gray-300">
                         {item.quantity}x {item.menu_items?.name}
@@ -319,6 +321,9 @@ export default function OpenOrdersTab() {
                       </span>
                     </div>
                   ))}
+                  {visibleItems.length === 0 && (
+                    <p className="text-gray-500 text-xs">All items pending return review</p>
+                  )}
                 </div>
               </div>
             )
