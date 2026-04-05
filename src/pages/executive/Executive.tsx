@@ -135,7 +135,7 @@ export default function Executive() {
         supabase
           .from('attendance')
           .select('staff_id')
-          .or(`clock_out.is.null,clock_out.gte.${sessionStartIso}`)
+          .is('clock_out', null)
           .gte('clock_in', sessionStartIso),
         supabase.from('inventory').select('id, current_stock, minimum_stock').eq('is_active', true),
         supabase
