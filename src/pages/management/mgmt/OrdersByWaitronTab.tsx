@@ -66,7 +66,7 @@ export default function OrdersByWaitronTab({
       const { data, error } = await supabase
         .from('order_items')
         .select(
-          'quantity, total_price, destination, created_at, menu_items(name, menu_categories(destination)), orders(profiles(full_name))'
+          'quantity, total_price, destination, created_at, return_accepted, menu_items(name, menu_categories(destination)), orders(profiles(full_name))'
         )
         .gte('created_at', start)
         .lte('created_at', end)
@@ -80,6 +80,7 @@ export default function OrdersByWaitronTab({
           total_price?: number
           destination?: string | null
           created_at?: string
+          return_accepted?: boolean
           orders?: { profiles?: { full_name?: string | null } | null } | null
           menu_items?: {
             name?: string | null
@@ -91,6 +92,9 @@ export default function OrdersByWaitronTab({
             oi.menu_items?.menu_categories?.destination ||
             ''
           ).toLowerCase()
+          // Exclude anything returned or pending return, and cancelled items
+          if (oi.return_accepted || oi.return_requested) return
+          if ((oi.status || '').toLowerCase() === 'cancelled') return
           if (!destinations.includes(dest as Dest)) return
           const name = oi.orders?.profiles?.full_name || 'Unknown'
           if (!map[name]) map[name] = { waitron: name, count: 0, total: 0 }
