@@ -16,7 +16,7 @@ import {
   Printer,
 } from 'lucide-react'
 import ReceiptModal from './ReceiptModal'
-import type { Table, Profile } from '../../types'
+import type { Table, Profile, ItemDestination } from '../../types'
 import { useToast } from '../../context/ToastContext'
 import { buildOrderTicketHTML, type TicketItem } from '../../lib/orderTicket'
 
@@ -67,11 +67,13 @@ interface Props {
   onClose: () => void
 }
 
-const normalizeDestination = (dest?: string | null): 'kitchen' | 'griller' | 'bar' | 'shisha' => {
+const normalizeDestination = (dest?: string | null): ItemDestination => {
   const d = (dest || '').trim().toLowerCase()
   if (d === 'kitchen') return 'kitchen'
   if (d === 'griller' || d === 'grill' || d === 'grilling') return 'griller'
   if (d === 'shisha' || d === 'hookah') return 'shisha'
+  if (d === 'games' || d === 'game' || d === 'games_master') return 'games'
+  if (d === 'mixologist' || d === 'cocktail' || d === 'cocktails') return 'mixologist'
   return 'bar'
 }
 

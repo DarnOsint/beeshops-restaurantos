@@ -54,6 +54,8 @@ const normalizeDestination = (dest?: string | null): ItemDestination => {
   if (d === 'kitchen') return 'kitchen'
   if (d === 'griller' || d === 'grill' || d === 'grilling') return 'griller'
   if (d === 'shisha' || d === 'hookah') return 'shisha'
+  if (d === 'games' || d === 'game' || d === 'games_master') return 'games'
+  if (d === 'mixologist' || d === 'cocktail' || d === 'cocktails') return 'mixologist'
   if (d === 'bar') return 'bar'
   return 'bar'
 }

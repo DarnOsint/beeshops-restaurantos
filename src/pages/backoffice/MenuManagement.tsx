@@ -185,6 +185,7 @@ export default function MenuManagement({ onBack }: Props) {
     if (dest === 'griller')
       return { label: 'Griller', className: 'bg-orange-500/20 text-orange-400' }
     if (dest === 'shisha') return { label: 'Shisha', className: 'bg-rose-500/20 text-rose-400' }
+    if (dest === 'games') return { label: 'Games', className: 'bg-amber-500/20 text-amber-400' }
     return { label: 'Bar', className: 'bg-blue-500/20 text-blue-400' }
   }
 
@@ -466,6 +467,8 @@ export default function MenuManagement({ onBack }: Props) {
                     ['bar', '🍺 Bar', 'blue'],
                     ['griller', '🔥 Griller', 'orange'],
                     ['shisha', '💨 Shisha', 'rose'],
+                    ['games', '🎮 Games', 'amber'],
+                    ['mixologist', '🍸 Mixologist', 'green'],
                   ].map(([val, label, color]) => (
                     <button
                       key={val}

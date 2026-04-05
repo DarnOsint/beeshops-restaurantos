@@ -48,6 +48,13 @@ const STATIONS: StationPrinter[] = [
     icon: <Flame size={18} className="text-red-400" />,
     settingId: 'griller_printer_url',
   },
+  {
+    key: 'mixologist',
+    label: 'Mixologist Printer',
+    description: 'Sends cocktail tickets to the mixologist station instead of bar chiller',
+    icon: <ChefHat size={18} className="text-emerald-400" />,
+    settingId: 'mixologist_printer_url',
+  },
 ]
 
 export default function PrinterConfig({ onBack }: Props) {
@@ -69,11 +76,13 @@ export default function PrinterConfig({ onBack }: Props) {
     kitchen: 'display',
     griller: 'display',
     bar: 'display',
+    mixologist: 'display',
   })
   const [printCopies, setPrintCopies] = useState<Record<string, number>>({
     kitchen: 2,
     griller: 2,
     bar: 1,
+    mixologist: 1,
   })
   const [modesSaving, setModesSaving] = useState(false)
 
