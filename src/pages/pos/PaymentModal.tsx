@@ -184,9 +184,10 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       i.menu_items?.name,
       catName
     )
-    // shisha and games/mixologist items should not block payment
-    if (normDest === 'shisha' || normDest === 'games' || normDest === 'mixologist') return false
-    return normDest === 'bar' && i.status === 'pending' && !i.return_requested && !i.return_accepted
+    // shisha and games should not block payment; bar and mixologist must be ready/approved
+    if (normDest === 'shisha' || normDest === 'games') return false
+    const isBlocking = normDest === 'bar' || normDest === 'mixologist'
+    return isBlocking && i.status === 'pending' && !i.return_requested && !i.return_accepted
   })
   const hasUnreadyItems = unreadyItems.length > 0
 
