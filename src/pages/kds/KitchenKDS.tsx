@@ -179,6 +179,65 @@ function KitchenKDSInner() {
         }, 200)
     }
   }
+  const printPendingTicket = (order: KdsOrder) => {
+    const W = 40
+    const divider = '-'.repeat(W)
+    const centre = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
+    const fmtRow = (l: string, r: string) => {
+      const space = W - l.length - r.length
+      return l + ' '.repeat(Math.max(1, space)) + r
+    }
+    const pendingItems = order.order_items.filter((i) => isKitchenItem(i) && i.status === 'pending')
+    if (!pendingItems.length) return
+    const itemLines = pendingItems
+      .map((i) =>
+        fmtRow(
+          `${i.quantity}x ${(i.menu_items?.name ?? i.modifier_notes ?? 'Item').substring(0, 28)}`,
+          ''
+        )
+      )
+      .join('\n')
+
+    const ticket = [
+      '',
+      centre('** KITCHEN (NEW ITEMS) **'),
+      divider,
+      fmtRow('Table:', order.tables?.name ?? 'N/A'),
+      fmtRow(
+        'Time:',
+        new Date().toLocaleTimeString('en-NG', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        })
+      ),
+      divider,
+      itemLines,
+      divider,
+      '',
+    ].join('\n')
+
+    for (let copy = 0; copy < 2; copy++) {
+      const win = window.open('', '_blank', 'width=400,height=500,toolbar=no,menubar=no')
+      if (!win) continue
+      win.document.open('text/html', 'replace')
+      win.document.write(
+        `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Kitchen Ticket</title>
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:13px;width:80mm;padding:4mm;white-space:pre;}
+@media print{body{width:80mm;}@page{margin:0;size:80mm auto;}}</style></head><body>${ticket}</body></html>`
+      )
+      win.document.close()
+      win.onload = () =>
+        setTimeout(() => {
+          try {
+            win.print()
+          } catch {
+            /* ignore */
+          }
+          win.close()
+        }, 200)
+    }
+  }
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
   const [tab, setTab] = useState<'orders' | 'stock' | 'summary' | 'returns' | 'history'>('orders')
   const [orders, setOrders] = useState<KdsOrder[]>([])
@@ -270,6 +329,17 @@ function KitchenKDSInner() {
         .update({ total_amount: newTotal, updated_at: new Date().toISOString() })
         .eq('id', itemData.order_id)
     }
+
+    // Update returns_log — mark as kitchen_accepted
+    await supabase
+      .from('returns_log')
+      .update({
+        status: 'kitchen_accepted',
+        resolved_at: new Date().toISOString(),
+        kitchen_name: profile?.full_name ?? null,
+      })
+      .eq('order_item_id', itemId)
+      .eq('status', 'pending')
     await supabase
       .from('returns_log')
       .update({
@@ -304,6 +374,16 @@ function KitchenKDSInner() {
       toast.error('Error', 'Failed to reject return')
       return
     }
+
+    await supabase
+      .from('returns_log')
+      .update({
+        status: 'rejected',
+        resolved_at: new Date().toISOString(),
+        kitchen_name: profile?.full_name ?? null,
+      })
+      .eq('order_item_id', itemId)
+      .eq('status', 'pending')
     await supabase
       .from('returns_log')
       .update({
@@ -777,6 +857,12 @@ function KitchenKDSInner() {
                     className="flex items-center gap-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-1.5 rounded-lg transition-colors"
                   >
                     <Printer size={11} /> Print
+                  </button>
+                  <button
+                    onClick={() => printPendingTicket(order)}
+                    className="flex items-center gap-1 text-xs bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 px-2 py-1.5 rounded-lg transition-colors"
+                  >
+                    <Printer size={11} /> Print New Items
                   </button>
                   {order.order_items.some((i) => i.status !== 'ready') && (
                     <button

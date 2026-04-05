@@ -434,6 +434,23 @@ export default function OrderPanel({
       },
       { onConflict: 'id' }
     )
+
+    // Mirror into returns_log so management returns tab sees non-bar returns
+    await supabase.from('returns_log').delete().eq('order_item_id', dbId).eq('status', 'pending')
+    await supabase.from('returns_log').insert({
+      order_id: activeOrder?.id,
+      order_item_id: dbId,
+      item_name: item.name,
+      quantity: item.quantity,
+      item_total: item.total,
+      table_name: table?.name || '',
+      waitron_id: profile?.id,
+      waitron_name: profile?.full_name,
+      return_reason: 'Deleted by waitron',
+      status: 'pending',
+      requested_at: new Date().toISOString(),
+    })
+
     setPendingDeletes((prev) => new Set(prev).add(dbId))
     toast.success('Delete Requested', `Manager will review removal of ${item.name}`)
     await audit({

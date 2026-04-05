@@ -148,6 +148,58 @@ function GrillerKDSInner() {
         }, 200)
     }
   }
+  const printPendingTicket = (ticket: GrillerTicket) => {
+    const pending = ticket.items.filter((i) => i.status === 'pending')
+    if (!pending.length) return
+    const W = 40
+    const divider = '-'.repeat(W)
+    const centre = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
+    const fmtRow = (l: string, r: string) => {
+      const space = W - l.length - r.length
+      return l + ' '.repeat(Math.max(1, space)) + r
+    }
+    const itemLines = pending
+      .map((i) => fmtRow(`${i.quantity}x ${(i.menu_items?.name ?? '').substring(0, 28)}`, ''))
+      .join('\n')
+    const ticketBody = [
+      '',
+      centre('** GRILL (NEW ITEMS) **'),
+      divider,
+      fmtRow('Table:', ticket.tableName ?? 'N/A'),
+      fmtRow(
+        'Time:',
+        new Date(ticket.createdAt).toLocaleTimeString('en-NG', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        })
+      ),
+      divider,
+      itemLines,
+      divider,
+      '',
+    ].join('\n')
+    for (let copy = 0; copy < 2; copy++) {
+      const win = window.open('', '_blank', 'width=400,height=500,toolbar=no,menubar=no')
+      if (!win) continue
+      win.document.open('text/html', 'replace')
+      win.document.write(
+        `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Grill Ticket</title>
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:13px;width:80mm;padding:4mm;white-space:pre;}
+@media print{body{width:80mm;}@page{margin:0;size:80mm auto;}}</style></head><body>${ticketBody}</body></html>`
+      )
+      win.document.close()
+      win.onload = () =>
+        setTimeout(() => {
+          try {
+            win.print()
+          } catch {
+            /* ignore */
+          }
+          win.close()
+        }, 200)
+    }
+  }
   const toast = useToast()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
   const [tickets, setTickets] = useState<GrillerTicket[]>([])
@@ -239,6 +291,16 @@ function GrillerKDSInner() {
         .update({ total_amount: newTotal, updated_at: new Date().toISOString() })
         .eq('id', itemData.order_id)
     }
+
+    await supabase
+      .from('returns_log')
+      .update({
+        status: 'griller_accepted',
+        resolved_at: new Date().toISOString(),
+        griller_name: profile?.full_name ?? null,
+      })
+      .eq('order_item_id', itemId)
+      .eq('status', 'pending')
     await supabase
       .from('returns_log')
       .update({
@@ -273,6 +335,16 @@ function GrillerKDSInner() {
       toast.error('Error', 'Failed to reject return')
       return
     }
+
+    await supabase
+      .from('returns_log')
+      .update({
+        status: 'rejected',
+        resolved_at: new Date().toISOString(),
+        griller_name: profile?.full_name ?? null,
+      })
+      .eq('order_item_id', itemId)
+      .eq('status', 'pending')
     await supabase
       .from('returns_log')
       .update({
@@ -806,16 +878,31 @@ function GrillerKDSInner() {
                       </p>
                     </div>
 
-                    {ticket.items.some((i) => i.status !== 'ready') && (
-                      <div className="bg-gray-900 px-3 py-2">
+                    <div className="bg-gray-900 px-3 py-2 space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => printOrderTicket(ticket)}
+                          className="flex items-center justify-center gap-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-2 py-1.5 rounded-lg transition-colors"
+                        >
+                          <Printer size={11} /> Print
+                        </button>
+                        <button
+                          onClick={() => printPendingTicket(ticket)}
+                          className="flex items-center justify-center gap-1 text-xs bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 px-2 py-1.5 rounded-lg transition-colors"
+                        >
+                          <Printer size={11} /> Print New Items
+                        </button>
+                      </div>
+
+                      {ticket.items.some((i) => i.status !== 'ready') && (
                         <button
                           onClick={() => markAllReady(ticket)}
                           className="w-full bg-green-600 hover:bg-green-500 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
                         >
                           <CheckCircle size={13} /> All Done — Ticket Complete
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 )
               })}

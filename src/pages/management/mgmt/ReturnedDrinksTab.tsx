@@ -214,6 +214,18 @@ export default function ReturnedDrinksTab() {
         color: 'bg-amber-500/20 text-amber-400',
         desc: 'Awaiting manager approval',
       }
+    if (s === 'kitchen_accepted')
+      return {
+        text: 'Kitchen Accepted',
+        color: 'bg-blue-500/20 text-blue-300',
+        desc: 'Kitchen approved — manager final decision needed',
+      }
+    if (s === 'griller_accepted')
+      return {
+        text: 'Grill Accepted',
+        color: 'bg-orange-500/20 text-orange-300',
+        desc: 'Grill approved — manager final decision needed',
+      }
     if (s === 'accepted')
       return { text: 'Approved', color: 'bg-green-500/20 text-green-400', desc: 'Manager approved' }
     if (s === 'rejected')
