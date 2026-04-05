@@ -404,7 +404,17 @@ export default function OrderPanel({
       return
     }
 
-    // Non-bar items: send deletion request to manager via settings
+    // Non-bar items: mark return_requested so kitchen/grill see it, then send to manager + log
+    await supabase
+      .from('order_items')
+      .update({
+        return_requested: true,
+        return_reason: 'Deleted by waitron',
+        return_requested_at: new Date().toISOString(),
+      })
+      .eq('id', dbId)
+
+    // Send deletion request to manager via settings
     // Load existing requests, add this one, save
     const { data: settingsRow } = await supabase
       .from('settings')
