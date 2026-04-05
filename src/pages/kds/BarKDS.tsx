@@ -215,6 +215,7 @@ function BarKDSInner() {
       r.id === id ? { ...r, status: 'approved', resolved_by: profile?.full_name || null } : r
     )
     await updateMixoRequests(updated)
+    // TODO: auto-deduct from chiller once chiller stock is linked to menu items
     toast.success('Approved', 'Released from chiller')
   }
 
@@ -547,7 +548,7 @@ function BarKDSInner() {
               : 'border-transparent text-gray-400 hover:text-white'
           }`}
         >
-          <BarChart2 size={14} /> Requests
+          <BarChart2 size={14} /> Requests from Mixologist
           {mixoRequests.filter((r) => r.status === 'pending').length > 0 && (
             <span className="bg-emerald-500 text-black text-xs font-bold px-1.5 py-0.5 rounded-full">
               {mixoRequests.filter((r) => r.status === 'pending').length}
@@ -746,6 +747,9 @@ function BarKDSInner() {
                     </>
                   )}
                 </div>
+                {r.status === 'approved' && (
+                  <span className="text-[11px] text-emerald-400">Deducted from chiller</span>
+                )}
               </div>
             ))
           )}
