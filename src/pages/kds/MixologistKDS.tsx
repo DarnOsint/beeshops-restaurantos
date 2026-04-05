@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import DailySummaryTab from './DailySummaryTab'
 import { useToast } from '../../context/ToastContext'
-import { RefreshCw, CheckCircle, X, BarChart2, History, LogOut } from 'lucide-react'
+import { RefreshCw, CheckCircle, X, BarChart2, History, LogOut, Plus, Send } from 'lucide-react'
 import ErrorBoundary from '../../components/ErrorBoundary'
 import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
@@ -32,7 +32,9 @@ function MixologistKDSInner() {
   const [orders, setOrders] = useState<KdsOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
-  const [activeTab, setActiveTab] = useState<'orders' | 'summary' | 'history'>('orders')
+  const [activeTab, setActiveTab] = useState<'orders' | 'summary' | 'history' | 'requests'>(
+    'orders'
+  )
   const [returnItems, setReturnItems] = useState<
     (KdsOrder['order_items'][0] & { tableName: string; orderId: string; staffId?: string | null })[]
   >([])
@@ -51,6 +53,35 @@ function MixologistKDSInner() {
       resolved_at: string | null
     }>
   >([])
+  const [requestLines, setRequestLines] = useState<
+    Array<{ id: string; item: string; qty: number }>
+  >([{ id: crypto.randomUUID(), item: '', qty: 1 }])
+  const [sentRequests, setSentRequests] = useState<
+    Array<{ id: string; items: string; status: 'pending' | 'approved' | 'rejected'; at: string }>
+  >([])
+  const addRequestLine = () =>
+    setRequestLines((prev) => [...prev, { id: crypto.randomUUID(), item: '', qty: 1 }])
+  const updateRequestLine = (id: string, field: 'item' | 'qty', value: string | number) =>
+    setRequestLines((prev) =>
+      prev.map((l) =>
+        l.id === id ? { ...l, [field]: field === 'qty' ? Number(value) : value } : l
+      )
+    )
+  const removeRequestLine = (id: string) =>
+    setRequestLines((prev) => (prev.length === 1 ? prev : prev.filter((l) => l.id !== id)))
+  const submitRequest = () => {
+    const valid = requestLines.filter((l) => l.item && l.qty > 0)
+    if (!valid.length) return toast.warning('Add at least one drink and quantity')
+    const record = {
+      id: crypto.randomUUID(),
+      items: valid.map((l) => `${l.qty}x ${l.item}`).join(', '),
+      status: 'pending' as const,
+      at: new Date().toISOString(),
+    }
+    setSentRequests((prev) => [record, ...prev])
+    setRequestLines([{ id: crypto.randomUUID(), item: '', qty: 1 }])
+    toast.success('Sent to bar', 'Waiting for bar approval to release drinks')
+  }
 
   useEffect(() => {
     const interval = setInterval(() => setTick((t) => t + 1), 30_000)
@@ -284,6 +315,7 @@ function MixologistKDSInner() {
           ['orders', 'Orders', 'Orders awaiting mixologist'],
           ['summary', 'Summary', 'Daily item summary'],
           ['history', 'Returns', 'History of approved returns'],
+          ['requests', 'Bar Requests', 'Request drinks from bar'],
         ].map(([id, label]) => (
           <button
             key={id}
@@ -447,6 +479,99 @@ function MixologistKDSInner() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {activeTab === 'requests' && (
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-white font-semibold text-sm">Request drinks from Bar</p>
+                <p className="text-gray-500 text-xs">
+                  Sent to bar for approval; released from chiller once approved.
+                </p>
+              </div>
+              <button
+                onClick={addRequestLine}
+                className="px-3 py-1.5 text-xs rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1"
+              >
+                <Plus size={12} /> Add line
+              </button>
+            </div>
+            <div className="space-y-2">
+              {requestLines.map((line) => (
+                <div key={line.id} className="grid grid-cols-7 gap-2 items-center">
+                  <input
+                    placeholder="e.g. Jameson, Smirnoff Ice"
+                    value={line.item}
+                    onChange={(e) => updateRequestLine(line.id, 'item', e.target.value)}
+                    className="col-span-5 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    value={line.qty}
+                    onChange={(e) => updateRequestLine(line.id, 'qty', Number(e.target.value))}
+                    className="col-span-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                  />
+                  <button
+                    onClick={() => removeRequestLine(line.id)}
+                    className="text-red-400 hover:text-red-300 text-xs"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={submitRequest}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-sm font-semibold"
+            >
+              <Send size={14} /> Send to Bar
+            </button>
+          </div>
+
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <History size={14} className="text-gray-400" />
+              <p className="text-white text-sm font-semibold">Recent Requests</p>
+            </div>
+            {sentRequests.length === 0 ? (
+              <p className="text-gray-500 text-sm">No requests sent yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {sentRequests.map((r) => (
+                  <div
+                    key={r.id}
+                    className="bg-gray-800 rounded-xl px-3 py-2 flex items-center justify-between"
+                  >
+                    <div>
+                      <p className="text-white text-sm font-semibold">{r.items}</p>
+                      <p className="text-gray-500 text-xs">
+                        {new Date(r.at).toLocaleTimeString('en-NG', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true,
+                        })}
+                      </p>
+                    </div>
+                    <span
+                      className={`text-[11px] px-2 py-1 rounded-lg border ${
+                        r.status === 'approved'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : r.status === 'rejected'
+                            ? 'bg-red-500/10 text-red-400 border-red-500/30'
+                            : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                      }`}
+                    >
+                      {r.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
