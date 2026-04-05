@@ -133,6 +133,7 @@ function RoleRoute() {
   if (profile.role === 'kitchen') return <Navigate to="/kds/kitchen" />
   if (profile.role === 'bar') return <Navigate to="/kds/bar" />
   if (profile.role === 'griller') return <Navigate to="/kds/griller" />
+  if (profile.role === 'mixologist') return <Navigate to="/kds/mixologist" />
   if (profile.role === 'apartment_manager') return <Navigate to="/apartment" />
   if (profile.role === 'auditor') return <Navigate to="/accounting" />
   if (profile.role === 'games_master') return <Navigate to="/games" />

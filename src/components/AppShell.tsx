@@ -66,6 +66,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
   ],
   apartment_manager: [{ label: 'Rooms', icon: BedDouble, path: '/apartment' }],
   supervisor: [{ label: 'Supervisor', icon: LayoutDashboard, path: '/supervisor' }],
+  mixologist: [{ label: 'Mixologist', icon: Beer, path: '/kds/mixologist' }],
 }
 
 const BARE_ROLES = ['kitchen', 'bar', 'griller', 'waitron', 'games_master', 'shisha_attendant']
