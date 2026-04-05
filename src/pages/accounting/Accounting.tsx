@@ -194,26 +194,37 @@ export default function Accounting() {
 
     const allOrders = (ordersRes.data || []) as Order[]
     const paidOrders = allOrders.filter((o) => o.status === 'paid')
-    const total = paidOrders.reduce((s, o) => s + (o.total_amount || 0), 0)
+
+    const netOrderAmount = (o: Order) =>
+      (o.order_items || [])
+        .filter(
+          (i) =>
+            !i.return_requested &&
+            !i.return_accepted &&
+            (i.status || '').toLowerCase() !== 'cancelled'
+        )
+        .reduce((s, i) => s + (i.total_price || 0), 0)
+
+    const total = paidOrders.reduce((s, o) => s + netOrderAmount(o), 0)
     const cash = paidOrders
       .filter((o) => o.payment_method === 'cash')
-      .reduce((s, o) => s + (o.total_amount || 0), 0)
+      .reduce((s, o) => s + netOrderAmount(o), 0)
     const card = paidOrders
       .filter((o) => ['card', 'bank_pos'].includes(o.payment_method || ''))
-      .reduce((s, o) => s + (o.total_amount || 0), 0)
+      .reduce((s, o) => s + netOrderAmount(o), 0)
     const transfer = paidOrders
       .filter((o) => (o.payment_method || '').startsWith('transfer'))
-      .reduce((s, o) => s + (o.total_amount || 0), 0)
+      .reduce((s, o) => s + netOrderAmount(o), 0)
     const credit = paidOrders
       .filter((o) => o.payment_method === 'credit')
-      .reduce((s, o) => s + (o.total_amount || 0), 0)
+      .reduce((s, o) => s + netOrderAmount(o), 0)
     const split = paidOrders
       .filter((o) => o.payment_method === 'split')
-      .reduce((s, o) => s + (o.total_amount || 0), 0)
+      .reduce((s, o) => s + netOrderAmount(o), 0)
     // Orders with no payment method (force-closed) count as transfer
     const nullPayment = paidOrders
       .filter((o) => !o.payment_method)
-      .reduce((s, o) => s + (o.total_amount || 0), 0)
+      .reduce((s, o) => s + netOrderAmount(o), 0)
 
     setSummary({
       total,
@@ -233,7 +244,7 @@ export default function Accounting() {
         (o as Order & { profiles?: { full_name: string } }).profiles?.full_name || 'Unknown'
       if (!wMap[name]) wMap[name] = { name, orders: 0, revenue: 0 }
       wMap[name].orders++
-      wMap[name].revenue += o.total_amount || 0
+      wMap[name].revenue += netOrderAmount(o)
     })
     setWaitronStats(Object.values(wMap).sort((a, b) => b.revenue - a.revenue))
 
