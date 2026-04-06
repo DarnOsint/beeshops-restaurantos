@@ -185,7 +185,7 @@ export default async function handler(req, res) {
       itemMap[k].qty     += item.quantity || 1
       itemMap[k].revenue += item.total_price || (item.unit_price || 0) * (item.quantity || 1)
     }
-    const topItems = Object.values(itemMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10)
+    const topItems = Object.values(itemMap).sort((a, b) => b.qty - a.qty).slice(0, 10)
 
     // Returns (replaces voids)
     const acceptedReturns = (returnsLog || []).filter(r => ['accepted', 'bar_accepted', 'kitchen_accepted', 'griller_accepted'].includes(r.status))
