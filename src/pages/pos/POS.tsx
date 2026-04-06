@@ -90,7 +90,15 @@ interface ShiftOrder {
   total_amount?: number
   closed_at: string
   tables?: { name: string } | null
-  order_items: { quantity: number; menu_items?: { name: string } | null }[]
+  order_items: {
+    quantity: number
+    total_price?: number | null
+    status?: string | null
+    return_requested?: boolean | null
+    return_accepted?: boolean | null
+    menu_items?: { name: string } | null
+  }[]
+  netTotal?: number
 }
 interface ShiftStats {
   clockIn?: string
@@ -601,7 +609,15 @@ export default function POS() {
       supabase
         .from('orders')
         .select(
-          'id, total_amount, closed_at, tables(name), order_items(quantity, menu_items(name))'
+          `id, total_amount, closed_at, tables(name),
+          order_items(
+            quantity,
+            total_price,
+            status,
+            return_requested,
+            return_accepted,
+            menu_items(name)
+          )`
         )
         .eq('staff_id', profile?.id)
         .eq('status', 'paid')
@@ -609,8 +625,20 @@ export default function POS() {
     ])
     const attendance = attendanceRes.data?.[0] as { clock_in: string } | undefined
     const orders = (ordersRes.data || []) as unknown as ShiftOrder[]
-    const totalSales = orders.reduce((s, o) => s + (o.total_amount || 0), 0)
-    const totalItems = orders.reduce(
+
+    const filteredOrders = orders.map((o) => {
+      const items = o.order_items.filter(
+        (i) =>
+          !i.return_requested &&
+          !i.return_accepted &&
+          (i.status || '').toLowerCase() !== 'cancelled'
+      )
+      const netTotal = items.reduce((s, i) => s + (i.total_price ?? 0), 0)
+      return { ...o, order_items: items, netTotal }
+    })
+
+    const totalSales = filteredOrders.reduce((s, o) => s + (o.netTotal || 0), 0)
+    const totalItems = filteredOrders.reduce(
       (s, o) => s + o.order_items.reduce((ss, i) => ss + (i.quantity || 0), 0),
       0
     )
@@ -621,7 +649,7 @@ export default function POS() {
       totalSales,
       totalItems,
       uniqueTables,
-      recentOrders: orders.slice(0, 5),
+      recentOrders: filteredOrders.slice(0, 5),
     })
     setShiftLoading(false)
   }
@@ -1375,6 +1403,60 @@ export default function POS() {
                   <button onClick={fetchShiftStats} className="text-gray-500 hover:text-white p-2">
                     <RefreshCw size={14} />
                   </button>
+                  <button
+                    onClick={() => {
+                      if (!shiftStats) return
+                      const lines: string[] = []
+                      lines.push("BEE'SHOP — SHIFT SUMMARY")
+                      lines.push('----------------------------------------')
+                      lines.push(`Waitron: ${profile?.full_name || 'You'}`)
+                      if (shiftStats.clockIn)
+                        lines.push(
+                          `Clock In: ${new Date(shiftStats.clockIn).toLocaleString('en-NG')}`
+                        )
+                      lines.push(`Orders: ${shiftStats.ordersCount}`)
+                      lines.push(`Items: ${shiftStats.totalItems}`)
+                      lines.push(`Tables: ${shiftStats.uniqueTables}`)
+                      lines.push(
+                        `Total Sales: ₦${shiftStats.totalSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      )
+                      lines.push('')
+                      lines.push('RECENT ORDERS')
+                      shiftStats.recentOrders.forEach((o) => {
+                        const items = o.order_items
+                          .map(
+                            (i) =>
+                              `${i.quantity}x ${i.menu_items?.name || ''} - ₦${(i.total_price || 0).toLocaleString()}`
+                          )
+                          .join('; ')
+                        lines.push(
+                          `${o.tables?.name || 'Cash Sale'} | ₦${(o.netTotal || 0).toLocaleString()} | ${new Date(o.closed_at).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true })}`
+                        )
+                        if (items) lines.push(`  ${items}`)
+                      })
+
+                      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Shift Summary</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:13px;width:80mm;padding:4mm;white-space:pre;}@media print{body{width:80mm;}@page{margin:0;size:80mm auto;}}</style></head><body>${lines.join(
+                        '\n'
+                      )}</body></html>`
+                      const w = window.open('', '_blank', 'width=400,height=600,toolbar=no')
+                      if (!w) return
+                      w.document.open('text/html', 'replace')
+                      w.document.write(html)
+                      w.document.close()
+                      w.onload = () =>
+                        setTimeout(() => {
+                          try {
+                            w.print()
+                          } catch {
+                            /* ignore */
+                          }
+                          w.close()
+                        }, 200)
+                    }}
+                    className="text-xs bg-amber-500 text-black px-3 py-1.5 rounded-lg font-semibold hover:bg-amber-400"
+                  >
+                    Print Summary
+                  </button>
                 </div>
 
                 {/* Clock info */}
@@ -1492,7 +1574,7 @@ export default function POS() {
                                 {order.tables?.name || 'Cash Sale'}
                               </p>
                               <p className="text-amber-400 font-bold text-sm">
-                                ₦{(order.total_amount || 0).toLocaleString()}
+                                ₦{(order.netTotal || 0).toLocaleString()}
                               </p>
                             </div>
                             <div className="flex items-center justify-between">
