@@ -30,6 +30,7 @@ import KitchenStock from '../backoffice/KitchenStock'
 import ReturnedDrinksTab from './mgmt/ReturnedDrinksTab'
 import ChillerTab from './mgmt/ChillerTab'
 import StaffPerformanceTab from './mgmt/StaffPerformanceTab'
+import PayrollTab from './mgmt/PayrollTab'
 import { useLateOrders } from '../../hooks/useLateOrders'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import type { SyncQueueEntry } from '../../lib/db'
@@ -84,6 +85,7 @@ const TABS = [
   { id: 'shishawaitron', label: 'Shisha Orders', icon: Wind },
   { id: 'gameswaitron', label: 'Games Orders', icon: Gamepad2 },
   { id: 'performance', label: 'Staff Performance', icon: Trophy },
+  { id: 'payroll', label: 'Payroll', icon: DollarSign },
   { id: 'till', label: 'Till', icon: DollarSign },
   { id: 'kitchen', label: 'Kitchen', icon: UtensilsCrossed },
   { id: 'chiller', label: 'Chiller', icon: Beer },
@@ -439,6 +441,7 @@ export default function Management() {
         {activeTab === 'till' && <TillManagement />}
         {activeTab === 'kitchen' && <KitchenStock onBack={() => setActiveTab('overview')} />}
         {activeTab === 'performance' && <StaffPerformanceTab />}
+        {activeTab === 'payroll' && <PayrollTab />}
         {activeTab === 'chiller' && <ChillerTab />}
         {activeTab === 'mainstore' && <MainStoreSummaryTab />}
         {activeTab === 'returns' && <ReturnedDrinksTab />}
