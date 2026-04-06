@@ -20,6 +20,7 @@ import {
   Gamepad2,
   Wine,
   Package,
+  Trophy,
 } from 'lucide-react'
 import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
@@ -28,6 +29,7 @@ import WaiterCalls from './WaiterCalls'
 import KitchenStock from '../backoffice/KitchenStock'
 import ReturnedDrinksTab from './mgmt/ReturnedDrinksTab'
 import ChillerTab from './mgmt/ChillerTab'
+import StaffPerformanceTab from './mgmt/StaffPerformanceTab'
 import { useLateOrders } from '../../hooks/useLateOrders'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import type { SyncQueueEntry } from '../../lib/db'
@@ -81,6 +83,7 @@ const TABS = [
   { id: 'mixologistwaitron', label: 'Mixologist Orders', icon: Wine },
   { id: 'shishawaitron', label: 'Shisha Orders', icon: Wind },
   { id: 'gameswaitron', label: 'Games Orders', icon: Gamepad2 },
+  { id: 'performance', label: 'Staff Performance', icon: Trophy },
   { id: 'till', label: 'Till', icon: DollarSign },
   { id: 'kitchen', label: 'Kitchen', icon: UtensilsCrossed },
   { id: 'chiller', label: 'Chiller', icon: Beer },
@@ -435,6 +438,7 @@ export default function Management() {
         )}
         {activeTab === 'till' && <TillManagement />}
         {activeTab === 'kitchen' && <KitchenStock onBack={() => setActiveTab('overview')} />}
+        {activeTab === 'performance' && <StaffPerformanceTab />}
         {activeTab === 'chiller' && <ChillerTab />}
         {activeTab === 'mainstore' && <MainStoreSummaryTab />}
         {activeTab === 'returns' && <ReturnedDrinksTab />}
