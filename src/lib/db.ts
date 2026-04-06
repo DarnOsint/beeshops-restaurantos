@@ -3,7 +3,8 @@
 // All page components interact with this instead of IDB directly.
 
 const DB_NAME = 'beeshops_os'
-const DB_VERSION = 1
+// Bump version when adding new stores; existing data stays intact
+const DB_VERSION = 2
 
 const STORES = [
   'orders',
@@ -17,6 +18,7 @@ const STORES = [
   'profiles',
   'zone_assignments',
   'inventory',
+  'credentials',
   'sync_queue',
 ] as const
 
@@ -30,6 +32,17 @@ export interface SyncQueueEntry {
   payload: Record<string, unknown>
   created_at: string
   retries: number
+}
+
+export interface CredentialRecord {
+  id: string
+  email?: string
+  full_name: string
+  role: string
+  mode: 'pin' | 'password'
+  verifier: string
+  created_at?: string
+  stored_at: string
 }
 
 let _db: IDBDatabase | null = null
@@ -157,4 +170,14 @@ export async function removeFromQueue(id: string): Promise<void> {
 
 export async function getPendingCount(): Promise<number> {
   return (await getPendingQueue()).length
+}
+
+// ── Credential helpers (offline auth cache) ───────────────────────────────────
+
+export async function saveCredential(record: CredentialRecord): Promise<IDBValidKey> {
+  return localPut('credentials', record)
+}
+
+export async function getCredentials(): Promise<CredentialRecord[]> {
+  return localGetAll<CredentialRecord>('credentials')
 }

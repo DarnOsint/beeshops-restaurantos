@@ -17,6 +17,10 @@
     {
       "path": "/api/cron/stock-check",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/accountant-summary",
+      "schedule": "0 7 * * *"
     }
   ]
 }

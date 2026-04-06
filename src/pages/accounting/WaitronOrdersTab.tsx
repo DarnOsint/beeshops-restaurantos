@@ -26,6 +26,9 @@ interface WaitronOrder {
     total_price: number
     menu_items?: { name: string } | null
     modifier_notes?: string
+    return_requested?: boolean
+    return_accepted?: boolean
+    status?: string
   }>
 }
 
@@ -79,7 +82,7 @@ export default function WaitronOrdersTab() {
     const { data } = await supabase
       .from('orders')
       .select(
-        'id, total_amount, payment_method, order_type, created_at, closed_at, tables(name, table_categories(name)), order_items(quantity, total_price, modifier_notes, menu_items(name))'
+        'id, total_amount, payment_method, order_type, created_at, closed_at, tables(name, table_categories(name)), order_items(quantity, total_price, modifier_notes, return_requested, return_accepted, status, menu_items(name))'
       )
       .eq('staff_id', staffId)
       .eq('status', 'paid')
@@ -91,9 +94,16 @@ export default function WaitronOrdersTab() {
   }
 
   const selectedShift = shifts.find((s) => s.staff_id === selectedStaff)
-  const totalSales = orders.reduce((s, o) => s + (o.total_amount || 0), 0)
+  const validItems = (items: WaitronOrder['order_items']) =>
+    (items || []).filter(
+      (i) => !i.return_requested && !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled'
+    )
+  const totalSales = orders.reduce(
+    (s, o) => s + validItems(o.order_items).reduce((ss, i) => ss + (i.total_price || 0), 0),
+    0
+  )
   const totalItems = orders.reduce(
-    (s, o) => s + (o.order_items || []).reduce((ss, i) => ss + i.quantity, 0),
+    (s, o) => s + validItems(o.order_items).reduce((ss, i) => ss + i.quantity, 0),
     0
   )
 
@@ -134,7 +144,7 @@ export default function WaitronOrdersTab() {
           minute: '2-digit',
           hour12: true,
         })
-        const itemLines = (o.order_items || [])
+        const itemLines = validItems(o.order_items)
           .map((i) =>
             row(
               `  ${i.quantity}x ${i.menu_items?.name || i.modifier_notes || 'Item'}`,
@@ -319,7 +329,7 @@ export default function WaitronOrdersTab() {
                           <div className="px-4 py-2 bg-gray-950 border-t border-gray-800">
                             <table className="w-full text-xs">
                               <tbody>
-                                {(o.order_items || []).map((item, i) => (
+                                {validItems(o.order_items).map((item, i) => (
                                   <tr key={i}>
                                     <td className="text-gray-500 py-0.5 pr-2 w-8 text-right">
                                       {item.quantity}x

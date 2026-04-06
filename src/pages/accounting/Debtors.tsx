@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
+import { audit } from '../../lib/audit'
 import {
   ArrowLeft,
   Plus,
@@ -201,6 +202,7 @@ export default function Debtors({ onBack, embedded = false }: Props) {
         .order('created_at', { ascending: false })
         .limit(1)
         .single()
+      audit({ action: 'DEBTOR_CREATED', entity: 'debtors', entityName: form.name, newValue: { credit_limit: parseFloat(form.credit_limit), type: form.debt_type }, performer: profile as any })
       if (newDebtor?.id) sendStatement(newDebtor.id, 'credit_sale')
       await fetchAll()
       setShowAddModal(false)
@@ -249,6 +251,7 @@ export default function Debtors({ onBack, embedded = false }: Props) {
         })
         .eq('id', debtor.id)
       if (updError) throw updError
+      audit({ action: 'DEBT_PAYMENT', entity: 'debtors', entityId: debtor.id, entityName: debtor.name, newValue: { amount, method: payForm.payment_method, newBalance, newStatus }, performer: profile as any })
       await fetchAll()
       sendStatement(debtor.id, 'payment')
       setShowPaymentModal(null)

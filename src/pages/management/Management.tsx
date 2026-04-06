@@ -18,6 +18,8 @@ import {
   Flame,
   Wind,
   Gamepad2,
+  Wine,
+  Package,
 } from 'lucide-react'
 import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
@@ -39,6 +41,7 @@ import type { CvData } from '../executive/exec/types'
 import SyncTab from './mgmt/SyncTab'
 import SettingsTab from './mgmt/SettingsTab'
 import ActivityLogTab from './mgmt/ActivityLogTab'
+import MainStoreSummaryTab from './mgmt/MainStoreSummaryTab'
 import OrdersByWaitronTab from './mgmt/OrdersByWaitronTab'
 
 /* eslint-disable react-hooks/set-state-in-effect */
@@ -75,11 +78,13 @@ const TABS = [
   { id: 'barwaitron', label: 'Bar Orders', icon: Beer },
   { id: 'kitchenwaitron', label: 'Kitchen Orders', icon: UtensilsCrossed },
   { id: 'grillwaitron', label: 'Grill Orders', icon: Flame },
+  { id: 'mixologistwaitron', label: 'Mixologist Orders', icon: Wine },
   { id: 'shishawaitron', label: 'Shisha Orders', icon: Wind },
   { id: 'gameswaitron', label: 'Games Orders', icon: Gamepad2 },
   { id: 'till', label: 'Till', icon: DollarSign },
   { id: 'kitchen', label: 'Kitchen', icon: UtensilsCrossed },
   { id: 'chiller', label: 'Chiller', icon: Beer },
+  { id: 'mainstore', label: 'Main Store', icon: Package },
   { id: 'returns', label: 'Returns', icon: RotateCcw },
   { id: 'settings', label: 'Alert Threshold', icon: Settings },
   { id: 'cctv', label: 'CV', icon: Camera },
@@ -419,6 +424,9 @@ export default function Management() {
         {activeTab === 'grillwaitron' && (
           <OrdersByWaitronTab destinations={['griller']} title="Griller Orders per Waitron" />
         )}
+        {activeTab === 'mixologistwaitron' && (
+          <OrdersByWaitronTab destinations={['mixologist']} title="Mixologist Orders per Waitron" />
+        )}
         {activeTab === 'shishawaitron' && (
           <OrdersByWaitronTab destinations={['shisha']} title="Shisha Orders per Waitron" />
         )}
@@ -428,6 +436,7 @@ export default function Management() {
         {activeTab === 'till' && <TillManagement />}
         {activeTab === 'kitchen' && <KitchenStock onBack={() => setActiveTab('overview')} />}
         {activeTab === 'chiller' && <ChillerSummaryTab />}
+        {activeTab === 'mainstore' && <MainStoreSummaryTab />}
         {activeTab === 'returns' && <ReturnedDrinksTab />}
         {activeTab === 'cctv' && <CctvPanel cvData={cvData} onResolve={resolveAlert} />}
         {activeTab === 'sync' && (

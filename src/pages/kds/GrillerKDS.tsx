@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { sendPushToStaff } from '../../hooks/usePushNotifications'
+import { audit } from '../../lib/audit'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
@@ -311,6 +312,7 @@ function GrillerKDSInner() {
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
+    audit({ action: 'GRILLER_RETURN_ACCEPTED', entity: 'order_items', entityId: itemId, newValue: { table: tableName }, performer: profile as any })
     toast.success('Return Accepted', 'Item tentatively removed — awaiting manager final approval')
     if (staffId)
       await sendPushToStaff(
@@ -355,6 +357,7 @@ function GrillerKDSInner() {
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
+    audit({ action: 'GRILLER_RETURN_REJECTED', entity: 'order_items', entityId: itemId, newValue: { table: tableName }, performer: profile as any })
     toast.success('Return Rejected', 'Item stays on bill')
     if (staffId)
       await sendPushToStaff(

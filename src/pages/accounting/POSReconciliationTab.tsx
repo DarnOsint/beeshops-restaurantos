@@ -68,7 +68,7 @@ export default function POSReconciliationTab({ timesheet, orders, dateLabel }: P
     ).getTime()
     const shiftClockOut = (entry as TimesheetEntry & { clock_out?: string | null }).clock_out
       ? new Date((entry as TimesheetEntry & { clock_out?: string }).clock_out!).getTime()
-      : new Date(new Date().setHours(23, 59, 59, 999)).getTime()
+      : new Date().getTime() // eslint-disable-line react-hooks/purity
 
     const staffOrders = orders.filter((o) => {
       if ((o as Order & { staff_id?: string }).staff_id !== staffId) return false

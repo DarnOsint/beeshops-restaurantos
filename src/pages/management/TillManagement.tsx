@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
+import { audit } from '../../lib/audit'
 import {
   DollarSign,
   TrendingUp,
@@ -165,6 +166,7 @@ export default function TillManagement({ onClose }: Props) {
     }
     setOpeningFloat('')
     setShowOpenTill(false)
+    audit({ action: 'TILL_OPENED', entity: 'till_sessions', entityName: profile?.full_name, newValue: { opening_float: float }, performer: profile as any })
     toast.success('Till Opened', `Opening float ₦${float.toLocaleString()} recorded`)
     fetchSessions()
   }
@@ -179,6 +181,7 @@ export default function TillManagement({ onClose }: Props) {
         total_sales: todayStats.totalRevenue,
       })
       .eq('id', session.id)
+    audit({ action: 'TILL_CLOSED', entity: 'till_sessions', entityId: session.id, entityName: session.profiles?.full_name, newValue: { total_sales: todayStats.totalRevenue }, performer: profile as any })
     fetchSessions()
   }
 
@@ -204,6 +207,7 @@ export default function TillManagement({ onClose }: Props) {
       approved_by: profile!.id,
     })
     if (!error) {
+      audit({ action: 'PAYOUT_RECORDED', entity: 'payouts', entityName: payoutForm.reason, newValue: { amount: parseFloat(payoutForm.amount), category: payoutForm.category }, performer: profile as any })
       setPayoutForm({ amount: '', reason: '', category: 'general' })
       fetchPayouts()
       fetchTodayStats()

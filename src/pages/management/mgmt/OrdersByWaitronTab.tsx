@@ -3,7 +3,7 @@ import { supabase } from '../../../lib/supabase'
 import { RefreshCw, Download } from 'lucide-react'
 import React from 'react'
 
-type Dest = 'bar' | 'kitchen' | 'griller' | 'shisha' | 'games'
+type Dest = 'bar' | 'kitchen' | 'griller' | 'mixologist' | 'shisha' | 'games'
 
 interface Row {
   waitron: string
@@ -66,7 +66,7 @@ export default function OrdersByWaitronTab({
       const { data, error } = await supabase
         .from('order_items')
         .select(
-          'quantity, total_price, destination, created_at, return_accepted, menu_items(name, menu_categories(destination)), orders(profiles(full_name))'
+          'quantity, total_price, destination, created_at, status, return_requested, return_accepted, menu_items(name, menu_categories(destination)), orders(profiles(full_name))'
         )
         .gte('created_at', start)
         .lte('created_at', end)
@@ -80,6 +80,8 @@ export default function OrdersByWaitronTab({
           total_price?: number
           destination?: string | null
           created_at?: string
+          status?: string
+          return_requested?: boolean
           return_accepted?: boolean
           orders?: { profiles?: { full_name?: string | null } | null } | null
           menu_items?: {

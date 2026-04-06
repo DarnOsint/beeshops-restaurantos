@@ -121,11 +121,14 @@ function getRangeDates(range: string, custom: { from: string; to: string }) {
     s.setDate(1)
     return { from: pad(s), to: pad(e) }
   }
-  if (range === 'custom' && custom.from && custom.to)
+  if (range === 'custom' && custom.from && custom.to) {
+    const cEnd = new Date(custom.to + 'T08:00:00+01:00')
+    cEnd.setDate(cEnd.getDate() + 1)
     return {
-      from: new Date(custom.from).toISOString(),
-      to: new Date(custom.to + 'T23:59:59').toISOString(),
+      from: new Date(custom.from + 'T08:00:00+01:00').toISOString(),
+      to: cEnd.toISOString(),
     }
+  }
   return { from: null, to: null }
 }
 

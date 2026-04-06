@@ -194,6 +194,7 @@ export default function TableView() {
     try {
       const today = new Date()
       today.setHours(8, 0, 0, 0)
+      if (new Date().getHours() < 8) today.setDate(today.getDate() - 1)
       const [tableRes, menuRes, catRes, custOrderRes, liveOrderRes] = await Promise.all([
         supabase
           .from('tables')

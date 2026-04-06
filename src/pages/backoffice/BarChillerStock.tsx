@@ -136,10 +136,9 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
   // Load sold quantities from POS — count all items in open/paid orders
   // (bar items are removed from chiller the moment the order is confirmed)
   const loadSoldQty = useCallback(async (d: string) => {
-    const dayStart = new Date(d)
-    dayStart.setHours(8, 0, 0, 0)
-    const dayEnd = new Date(d)
-    dayEnd.setHours(23, 59, 59, 999)
+    const dayStart = new Date(d + 'T08:00:00+01:00')
+    const dayEnd = new Date(dayStart)
+    dayEnd.setDate(dayEnd.getDate() + 1)
     const { data } = await supabase
       .from('order_items')
       .select('quantity, status, return_accepted, menu_items(name), orders(status)')
@@ -170,10 +169,9 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
   // Load existing entries for the day
   // Helper: fetch sold map for an arbitrary date (used for carry-over accuracy)
   const fetchSoldMapForDate = useCallback(async (d: string) => {
-    const dayStart = new Date(d)
-    dayStart.setHours(8, 0, 0, 0)
-    const dayEnd = new Date(d)
-    dayEnd.setHours(23, 59, 59, 999)
+    const dayStart = new Date(d + 'T08:00:00+01:00')
+    const dayEnd = new Date(dayStart)
+    dayEnd.setDate(dayEnd.getDate() + 1)
     const { data } = await supabase
       .from('order_items')
       .select('quantity, return_accepted, menu_items(name), orders(status)')
@@ -258,29 +256,38 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         }
       }
 
-      // Build stock data for all bar drinks
+      // Build stock data — start from menu drinks, then add any chiller entries not in menu
       const stock: Record<string, StockEntry> = {}
       for (const drink of menuDrinks) {
-        const carryOver = prevClosing[drink.name] || 0
+        const carryOver = prevClosing[drink.name]
         if (existing[drink.name]) {
           const entry = { ...existing[drink.name] }
-          // Always set opening to computed carry-over so stale openings get corrected
-          entry.opening_qty = carryOver
-          // Always reset closing to 0 on load — closing is always auto-computed
-          // from live POS data. Barman sets it fresh via stepper only for physical counts.
-          entry.closing_qty = 0
+          if (carryOver !== undefined && carryOver > 0) {
+            entry.opening_qty = carryOver
+          }
           stock[drink.name] = entry
         } else {
           stock[drink.name] = {
             item_name: drink.name,
             unit: drink.unit,
-            opening_qty: carryOver,
+            opening_qty: carryOver || 0,
             received_qty: 0,
             sold_qty: 0,
             void_qty: 0,
             closing_qty: 0,
             note: '',
           }
+        }
+      }
+      // Include chiller entries that exist in DB but aren't in the bar menu
+      for (const [name, entry] of Object.entries(existing)) {
+        if (!stock[name]) {
+          const carryOver = prevClosing[name]
+          const e = { ...entry }
+          if (carryOver !== undefined && carryOver > 0) {
+            e.opening_qty = carryOver
+          }
+          stock[name] = e
         }
       }
       setStockData(stock)
@@ -326,8 +333,8 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         continue
 
       const actualSold = soldMap[name] || entry.sold_qty || 0
-      // Only save closing_qty if the barman manually entered a physical count.
-      // Keep it as 0 otherwise — views will always auto-compute from live POS data.
+      // Always save auto-computed closing so it carries over correctly
+      const autoClosing = Math.max(0, entry.opening_qty + entry.received_qty - actualSold - entry.void_qty)
       const row = {
         date,
         item_name: name,
@@ -336,7 +343,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         received_qty: entry.received_qty,
         sold_qty: actualSold,
         void_qty: entry.void_qty,
-        closing_qty: entry.closing_qty,
+        closing_qty: autoClosing,
         note: entry.note || null,
         recorded_by: profile?.id,
         updated_at: new Date().toISOString(),
@@ -392,12 +399,14 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     loadEntries(date)
   }
 
+  const totalOpening = Object.values(stockData).reduce((s, e) => s + e.opening_qty, 0)
   const totalReceived = Object.values(stockData).reduce((s, e) => s + e.received_qty, 0)
   const totalSold = Object.values(stockData).reduce(
     (s, e) => s + (soldMap[e.item_name] || e.sold_qty || 0),
     0
   )
   const totalVoid = Object.values(stockData).reduce((s, e) => s + e.void_qty, 0)
+  const totalClosing = Math.max(0, totalOpening + totalReceived - totalSold - totalVoid)
 
   const handleDelete = async (itemName: string) => {
     if (!isManager) return
@@ -448,9 +457,14 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     setHasChanges(true)
   }
 
+  // Only show items that have stock entries or were sold today — hide empty items
+  const activeMenuDrinks = menuDrinks.filter(
+    (d) => stockData[d.name]?.opening_qty > 0 || stockData[d.name]?.received_qty > 0 || soldMap[d.name] > 0 || stockData[d.name]?.void_qty > 0
+  )
+
   const filtered = search
-    ? menuDrinks.filter((d) => d.name.toLowerCase().includes(search.toLowerCase()))
-    : menuDrinks
+    ? activeMenuDrinks.filter((d) => d.name.toLowerCase().includes(search.toLowerCase()))
+    : activeMenuDrinks
 
   const drinks = filtered.map((d) => ({
     ...d,
@@ -518,11 +532,13 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
 
       <div className="p-4 max-w-2xl mx-auto">
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="grid grid-cols-5 gap-2 mb-4">
           {[
+            { label: 'Opening', value: totalOpening, color: 'text-white' },
             { label: 'Received', value: totalReceived, color: 'text-green-400' },
             { label: 'Sold (POS)', value: totalSold, color: 'text-blue-400' },
             { label: 'Void', value: totalVoid, color: 'text-red-400' },
+            { label: 'Closing', value: totalClosing, color: 'text-cyan-400' },
           ].map(({ label, value, color }) => (
             <div
               key={label}
@@ -559,10 +575,8 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
               const isExpanded = expanded === drink.name
               const sold = drink.autoSold || drink.sold_qty || 0
               const rawExpected = drink.opening_qty + drink.received_qty - sold - drink.void_qty
-              const expected = Math.max(0, rawExpected)
-              // closing_qty is only non-zero if barman sets it this session via stepper
-              const effectiveClosing = drink.closing_qty > 0 ? drink.closing_qty : expected
-              const variance = drink.closing_qty > 0 ? expected - effectiveClosing : 0
+              const effectiveClosing = Math.max(0, rawExpected)
+              const variance = 0
               const hasActivity =
                 drink.opening_qty > 0 ||
                 drink.received_qty > 0 ||
@@ -596,12 +610,9 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
                       ) : null}
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
-                      {hasActivity && variance !== 0 && drink.closing_qty > 0 && (
-                        <span
-                          className={`text-xs font-bold ${variance > 0 ? 'text-red-400' : 'text-blue-400'}`}
-                        >
-                          {variance > 0 ? '−' : '+'}
-                          {Math.abs(variance)}
+                      {sold > 0 && (
+                        <span className="text-xs font-bold text-red-400">
+                          −{sold}
                         </span>
                       )}
                       {isExpanded ? (
@@ -626,24 +637,39 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
                           </div>
                           <span className="text-gray-600 text-[8px]">auto from yesterday</span>
                         </div>
-                        <Stepper
-                          label="Received"
-                          value={drink.received_qty}
-                          onChange={(v) => updateField(drink.name, 'received_qty', v)}
-                          color="text-green-400"
-                        />
+                        {isManager ? (
+                          <Stepper
+                            label="Received"
+                            value={drink.received_qty}
+                            onChange={(v) => updateField(drink.name, 'received_qty', v)}
+                            color="text-green-400"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="text-gray-500 text-[9px] uppercase tracking-wider">
+                              Received
+                            </span>
+                            <div className="w-12 h-9 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center text-sm font-bold text-green-400">
+                              {drink.received_qty}
+                            </div>
+                            <span className="text-gray-600 text-[8px]">from store</span>
+                          </div>
+                        )}
                         <Stepper
                           label="Void/Broken"
                           value={drink.void_qty}
                           onChange={(v) => updateField(drink.name, 'void_qty', v)}
                           color="text-red-400"
                         />
-                        <Stepper
-                          label="Closing Count"
-                          value={drink.closing_qty}
-                          onChange={(v) => updateField(drink.name, 'closing_qty', v)}
-                          color="text-cyan-400"
-                        />
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="text-gray-500 text-[9px] uppercase tracking-wider">
+                            Closing
+                          </span>
+                          <div className="w-12 h-9 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center text-sm font-bold text-cyan-400">
+                            {effectiveClosing}
+                          </div>
+                          <span className="text-gray-600 text-[8px]">auto-computed</span>
+                        </div>
                       </div>
 
                       {/* Sold (auto) */}
@@ -667,19 +693,13 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
                         </div>
                       )}
 
-                      {/* Expected vs actual */}
-                      {drink.closing_qty > 0 && rawExpected >= 0 && (
-                        <div className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
-                          <span className="text-gray-400 text-xs">Expected remaining</span>
-                          <span
-                            className={`text-sm font-bold ${variance === 0 ? 'text-green-400' : variance > 0 ? 'text-red-400' : 'text-blue-400'}`}
-                          >
-                            {expected}{' '}
-                            {variance !== 0 &&
-                              `(${variance > 0 ? '−' : '+'}${Math.abs(variance)} variance)`}
-                          </span>
-                        </div>
-                      )}
+                      {/* Formula breakdown */}
+                      <div className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
+                        <span className="text-gray-400 text-xs">Closing = Open + Rcvd − Sold − Void</span>
+                        <span className="text-cyan-400 text-sm font-bold">
+                          {drink.opening_qty} + {drink.received_qty} − {sold} − {drink.void_qty} = {effectiveClosing}
+                        </span>
+                      </div>
 
                       {isManager && (
                         <button

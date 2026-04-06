@@ -22,7 +22,9 @@ import {
   Bell,
   UserCheck,
   LayoutGrid,
+  Package,
 } from 'lucide-react'
+import SupervisorMainStoreTab from './SupervisorMainStoreTab'
 
 interface OpenOrder {
   id: string
@@ -131,16 +133,18 @@ function SupervisorDashboardInner() {
   const [calls, setCalls] = useState<WaiterCall[]>([])
   const [voids, setVoids] = useState<VoidEntry[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'floor' | 'staff' | 'calls' | 'voids' | 'shift' | 'tables'>(
+  const [tab, setTab] = useState<'floor' | 'staff' | 'calls' | 'voids' | 'shift' | 'tables' | 'store'>(
     'floor'
   )
   const [zoneFilter, setZoneFilter] = useState('All')
   const [lateCount] = useState(0) // SUSPENDED
+  const [pendingStore, setPendingStore] = useState(0)
 
   const fetchAll = useCallback(async () => {
     const today = new Date()
     today.setHours(8, 0, 0, 0)
-    const [oR, sR, cR, vR] = await Promise.all([
+    if (new Date().getHours() < 8) today.setDate(today.getDate() - 1)
+    const [oR, sR, cR, vR, storeR] = await Promise.all([
       supabase
         .from('orders')
         .select(
@@ -165,11 +169,16 @@ function SupervisorDashboardInner() {
         .gte('created_at', today.toISOString())
         .order('created_at', { ascending: false })
         .limit(30),
+      supabase
+        .from('store_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'pending'),
     ])
     setOrders((oR.data || []) as unknown as OpenOrder[])
     setShifts((sR.data || []) as ActiveShift[])
     setCalls((cR.data || []) as WaiterCall[])
     setVoids((vR.data || []) as VoidEntry[])
+    setPendingStore(storeR.count || 0)
     setLoading(false)
   }, [])
 
@@ -183,6 +192,7 @@ function SupervisorDashboardInner() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'waiter_calls' }, fetchAll)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, fetchAll)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'store_requests' }, fetchAll)
       .subscribe()
     return () => {
       clearInterval(iv)
@@ -219,20 +229,7 @@ function SupervisorDashboardInner() {
       badgeRed: lateCount > 0,
     },
     { id: 'staff' as const, label: 'Staff', icon: Users, badge: shifts.length, badgeRed: false },
-    {
-      id: 'calls' as const,
-      label: 'Calls',
-      icon: Bell,
-      badge: calls.length,
-      badgeRed: calls.length > 0,
-    },
-    {
-      id: 'voids' as const,
-      label: 'Voids',
-      icon: AlertTriangle,
-      badge: voids.length,
-      badgeRed: false,
-    },
+    { id: 'store' as const, label: 'Store', icon: Package, badge: pendingStore, badgeRed: pendingStore > 0 },
     { id: 'shift' as const, label: 'Shift', icon: UserCheck, badge: 0, badgeRed: false },
     { id: 'tables' as const, label: 'Tables', icon: LayoutGrid, badge: 0, badgeRed: false },
   ]
@@ -503,6 +500,8 @@ function SupervisorDashboardInner() {
               ))}
             </>
           ))}
+
+        {tab === 'store' && <SupervisorMainStoreTab />}
 
         {tab === 'shift' && <ShiftManager />}
 

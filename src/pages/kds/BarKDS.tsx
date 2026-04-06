@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { sendPushToStaff } from '../../hooks/usePushNotifications'
-import { supabase as supa } from '../../lib/supabase'
+import { audit } from '../../lib/audit'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
@@ -18,8 +18,10 @@ import {
   X,
   History,
   Snowflake,
+  Package,
 } from 'lucide-react'
 import BarChillerStock from '../backoffice/BarChillerStock'
+import StoreRequestPanel from './StoreRequestPanel'
 import type { KdsOrder } from './types'
 import DailySummaryTab from './DailySummaryTab'
 import { useToast } from '../../context/ToastContext'
@@ -112,7 +114,7 @@ function BarKDSInner() {
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
   const [activeTab, setActiveTab] = useState<
-    'orders' | 'returns' | 'summary' | 'history' | 'chiller' | 'requests'
+    'orders' | 'returns' | 'summary' | 'history' | 'chiller' | 'requests' | 'store_requests'
   >('orders')
   const [returnHistory, setReturnHistory] = useState<
     Array<{
@@ -292,16 +294,15 @@ function BarKDSInner() {
       toast.error('Error', 'Failed to update item: ' + error.message)
       return
     }
-    if (nextStatus === 'ready') {
-      const order = orders.find((o) => o.id === orderId)
-      if (order?.staff_id) {
-        const item = order.order_items.find((i) => i.id === itemId)
-        await sendPushToStaff(
-          order.staff_id,
-          '✅ Item Ready',
-          `${item?.menu_items?.name || 'Item'} ready for ${order.tables?.name || 'a table'}`
-        )
-      }
+    const order = orders.find((o) => o.id === orderId)
+    const item = order?.order_items.find((i) => i.id === itemId)
+    audit({ action: 'BAR_ITEM_STATUS', entity: 'order_items', entityId: itemId, entityName: item?.menu_items?.name, newValue: { from: currentStatus, to: nextStatus }, performer: profile as any })
+    if (nextStatus === 'ready' && order?.staff_id) {
+      await sendPushToStaff(
+        order.staff_id,
+        '✅ Item Ready',
+        `${item?.menu_items?.name || 'Item'} ready for ${order.tables?.name || 'a table'}`
+      )
     }
     fetchOrders()
   }
@@ -319,6 +320,7 @@ function BarKDSInner() {
       toast.error('Error', 'Failed to mark all ready: ' + baErr.message)
       return
     }
+    audit({ action: 'BAR_ALL_READY', entity: 'orders', entityId: order.id, entityName: order.tables?.name, newValue: { items: barItemIds.length }, performer: profile as any })
     if (order.staff_id)
       await sendPushToStaff(
         order.staff_id,
@@ -366,6 +368,7 @@ function BarKDSInner() {
         '❌ Order Rejected by Bar',
         `Bar rejected drinks for ${order.tables?.name || order.customer_name || 'an order'}`
       )
+    audit({ action: 'BAR_ORDER_REJECTED', entity: 'orders', entityId: order.id, entityName: order.tables?.name, newValue: { items: barItemIds.length, newTotal }, performer: profile as any })
     toast.success('Order Rejected', 'Bar items cancelled and total updated')
     fetchOrders()
   }
@@ -384,7 +387,7 @@ function BarKDSInner() {
     // Recalculate order total — deduct returned item tentatively
     const { data: itemData } = await supabase
       .from('order_items')
-      .select('order_id, total_price')
+      .select('order_id, total_price, quantity, menu_items(name)')
       .eq('id', itemId)
       .single()
     if (itemData) {
@@ -399,6 +402,26 @@ function BarKDSInner() {
         .from('orders')
         .update({ total_amount: newTotal, updated_at: new Date().toISOString() })
         .eq('id', itemData.order_id)
+
+      // Auto-restock chiller — decrement sold_qty so the item goes back to chiller count
+      const itemName = (itemData as any).menu_items?.name
+      const returnQty = (itemData as any).quantity || 1
+      if (itemName) {
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+        const { data: stockRow } = await supabase
+          .from('bar_chiller_stock')
+          .select('id, sold_qty')
+          .eq('date', today)
+          .eq('item_name', itemName)
+          .single()
+        if (stockRow?.id) {
+          const newSold = Math.max(0, (stockRow.sold_qty || 0) - returnQty)
+          await supabase
+            .from('bar_chiller_stock')
+            .update({ sold_qty: newSold, updated_at: new Date().toISOString() })
+            .eq('id', stockRow.id)
+        }
+      }
     }
 
     // Update returns_log — mark as bar_accepted (pending manager final approval)
@@ -412,7 +435,7 @@ function BarKDSInner() {
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
-    toast.success('Return Accepted', 'Item tentatively removed — awaiting manager final approval')
+    toast.success('Return Accepted', 'Item returned to chiller — awaiting manager final approval')
     if (staffId)
       await sendPushToStaff(
         staffId,
@@ -586,12 +609,29 @@ function BarKDSInner() {
             </span>
           )}
         </button>
+        <button
+          onClick={() => setActiveTab('store_requests')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'store_requests'
+              ? 'border-purple-500 text-purple-400'
+              : 'border-transparent text-gray-400 hover:text-white'
+          }`}
+        >
+          <Package size={14} /> Request from Store
+        </button>
       </div>
 
       {/* Chiller Tab */}
       {activeTab === 'chiller' && (
         <div className="flex-1 overflow-y-auto">
           <BarChillerStock onBack={() => setActiveTab('orders')} embedded />
+        </div>
+      )}
+
+      {/* Store Requests Tab */}
+      {activeTab === 'store_requests' && (
+        <div className="flex-1 overflow-y-auto p-4">
+          <StoreRequestPanel />
         </div>
       )}
 
@@ -731,11 +771,12 @@ function BarKDSInner() {
           {mixoRequests.length === 0 ? (
             <div className="text-center text-gray-500 text-sm">No mixologist requests yet.</div>
           ) : (
-            mixoRequests.map((r) => (
-              <div
-                key={r.id}
-                className="bg-gray-900 border border-gray-800 rounded-2xl p-3 flex items-center justify-between gap-3"
-              >
+            <>
+              {mixoRequests.map((r) => (
+                <div
+                  key={r.id}
+                  className="bg-gray-900 border border-gray-800 rounded-2xl p-3 flex items-center justify-between gap-3"
+                >
                 <div>
                   <p className="text-white font-semibold text-sm">
                     {r.items.map((it) => `${it.qty}x ${it.item}`).join(', ')}
@@ -778,11 +819,31 @@ function BarKDSInner() {
                     </>
                   )}
                 </div>
-                {r.status === 'approved' && (
-                  <span className="text-[11px] text-emerald-400">Deducted from chiller</span>
-                )}
+                  {r.status === 'approved' && (
+                    <span className="text-[11px] text-emerald-400">Deducted from chiller</span>
+                  )}
+                </div>
+              ))}
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-3">
+                <p className="text-white font-semibold text-sm mb-2">Summary of requests</p>
+                {Object.entries(
+                  mixoRequests.reduce((acc, r) => {
+                    r.items.forEach((it) => {
+                      acc[it.item] = (acc[it.item] || 0) + it.qty
+                    })
+                    return acc
+                  }, {} as Record<string, number>)
+                ).map(([name, qty]) => (
+                  <div
+                    key={name}
+                    className="flex items-center justify-between text-sm text-gray-300 py-0.5"
+                  >
+                    <span>{name}</span>
+                    <span className="text-emerald-400">{qty}</span>
+                  </div>
+                ))}
               </div>
-            ))
+            </>
           )}
         </div>
       )}

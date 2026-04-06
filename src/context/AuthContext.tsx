@@ -72,10 +72,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setMfaVerified = (value: boolean): void => {
     if (value) {
-      // Expires at end of current calendar day (WAT) — so they verify once per day,
-      // survives tab closes / app restarts within the same day
+      // Expires at next 8am WAT session boundary — verify once per trading day
       const expiry = new Date()
-      expiry.setHours(23, 59, 59, 999)
+      expiry.setHours(8, 0, 0, 0)
+      if (expiry.getTime() <= Date.now()) expiry.setDate(expiry.getDate() + 1)
       localStorage.setItem(
         'mfa_verified',
         JSON.stringify({

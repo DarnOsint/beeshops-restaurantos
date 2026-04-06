@@ -160,8 +160,10 @@ export default function MonthEnd() {
       endDate = `${year}-12-31`
     }
 
-    const startISO = new Date(startDate + 'T00:00:00+01:00').toISOString()
-    const endISO = new Date(endDate + 'T23:59:59+01:00').toISOString()
+    const startISO = new Date(startDate + 'T08:00:00+01:00').toISOString()
+    const endD = new Date(endDate + 'T08:00:00+01:00')
+    endD.setDate(endD.getDate() + 1)
+    const endISO = endD.toISOString()
 
     const [ordersRes, voidsRes, payoutsRes, debtorsRes] = await Promise.all([
       supabase

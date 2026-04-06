@@ -16,7 +16,9 @@ import {
   DollarSign,
   Filter,
   Clock,
+  Trash2,
 } from 'lucide-react'
+import { audit } from '../../lib/audit'
 
 const UNITS = ['bottles', 'crates', 'litres', 'kg', 'packs', 'cartons', 'pieces'] as const
 const CONDITIONS = ['good', 'damaged', 'partial'] as const
@@ -269,6 +271,25 @@ export default function Inventory({ onBack }: Props) {
     setShowAddItem(true)
   }
 
+  const deleteItem = async (item: InventoryItem) => {
+    if (!confirm(`Delete "${item.item_name}" from main store? This cannot be undone.`)) return
+    const { error } = await supabase.from('inventory').delete().eq('id', item.id)
+    if (error) {
+      toast.error('Error', error.message)
+      return
+    }
+    await audit({
+      action: 'INVENTORY_DELETED',
+      entity: 'inventory',
+      entityId: item.id,
+      entityName: item.item_name,
+      oldValue: { stock: item.current_stock, category: item.category },
+      performer: profile ?? undefined,
+    })
+    toast.success('Deleted', `${item.item_name} removed from main store`)
+    setItems((prev) => prev.filter((i) => i.id !== item.id))
+  }
+
   const filtered = items.filter((item) => {
     const matchSearch =
       item.item_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -484,6 +505,12 @@ export default function Inventory({ onBack }: Props) {
                                   className="text-gray-400 hover:text-white"
                                 >
                                   <Edit2 size={14} />
+                                </button>
+                                <button
+                                  onClick={() => deleteItem(item)}
+                                  className="text-gray-400 hover:text-red-400"
+                                >
+                                  <Trash2 size={14} />
                                 </button>
                               </div>
                             </td>

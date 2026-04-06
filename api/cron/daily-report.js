@@ -100,10 +100,15 @@ export default async function handler(req, res) {
   try {
     const { start, end, label, short } = getSessionWAT()
 
+    // Derive the WAT date string for attendance lookup
+    const sessionDate = new Date(start)
+    const watDate = new Date(sessionDate.toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+    const dateStr = `${watDate.getFullYear()}-${String(watDate.getMonth() + 1).padStart(2, '0')}-${String(watDate.getDate()).padStart(2, '0')}`
+
     const [
       { data: orders },
       { data: orderItems },
-      { data: voidLog },
+      { data: returnsLog },
       { data: tillSessions },
       { data: payouts },
       { data: attendance },
@@ -113,11 +118,11 @@ export default async function handler(req, res) {
       { data: reservations },
     ] = await Promise.all([
       supabase.from('orders').select('*, profiles(full_name), tables(name, table_categories(name)), covers').gte('created_at', start).lte('created_at', end),
-      supabase.from('order_items').select('*, menu_items(name, menu_categories(name))').gte('created_at', start).lte('created_at', end),
-      supabase.from('void_log').select('*, profiles(full_name)').gte('created_at', start).lte('created_at', end),
+      supabase.from('order_items').select('*, menu_items(name, menu_categories(name))').gte('created_at', start).lte('created_at', end).neq('status', 'cancelled'),
+      supabase.from('returns_log').select('*').gte('requested_at', start).lte('requested_at', end),
       supabase.from('till_sessions').select('*, profiles(full_name)').gte('opened_at', start).lte('opened_at', end),
       supabase.from('payouts').select('*').gte('created_at', start).lte('created_at', end),
-      supabase.from('attendance').select('*, profiles(full_name)').gte('clock_in', start).lte('clock_in', end),
+      supabase.from('attendance').select('*').eq('date', dateStr),
       supabase.from('debtors').select('*').gt('balance', 0),
       supabase.from('inventory').select('*').eq('is_active', true),
       supabase.from('room_stays').select('*').gte('created_at', start).lte('created_at', end),
@@ -133,15 +138,32 @@ export default async function handler(req, res) {
     const revPerCover    = totalCovers > 0 ? totalRevenue / totalCovers : 0
     const avgOrder       = paid.length ? totalRevenue / paid.length : 0
 
-    const byMethod = (method) => paid.filter(o => o.payment_method === method)
-    const revByMethod = (method) => byMethod(method).reduce((s, o) => s + (o.total_amount || 0), 0)
-
-    const cashRev       = revByMethod('cash')
-    const posRev        = revByMethod('bank_pos')
-    const transferRev   = revByMethod('bank_transfer')
-    const creditRev     = revByMethod('credit')
-    const splitRev      = revByMethod('split')
-    const compRev       = revByMethod('complimentary')
+    // Group payment methods properly (transfer:BankName, cash+transfer:X+Y, cash+card:X+Y)
+    function classifyMethod(pm) {
+      if (!pm) return 'transfer' // force-closed orders count as transfer
+      if (pm === 'cash') return 'cash'
+      if (pm === 'card' || pm === 'bank_pos') return 'pos'
+      if (pm.startsWith('transfer')) return 'transfer'
+      if (pm === 'credit') return 'credit'
+      if (pm === 'split') return 'split'
+      if (pm.startsWith('cash+transfer')) return 'cash+transfer'
+      if (pm.startsWith('cash+card')) return 'cash+pos'
+      if (pm === 'complimentary') return 'complimentary'
+      return pm
+    }
+    const methodLabels = {
+      cash: 'Cash', pos: 'POS / Card', transfer: 'Transfer', credit: 'Credit',
+      split: 'Split', 'cash+transfer': 'Cash + Transfer', 'cash+pos': 'Cash + POS',
+      complimentary: 'Complimentary',
+    }
+    const methodGroups = {}
+    for (const o of paid) {
+      const key = classifyMethod(o.payment_method)
+      if (!methodGroups[key]) methodGroups[key] = { count: 0, revenue: 0 }
+      methodGroups[key].count++
+      methodGroups[key].revenue += o.total_amount || 0
+    }
+    const cashRev = methodGroups['cash']?.revenue || 0
 
     // Zone breakdown
     const zoneMap = {}
@@ -152,19 +174,24 @@ export default async function handler(req, res) {
       zoneMap[zone].revenue += o.total_amount || 0
     }
 
-    // Top items
+    // Top items — use unit_price or total_price, exclude returned/cancelled items
     const itemMap = {}
     for (const item of (orderItems || [])) {
       if (!item.menu_items) continue
+      if (item.return_requested || item.return_accepted) continue
+      if ((item.status || '').toLowerCase() === 'cancelled') continue
       const k = item.menu_item_id
       if (!itemMap[k]) itemMap[k] = { name: item.menu_items.name, category: item.menu_items.menu_categories?.name || '—', qty: 0, revenue: 0 }
       itemMap[k].qty     += item.quantity || 1
-      itemMap[k].revenue += (item.price || 0) * (item.quantity || 1)
+      itemMap[k].revenue += item.total_price || (item.unit_price || 0) * (item.quantity || 1)
     }
     const topItems = Object.values(itemMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10)
 
-    // Voids
-    const totalVoidValue = (voidLog || []).reduce((s, v) => s + (v.amount || 0), 0)
+    // Returns (replaces voids)
+    const acceptedReturns = (returnsLog || []).filter(r => ['accepted', 'bar_accepted', 'kitchen_accepted', 'griller_accepted'].includes(r.status))
+    const pendingReturns  = (returnsLog || []).filter(r => r.status === 'pending')
+    const rejectedReturns = (returnsLog || []).filter(r => ['rejected', 'manager_rejected'].includes(r.status))
+    const totalReturnValue = acceptedReturns.reduce((s, r) => s + (r.item_total || 0), 0)
 
     // Till
     const totalFloat   = (tillSessions || []).reduce((s, t) => s + (t.opening_float || 0), 0)
@@ -229,19 +256,14 @@ export default async function handler(req, res) {
   ${section('Revenue Summary', '💰', `
     ${kpiRow([kpiBox('F&B Revenue', fmt(totalRevenue), '#059669'), kpiBox('Room Revenue', fmt(roomRevenue), '#2563eb'), kpiBox('Nook Hire', fmt(nookRevenue), '#7c3aed')])}
     <div style="height:10px;"></div>
-    ${kpiRow([kpiBox('Paid Orders', paid.length), kpiBox('Voided', voided.length, voided.length > 5 ? '#dc2626' : '#111827'), kpiBox('Still Open', openOrders.length, openOrders.length > 0 ? '#ea580c' : '#111827')])}
+    ${kpiRow([kpiBox('Paid Orders', paid.length), kpiBox('Returned', acceptedReturns.length, acceptedReturns.length > 0 ? '#dc2626' : '#111827', acceptedReturns.length > 0 ? fmt(totalReturnValue) : ''), kpiBox('Still Open', openOrders.length, openOrders.length > 0 ? '#ea580c' : '#111827')])}
   `, '#059669')}
 
   ${section('Payment Methods', '💳', buildTable(
     [{ label: 'Method' }, { label: 'Orders' }, { label: 'Amount', right: true }, { label: '%', right: true }],
-    [
-      ['Cash',         byMethod('cash').length,          fmt(cashRev),     pct(cashRev, totalRevenue)],
-      ['POS / Card',   byMethod('bank_pos').length,       fmt(posRev),      pct(posRev, totalRevenue)],
-      ['Transfer',     byMethod('bank_transfer').length,  fmt(transferRev), pct(transferRev, totalRevenue)],
-      ['Credit',       byMethod('credit').length,         fmt(creditRev),   pct(creditRev, totalRevenue)],
-      ['Split',        byMethod('split').length,          fmt(splitRev),    pct(splitRev, totalRevenue)],
-      ['Complimentary',byMethod('complimentary').length,  fmt(compRev),     pct(compRev, totalRevenue)],
-    ].filter(r => r[1] > 0),
+    Object.entries(methodGroups)
+      .sort((a, b) => b[1].revenue - a[1].revenue)
+      .map(([key, d]) => [methodLabels[key] || key, d.count, fmt(d.revenue), pct(d.revenue, totalRevenue)]),
     'No paid orders.'
   ), '#2563eb')}
 
@@ -268,18 +290,18 @@ export default async function handler(req, res) {
     ${unclosedTillCount > 0 ? `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px 16px;margin-top:8px;"><span style="color:#ea580c;font-weight:700;font-size:12px;">⚠️ ${unclosedTillCount} till session(s) not closed at end of shift.</span></div>` : ''}
   `, '#f59e0b')}
 
-  ${voided.length > 0 || (voidLog || []).length > 0 
-    ? section('Voids & Cancellations', '🚫', `
-        ${kpiRow([kpiBox('Voided Orders', voided.length, '#dc2626'), kpiBox('Void Log Entries', (voidLog||[]).length, '#dc2626'), kpiBox('Total Voided Value', fmt(totalVoidValue), '#dc2626')])}
-        ${(voidLog||[]).length > 0 ? `<div style="margin-top:12px;">${buildTable(
-          [{ label: 'Time' }, { label: 'Staff' }, { label: 'Reason / Item' }, { label: 'Amount', right: true }],
-          (voidLog||[]).slice(0,8).map(v => [
-            new Date(v.created_at).toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit', timeZone:'Africa/Lagos' }),
-            v.profiles?.full_name || '—', v.reason || v.item_name || '—', fmt(v.amount)
+  ${(returnsLog || []).length > 0
+    ? section('Returned Items', '🔄', `
+        ${kpiRow([kpiBox('Accepted', acceptedReturns.length, '#dc2626'), kpiBox('Pending', pendingReturns.length, pendingReturns.length > 0 ? '#ea580c' : '#6b7280'), kpiBox('Total Return Value', fmt(totalReturnValue), '#dc2626')])}
+        ${acceptedReturns.length > 0 ? `<div style="margin-top:12px;">${buildTable(
+          [{ label: 'Time' }, { label: 'Waitron' }, { label: 'Item' }, { label: 'Qty' }, { label: 'Amount', right: true }, { label: 'Reason' }],
+          acceptedReturns.slice(0,10).map(r => [
+            new Date(r.requested_at).toLocaleTimeString('en-NG', { hour:'2-digit', minute:'2-digit', timeZone:'Africa/Lagos' }),
+            r.waitron_name || '—', r.item_name || '—', r.quantity || 1, fmt(r.item_total), r.return_reason || '—'
           ])
         )}</div>` : ''}
       `, '#dc2626')
-    : section('Voids & Cancellations', '✅', `<p style="color:#059669;font-size:13px;font-weight:600;margin:4px 0;">No voids or cancellations today.</p>`, '#059669')
+    : section('Returned Items', '✅', `<p style="color:#059669;font-size:13px;font-weight:600;margin:4px 0;">No returned items today.</p>`, '#059669')
   }
 
   ${section('Staff Performance', '👥', `
@@ -310,7 +332,7 @@ export default async function handler(req, res) {
   `, '#ef4444')}
 
   ${outOfStock.length > 0 || lowStock.length > 0
-    ? section('Stock Alerts', '📦', `
+    ? section('Main Store Stock Alerts', '📦', `
         ${outOfStock.length > 0 ? `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin-bottom:10px;">
           <div style="color:#dc2626;font-weight:700;font-size:12px;margin-bottom:6px;">🔴 Out of Stock (${outOfStock.length})</div>
           ${outOfStock.slice(0,10).map(i => `<div style="color:#374151;font-size:12px;padding:2px 0;">• ${i.item_name}</div>`).join('')}
@@ -322,7 +344,7 @@ export default async function handler(req, res) {
           ${lowStock.length > 10 ? `<div style="color:#9ca3af;font-size:11px;margin-top:4px;">...and ${lowStock.length - 10} more</div>` : ''}
         </div>` : ''}
       `, '#f59e0b')
-    : section('Stock', '✅', `<p style="color:#059669;font-size:13px;font-weight:600;margin:4px 0;">All inventory items are sufficiently stocked.</p>`, '#059669')
+    : section('Main Store Stock', '✅', `<p style="color:#059669;font-size:13px;font-weight:600;margin:4px 0;">All main store inventory items are sufficiently stocked.</p>`, '#059669')
   }
 
   ${(roomStays||[]).length > 0 ? section('Rooms & Accommodation', '🛏️', `
@@ -335,7 +357,7 @@ export default async function handler(req, res) {
 
   <div style="text-align:center;padding:20px 0 10px;color:#94a3b8;font-size:11px;line-height:1.7;">
     <div style="font-weight:700;color:#64748b;margin-bottom:4px;">RestaurantOS · Beeshop's Place Lounge</div>
-    <div>Trading period: 12:00 AM – 11:59 PM WAT · ${short}</div>
+    <div>Trading period: 8:00 AM – 8:00 AM WAT · ${short}</div>
     <div>Generated at 4:30 AM WAT · <a href="https://beeshop.place" style="color:#f59e0b;text-decoration:none;">beeshop.place</a></div>
   </div>
 
@@ -358,7 +380,7 @@ export default async function handler(req, res) {
     console.log(`[daily-report] OK — ${fmt(grandTotal)}, ${paid.length} orders, id: ${emailData?.id}`)
     return res.status(200).json({
       sent: true, emailId: emailData?.id, date: short,
-      grandTotal, paidOrders: paid.length, voidedOrders: voided.length,
+      grandTotal, paidOrders: paid.length, returnedItems: acceptedReturns.length,
       stockAlerts: outOfStock.length + lowStock.length, overdueDebtors: overdue.length,
     })
 

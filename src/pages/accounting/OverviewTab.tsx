@@ -25,6 +25,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
+import { audit } from '../../lib/audit'
 import type { AccountingSummary, TrendPoint, WaitronStat } from './types'
 
 interface Props {
@@ -125,6 +126,7 @@ export default function OverviewTab({
       },
       { onConflict: 'id' }
     )
+    audit({ action: 'RECONCILIATION_SAVED', entity: 'settings', entityName: `recon_${reconDate}`, newValue: { totalCash: totalCashCollected, totalBank: totalBankReceived, totalPOS: totalPOSReceived, shortfall }, performer: profile as any })
     setSaving(false)
     toast.success('Saved', 'Reconciliation data saved')
   }
@@ -395,6 +397,12 @@ export default function OverviewTab({
               className="text-xs px-2 py-1 rounded-lg border border-gray-700 text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700"
             >
               Prev Day
+            </button>
+            <button
+              onClick={() => setReconDate(new Date().toISOString().slice(0, 10))}
+              className={`text-xs px-2 py-1 rounded-lg border transition-colors ${reconDate === new Date().toISOString().slice(0, 10) ? 'bg-amber-500 text-black border-amber-500 font-bold' : 'border-gray-700 text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700'}`}
+            >
+              Today
             </button>
             <button
               onClick={saveRecon}

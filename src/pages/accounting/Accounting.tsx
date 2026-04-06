@@ -6,7 +6,6 @@ import {
   ShoppingBag,
   AlertTriangle,
   Users,
-  Trash2,
   DollarSign,
   BarChart2,
   Clock,
@@ -51,7 +50,7 @@ import type {
 } from './types'
 import type { Order } from '../../types'
 
-const DATE_RANGES = ['Today', 'This Week', 'This Month', 'Custom'] as const
+const DATE_RANGES = ['Today', 'Prev Day', 'This Week', 'This Month', 'Custom'] as const
 type DateRange = (typeof DATE_RANGES)[number]
 
 const TABS = [
@@ -123,6 +122,11 @@ export default function Accounting() {
 
     if (dateRange === 'Today') {
       start = sessionStart()
+      end = new Date(start)
+      end.setDate(end.getDate() + 1)
+    } else if (dateRange === 'Prev Day') {
+      start = sessionStart()
+      start.setDate(start.getDate() - 1)
       end = new Date(start)
       end.setDate(end.getDate() + 1)
     } else if (dateRange === 'This Week') {

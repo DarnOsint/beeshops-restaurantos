@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { audit } from '../../lib/audit'
+import { useAuth } from '../../context/AuthContext'
 import { ArrowLeft, Plus, Edit2, X, Save, ToggleLeft, ToggleRight, Search, Tag } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
 
@@ -38,6 +39,7 @@ export default function MenuManagement({ onBack }: Props) {
   const [items, setItems] = useState<MenuItem[]>([])
   const [categories, setCategories] = useState<MenuCategory[]>([])
   const [loading, setLoading] = useState(true)
+  const { profile } = useAuth()
   const toast = useToast()
   const [showItemModal, setShowItemModal] = useState(false)
   const [showCatModal, setShowCatModal] = useState(false)
@@ -104,10 +106,37 @@ export default function MenuManagement({ onBack }: Props) {
       is_available: itemForm.is_available,
     }
     try {
-      const { error } = editingItem
-        ? await supabase.from('menu_items').update(payload).eq('id', editingItem.id)
-        : await supabase.from('menu_items').insert(payload)
-      if (error) throw error
+      if (editingItem) {
+        const { error } = await supabase.from('menu_items').update(payload).eq('id', editingItem.id)
+        if (error) throw error
+        audit({ action: 'MENU_ITEM_UPDATED', entity: 'menu_items', entityId: editingItem.id, entityName: itemForm.name, newValue: payload, performer: profile as any })
+      } else {
+        const { data: inserted, error } = await supabase
+          .from('menu_items')
+          .insert(payload)
+          .select('id')
+          .single()
+        if (error) throw error
+        audit({ action: 'MENU_ITEM_CREATED', entity: 'menu_items', entityId: inserted?.id, entityName: itemForm.name, newValue: payload, performer: profile as any })
+        // Auto-add to main store inventory for bar items (not kitchen, griller, mixologist)
+        if (inserted) {
+          const cat = categories.find((c) => c.id === itemForm.category_id)
+          const dest = (cat?.destination || '').toLowerCase()
+          if (dest === 'bar' && cat?.name !== 'Cocktails') {
+            await supabase.from('inventory').insert({
+              item_name: itemForm.name,
+              category: cat?.name || 'Drinks',
+              unit: 'bottles',
+              current_stock: 0,
+              minimum_stock: 5,
+              cost_price: 0,
+              selling_price: parseFloat(itemForm.price) || 0,
+              menu_item_id: inserted.id,
+              is_active: true,
+            })
+          }
+        }
+      }
       await fetchAll()
       setShowItemModal(false)
     } catch (err) {
@@ -125,6 +154,7 @@ export default function MenuManagement({ onBack }: Props) {
       toast.error('Error', error instanceof Error ? error.message : String(error))
       return
     }
+    audit({ action: item.is_available ? 'MENU_ITEM_DISABLED' : 'MENU_ITEM_ENABLED', entity: 'menu_items', entityId: item.id, entityName: item.name, performer: profile as any })
     fetchAll()
   }
   const openAddCat = () => {

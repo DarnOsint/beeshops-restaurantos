@@ -51,13 +51,29 @@ export function todayWAT(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: WAT }) // YYYY-MM-DD
 }
 
-// WAT start/end of day for DB range queries
+// WAT start/end of day for DB range queries — 8am-to-8am trading day
 export function watDayRange(dateStr?: string): { start: Date; end: Date } {
   const base = dateStr
-    ? new Date(dateStr + 'T00:00:00+01:00')
-    : new Date(new Date().toLocaleDateString('en-CA', { timeZone: WAT }) + 'T00:00:00+01:00')
+    ? new Date(dateStr + 'T08:00:00+01:00')
+    : (() => {
+        const watNow = new Date(new Date().toLocaleString('en-US', { timeZone: WAT }))
+        const d = new Date(new Date().toLocaleDateString('en-CA', { timeZone: WAT }) + 'T08:00:00+01:00')
+        if (watNow.getHours() < 8) d.setDate(d.getDate() - 1)
+        return d
+      })()
   const start = new Date(base)
   const end = new Date(base)
-  end.setHours(end.getHours() + 24)
+  end.setDate(end.getDate() + 1)
   return { start, end }
+}
+
+// Shared 8am session window helper — used across the app
+export function sessionWindowWAT(): { start: Date; end: Date; startISO: string; endISO: string } {
+  const watNow = new Date(new Date().toLocaleString('en-US', { timeZone: WAT }))
+  const start = new Date(watNow)
+  start.setHours(8, 0, 0, 0)
+  if (watNow.getHours() < 8) start.setDate(start.getDate() - 1)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 1)
+  return { start, end, startISO: start.toISOString(), endISO: end.toISOString() }
 }

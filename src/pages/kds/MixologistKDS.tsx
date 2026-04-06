@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { audit } from '../../lib/audit'
 import DailySummaryTab from './DailySummaryTab'
 import { useToast } from '../../context/ToastContext'
 import { RefreshCw, CheckCircle, X, BarChart2, History, LogOut, Plus, Send } from 'lucide-react'
@@ -112,6 +113,7 @@ function MixologistKDSInner() {
     })
     await loadRequests()
     setRequestLines([{ id: crypto.randomUUID(), item: '', qty: 1 }])
+    audit({ action: 'MIXO_REQUEST_SENT', entity: 'settings', entityName: 'mixologist_requests', newValue: { items: requestLines.filter(l => l.item).map(l => ({ item: l.item, qty: l.qty })) }, performer: profile as any })
     toast.success('Sent to bar', 'Waiting for bar approval to release drinks')
   }
 
@@ -205,6 +207,7 @@ function MixologistKDSInner() {
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
+    audit({ action: 'MIXO_RETURN_ACCEPTED', entity: 'order_items', entityId: itemId, newValue: { table: tableName }, performer: profile as any })
     toast.success('Return Accepted', 'Item tentatively removed — awaiting manager approval')
     if (staffId)
       await sendPushToStaff(
@@ -246,6 +249,7 @@ function MixologistKDSInner() {
         '❌ Mixologist Rejected Order',
         `Mixologist rejected drinks for ${order.tables?.name || order.customer_name || 'an order'}`
       ).catch(() => {})
+    audit({ action: 'MIXO_ORDER_REJECTED', entity: 'orders', entityId: order.id, entityName: order.tables?.name, performer: profile as any })
     toast.success('Order Rejected', 'Mixologist items cancelled and total updated')
     fetchOrders()
   }
@@ -274,6 +278,7 @@ function MixologistKDSInner() {
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
+    audit({ action: 'MIXO_RETURN_REJECTED', entity: 'order_items', entityId: itemId, newValue: { table: tableName }, performer: profile as any })
     toast.success('Return Rejected', 'Item stays on bill')
     if (staffId)
       await sendPushToStaff(

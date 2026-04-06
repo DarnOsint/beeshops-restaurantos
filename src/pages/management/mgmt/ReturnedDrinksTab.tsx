@@ -47,27 +47,30 @@ export default function ReturnedDrinksTab() {
     const dayEnd = new Date(dayStart)
     dayEnd.setDate(dayEnd.getDate() + 1)
 
-    // Also check for bar_accepted items older than 72 hours that need reverting
-    const expiry = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString()
+    // Also check for bar_accepted items older than 24 hours that need reverting
+    const expiry = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const { data: expired } = await supabase
       .from('returns_log')
-      .select('id, order_item_id, order_id, item_total')
+      .select('id, order_item_id, order_id, item_total, item_name, quantity')
       .eq('status', 'bar_accepted')
       .lt('resolved_at', expiry)
     if (expired && expired.length > 0) {
-      // Auto-revert expired returns
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+      // Auto-revert expired returns — items go back to waitron's account
       for (const exp of expired as Array<{
         id: string
         order_item_id: string
         order_id: string
         item_total: number
+        item_name: string
+        quantity: number
       }>) {
         await supabase
           .from('order_items')
           .update({ return_accepted: false, return_requested: false, return_reason: null })
           .eq('id', exp.order_item_id)
         await supabase.from('returns_log').update({ status: 'expired' }).eq('id', exp.id)
-        // Recalculate order total
+        // Recalculate order total — item is back on the order
         const { data: remaining } = await supabase
           .from('order_items')
           .select('total_price, return_accepted')
@@ -76,6 +79,21 @@ export default function ReturnedDrinksTab() {
           .filter((r: { return_accepted?: boolean }) => !r.return_accepted)
           .reduce((s: number, r: { total_price: number }) => s + (r.total_price || 0), 0)
         await supabase.from('orders').update({ total_amount: newTotal }).eq('id', exp.order_id)
+        // Re-deduct from chiller — item was returned to chiller on bar acceptance, now take it back
+        if (exp.item_name) {
+          const { data: stockRow } = await supabase
+            .from('bar_chiller_stock')
+            .select('id, sold_qty')
+            .eq('date', today)
+            .eq('item_name', exp.item_name)
+            .single()
+          if (stockRow?.id) {
+            await supabase
+              .from('bar_chiller_stock')
+              .update({ sold_qty: (stockRow.sold_qty || 0) + (exp.quantity || 1), updated_at: new Date().toISOString() })
+              .eq('id', stockRow.id)
+          }
+        }
       }
     }
 
@@ -190,6 +208,23 @@ export default function ReturnedDrinksTab() {
         .eq('id', r.order_id)
       if (orderErr) throw orderErr
 
+      // Re-deduct from chiller — item was returned to chiller on bar acceptance, now take it back
+      if (r.item_name) {
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+        const { data: stockRow } = await supabase
+          .from('bar_chiller_stock')
+          .select('id, sold_qty')
+          .eq('date', today)
+          .eq('item_name', r.item_name)
+          .single()
+        if (stockRow?.id) {
+          await supabase
+            .from('bar_chiller_stock')
+            .update({ sold_qty: (stockRow.sold_qty || 0) + (r.quantity || 1), updated_at: new Date().toISOString() })
+            .eq('id', stockRow.id)
+        }
+      }
+
       await audit({
         action: 'RETURN_MANAGER_REJECTED',
         entity: 'returns_log',
@@ -250,7 +285,7 @@ export default function ReturnedDrinksTab() {
       return {
         text: 'Expired',
         color: 'bg-gray-500/20 text-gray-400',
-        desc: 'Auto-reverted after 72h',
+        desc: 'Auto-reverted after 24h',
       }
     if (s === 'pending')
       return {
@@ -376,7 +411,7 @@ export default function ReturnedDrinksTab() {
           </div>
           <p className="text-amber-400/70 text-xs">
             Bar accepted these returns tentatively. Approve to confirm or reject to restore items to
-            the order. Auto-reverts after 72 hours if not approved.
+            the order. Auto-reverts after 24 hours if not approved.
           </p>
         </div>
       )}

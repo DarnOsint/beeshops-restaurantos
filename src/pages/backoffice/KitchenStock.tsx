@@ -249,8 +249,8 @@ export default function KitchenStock({ onBack }: Props) {
       .from('orders')
       .select('id')
       .eq('status', 'paid')
-      .gte('created_at', `${d}T00:00:00`)
-      .lte('created_at', `${d}T23:59:59`)
+      .gte('created_at', `${d}T07:00:00.000Z`)
+      .lt('created_at', new Date(new Date(`${d}T07:00:00.000Z`).getTime() + 86400000).toISOString())
     if (!orders?.length) {
       setSoldMap({})
       return

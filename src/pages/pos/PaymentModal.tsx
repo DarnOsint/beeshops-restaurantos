@@ -138,6 +138,13 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   const [tipAmount, setTipAmount] = useState('')
   const [amountReceived, setAmountReceived] = useState('')
   const [cashSplit, setCashSplit] = useState('')
+  const [secondarySplit, setSecondarySplit] = useState('')
+  const [kitchenPendingCount, setKitchenPendingCount] = useState(0)
+  const [grillPendingCount, setGrillPendingCount] = useState(0)
+  const [kitchenTotalCount, setKitchenTotalCount] = useState(0)
+  const [grillTotalCount, setGrillTotalCount] = useState(0)
+  const [lastPrintedKitchenAt, setLastPrintedKitchenAt] = useState<string | null>(null)
+  const [lastPrintedGrillAt, setLastPrintedGrillAt] = useState<string | null>(null)
 
   // keep station counts in sync on initial load and when items change
   useEffect(() => {
@@ -154,21 +161,23 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       ) === 'griller'
     setKitchenTotalCount(items.filter(isKitchen).length)
     setGrillTotalCount(items.filter(isGrill).length)
-    setKitchenPendingCount(items.filter((i) => isKitchen(i) && i.status === 'pending').length)
-    setGrillPendingCount(items.filter((i) => isGrill(i) && i.status === 'pending').length)
 
-    // If order refreshed (new items came in) and no manual print has occurred yet,
-    // keep the last-printed markers at first load only.
+    // Count "new" items the same way the print function filters them:
+    // pending status AND created after the last print timestamp
+    const countNew = (filterFn: (i: any) => boolean, lastPrinted: string | null) =>
+      items.filter((i) => {
+        if (!filterFn(i) || i.status !== 'pending') return false
+        if (!lastPrinted) return true
+        const created = new Date(i.created_at || order?.created_at || Date.now())
+        return created.getTime() > new Date(lastPrinted).getTime()
+      }).length
+    setKitchenPendingCount(countNew(isKitchen, lastPrintedKitchenAt))
+    setGrillPendingCount(countNew(isGrill, lastPrintedGrillAt))
+
+    // On first open, set marker so only truly new items (added after opening) count as "new"
     if (!lastPrintedKitchenAt) setLastPrintedKitchenAt(new Date().toISOString())
     if (!lastPrintedGrillAt) setLastPrintedGrillAt(new Date().toISOString())
-  }, [order?.order_items])
-  const [secondarySplit, setSecondarySplit] = useState('')
-  const [kitchenPendingCount, setKitchenPendingCount] = useState(0)
-  const [grillPendingCount, setGrillPendingCount] = useState(0)
-  const [kitchenTotalCount, setKitchenTotalCount] = useState(0)
-  const [grillTotalCount, setGrillTotalCount] = useState(0)
-  const [lastPrintedKitchenAt, setLastPrintedKitchenAt] = useState<string | null>(null)
-  const [lastPrintedGrillAt, setLastPrintedGrillAt] = useState<string | null>(null)
+  }, [order?.order_items, lastPrintedKitchenAt, lastPrintedGrillAt])
 
   useState(() => {
     supabase
@@ -1206,51 +1215,49 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
             <p className="text-gray-400 text-sm">{table.name}</p>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <div className="flex items-center gap-2">
             <button
               onClick={printPreReceipt}
-              className="flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors w-full sm:w-auto"
+              className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-xs font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors shrink-0"
               title="Print receipt for customer to review before payment"
             >
-              <Printer size={13} /> Print Receipt
+              <Printer size={13} /> Print
             </button>
-
-            <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
-              <button
-                onClick={() => printAllForStation('kitchen')}
-                className="flex items-center justify-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors"
-                title="Print all kitchen items for this order"
-              >
-                <Printer size={13} /> Kitchen — All ({kitchenTotalCount})
-              </button>
-              <button
-                onClick={() => printPendingForStation('kitchen')}
-                className="flex items-center justify-center gap-1 bg-emerald-800/40 hover:bg-emerald-700/40 text-emerald-200 text-[11px] font-medium px-3 py-2 rounded-xl border border-emerald-700 transition-colors"
-                title="Print only newly added / pending kitchen items"
-              >
-                <Printer size={13} /> Kitchen — New ({kitchenPendingCount})
-              </button>
-              <button
-                onClick={() => printAllForStation('griller')}
-                className="flex items-center justify-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-medium px-3 py-2 rounded-xl border border-gray-700 transition-colors"
-                title="Print all grill items for this order"
-              >
-                <Printer size={13} /> Grill — All ({grillTotalCount})
-              </button>
-              <button
-                onClick={() => printPendingForStation('griller')}
-                className="flex items-center justify-center gap-1 bg-amber-800/40 hover:bg-amber-700/40 text-amber-200 text-[11px] font-medium px-3 py-2 rounded-xl border border-amber-700 transition-colors"
-                title="Print only newly added / pending grill items"
-              >
-                <Printer size={13} /> Grill — New ({grillPendingCount})
-              </button>
-            </div>
-
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white flex items-center justify-center w-full sm:w-auto"
+              className="text-gray-400 hover:text-white shrink-0"
             >
               <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Station print buttons */}
+        <div className="px-5 pb-3 border-b border-gray-800">
+          <div className="grid grid-cols-4 gap-1.5">
+            <button
+              onClick={() => printAllForStation('kitchen')}
+              className="flex items-center justify-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-medium py-2 rounded-lg border border-gray-700 transition-colors"
+            >
+              Kitchen ({kitchenTotalCount})
+            </button>
+            <button
+              onClick={() => printPendingForStation('kitchen')}
+              className={`flex items-center justify-center gap-1 text-[11px] font-bold py-2 rounded-lg border transition-colors ${kitchenPendingCount > 0 ? 'bg-emerald-600 text-white border-emerald-500 hover:bg-emerald-500' : 'bg-emerald-900/30 text-emerald-400 border-emerald-800 hover:bg-emerald-800/40'}`}
+            >
+              Kitchen New {kitchenPendingCount > 0 && <span className="bg-white text-emerald-700 text-[10px] font-black px-1.5 rounded-full ml-0.5">{kitchenPendingCount}</span>}
+            </button>
+            <button
+              onClick={() => printAllForStation('griller')}
+              className="flex items-center justify-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white text-[11px] font-medium py-2 rounded-lg border border-gray-700 transition-colors"
+            >
+              Grill ({grillTotalCount})
+            </button>
+            <button
+              onClick={() => printPendingForStation('griller')}
+              className={`flex items-center justify-center gap-1 text-[11px] font-bold py-2 rounded-lg border transition-colors ${grillPendingCount > 0 ? 'bg-amber-600 text-white border-amber-500 hover:bg-amber-500' : 'bg-amber-900/30 text-amber-400 border-amber-800 hover:bg-amber-800/40'}`}
+            >
+              Grill New {grillPendingCount > 0 && <span className="bg-white text-amber-700 text-[10px] font-black px-1.5 rounded-full ml-0.5">{grillPendingCount}</span>}
             </button>
           </div>
         </div>

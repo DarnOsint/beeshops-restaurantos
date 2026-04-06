@@ -2,6 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { verifyPinServer, verifyPbkdf2, hashPin } from '../../lib/pinHash'
+import {
+  cacheCredential,
+  verifyOfflinePassword,
+  verifyOfflinePin,
+} from '../../lib/offlineAuth'
 import { Eye, EyeOff, Delete } from 'lucide-react'
 
 const EMAIL_MAX = 5
@@ -38,6 +43,24 @@ const resetAttempts = (key: string) => sessionStorage.removeItem(key)
 const fmtTime = (secs: number) => {
   const m = Math.floor(secs / 60)
   return m > 0 ? `${m}m ${secs % 60}s` : `${secs}s`
+}
+
+const setOfflineSession = (
+  profile: { id: string; full_name: string; role: string; email?: string; created_at?: string },
+  mode: 'pin' | 'password'
+) => {
+  localStorage.setItem(
+    'pin_session',
+    JSON.stringify({
+      id: profile.id,
+      full_name: profile.full_name,
+      role: profile.role,
+      email: profile.email,
+      session_type: mode,
+      created_at: profile.created_at,
+      logged_in_at: new Date().toISOString(),
+    })
+  )
 }
 
 function useLockoutTimer(
@@ -131,8 +154,30 @@ export default function Login() {
     }
     setLoading(true)
     setError(null)
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-    if (err) {
+    const tryOffline = async () => {
+      const offline = await verifyOfflinePassword(email, password)
+      if (!offline) return false
+      setOfflineSession(offline.profile, 'password')
+      resetAttempts('rl_email')
+      setLoading(false)
+      navigate('/dashboard')
+      return true
+    }
+
+    if (!navigator.onLine) {
+      const ok = await tryOffline()
+      if (!ok) setError('No offline password cached for this account.')
+      setLoading(false)
+      return
+    }
+
+    const { data, error: err } = await supabase.auth.signInWithPassword({ email, password })
+    if (err || !data?.session) {
+      // Network or credential failure — if network-related, attempt offline cache
+      if (err?.message?.toLowerCase().includes('network') || !navigator.onLine) {
+        const ok = await tryOffline()
+        if (ok) return
+      }
       const ns = recordAttempt('rl_email', EMAIL_MAX)
       if (ns.attempts >= EMAIL_MAX) {
         const rem = getRemaining(ns, EMAIL_LOCK_MS)
@@ -140,30 +185,52 @@ export default function Login() {
         setError(`Too many failed attempts. Locked out for ${fmtTime(rem)}.`)
       } else {
         const left = EMAIL_MAX - ns.attempts
-        setError(`${err.message} — ${left} attempt${left !== 1 ? 's' : ''} remaining.`)
+        setError(`${err?.message ?? 'Login failed'} — ${left} attempt${left !== 1 ? 's' : ''} remaining.`)
       }
       setLoading(false)
-    } else {
-      resetAttempts('rl_email')
-      void fetch('https://api.ipify.org?format=json')
-        .then((r) => r.json())
-        .catch(() => ({ ip: 'unknown' }))
-        .then(({ ip }) =>
-          supabase
-            .from('audit_log')
-            .insert({
-              action: 'LOGIN_EMAIL',
-              entity: 'auth',
-              entity_name: email,
-              ip_address: ip,
-              new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 120) },
-            })
-            .select()
-        )
-      // Navigate immediately — AuthContext will fetch profile in the background.
-      // PrivateRoute waits for profile before rendering, so no flicker.
-      navigate('/dashboard')
+      return
     }
+
+    // Online success — cache credential for offline reuse
+    resetAttempts('rl_email')
+    const { data: userData } = await supabase.auth.getUser()
+    const userId = userData.user?.id
+    if (userId) {
+      const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).single()
+      if (prof) {
+        void cacheCredential(prof as unknown as { id: string; full_name: string; role: string; email?: string; created_at?: string }, 'password', password).catch(
+          (e) => console.warn('cacheCredential(password) failed', e)
+        )
+        setOfflineSession(
+          {
+            id: prof.id,
+            full_name: prof.full_name,
+            role: prof.role,
+            email: prof.email,
+            created_at: prof.created_at,
+          },
+          'password'
+        )
+      }
+    }
+
+    void fetch('https://api.ipify.org?format=json')
+      .then((r) => r.json())
+      .catch(() => ({ ip: 'unknown' }))
+      .then(({ ip }) =>
+        supabase
+          .from('audit_log')
+          .insert({
+            action: 'LOGIN_EMAIL',
+            entity: 'auth',
+            entity_name: email,
+            ip_address: ip,
+            new_value: { device: getDevice(), browser: navigator.userAgent.slice(0, 120) },
+          })
+          .select()
+      )
+    setLoading(false)
+    navigate('/dashboard')
   }
 
   const handlePinLogin = async (entered: string) => {
@@ -177,6 +244,26 @@ export default function Login() {
     }
     setLoading(true)
     setError(null)
+
+    const offlineFallback = async () => {
+      const offline = await verifyOfflinePin(entered)
+      if (!offline) return null
+      setOfflineSession(offline.profile, 'pin')
+      resetAttempts('rl_pin')
+      setLoading(false)
+      window.location.replace('/dashboard')
+      return offline.profile
+    }
+
+    // Offline-first: if no network, try cached credentials immediately
+    if (!navigator.onLine) {
+      const offlineProfile = await offlineFallback()
+      if (!offlineProfile) {
+        setError('Offline and no cached PIN found for this user.')
+        setLoading(false)
+      }
+      return
+    }
 
     // Step 1: Server-side verify — handles plain-text and bcrypt instantly
     let data: Record<string, unknown> | null = await verifyPinServer(entered)
@@ -216,6 +303,11 @@ export default function Login() {
     } | null
 
     if (!profile) {
+      // If server failed due to network, attempt offline cached login
+      if (!navigator.onLine) {
+        const offlineProfile = await offlineFallback()
+        if (offlineProfile) return
+      }
       const ns = recordAttempt('rl_pin', PIN_MAX)
       if (ns.attempts >= PIN_MAX) {
         const rem = getRemaining(ns, PIN_LOCK_MS)
@@ -264,17 +356,28 @@ export default function Login() {
           })
           .select()
       )
-    localStorage.setItem(
-      'pin_session',
-      JSON.stringify({
+    void cacheCredential(
+      {
         id: profile.id,
         full_name: profile.full_name,
         role: profile.role,
         email: profile.email,
-        // PIN intentionally excluded from localStorage for security
-        logged_in_at: new Date().toISOString(),
-      })
-    )
+        created_at: new Date().toISOString(),
+      },
+      'pin',
+      entered
+    ).catch((e) => console.warn('cacheCredential(pin) failed', e))
+    setOfflineSession(
+      {
+        id: profile.id,
+        full_name: profile.full_name,
+        role: profile.role,
+        email: profile.email,
+        created_at: new Date().toISOString(),
+      },
+      'pin'
+      )
+    setLoading(false)
     window.location.replace('/dashboard')
   }
 
