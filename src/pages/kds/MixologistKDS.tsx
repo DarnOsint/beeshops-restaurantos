@@ -58,6 +58,7 @@ function MixologistKDSInner() {
     Array<{ id: string; item: string; qty: number }>
   >([{ id: crypto.randomUUID(), item: '', qty: 1 }])
   const [barItems, setBarItems] = useState<Array<{ id: string; name: string }>>([])
+  const [mixoReqDate, setMixoReqDate] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }))
   const [sentRequests, setSentRequests] = useState<
     Array<{
       id: string
@@ -604,15 +605,25 @@ function MixologistKDSInner() {
           </div>
 
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
               <History size={14} className="text-gray-400" />
-              <p className="text-white text-sm font-semibold">Recent Requests</p>
+              <p className="text-white text-sm font-semibold">My Requests</p>
+              <input type="date" value={mixoReqDate} onChange={(e) => setMixoReqDate(e.target.value)}
+                className="bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1 text-xs ml-auto" />
+              <button onClick={() => setMixoReqDate(new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }))}
+                className={`px-2 py-1 rounded-lg text-xs ${mixoReqDate === new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400'}`}>Today</button>
+              <button onClick={() => { const d = new Date(mixoReqDate); d.setDate(d.getDate() - 1); setMixoReqDate(d.toLocaleDateString('en-CA')) }}
+                className="px-2 py-1 rounded-lg text-xs bg-gray-800 text-gray-400 hover:text-white">Prev</button>
             </div>
-            {sentRequests.length === 0 ? (
-              <p className="text-gray-500 text-sm">No requests sent yet.</p>
+            {(() => {
+              const ds = new Date(mixoReqDate + 'T08:00:00+01:00')
+              const de = new Date(ds); de.setDate(de.getDate() + 1)
+              const dayFiltered = sentRequests.filter((r) => { const t = new Date(r.at).getTime(); return t >= ds.getTime() && t < de.getTime() })
+              return dayFiltered.length === 0 ? (
+              <p className="text-gray-500 text-sm">No requests for this date.</p>
             ) : (
               <div className="space-y-2">
-                {sentRequests.map((r) => (
+                {dayFiltered.map((r) => (
                   <div
                     key={r.id}
                     className="bg-gray-800 rounded-xl px-3 py-2 flex items-center justify-between"
@@ -644,14 +655,19 @@ function MixologistKDSInner() {
                   </div>
                 ))}
               </div>
-            )}
+            )
+            })()}
           </div>
 
-          {sentRequests.length > 0 && (
+          {(() => {
+            const ds2 = new Date(mixoReqDate + 'T08:00:00+01:00')
+            const de2 = new Date(ds2); de2.setDate(de2.getDate() + 1)
+            const dayFiltered2 = sentRequests.filter((r) => { const t = new Date(r.at).getTime(); return t >= ds2.getTime() && t < de2.getTime() })
+            return dayFiltered2.length > 0 ? (
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-2">
-              <p className="text-white font-semibold text-sm">Summary of requests (today)</p>
+              <p className="text-white font-semibold text-sm">Summary for {mixoReqDate}</p>
               {Object.entries(
-                sentRequests.reduce(
+                dayFiltered2.reduce(
                   (acc, r) => {
                     r.items.forEach((it) => {
                       acc[it.item] = (acc[it.item] || 0) + it.qty
@@ -667,7 +683,8 @@ function MixologistKDSInner() {
                 </div>
               ))}
             </div>
-          )}
+          ) : null
+          })()}
         </div>
       )}
     </div>

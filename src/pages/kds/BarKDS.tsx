@@ -131,6 +131,7 @@ function BarKDSInner() {
     }>
   >([])
   const [mixoRequests, setMixoRequests] = useState<MixoRequest[]>([])
+  const [mixoDateState, setMixoDateState] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }))
 
   const fetchOrders = useCallback(async () => {
     // Fetch open orders AND paid orders that still have pending bar items (cash sales/takeaway)
@@ -603,11 +604,12 @@ function BarKDSInner() {
           }`}
         >
           <BarChart2 size={14} /> Requests from Mixologist
-          {mixoRequests.filter((r) => r.status === 'pending').length > 0 && (
-            <span className="bg-emerald-500 text-black text-xs font-bold px-1.5 py-0.5 rounded-full">
-              {mixoRequests.filter((r) => r.status === 'pending').length}
-            </span>
-          )}
+          {(() => {
+            const ds = new Date(new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) + 'T08:00:00+01:00')
+            const de = new Date(ds); de.setDate(de.getDate() + 1)
+            const todayPending = mixoRequests.filter((r) => r.status === 'pending' && new Date(r.at).getTime() >= ds.getTime() && new Date(r.at).getTime() < de.getTime()).length
+            return todayPending > 0 ? <span className="bg-emerald-500 text-black text-xs font-bold px-1.5 py-0.5 rounded-full">{todayPending}</span> : null
+          })()}
         </button>
         <button
           onClick={() => setActiveTab('store_requests')}
@@ -766,13 +768,28 @@ function BarKDSInner() {
       )}
 
       {/* Mixologist Requests Tab */}
-      {activeTab === 'requests' && (
+      {activeTab === 'requests' && (() => {
+        const dayStart = new Date(mixoDateState + 'T08:00:00+01:00')
+        const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1)
+        const filtered = mixoRequests.filter((r) => {
+          const t = new Date(r.at).getTime()
+          return t >= dayStart.getTime() && t < dayEnd.getTime()
+        })
+        return (
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {mixoRequests.length === 0 ? (
-            <div className="text-center text-gray-500 text-sm">No mixologist requests yet.</div>
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <input type="date" value={mixoDateState} onChange={(e) => setMixoDateState(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+            <button onClick={() => setMixoDateState(new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }))}
+              className={`px-3 py-2 rounded-xl text-xs font-medium ${mixoDateState === new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400'}`}>Today</button>
+            <button onClick={() => { const d = new Date(mixoDateState); d.setDate(d.getDate() - 1); setMixoDateState(d.toLocaleDateString('en-CA')) }}
+              className="px-3 py-2 rounded-xl text-xs bg-gray-800 text-gray-400 hover:text-white">Prev Day</button>
+          </div>
+          {filtered.length === 0 ? (
+            <div className="text-center text-gray-500 text-sm">No mixologist requests for this date.</div>
           ) : (
             <>
-              {mixoRequests.map((r) => (
+              {filtered.map((r) => (
                 <div
                   key={r.id}
                   className="bg-gray-900 border border-gray-800 rounded-2xl p-3 flex items-center justify-between gap-3"
@@ -825,9 +842,9 @@ function BarKDSInner() {
                 </div>
               ))}
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-3">
-                <p className="text-white font-semibold text-sm mb-2">Summary of requests</p>
+                <p className="text-white font-semibold text-sm mb-2">Summary for {mixoDateState}</p>
                 {Object.entries(
-                  mixoRequests.reduce((acc, r) => {
+                  filtered.reduce((acc: Record<string, number>, r: MixoRequest) => {
                     r.items.forEach((it) => {
                       acc[it.item] = (acc[it.item] || 0) + it.qty
                     })
@@ -846,7 +863,8 @@ function BarKDSInner() {
             </>
           )}
         </div>
-      )}
+        )
+      })()}
 
       {/* Summary Tab */}
       {activeTab === 'summary' && (
