@@ -129,6 +129,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   const [currentSplitPerson, setCurrentSplitPerson] = useState(0)
   const [returningItemId, setReturningItemId] = useState<string | null>(null)
   const [returnReason, setReturnReason] = useState('')
+  const [returnQty, setReturnQty] = useState(1)
   const [splitPayMethod, setSplitPayMethod] = useState('cash')
   const [splitCash, setSplitCash] = useState('')
   const [bankAccounts, setBankAccounts] = useState<
@@ -232,6 +233,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     const item = (order?.order_items || []).find((i) => i.id === itemId)
     if (!item) return
     const reason = returnReason || 'No reason given'
+    const qtyToReturn = Math.min(returnQty, item.quantity)
+    const unitPrice = item.quantity > 0 ? (item.total_price || 0) / item.quantity : 0
+    const isPartial = qtyToReturn < item.quantity
     const itemDest =
       (item as unknown as { menu_items?: { menu_categories?: { destination?: string } } })
         .menu_items?.menu_categories?.destination ||
@@ -256,9 +260,32 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       }
     }
 
-    await supabase
-      .from('order_items')
-      .update({
+    if (isPartial) {
+      // Split: reduce original item quantity, create a new row for the returned portion
+      const remainQty = item.quantity - qtyToReturn
+      await supabase
+        .from('order_items')
+        .update({
+          quantity: remainQty,
+          total_price: Math.round(unitPrice * remainQty),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', itemId)
+
+      // Create new row for the returned portion
+      const newId = crypto.randomUUID()
+      await supabase.from('order_items').insert({
+        id: newId,
+        order_id: order.id,
+        menu_item_id: (item as any).menu_item_id || null,
+        quantity: qtyToReturn,
+        unit_price: unitPrice,
+        total_price: Math.round(unitPrice * qtyToReturn),
+        status: item.status,
+        destination: item.destination,
+        modifier_notes: (item as any).modifier_notes || null,
+        extra_charge: 0,
+        created_at: (item as any).created_at || new Date().toISOString(),
         return_requested: true,
         return_reason: reason,
         return_requested_at: new Date().toISOString(),
@@ -266,26 +293,58 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           ? { return_accepted: true, return_accepted_at: new Date().toISOString() }
           : {}),
       })
-      .eq('id', itemId)
 
-    // Log to returns_log for manager/accountant review
-    await supabase.from('returns_log').insert({
-      order_id: order.id,
-      order_item_id: itemId,
-      item_name:
-        item.menu_items?.name ||
-        (item as unknown as { modifier_notes?: string }).modifier_notes ||
-        'Item',
-      quantity: item.quantity,
-      item_total: item.total_price || 0,
-      table_name: table?.name ?? null,
-      waitron_id: profile?.id ?? null,
-      waitron_name: profile?.full_name ?? null,
-      return_reason: reason,
-      status: autoAccept ? 'bar_accepted' : 'pending',
-      requested_at: new Date().toISOString(),
-      ...(autoAccept ? { resolved_at: new Date().toISOString() } : {}),
-    })
+      // Log to returns_log with the new split row ID
+      await supabase.from('returns_log').insert({
+        order_id: order.id,
+        order_item_id: newId,
+        item_name:
+          item.menu_items?.name ||
+          (item as unknown as { modifier_notes?: string }).modifier_notes ||
+          'Item',
+        quantity: qtyToReturn,
+        item_total: Math.round(unitPrice * qtyToReturn),
+        table_name: table?.name ?? null,
+        waitron_id: profile?.id ?? null,
+        waitron_name: profile?.full_name ?? null,
+        return_reason: reason,
+        status: autoAccept ? 'bar_accepted' : 'pending',
+        requested_at: new Date().toISOString(),
+        ...(autoAccept ? { resolved_at: new Date().toISOString() } : {}),
+      })
+    } else {
+      // Full return — mark entire item
+      await supabase
+        .from('order_items')
+        .update({
+          return_requested: true,
+          return_reason: reason,
+          return_requested_at: new Date().toISOString(),
+          ...(autoAccept
+            ? { return_accepted: true, return_accepted_at: new Date().toISOString() }
+            : {}),
+        })
+        .eq('id', itemId)
+
+      // Log to returns_log for manager/accountant review
+      await supabase.from('returns_log').insert({
+        order_id: order.id,
+        order_item_id: itemId,
+        item_name:
+          item.menu_items?.name ||
+          (item as unknown as { modifier_notes?: string }).modifier_notes ||
+          'Item',
+        quantity: item.quantity,
+        item_total: item.total_price || 0,
+        table_name: table?.name ?? null,
+        waitron_id: profile?.id ?? null,
+        waitron_name: profile?.full_name ?? null,
+        return_reason: reason,
+        status: autoAccept ? 'bar_accepted' : 'pending',
+        requested_at: new Date().toISOString(),
+        ...(autoAccept ? { resolved_at: new Date().toISOString() } : {}),
+      })
+    }
 
     // Notify bar staff about the return request (for bar items that aren't auto-accepted)
     if (!autoAccept && itemDest === 'bar') {
@@ -303,7 +362,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           sendPushToStaff(
             staff.id,
             '↩ Return Requested',
-            `${item.quantity}x ${itemName} — ${table?.name || 'Table'} — Reason: ${reason}`
+            `${qtyToReturn}x ${itemName} — ${table?.name || 'Table'} — Reason: ${reason}`
           ).catch(() => {})
         }
       }
@@ -1567,10 +1626,10 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
                             <div className="flex items-center gap-2 shrink-0">
                               {!isReturned && !isPending && !isRequesting && (
                                 <button
-                                  onClick={() => setReturningItemId(item.id)}
+                                  onClick={() => { setReturningItemId(item.id); setReturnQty(1); setReturnReason(''); }}
                                   className="text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 px-2 py-1 rounded-lg transition-colors"
                                 >
-                                  Mark Returned
+                                  Return
                                 </button>
                               )}
                               {isPending && (
@@ -1594,9 +1653,28 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
                   </div>
                 )
               })}
-              {/* Inline reason input */}
-              {returningItemId && (
-                <div className="mt-3 space-y-2">
+              {/* Inline return form with quantity selector */}
+              {returningItemId && (() => {
+                const retItem = (order?.order_items || []).find((i) => i.id === returningItemId)
+                const maxQty = retItem?.quantity || 1
+                return (
+                <div className="mt-3 space-y-2 bg-red-500/5 border border-red-500/20 rounded-xl p-3">
+                  <p className="text-white text-sm font-semibold">
+                    Return: {retItem?.menu_items?.name || 'Item'}
+                  </p>
+                  {maxQty > 1 && (
+                    <div className="flex items-center gap-3">
+                      <span className="text-gray-400 text-xs">Qty to return:</span>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setReturnQty(Math.max(1, returnQty - 1))}
+                          className="w-8 h-8 rounded-lg bg-gray-700 text-white text-sm flex items-center justify-center hover:bg-gray-600">-</button>
+                        <span className="w-10 text-center text-white font-bold">{returnQty}</span>
+                        <button onClick={() => setReturnQty(Math.min(maxQty, returnQty + 1))}
+                          className="w-8 h-8 rounded-lg bg-gray-700 text-white text-sm flex items-center justify-center hover:bg-gray-600">+</button>
+                      </div>
+                      <span className="text-gray-500 text-xs">of {maxQty}</span>
+                    </div>
+                  )}
                   <input
                     value={returnReason}
                     onChange={(e) => setReturnReason(e.target.value)}
@@ -1605,23 +1683,21 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
                   />
                   <div className="flex gap-2">
                     <button
-                      onClick={() => requestReturn(returningItemId)}
+                      onClick={() => { requestReturn(returningItemId); setReturningItemId(null); setReturnReason(''); setReturnQty(1); }}
                       className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm font-semibold py-2 rounded-lg transition-colors"
                     >
-                      Send Return Request
+                      Return {returnQty} item{returnQty > 1 ? 's' : ''}
                     </button>
                     <button
-                      onClick={() => {
-                        setReturningItemId(null)
-                        setReturnReason('')
-                      }}
+                      onClick={() => { setReturningItemId(null); setReturnReason(''); setReturnQty(1); }}
                       className="bg-gray-700 hover:bg-gray-600 text-gray-400 text-sm px-3 py-2 rounded-lg transition-colors"
                     >
                       Cancel
                     </button>
                   </div>
                 </div>
-              )}
+                )
+              })()}
               {returnedTotal > 0 && (
                 <div className="mt-3 pt-2 border-t border-gray-700 flex justify-between text-sm">
                   <span className="text-gray-400">Returns deducted:</span>
