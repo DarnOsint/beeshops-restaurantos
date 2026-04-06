@@ -26,7 +26,6 @@ import TableAssignment from './TableAssignment'
 import TillManagement from './TillManagement'
 import WaiterCalls from './WaiterCalls'
 import KitchenStock from '../backoffice/KitchenStock'
-import ChillerSummaryTab from './mgmt/ChillerSummaryTab'
 import ReturnedDrinksTab from './mgmt/ReturnedDrinksTab'
 import { useLateOrders } from '../../hooks/useLateOrders'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
@@ -83,7 +82,6 @@ const TABS = [
   { id: 'gameswaitron', label: 'Games Orders', icon: Gamepad2 },
   { id: 'till', label: 'Till', icon: DollarSign },
   { id: 'kitchen', label: 'Kitchen', icon: UtensilsCrossed },
-  { id: 'chiller', label: 'Chiller', icon: Beer },
   { id: 'mainstore', label: 'Main Store', icon: Package },
   { id: 'returns', label: 'Returns', icon: RotateCcw },
   { id: 'settings', label: 'Alert Threshold', icon: Settings },
@@ -435,7 +433,6 @@ export default function Management() {
         )}
         {activeTab === 'till' && <TillManagement />}
         {activeTab === 'kitchen' && <KitchenStock onBack={() => setActiveTab('overview')} />}
-        {activeTab === 'chiller' && <ChillerSummaryTab />}
         {activeTab === 'mainstore' && <MainStoreSummaryTab />}
         {activeTab === 'returns' && <ReturnedDrinksTab />}
         {activeTab === 'cctv' && <CctvPanel cvData={cvData} onResolve={resolveAlert} />}
