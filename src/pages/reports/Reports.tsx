@@ -33,6 +33,7 @@ import {
   PieChart,
   Pie,
   Cell,
+  Legend,
 } from 'recharts'
 import * as XLSX from 'xlsx'
 
@@ -138,7 +139,7 @@ interface Report {
   returnedItems: number
   returnedValue: number
   avgOrderValue: number
-  byPayment: { cash: number; bank_pos: number; transfer: number; credit: number; split: number }
+  byPayment: Record<string, number>
   byCategory: CategoryStat[]
   topItems: ItemStat[]
   staffPerformance: StaffStat[]
@@ -337,42 +338,26 @@ export default function Reports() {
         .reduce((s, r) => s + (r.total_amount || 0), 0)
       // Payment aggregation
       const paymentTotals: Record<string, number> = {}
+      // Group payment methods properly (handles transfer:BankName, cash+transfer:X+Y, cash+card:X+Y)
+      const byPayment: Record<string, number> = {}
       paidOrders.forEach((o) => {
-        const key = (o.payment_method || 'unknown').toLowerCase()
-        paymentTotals[key] = (paymentTotals[key] || 0) + (o.total_amount || 0)
+        const pm = (o.payment_method || '').toLowerCase()
+        let key = 'other'
+        if (pm === 'cash') key = 'Cash'
+        else if (pm === 'card' || pm === 'bank_pos') key = 'Bank POS'
+        else if (pm.startsWith('transfer') || pm === 'bank_transfer' || !pm) key = 'Transfer'
+        else if (pm === 'credit') key = 'Credit'
+        else if (pm === 'split') key = 'Split'
+        else if (pm.startsWith('cash+transfer')) key = 'Cash + Transfer'
+        else if (pm.startsWith('cash+card')) key = 'Cash + POS'
+        else if (pm === 'complimentary') key = 'Complimentary'
+        else key = 'Other'
+        byPayment[key] = (byPayment[key] || 0) + (o.total_amount || 0)
       })
-      const byPayment = {
-        cash:
-          (paymentTotals['cash'] || 0) +
-          (paymentTotals['cash_sale'] || 0) +
-          (paymentTotals['cash_sale_cash'] || 0),
-        bank_pos:
-          (paymentTotals['card'] || 0) +
-          (paymentTotals['bank_pos'] || 0) +
-          (paymentTotals['pos'] || 0) +
-          (paymentTotals['cash_sale_card'] || 0),
-        transfer:
-          (paymentTotals['transfer'] || 0) +
-          (paymentTotals['bank_transfer'] || 0) +
-          (paymentTotals['cash_sale_transfer'] || 0),
-        credit: paymentTotals['credit'] || 0,
-        split: paymentTotals['split'] || 0,
-      }
-      const knownTotal =
-        byPayment.cash +
-        byPayment.bank_pos +
-        byPayment.transfer +
-        byPayment.credit +
-        byPayment.split
-      const otherTotal = Object.values(paymentTotals).reduce((s, v) => s + v, 0) - knownTotal
-      const paymentList = [
-        { label: 'Cash', value: byPayment.cash },
-        { label: 'Bank POS', value: byPayment.bank_pos },
-        { label: 'Transfer', value: byPayment.transfer },
-        { label: 'Credit', value: byPayment.credit },
-        { label: 'Split', value: byPayment.split },
-      ]
-      if (otherTotal > 0) paymentList.push({ label: 'Other', value: otherTotal })
+      const paymentList = Object.entries(byPayment)
+        .map(([label, value]) => ({ label, value }))
+        .filter((p) => p.value > 0)
+        .sort((a, b) => b.value - a.value)
 
       const categoryMap: Record<string, CategoryStat> = {}
       allItems
@@ -525,11 +510,7 @@ export default function Reports() {
       ['Avg Order Value', '₦' + report.avgOrderValue.toLocaleString()],
       [],
       ['PAYMENT METHODS'],
-      ['Cash', '₦' + report.byPayment.cash.toLocaleString()],
-      ['Bank POS', '₦' + report.byPayment.bank_pos.toLocaleString()],
-      ['Bank Transfer', '₦' + report.byPayment.transfer.toLocaleString()],
-      ['Credit (Pay Later)', '₦' + report.byPayment.credit.toLocaleString()],
-      ['Split Payment', '₦' + report.byPayment.split.toLocaleString()],
+      ...Object.entries(report.byPayment).filter(([, v]) => v > 0).map(([k, v]) => [k, '₦' + v.toLocaleString()]),
       [],
       ['ITEMS SOLD'],
       ['Item', 'Qty Sold', 'Returned', 'Return Rate', 'Revenue'],
@@ -922,27 +903,14 @@ export default function Reports() {
                   <CreditCard size={16} className="text-amber-400" /> Payment Methods
                 </h3>
                 <div className="space-y-3">
-                  {(
-                    [
-                      { label: 'Cash', value: report.byPayment.cash, color: 'bg-emerald-500' },
-                      { label: 'Bank POS', value: report.byPayment.bank_pos, color: 'bg-blue-500' },
-                      {
-                        label: 'Bank Transfer',
-                        value: report.byPayment.transfer,
-                        color: 'bg-purple-500',
-                      },
-                      {
-                        label: 'Credit (Pay Later)',
-                        value: report.byPayment.credit,
-                        color: 'bg-amber-500',
-                      },
-                      {
-                        label: 'Split Payment',
-                        value: report.byPayment.split,
-                        color: 'bg-cyan-500',
-                      },
-                    ] as const
-                  ).map((item) => (
+                  {Object.entries(report.byPayment)
+                    .filter(([, v]) => v > 0)
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([label, value], i) => {
+                      const colors = ['bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-amber-500', 'bg-cyan-500', 'bg-pink-500', 'bg-red-500', 'bg-indigo-500']
+                      const item = { label, value, color: colors[i % colors.length] }
+                      return item
+                    }).map((item) => (
                     <div key={item.label}>
                       <div className="flex justify-between text-sm mb-1">
                         <span className="text-gray-400">{item.label}</span>
@@ -1048,7 +1016,7 @@ export default function Reports() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
                   <h3 className="text-white font-semibold mb-4">Revenue by Category</h3>
-                  <ResponsiveContainer width="100%" height={220}>
+                  <ResponsiveContainer width="100%" height={240}>
                     <PieChart>
                       <Pie
                         data={report.byCategory}
@@ -1057,9 +1025,9 @@ export default function Reports() {
                         cx="50%"
                         cy="50%"
                         outerRadius={80}
-                        label={({ name, percent }: { name?: string; percent?: number }) =>
-                          (name ?? '') + ' ' + ((percent ?? 0) * 100).toFixed(0) + '%'
-                        }
+                        innerRadius={35}
+                        paddingAngle={2}
+                        label={false}
                       >
                         {report.byCategory.map((_, i) => (
                           <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -1072,6 +1040,19 @@ export default function Reports() {
                           border: '1px solid #374151',
                           borderRadius: '8px',
                         }}
+                      />
+                      <Legend
+                        layout="vertical"
+                        align="right"
+                        verticalAlign="middle"
+                        iconType="circle"
+                        iconSize={8}
+                        formatter={(value: string) => {
+                          const cat = report.byCategory.find((c) => c.name === value)
+                          const pct = report.grossRevenue > 0 ? Math.round((cat?.revenue || 0) / report.grossRevenue * 100) : 0
+                          return `${value} ${pct}%`
+                        }}
+                        wrapperStyle={{ fontSize: '11px', color: '#9ca3af', lineHeight: '20px' }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
