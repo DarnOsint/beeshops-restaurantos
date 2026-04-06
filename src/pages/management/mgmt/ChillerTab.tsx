@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Beer, RefreshCw, Printer, Search, Save } from 'lucide-react'
+import { Beer, RefreshCw, Printer, Search, Save, Plus, X } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { useToast } from '../../../context/ToastContext'
@@ -33,6 +33,8 @@ export default function ChillerTab() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [edited, setEdited] = useState<Record<string, Partial<Row>>>({})
+  const [showAdd, setShowAdd] = useState(false)
+  const [newItem, setNewItem] = useState({ name: '', qty: '', unit: 'bottles' })
 
   const fetchData = useCallback(async (d: string) => {
     setLoading(true)
@@ -163,6 +165,116 @@ export default function ChillerTab() {
     fetchData(date)
   }
 
+  const addItem = async () => {
+    const name = newItem.name.trim()
+    const qty = parseInt(newItem.qty) || 0
+    if (!name) { toast.warning('Required', 'Enter item name'); return }
+    if (rows.find((r) => r.item_name.toLowerCase() === name.toLowerCase())) {
+      toast.warning('Exists', `${name} is already in the chiller`); return
+    }
+    setSaving(true)
+    try {
+      // 1. Add to chiller for today
+      await supabase.from('bar_chiller_stock').insert({
+        date,
+        item_name: name,
+        unit: newItem.unit,
+        opening_qty: qty,
+        received_qty: 0,
+        sold_qty: 0,
+        void_qty: 0,
+        closing_qty: qty,
+        recorded_by: profile?.id,
+        updated_at: new Date().toISOString(),
+      })
+
+      // 2. Check if item exists in inventory — if not, create it
+      const { data: invExists } = await supabase
+        .from('inventory')
+        .select('id')
+        .eq('item_name', name)
+        .limit(1)
+      if (!invExists || invExists.length === 0) {
+        await supabase.from('inventory').insert({
+          item_name: name,
+          category: 'Drinks',
+          unit: newItem.unit,
+          current_stock: qty,
+          minimum_stock: 5,
+          cost_price: 0,
+          selling_price: 0,
+          is_active: true,
+        })
+      }
+
+      // 3. Check if item exists in bar menu — if not, create it
+      const { data: menuExists } = await supabase
+        .from('menu_items')
+        .select('id')
+        .eq('name', name)
+        .limit(1)
+      let menuItemId = menuExists?.[0]?.id
+      if (!menuItemId) {
+        const { data: catData } = await supabase
+          .from('menu_categories')
+          .select('id')
+          .eq('name', 'Drinks')
+          .eq('destination', 'bar')
+          .single()
+        if (catData) {
+          const { data: inserted } = await supabase
+            .from('menu_items')
+            .insert({ name, category_id: catData.id, price: 0, is_available: true })
+            .select('id')
+            .single()
+          menuItemId = inserted?.id
+          // Link inventory to menu item
+          if (menuItemId) {
+            await supabase.from('inventory').update({ menu_item_id: menuItemId }).eq('item_name', name)
+          }
+        }
+      }
+
+      // 4. Log restock
+      if (qty > 0) {
+        const { data: invRow } = await supabase.from('inventory').select('id').eq('item_name', name).single()
+        if (invRow) {
+          await supabase.from('restock_log').insert({
+            inventory_id: invRow.id,
+            item_name: name,
+            quantity_added: qty,
+            previous_stock: 0,
+            new_stock: qty,
+            cost_price_per_unit: 0,
+            total_cost: 0,
+            payment_method: 'cash',
+            condition: 'good',
+            notes: 'Added via management chiller',
+            restocked_by: profile?.id,
+            restocked_by_name: profile?.full_name,
+            restocked_at: new Date().toISOString(),
+          })
+        }
+      }
+
+      await audit({
+        action: 'CHILLER_ITEM_ADDED',
+        entity: 'bar_chiller_stock',
+        entityName: name,
+        newValue: { quantity: qty, unit: newItem.unit, date },
+        performer: profile as Profile,
+      })
+
+      toast.success('Added', `${name} added to chiller, inventory, and menu`)
+      setShowAdd(false)
+      setNewItem({ name: '', qty: '', unit: 'bottles' })
+      fetchData(date)
+    } catch (e: any) {
+      toast.error('Error', e?.message || 'Failed to add item')
+    }
+    setSaving(false)
+  }
+
   const filtered = search
     ? rows.filter((r) => r.item_name.toLowerCase().includes(search.toLowerCase()))
     : rows
@@ -245,6 +357,10 @@ export default function ChillerTab() {
             <Save size={13} /> {saving ? 'Saving...' : 'Save Changes'}
           </button>
         )}
+        <button onClick={() => setShowAdd(true)}
+          className="flex items-center gap-1 bg-green-600 hover:bg-green-500 text-white font-bold text-xs px-3 py-2 rounded-xl">
+          <Plus size={13} /> Add Item
+        </button>
         {rows.length > 0 && (
           <button onClick={printReport}
             className="flex items-center gap-1 px-3 py-2 bg-gray-800 text-gray-400 hover:text-white rounded-xl text-xs ml-auto">
@@ -252,6 +368,43 @@ export default function ChillerTab() {
           </button>
         )}
       </div>
+
+      {/* Add Item Modal */}
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-gray-950 border border-gray-800 rounded-2xl w-full max-w-sm p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-bold">Add Item to Chiller</h3>
+              <button onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-white"><X size={18} /></button>
+            </div>
+            <p className="text-gray-500 text-xs mb-4">This will also add the item to the drink menu and main store inventory.</p>
+            <div className="space-y-3">
+              <input type="text" placeholder="Item name" value={newItem.name}
+                onChange={(e) => setNewItem((p) => ({ ...p, name: e.target.value }))}
+                className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500" autoFocus />
+              <input type="number" placeholder="Opening quantity" value={newItem.qty}
+                onChange={(e) => setNewItem((p) => ({ ...p, qty: e.target.value }))}
+                className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500" />
+              <select value={newItem.unit} onChange={(e) => setNewItem((p) => ({ ...p, unit: e.target.value }))}
+                className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500">
+                <option value="bottles">Bottles</option>
+                <option value="crates">Crates</option>
+                <option value="packs">Packs</option>
+                <option value="pieces">Pieces</option>
+                <option value="cartons">Cartons</option>
+              </select>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setShowAdd(false)}
+                className="flex-1 px-3 py-2 bg-gray-800 text-gray-300 rounded-xl text-sm">Cancel</button>
+              <button onClick={addItem} disabled={saving}
+                className="flex-1 px-3 py-2 bg-amber-500 text-black font-bold rounded-xl text-sm hover:bg-amber-400 disabled:opacity-50">
+                {saving ? 'Adding...' : 'Add Item'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-12 text-amber-500">Loading...</div>
