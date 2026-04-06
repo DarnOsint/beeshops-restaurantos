@@ -1406,38 +1406,58 @@ export default function POS() {
                   <button
                     onClick={() => {
                       if (!shiftStats) return
-                      const lines: string[] = []
-                      lines.push("BEE'SHOP — SHIFT SUMMARY")
-                      lines.push('----------------------------------------')
-                      lines.push(`Waitron: ${profile?.full_name || 'You'}`)
-                      if (shiftStats.clockIn)
-                        lines.push(
-                          `Clock In: ${new Date(shiftStats.clockIn).toLocaleString('en-NG')}`
-                        )
-                      lines.push(`Orders: ${shiftStats.ordersCount}`)
-                      lines.push(`Items: ${shiftStats.totalItems}`)
-                      lines.push(`Tables: ${shiftStats.uniqueTables}`)
-                      lines.push(
-                        `Total Sales: ₦${shiftStats.totalSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      )
-                      lines.push('')
-                      lines.push('RECENT ORDERS')
-                      shiftStats.recentOrders.forEach((o) => {
-                        const items = o.order_items
-                          .map(
-                            (i) =>
-                              `${i.quantity}x ${i.menu_items?.name || ''} - ₦${(i.total_price || 0).toLocaleString()}`
-                          )
-                          .join('; ')
-                        lines.push(
-                          `${o.tables?.name || 'Cash Sale'} | ₦${(o.netTotal || 0).toLocaleString()} | ${new Date(o.closed_at).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true })}`
-                        )
-                        if (items) lines.push(`  ${items}`)
+                      const W = 40
+                      const div = '-'.repeat(W)
+                      const sol = '='.repeat(W)
+                      const row = (l: string, r: string) => {
+                        const left = l.substring(0, W - r.length - 1)
+                        return left + ' '.repeat(Math.max(1, W - left.length - r.length)) + r
+                      }
+                      const ctr = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
+                      const fmt = (n: number) => `N${n.toLocaleString()}`
+                      const fmtDate = new Date().toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
+
+                      const lines: string[] = [
+                        '',
+                        ctr("BEESHOP'S PLACE"),
+                        ctr('SHIFT SUMMARY'),
+                        div,
+                        row('Waitron:', profile?.full_name || 'Staff'),
+                        row('Date:', fmtDate),
+                        ...(shiftStats.clockIn ? [row('Clock In:', new Date(shiftStats.clockIn).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true }))] : []),
+                        row('Printed:', new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true })),
+                        div,
+                        ctr('SALES SUMMARY'),
+                        div,
+                        row('Total Orders:', String(shiftStats.ordersCount)),
+                        row('Total Items:', String(shiftStats.totalItems)),
+                        row('Tables Served:', String(shiftStats.uniqueTables)),
+                        sol,
+                        row('TOTAL SALES:', fmt(shiftStats.totalSales)),
+                        sol,
+                        '',
+                        ctr('ORDER BREAKDOWN'),
+                        div,
+                      ]
+
+                      shiftStats.recentOrders.forEach((o, idx) => {
+                        const time = new Date(o.closed_at).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true })
+                        lines.push(row(`${idx + 1}. ${o.tables?.name || 'Cash Sale'}`, fmt(o.netTotal || 0)))
+                        lines.push(row(`   ${time}`, ''))
+                        o.order_items.forEach((i) => {
+                          lines.push(row(`   ${i.quantity}x ${i.menu_items?.name || 'Item'}`, fmt(i.total_price || 0)))
+                        })
+                        lines.push('')
                       })
 
-                      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Shift Summary</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:13px;width:80mm;padding:4mm;white-space:pre;}@media print{body{width:80mm;}@page{margin:0;size:80mm auto;}}</style></head><body>${lines.join(
-                        '\n'
-                      )}</body></html>`
+                      lines.push(sol)
+                      lines.push(row('TOTAL:', fmt(shiftStats.totalSales)))
+                      lines.push(sol)
+                      lines.push('')
+                      lines.push(ctr('*** END OF SUMMARY ***'))
+                      lines.push('')
+
+                      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Shift Summary — ${profile?.full_name}</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;font-size:13px;color:#000;background:#fff;width:80mm;padding:4mm;white-space:pre;}@media print{body{width:80mm;}@page{margin:0;size:80mm auto;}}</style></head><body>${lines.join('\n')}</body></html>`
                       const w = window.open('', '_blank', 'width=400,height=600,toolbar=no')
                       if (!w) return
                       w.document.open('text/html', 'replace')
