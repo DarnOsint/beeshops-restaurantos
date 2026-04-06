@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Printer, RefreshCw } from 'lucide-react'
 
-const BASE_URL = 'https://beeshops-restaurantos.vercel.app'
+const BASE_URL = 'https://beeshop.place'
 
 interface TableRow {
   id: string
