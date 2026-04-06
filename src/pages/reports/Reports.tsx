@@ -321,7 +321,7 @@ export default function Reports() {
       }>
       // Accepted returns (bar_accepted or accepted by manager)
       const acceptedReturns = returnsData.filter(
-        (r) => r.status === 'accepted' || r.status === 'bar_accepted' || r.status === 'kitchen_accepted' || r.status === 'griller_accepted'
+        (r) => r.status !== 'rejected' && r.status !== 'manager_rejected' && r.status !== 'expired'
       )
       const returnedItems = acceptedReturns.reduce((s, r) => s + (r.quantity || 0), 0)
       const returnedValue = acceptedReturns.reduce((s, r) => s + (r.item_total || 0), 0)
