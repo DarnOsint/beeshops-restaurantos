@@ -321,7 +321,7 @@ export default function Reports() {
       }>
       // Accepted returns (bar_accepted or accepted by manager)
       const acceptedReturns = returnsData.filter(
-        (r) => r.status === 'accepted' || r.status === 'bar_accepted'
+        (r) => r.status === 'accepted' || r.status === 'bar_accepted' || r.status === 'kitchen_accepted' || r.status === 'griller_accepted'
       )
       const returnedItems = acceptedReturns.reduce((s, r) => s + (r.quantity || 0), 0)
       const returnedValue = acceptedReturns.reduce((s, r) => s + (r.item_total || 0), 0)
@@ -1124,12 +1124,12 @@ export default function Reports() {
                             <td
                               className={`px-3 py-2.5 text-right text-sm font-medium ${item.returned > 0 ? 'text-red-400' : 'text-gray-600'}`}
                             >
-                              {item.returned > 0 ? item.returned : '–'}
+                              {item.returned}
                             </td>
                             <td
                               className={`px-3 py-2.5 text-right text-xs ${returnRate >= 20 ? 'text-red-400 font-bold' : returnRate > 0 ? 'text-orange-400' : 'text-gray-600'}`}
                             >
-                              {returnRate > 0 ? `${returnRate}%` : '–'}
+                              {returnRate}%
                             </td>
                             <td className="px-3 py-2.5 text-right text-white text-sm">
                               ₦{item.revenue.toLocaleString()}
