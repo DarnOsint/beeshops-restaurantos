@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Trophy, RefreshCw, Download } from 'lucide-react'
+import { Trophy, RefreshCw, Download, Printer } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 
 type Period = 'today' | 'week' | 'month' | 'quarter'
@@ -107,6 +107,39 @@ export default function StaffPerformanceTab() {
     a.click()
   }
 
+  const printReport = () => {
+    const W = 44
+    const div = '-'.repeat(W)
+    const sol = '='.repeat(W)
+    const r = (l: string, rv: string) => {
+      const left = l.substring(0, W - rv.length - 1)
+      return left + ' '.repeat(Math.max(1, W - left.length - rv.length)) + rv
+    }
+    const ctr = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
+    const lines = [
+      '', ctr("BEESHOP'S PLACE"), ctr('STAFF PERFORMANCE'), div,
+      r('Period:', label), r('Staff Count:', String(rows.length)),
+      r('Total Revenue:', `N${totalRevenue.toLocaleString()}`),
+      r('Total Orders:', String(totalOrders)), div, '',
+      ...rows.map((row, i) => {
+        const pct = totalRevenue ? Math.round((row.revenue / totalRevenue) * 100) : 0
+        return [
+          r(`${i + 1}. ${row.name}`, `N${row.revenue.toLocaleString()}`),
+          r(`   ${row.orders} orders · ${row.items} items`, `avg N${row.avgOrder.toLocaleString()} · ${pct}%`),
+          '',
+        ].join('\n')
+      }),
+      sol, r('TOTAL:', `N${totalRevenue.toLocaleString()}`), sol, '', ctr('*** END ***'), '',
+    ].join('\n')
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Staff Performance — ${label}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;color:#000;background:#fff;width:80mm;padding:4mm;white-space:pre}@media print{body{width:80mm}@page{margin:0;size:80mm auto}}</style></head><body>${lines}</body></html>`
+    const w = window.open('', '_blank', 'width=500,height=700,toolbar=no,menubar=no')
+    if (!w) return
+    w.document.open('text/html', 'replace')
+    w.document.write(html)
+    w.document.close()
+    w.onload = () => setTimeout(() => { try { w.print() } catch { /* */ } }, 200)
+  }
+
   const { label } = getRange(period)
 
   return (
@@ -125,10 +158,16 @@ export default function StaffPerformanceTab() {
           <RefreshCw size={14} />
         </button>
         {rows.length > 0 && (
-          <button onClick={exportCsv}
-            className="p-2 text-gray-400 hover:text-white bg-gray-900 border border-gray-800 rounded-xl ml-auto">
-            <Download size={14} />
-          </button>
+          <>
+            <button onClick={printReport}
+              className="flex items-center gap-1 px-3 py-2 text-gray-400 hover:text-white bg-gray-900 border border-gray-800 rounded-xl text-xs ml-auto">
+              <Printer size={13} /> Print
+            </button>
+            <button onClick={exportCsv}
+              className="p-2 text-gray-400 hover:text-white bg-gray-900 border border-gray-800 rounded-xl">
+              <Download size={14} />
+            </button>
+          </>
         )}
       </div>
 
