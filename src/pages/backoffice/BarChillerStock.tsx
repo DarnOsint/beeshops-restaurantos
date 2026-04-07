@@ -229,17 +229,13 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
           if (seenItems.has(row.item_name)) continue
           seenItems.add(row.item_name)
 
-          if (row.closing_qty > 0) {
-            // Use the manually entered closing count
-            prevClosing[row.item_name] = row.closing_qty
-          } else {
-            // Auto-compute using live POS sold for that date (fallback to saved sold_qty)
-            const actualSold = prevSoldMap[row.item_name] ?? row.sold_qty ?? 0
-            prevClosing[row.item_name] = Math.max(
-              0,
-              row.opening_qty + row.received_qty - actualSold - row.void_qty
-            )
-          }
+          // Always compute closing from formula — never trust stored closing_qty
+          // Use live POS sold data, fallback to saved sold_qty
+          const actualSold = prevSoldMap[row.item_name] ?? row.sold_qty ?? 0
+          prevClosing[row.item_name] = Math.max(
+            0,
+            row.opening_qty + row.received_qty - actualSold - row.void_qty
+          )
         }
       }
 
@@ -307,6 +303,27 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     if (menuDrinks.length > 0) loadEntries(date)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, menuDrinks])
+
+  // Auto-sync sold_qty and closing_qty to DB every 5 minutes so carry-over works
+  useEffect(() => {
+    const syncToDb = async () => {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+      if (date !== today) return // only sync today
+      for (const [name, entry] of Object.entries(stockData)) {
+        if (!entry.id) continue
+        const posSold = soldMap[name] || 0
+        const closing = Math.max(0, entry.opening_qty + entry.received_qty - posSold - entry.void_qty)
+        if (posSold > 0 || entry.received_qty > 0 || entry.void_qty > 0) {
+          await supabase.from('bar_chiller_stock')
+            .update({ sold_qty: posSold, closing_qty: closing, updated_at: new Date().toISOString() })
+            .eq('id', entry.id)
+        }
+      }
+    }
+    const iv = setInterval(syncToDb, 5 * 60 * 1000) // every 5 minutes
+    return () => clearInterval(iv)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stockData, soldMap, date])
 
   const updateField = (itemName: string, field: keyof StockEntry, value: number | string) => {
     setStockData((prev) => ({

@@ -117,7 +117,7 @@ export default async function handler(req, res) {
       { data: roomStays },
       { data: reservations },
     ] = await Promise.all([
-      supabase.from('orders').select('*, profiles(full_name), tables(name, table_categories(name)), covers').gte('created_at', start).lte('created_at', end),
+      supabase.from('orders').select('*, profiles(full_name), tables(name, table_categories(name)), covers, order_items(total_price, return_requested, return_accepted, status)').gte('created_at', start).lte('created_at', end),
       supabase.from('order_items').select('*, menu_items(name, menu_categories(name))').gte('created_at', start).lte('created_at', end).neq('status', 'cancelled'),
       supabase.from('returns_log').select('*').gte('requested_at', start).lte('requested_at', end),
       supabase.from('till_sessions').select('*, profiles(full_name)').gte('opened_at', start).lte('opened_at', end),
@@ -129,11 +129,15 @@ export default async function handler(req, res) {
       supabase.from('reservations').select('*').gte('created_at', start).lte('created_at', end),
     ])
 
-    // Revenue
+    // Revenue — use net order items (excluding returned/cancelled) for accurate totals
+    const netOrderAmount = (o) => (o.order_items || [])
+      .filter(i => !i.return_requested && !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled')
+      .reduce((s, i) => s + (i.total_price || 0), 0)
+
     const paid           = (orders || []).filter(o => o.status === 'paid')
     const voided         = (orders || []).filter(o => o.status === 'cancelled')
     const openOrders     = (orders || []).filter(o => o.status === 'open')
-    const totalRevenue   = paid.reduce((s, o) => s + (o.total_amount || 0), 0)
+    const totalRevenue   = paid.reduce((s, o) => s + netOrderAmount(o), 0)
     const totalCovers    = paid.reduce((s, o) => s + (o.covers || 0), 0)
     const revPerCover    = totalCovers > 0 ? totalRevenue / totalCovers : 0
     const avgOrder       = paid.length ? totalRevenue / paid.length : 0
@@ -161,7 +165,7 @@ export default async function handler(req, res) {
       const key = classifyMethod(o.payment_method)
       if (!methodGroups[key]) methodGroups[key] = { count: 0, revenue: 0 }
       methodGroups[key].count++
-      methodGroups[key].revenue += o.total_amount || 0
+      methodGroups[key].revenue += netOrderAmount(o)
     }
     const cashRev = methodGroups['cash']?.revenue || 0
 
@@ -171,7 +175,7 @@ export default async function handler(req, res) {
       const zone = o.tables?.table_categories?.name || 'Takeaway / Unknown'
       if (!zoneMap[zone]) zoneMap[zone] = { count: 0, revenue: 0 }
       zoneMap[zone].count++
-      zoneMap[zone].revenue += o.total_amount || 0
+      zoneMap[zone].revenue += netOrderAmount(o)
     }
 
     // Top items — use unit_price or total_price, exclude returned/cancelled items
@@ -205,7 +209,7 @@ export default async function handler(req, res) {
       const name = o.profiles?.full_name || 'Unknown'
       if (!waitronMap[name]) waitronMap[name] = { orders: 0, revenue: 0 }
       waitronMap[name].orders++
-      waitronMap[name].revenue += o.total_amount || 0
+      waitronMap[name].revenue += netOrderAmount(o)
     }
     const topWaitrons  = Object.entries(waitronMap).sort((a, b) => b[1].revenue - a[1].revenue).slice(0, 8)
     const clockedIn    = (attendance || []).length
