@@ -124,7 +124,8 @@ export default function OrdersByWaitronTab({
     } finally {
       setLoading(false)
     }
-  }, [destinations, start, end])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [destinations.join(','), start, end])
 
   useEffect(() => {
     void load()

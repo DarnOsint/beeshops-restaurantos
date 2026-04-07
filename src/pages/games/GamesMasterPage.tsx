@@ -84,7 +84,7 @@ export default function GamesMasterPage() {
     const dayStart = new Date(date + 'T08:00:00+01:00')
     const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1)
     const [typesRes, salesRes, staffRes] = await Promise.all([
-      supabase.from('game_types').select('*').eq('is_active', true).order('name'),
+      supabase.from('menu_items').select('id, name, price, menu_categories(destination)').eq('is_available', true),
       supabase
         .from('game_sales')
         .select('*')
@@ -93,7 +93,12 @@ export default function GamesMasterPage() {
         .order('created_at', { ascending: false }),
       supabase.from('attendance').select('staff_id, staff_name').is('clock_out', null).order('staff_name'),
     ])
-    if (typesRes.data) setGameTypes(typesRes.data as GameType[])
+    if (typesRes.data) {
+      const gamesFromMenu = (typesRes.data as any[])
+        .filter((i) => i.menu_categories?.destination === 'games')
+        .map((i) => ({ id: i.id, name: i.name, price: i.price, is_active: true }))
+      setGameTypes(gamesFromMenu as GameType[])
+    }
     if (salesRes.data) setSales(salesRes.data as GameSale[])
     if (staffRes.data) {
       const unique = new Map<string, string>()

@@ -35,6 +35,7 @@ interface Props {
   netRevenue: number
   waitronStats: WaitronStat[]
   dateLabel: string
+  sessionDate?: string
   onRecordPayout: () => void
 }
 
@@ -53,6 +54,7 @@ export default function OverviewTab({
   netRevenue,
   waitronStats,
   dateLabel,
+  sessionDate,
   onRecordPayout,
 }: Props) {
   const { profile } = useAuth()
@@ -70,10 +72,15 @@ export default function OverviewTab({
   const [posMachines, setPosMachines] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [reconDate, setReconDate] = useState(() => {
+    if (sessionDate) return sessionDate
     const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
     if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
     return wat.toLocaleDateString('en-CA')
   })
+  // Sync reconDate when parent session date changes
+  useEffect(() => {
+    if (sessionDate) setReconDate(sessionDate)
+  }, [sessionDate])
   const activeWaitrons =
     waitronStats.filter((w) => (w.revenue || 0) > 0 || (w.orders || 0) > 0) || waitronStats
 
@@ -143,7 +150,7 @@ export default function OverviewTab({
   const totalOutstanding = Object.values(recon.outstanding).reduce((s, v) => s + (v || 0), 0)
   const totalReceived = totalCashCollected + totalBankReceived + totalPOSReceived
   const expectedRevenue = summary.total
-  const shortfall = expectedRevenue - totalReceived - totalDebts - totalPayouts
+  const shortfall = expectedRevenue - totalReceived - totalDebts - totalOutstanding - totalPayouts
 
   const printDailySummary = () => {
     const W = 40
@@ -236,7 +243,7 @@ export default function OverviewTab({
       row('Total Received:', `N${totalReceived.toLocaleString()}`),
       row('Payouts:', `N${totalPayouts.toLocaleString()}`),
       row('Debts:', `N${totalDebts.toLocaleString()}`),
-      row('Accounted For:', `N${(totalReceived + totalDebts + totalPayouts).toLocaleString()}`),
+      row('Accounted For:', `N${(totalReceived + totalDebts + totalOutstanding + totalPayouts).toLocaleString()}`),
       sol,
       row(
         shortfall > 0 ? 'SHORTFALL:' : shortfall < 0 ? 'SURPLUS:' : 'BALANCED:',
@@ -675,7 +682,7 @@ export default function OverviewTab({
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Total Accounted For</span>
               <span className="text-white font-bold">
-                ₦{(totalReceived + totalDebts + totalPayouts).toLocaleString()}
+                ₦{(totalReceived + totalDebts + totalOutstanding + totalPayouts).toLocaleString()}
               </span>
             </div>
           </div>

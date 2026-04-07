@@ -463,6 +463,7 @@ export default function Accounting() {
             netRevenue={netRevenue}
             waitronStats={waitronStats}
             dateLabel={dateRange === 'Custom' ? `${customStart} – ${customEnd}` : dateRange}
+            sessionDate={getDateBounds().start.slice(0, 10)}
             onRecordPayout={() => setActiveTab('payouts')}
           />
         )}
