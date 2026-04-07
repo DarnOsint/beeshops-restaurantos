@@ -243,6 +243,7 @@ export default function OverviewTab({
       row('Total Received:', `N${totalReceived.toLocaleString()}`),
       row('Payouts:', `N${totalPayouts.toLocaleString()}`),
       row('Debts:', `N${totalDebts.toLocaleString()}`),
+      row('Outstanding (Waitrons):', `N${totalOutstanding.toLocaleString()}`),
       row('Accounted For:', `N${(totalReceived + totalDebts + totalOutstanding + totalPayouts).toLocaleString()}`),
       sol,
       row(
@@ -392,29 +393,7 @@ export default function OverviewTab({
             <DollarSign size={16} /> Daily Reconciliation
           </h3>
           <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={reconDate}
-              max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => setReconDate(e.target.value)}
-              className="bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-amber-500"
-            />
-            <button
-              onClick={() => {
-                const d = new Date(reconDate)
-                d.setDate(d.getDate() - 1)
-                setReconDate(d.toISOString().slice(0, 10))
-              }}
-              className="text-xs px-2 py-1 rounded-lg border border-gray-700 text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700"
-            >
-              Prev Day
-            </button>
-            <button
-              onClick={() => setReconDate(new Date().toISOString().slice(0, 10))}
-              className={`text-xs px-2 py-1 rounded-lg border transition-colors ${reconDate === new Date().toISOString().slice(0, 10) ? 'bg-amber-500 text-black border-amber-500 font-bold' : 'border-gray-700 text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700'}`}
-            >
-              Today
-            </button>
+            <span className="text-gray-400 text-xs">{new Date(reconDate).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
             <button
               onClick={saveRecon}
               disabled={saving}
@@ -677,6 +656,10 @@ export default function OverviewTab({
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">Outstanding Debts</span>
             <span className="text-red-400">₦{totalDebts.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-400">Outstanding / Shortage (Waitrons)</span>
+            <span className="text-red-400">₦{totalOutstanding.toLocaleString()}</span>
           </div>
           <div className="border-t-2 border-gray-700 pt-2 mt-2">
             <div className="flex justify-between text-sm">
