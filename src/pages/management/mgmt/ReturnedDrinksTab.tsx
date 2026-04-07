@@ -487,7 +487,7 @@ export default function ReturnedDrinksTab() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
-                  <span>Barman: {r.barman_name ? r.barman_name : r.status === 'pending' ? 'Pending' : r.status === 'accepted' || r.status === 'manager_rejected' ? 'Skipped' : 'N/A'}</span>
+                  <span>Barman: {r.barman_name ? r.barman_name : r.status === 'pending' ? 'Pending' : r.status === 'bar_accepted' ? 'Accepted' : 'Direct approval'}</span>
                   <span>·</span>
                   <span>
                     {new Date(r.requested_at).toLocaleTimeString('en-NG', {
