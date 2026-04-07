@@ -128,8 +128,11 @@ export default function SupervisorMainStoreTab() {
         .eq('id', req.inventory_id)
       if (invErr) throw invErr
 
-      // Add to barman's chiller
-      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+      // Add to barman's chiller — use 8am-8am session date
+      const watNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+      const sessionDate = new Date(watNow)
+      if (watNow.getHours() < 8) sessionDate.setDate(sessionDate.getDate() - 1)
+      const today = sessionDate.toLocaleDateString('en-CA')
       const { data: chillerRow } = await supabase
         .from('bar_chiller_stock')
         .select('id, received_qty')

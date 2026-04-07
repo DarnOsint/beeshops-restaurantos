@@ -1613,8 +1613,8 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
                                 </p>
                               )}
                               {isReturned && (
-                                <p className="text-red-400 text-xs">
-                                  ✓ Return accepted — excluded from total
+                                <p className="text-green-400 text-xs">
+                                  ✓ Bar accepted — awaiting management approval
                                 </p>
                               )}
                               {item.return_reason && (isPending || isReturned) && (
