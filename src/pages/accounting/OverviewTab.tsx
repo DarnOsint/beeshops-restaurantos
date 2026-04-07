@@ -69,7 +69,11 @@ export default function OverviewTab({
   >([])
   const [posMachines, setPosMachines] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
-  const [reconDate, setReconDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [reconDate, setReconDate] = useState(() => {
+    const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+    if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
+    return wat.toLocaleDateString('en-CA')
+  })
   const activeWaitrons =
     waitronStats.filter((w) => (w.revenue || 0) > 0 || (w.orders || 0) > 0) || waitronStats
 

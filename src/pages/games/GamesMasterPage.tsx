@@ -40,7 +40,14 @@ interface GameSale {
   created_at: string
 }
 
-const todayStr = () => new Date().toISOString().slice(0, 10)
+import { audit } from '../../lib/audit'
+import type { Profile } from '../../types'
+
+const todayWAT = () => {
+  const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+  if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
+  return wat.toLocaleDateString('en-CA')
+}
 
 export default function GamesMasterPage() {
   const { profile, signOut } = useAuth()
@@ -52,11 +59,14 @@ export default function GamesMasterPage() {
   const [sales, setSales] = useState<GameSale[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'sell' | 'history' | 'config'>('sell')
+  const [date, setDate] = useState(todayWAT())
+  const [waitrons, setWaitrons] = useState<Array<{ id: string; name: string }>>([])
 
   // Sale form
   const [selectedGame, setSelectedGame] = useState<string>('')
   const [quantity, setQuantity] = useState('1')
   const [customerName, setCustomerName] = useState('')
+  const [selectedWaitron, setSelectedWaitron] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
   const [notes, setNotes] = useState('')
   const [processing, setProcessing] = useState(false)
@@ -71,19 +81,27 @@ export default function GamesMasterPage() {
   const [configSaving, setConfigSaving] = useState(false)
 
   const fetchAll = useCallback(async () => {
-    const today = new Date(todayStr())
-    const [typesRes, salesRes] = await Promise.all([
+    const dayStart = new Date(date + 'T08:00:00+01:00')
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1)
+    const [typesRes, salesRes, staffRes] = await Promise.all([
       supabase.from('game_types').select('*').eq('is_active', true).order('name'),
       supabase
         .from('game_sales')
         .select('*')
-        .gte('created_at', today.toISOString())
+        .gte('created_at', dayStart.toISOString())
+        .lt('created_at', dayEnd.toISOString())
         .order('created_at', { ascending: false }),
+      supabase.from('attendance').select('staff_id, staff_name').is('clock_out', null).order('staff_name'),
     ])
     if (typesRes.data) setGameTypes(typesRes.data as GameType[])
     if (salesRes.data) setSales(salesRes.data as GameSale[])
+    if (staffRes.data) {
+      const unique = new Map<string, string>()
+      staffRes.data.forEach((s: { staff_id: string; staff_name: string }) => unique.set(s.staff_id, s.staff_name))
+      setWaitrons(Array.from(unique.entries()).map(([id, name]) => ({ id, name })))
+    }
     setLoading(false)
-  }, [])
+  }, [date])
 
   useEffect(() => {
     fetchAll()
@@ -94,8 +112,10 @@ export default function GamesMasterPage() {
 
   const handleSale = async () => {
     if (!selectedGameType) return toast.warning('Required', 'Select a game type')
+    if (!selectedWaitron) return toast.warning('Required', 'Select the waitron who collected payment')
     setProcessing(true)
     const qty = parseInt(quantity) || 1
+    const waitron = waitrons.find((w) => w.id === selectedWaitron)
     const { error } = await supabase.from('game_sales').insert({
       game_type_id: selectedGameType.id,
       game_name: selectedGameType.name,
@@ -105,15 +125,24 @@ export default function GamesMasterPage() {
       customer_name: customerName || null,
       payment_method: paymentMethod,
       status: 'paid',
-      notes: notes || null,
+      notes: `Waitron: ${waitron?.name || '—'}${notes ? ' · ' + notes : ''}`,
       recorded_by: profile?.id,
       recorded_by_name: profile?.full_name,
+      waitron_id: selectedWaitron,
+      waitron_name: waitron?.name || null,
     })
     setProcessing(false)
     if (error) return toast.error('Error', error.message)
+    await audit({
+      action: 'GAME_RECORDED',
+      entity: 'game_sales',
+      entityName: `${qty}x ${selectedGameType.name}`,
+      newValue: { game: selectedGameType.name, qty, total: selectedGameType.price * qty, waitron: waitron?.name, customer: customerName },
+      performer: profile as Profile,
+    })
     toast.success(
       'Sale Recorded',
-      `${qty}x ${selectedGameType.name} — ₦${(selectedGameType.price * qty).toLocaleString()}`
+      `${qty}x ${selectedGameType.name} — ₦${(selectedGameType.price * qty).toLocaleString()} via ${waitron?.name}`
     )
     setQuantity('1')
     setCustomerName('')
@@ -200,6 +229,15 @@ export default function GamesMasterPage() {
         ))}
       </div>
 
+      <div className="px-4 py-3 flex items-center gap-2 flex-wrap">
+        <input type="date" value={date} max={todayWAT()} onChange={(e) => setDate(e.target.value)}
+          className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm" />
+        <button onClick={() => setDate(todayWAT())}
+          className={`px-3 py-2 rounded-xl text-xs font-medium ${date === todayWAT() ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400'}`}>Today</button>
+        <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() - 1); setDate(d.toLocaleDateString('en-CA')) }}
+          className="px-3 py-2 rounded-xl text-xs bg-gray-800 text-gray-400 hover:text-white">Prev Day</button>
+      </div>
+
       <div className="flex-1 overflow-y-auto p-4 max-w-lg mx-auto w-full">
         {tab === 'sell' && (
           <div className="space-y-4">
@@ -239,6 +277,13 @@ export default function GamesMasterPage() {
                   className={inp}
                 />
               </div>
+            </div>
+            <div>
+              <label className="text-gray-400 text-xs block mb-1">Waitron (who collected payment)</label>
+              <select value={selectedWaitron} onChange={(e) => setSelectedWaitron(e.target.value)} className={inp}>
+                <option value="">Select waitron...</option>
+                {waitrons.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+              </select>
             </div>
             <div>
               <label className="text-gray-400 text-xs block mb-1">Payment</label>
