@@ -425,8 +425,9 @@ function BarKDSInner() {
       }
     }
 
-    // Update returns_log — mark as bar_accepted (pending manager final approval)
-    await supabase
+    // Update returns_log — set barman info and mark as bar_accepted
+    // First try pending items, then update any status (in case manager already approved)
+    const { count } = await supabase
       .from('returns_log')
       .update({
         status: 'bar_accepted',
@@ -436,6 +437,17 @@ function BarKDSInner() {
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
+      .select('id', { count: 'exact', head: true })
+    // If no pending row found, still record barman name on whatever status exists
+    if (!count || count === 0) {
+      await supabase
+        .from('returns_log')
+        .update({
+          barman_id: profile?.id ?? null,
+          barman_name: profile?.full_name ?? null,
+        })
+        .eq('order_item_id', itemId)
+    }
     toast.success('Return Accepted', 'Item returned to chiller — awaiting manager final approval')
     if (staffId)
       await sendPushToStaff(
