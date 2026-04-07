@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Package, Search, Plus, RefreshCw, Check, X, Clock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { sendPushToStaff } from '../../hooks/usePushNotifications'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { audit } from '../../lib/audit'
@@ -112,6 +113,11 @@ export default function StoreRequestPanel() {
         performer: profile as Profile,
       })
 
+      // Notify supervisors
+      const { data: supervisors } = await supabase.from('profiles').select('id').in('role', ['supervisor', 'manager', 'owner']).eq('is_active', true)
+      for (const s of (supervisors || [])) {
+        sendPushToStaff(s.id, '📦 Store Request', `${quantity}x ${selectedItem.item_name} requested by ${profile?.full_name}`).catch(() => {})
+      }
       toast.success('Request Sent', `${quantity} ${selectedItem.unit} of ${selectedItem.item_name} requested`)
       setShowForm(false)
       setSelectedItem(null)

@@ -11,6 +11,7 @@ import {
   Clock,
 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { sendPushToStaff } from '../../hooks/usePushNotifications'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { audit } from '../../lib/audit'
@@ -33,6 +34,7 @@ interface StoreRequest {
   inventory_id: string | null
   quantity: number
   unit: string
+  requested_by: string | null
   requested_by_name: string | null
   status: string
   reason: string | null
@@ -188,6 +190,8 @@ export default function SupervisorMainStoreTab() {
         performer: profile as Profile,
       })
 
+      // Notify barman
+      if (req.requested_by) sendPushToStaff(req.requested_by, '✅ Request Approved', `${req.quantity}x ${req.item_name} released to chiller`).catch(() => {})
       toast.success('Approved', `${req.quantity} ${req.unit} of ${req.item_name} sent to chiller`)
       fetchData()
     } catch (e: any) {
@@ -219,6 +223,7 @@ export default function SupervisorMainStoreTab() {
         performer: profile as Profile,
       })
 
+      if (req.requested_by) sendPushToStaff(req.requested_by, '❌ Request Rejected', `${req.item_name} — ${reason || 'No reason'}`).catch(() => {})
       toast.success('Rejected', `Request for ${req.item_name} rejected`)
       fetchData()
     } catch (e: any) {

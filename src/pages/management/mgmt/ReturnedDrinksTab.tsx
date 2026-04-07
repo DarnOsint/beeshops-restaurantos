@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { RotateCcw, RefreshCw, Printer, CheckCircle, X, AlertTriangle } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
+import { sendPushToStaff } from '../../../hooks/usePushNotifications'
 import { useAuth } from '../../../context/AuthContext'
 import { audit } from '../../../lib/audit'
 import { useToast } from '../../../context/ToastContext'
@@ -16,6 +17,7 @@ interface ReturnEntry {
   quantity: number
   item_total: number
   table_name: string | null
+  waitron_id: string | null
   waitron_name: string | null
   barman_name: string | null
   return_reason: string | null
@@ -168,6 +170,7 @@ export default function ReturnedDrinksTab() {
         },
         performer: profile as Profile,
       })
+      if (r.waitron_id) sendPushToStaff(r.waitron_id, '✅ Return Approved', `${r.quantity}x ${r.item_name} approved by management`).catch(() => {})
       toast.success('Return Approved', `${r.quantity}x ${r.item_name} permanently removed`)
       fetchReturns(date)
     } catch (e) {
@@ -238,6 +241,7 @@ export default function ReturnedDrinksTab() {
         },
         performer: profile as Profile,
       })
+      if (r.waitron_id) sendPushToStaff(r.waitron_id, '❌ Return Rejected', `${r.quantity}x ${r.item_name} restored to your order`).catch(() => {})
       toast.success('Return Rejected', `${r.quantity}x ${r.item_name} added back to order`)
       fetchReturns(date)
     } catch (e) {

@@ -146,7 +146,7 @@ export default function Executive() {
           .limit(10),
         supabase
           .from('orders')
-          .select('total_amount')
+          .select('total_amount, order_items(total_price, return_requested, return_accepted, status)')
           .eq('status', 'paid')
           .gte('created_at', sessionStartIso),
         supabase
@@ -157,7 +157,12 @@ export default function Executive() {
           .order('created_at', { ascending: true }),
       ])
     setStats({
-      revenue: revenueRes.data?.reduce((s, o) => s + (o.total_amount || 0), 0) || 0,
+      revenue: (revenueRes.data || []).reduce((s: number, o: any) => {
+        const net = (o.order_items || [])
+          .filter((i: any) => !i.return_requested && !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled')
+          .reduce((ss: number, i: any) => ss + (i.total_price || 0), 0)
+        return s + net
+      }, 0),
       openOrders: ordersRes.data?.length || 0,
       occupiedTables: tablesRes.data?.filter((t) => t.status === 'occupied').length || 0,
       occupiedRooms: roomsRes.data?.filter((r) => r.status === 'occupied').length || 0,

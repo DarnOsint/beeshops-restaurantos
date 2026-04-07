@@ -348,7 +348,7 @@ export default function PayrollTab() {
         </div>
       ) : (
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-x-auto">
-          <table className="w-full text-xs min-w-[900px]">
+          <table className="w-full text-xs min-w-[700px]">
             <thead>
               <tr className="bg-gray-800 text-gray-400 uppercase tracking-wider">
                 <th className="text-left px-3 py-2">Name</th>

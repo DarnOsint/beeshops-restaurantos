@@ -154,7 +154,7 @@ export default async function handler(req, res) {
     const totalDebts = (recon.debts || []).reduce((s, d) => s + (d.amount || 0), 0)
     const totalOutstanding = Object.values(recon.outstanding || {}).reduce((s, v) => s + (v || 0), 0)
     const totalReceived = totalCashCollected + totalBankReceived + totalPOSReceived
-    const shortfall = totalRevenue - totalReceived - totalDebts - totalPayouts
+    const shortfall = totalRevenue - totalReceived - totalDebts - totalOutstanding - totalPayouts
 
     // Debtors
     const totalDebtorBalance = (debtors || []).reduce((s, d) => s + (d.balance || 0), 0)

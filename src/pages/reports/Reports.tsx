@@ -257,7 +257,7 @@ export default function Reports() {
       ] = await Promise.all([
         supabase
           .from('orders')
-          .select('*, profiles(full_name), tables(name, table_categories(name))')
+          .select('*, profiles(full_name), tables(name, table_categories(name)), order_items(total_price, return_requested, return_accepted, status)')
           .gte('created_at', start)
           .lte('created_at', end),
         supabase
@@ -331,7 +331,12 @@ export default function Reports() {
         returnCountMap[r.item_name] = (returnCountMap[r.item_name] || 0) + (r.quantity || 0)
       })
 
-      const grossRevenue = paidOrders.reduce((s, o) => s + (o.total_amount || 0), 0)
+      const grossRevenue = paidOrders.reduce((s, o) => {
+        const net = (o.order_items || [])
+          .filter((i: any) => !i.return_requested && !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled')
+          .reduce((ss: number, i: any) => ss + (i.total_price || 0), 0)
+        return s + net
+      }, 0)
       const totalExpenses = payouts.reduce((s, p) => s + (p.amount || 0), 0)
       const roomRevenue = roomStays
         .filter((r) => r.status === 'checked_out')
