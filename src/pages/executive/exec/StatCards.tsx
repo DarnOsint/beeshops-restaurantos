@@ -23,14 +23,14 @@ export default function StatCards({ stats }: Props) {
     },
     {
       label: 'Occupied Tables',
-      value: `${stats.occupiedTables}/60`,
+      value: `${stats.occupiedTables}/${stats.totalTables}`,
       icon: LayoutDashboard,
       color: 'text-blue-400',
       bg: 'bg-blue-400/10',
     },
     {
       label: 'Occupied Rooms',
-      value: `${stats.occupiedRooms}/20`,
+      value: `${stats.occupiedRooms}/${stats.totalRooms}`,
       icon: BedDouble,
       color: 'text-purple-400',
       bg: 'bg-purple-400/10',

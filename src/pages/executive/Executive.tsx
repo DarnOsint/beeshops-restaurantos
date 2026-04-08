@@ -108,7 +108,9 @@ export default function Executive() {
     revenue: 0,
     openOrders: 0,
     occupiedTables: 0,
+    totalTables: 0,
     occupiedRooms: 0,
+    totalRooms: 0,
     staffOnDuty: 0,
     lowStock: 0,
   })
@@ -165,7 +167,9 @@ export default function Executive() {
       }, 0),
       openOrders: ordersRes.data?.length || 0,
       occupiedTables: tablesRes.data?.filter((t) => t.status === 'occupied').length || 0,
+      totalTables: tablesRes.data?.length || 0,
       occupiedRooms: roomsRes.data?.filter((r) => r.status === 'occupied').length || 0,
+      totalRooms: roomsRes.data?.length || 0,
       staffOnDuty: new Set((shiftsRes.data || []).map((r: { staff_id: string }) => r.staff_id))
         .size,
       lowStock: stockRes.data?.filter((i) => i.current_stock <= i.minimum_stock).length || 0,

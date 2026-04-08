@@ -210,33 +210,24 @@ export default function Accounting() {
         .reduce((s, i) => s + (i.total_price || 0), 0)
 
     const total = paidOrders.reduce((s, o) => s + netOrderAmount(o), 0)
-    const cash = paidOrders
-      .filter((o) => o.payment_method === 'cash')
-      .reduce((s, o) => s + netOrderAmount(o), 0)
-    const card = paidOrders
-      .filter((o) => ['card', 'bank_pos'].includes(o.payment_method || ''))
-      .reduce((s, o) => s + netOrderAmount(o), 0)
-    const transfer = paidOrders
-      .filter((o) => (o.payment_method || '').startsWith('transfer'))
-      .reduce((s, o) => s + netOrderAmount(o), 0)
-    const credit = paidOrders
-      .filter((o) => o.payment_method === 'credit')
-      .reduce((s, o) => s + netOrderAmount(o), 0)
-    const split = paidOrders
-      .filter((o) => o.payment_method === 'split')
-      .reduce((s, o) => s + netOrderAmount(o), 0)
-    // Orders with no payment method (force-closed) count as transfer
-    const nullPayment = paidOrders
-      .filter((o) => !o.payment_method)
-      .reduce((s, o) => s + netOrderAmount(o), 0)
+    const byMethod: Record<string, number> = {}
+    paidOrders.forEach((o) => {
+      const pm = (o.payment_method || '').toLowerCase()
+      let key = 'Transfer'
+      if (pm === 'cash') key = 'Cash'
+      else if (pm === 'card' || pm === 'bank_pos') key = 'Bank POS'
+      else if (pm.startsWith('transfer') || !pm) key = 'Transfer'
+      else if (pm === 'credit') key = 'Credit'
+      else if (pm === 'split') key = 'Split'
+      else if (pm.startsWith('cash+transfer')) key = 'Cash + Transfer'
+      else if (pm.startsWith('cash+card')) key = 'Cash + POS'
+      else if (pm === 'complimentary') key = 'Complimentary'
+      byMethod[key] = (byMethod[key] || 0) + netOrderAmount(o)
+    })
 
     setSummary({
       total,
-      cash,
-      card,
-      transfer: transfer + nullPayment,
-      credit,
-      split,
+      byMethod,
       orders: paidOrders.length,
       avgOrder: paidOrders.length ? Math.round(total / paidOrders.length) : 0,
     })

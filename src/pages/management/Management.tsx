@@ -148,7 +148,7 @@ export default function Management() {
         .gte('clock_in', start.toISOString()),
       supabase
         .from('orders')
-        .select('total_amount')
+        .select('total_amount, order_items(total_price, return_requested, return_accepted, status)')
         .eq('status', 'paid')
         .gte('created_at', start.toISOString()),
     ])
@@ -158,7 +158,12 @@ export default function Management() {
       occupiedRooms: roomsRes.data?.filter((r) => r.status === 'occupied').length || 0,
       staffOnShift: new Set((staffRes.data || []).map((r: { staff_id: string }) => r.staff_id))
         .size,
-      todayRevenue: revenueRes.data?.reduce((s, o) => s + (o.total_amount || 0), 0) || 0,
+      todayRevenue: (revenueRes.data || []).reduce((s: number, o: any) => {
+        const net = (o.order_items || [])
+          .filter((i: any) => !i.return_requested && !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled')
+          .reduce((ss: number, i: any) => ss + (i.total_price || 0), 0)
+        return s + net
+      }, 0),
     })
   }, [])
 

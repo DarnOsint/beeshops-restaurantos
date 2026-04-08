@@ -183,11 +183,7 @@ export default function OverviewTab({
       div,
       ctr('PAYMENT BREAKDOWN'),
       div,
-      row('Cash:', `N${summary.cash.toLocaleString()}`),
-      row('Bank POS:', `N${summary.card.toLocaleString()}`),
-      row('Bank Transfer:', `N${summary.transfer.toLocaleString()}`),
-      row('Credit:', `N${summary.credit.toLocaleString()}`),
-      row('Split:', `N${summary.split.toLocaleString()}`),
+      ...Object.entries(summary.byMethod || {}).filter(([,v]) => v > 0).map(([k, v]) => row(k + ':', `N${v.toLocaleString()}`)),
       div,
       ctr('STAFF SALES'),
       div,
@@ -288,21 +284,21 @@ export default function OverviewTab({
     },
     {
       label: 'Cash',
-      value: `₦${summary.cash.toLocaleString()}`,
+      value: `₦${(summary.byMethod?.['Cash'] || 0).toLocaleString()}`,
       icon: Banknote,
       color: 'text-emerald-400',
       bg: 'bg-emerald-400/10',
     },
     {
       label: 'Bank POS',
-      value: `₦${summary.card.toLocaleString()}`,
+      value: `₦${(summary.byMethod?.['Bank POS'] || 0).toLocaleString()}`,
       icon: CreditCard,
       color: 'text-blue-400',
       bg: 'bg-blue-400/10',
     },
     {
       label: 'Transfer',
-      value: `₦${summary.transfer.toLocaleString()}`,
+      value: `₦${(summary.byMethod?.['Transfer'] || 0).toLocaleString()}`,
       icon: Smartphone,
       color: 'text-purple-400',
       bg: 'bg-purple-400/10',
@@ -316,13 +312,10 @@ export default function OverviewTab({
     },
   ]
 
-  const paymentBars = [
-    { label: 'Cash', value: summary.cash, color: 'bg-emerald-500' },
-    { label: 'Bank POS', value: summary.card, color: 'bg-blue-500' },
-    { label: 'Bank Transfer', value: summary.transfer, color: 'bg-purple-500' },
-    { label: 'Credit (Pay Later)', value: summary.credit, color: 'bg-amber-500' },
-    { label: 'Split Payment', value: summary.split, color: 'bg-cyan-500' },
-  ]
+  const barColors = ['bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-amber-500', 'bg-cyan-500', 'bg-pink-500', 'bg-red-500', 'bg-indigo-500']
+  const paymentBars = Object.entries(summary.byMethod || {})
+    .sort(([, a], [, b]) => b - a)
+    .map(([label, value], i) => ({ label, value, color: barColors[i % barColors.length] }))
 
   return (
     <div className="space-y-6">

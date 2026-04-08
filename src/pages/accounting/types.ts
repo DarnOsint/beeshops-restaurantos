@@ -5,11 +5,7 @@ import type { PaymentMethod } from '../../types'
 
 export interface AccountingSummary {
   total: number
-  cash: number
-  card: number
-  transfer: number
-  credit: number
-  split: number
+  byMethod: Record<string, number>
   orders: number
   avgOrder: number
 }

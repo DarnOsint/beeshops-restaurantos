@@ -2,7 +2,9 @@ export interface Stats {
   revenue: number
   openOrders: number
   occupiedTables: number
+  totalTables: number
   occupiedRooms: number
+  totalRooms: number
   staffOnDuty: number
   lowStock: number
 }
