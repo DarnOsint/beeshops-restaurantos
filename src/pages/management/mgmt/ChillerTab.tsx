@@ -33,6 +33,7 @@ export default function ChillerTab() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [edited, setEdited] = useState<Record<string, Partial<Row>>>({})
+  const [salesStats, setSalesStats] = useState<{ revenue: number; qty: number; byZone: Record<string, number> }>({ revenue: 0, qty: 0, byZone: {} })
   const [showAdd, setShowAdd] = useState(false)
   const [newItem, setNewItem] = useState({ name: '', qty: '', unit: 'bottles' })
 
@@ -49,26 +50,37 @@ export default function ChillerTab() {
       supabase.from('bar_chiller_stock').select('*').eq('date', d).order('item_name'),
       supabase
         .from('order_items')
-        .select('quantity, status, return_accepted, menu_items(name), orders(status)')
+        .select('quantity, unit_price, total_price, status, return_accepted, menu_items(name), orders(status, tables(name, table_categories(name)))')
         .eq('destination', 'bar')
         .gte('created_at', dayStart.toISOString())
         .lte('created_at', dayEnd.toISOString()),
     ])
 
-    // Build sold map from live POS
+    // Build sold map + revenue map + zone breakdown from live POS
     const soldMap: Record<string, number> = {}
+    let totalSalesRevenue = 0
+    let totalSalesQty = 0
+    const zoneRevenue: Record<string, number> = {}
     if (soldData) {
       for (const item of soldData as unknown as Array<{
-        quantity: number; status: string; return_accepted?: boolean
-        menu_items: { name: string } | null; orders: { status: string } | null
+        quantity: number; unit_price: number; total_price: number; status: string; return_accepted?: boolean
+        menu_items: { name: string } | null; orders: { status: string; tables?: { name: string; table_categories?: { name: string } } | null } | null
       }>) {
         if (item.return_accepted) continue
         if (item.orders?.status === 'cancelled') continue
         if (item.status === 'cancelled') continue
         const name = item.menu_items?.name
-        if (name) soldMap[name] = (soldMap[name] || 0) + item.quantity
+        const rev = item.total_price || (item.unit_price || 0) * (item.quantity || 0)
+        const zone = item.orders?.tables?.table_categories?.name || 'Takeaway'
+        if (name) {
+          soldMap[name] = (soldMap[name] || 0) + item.quantity
+          totalSalesRevenue += rev
+          totalSalesQty += item.quantity
+          zoneRevenue[zone] = (zoneRevenue[zone] || 0) + rev
+        }
       }
     }
+    setSalesStats({ revenue: totalSalesRevenue, qty: totalSalesQty, byZone: zoneRevenue })
 
     // Build rows from DB entries + overlay live sold
     const display: Row[] = ((entries || []) as Array<{
@@ -415,6 +427,29 @@ export default function ChillerTab() {
         </div>
       ) : (
         <>
+          {/* Sales Revenue Banner */}
+          {salesStats.revenue > 0 && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-4">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-amber-400 text-xs font-bold uppercase tracking-wider">Bar Sales Revenue</p>
+                  <p className="text-white text-2xl font-black mt-1">₦{salesStats.revenue.toLocaleString()}</p>
+                  <p className="text-gray-400 text-xs">{salesStats.qty} drinks sold</p>
+                </div>
+              </div>
+              {Object.keys(salesStats.byZone).length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 pt-3 border-t border-amber-500/20">
+                  {Object.entries(salesStats.byZone).sort((a, b) => b[1] - a[1]).map(([zone, rev]) => (
+                    <div key={zone} className="text-center">
+                      <p className="text-amber-400 font-bold text-sm">₦{rev.toLocaleString()}</p>
+                      <p className="text-gray-500 text-[9px] uppercase tracking-wider">{zone}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* KPI strip */}
           <div className="grid grid-cols-5 gap-2 mb-4">
             {[

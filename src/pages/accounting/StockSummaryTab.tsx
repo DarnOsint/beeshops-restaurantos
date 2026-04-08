@@ -32,6 +32,7 @@ export default function StockSummaryTab({ type }: Props) {
   const [date, setDate] = useState(todayStr())
   const [rows, setRows] = useState<DisplayRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [stationSales, setStationSales] = useState<{ revenue: number; qty: number; byZone: Record<string, number> }>({ revenue: 0, qty: 0, byZone: {} })
 
   const tableName = type === 'bar' ? 'bar_chiller_stock' : 'kitchen_stock'
   const destination = type === 'bar' ? 'bar' : 'kitchen'
@@ -51,29 +52,37 @@ export default function StockSummaryTab({ type }: Props) {
         supabase.from(tableName).select('*').eq('date', d).order('item_name'),
         supabase
           .from('order_items')
-          .select('quantity, status, return_accepted, menu_items(name), orders(status)')
+          .select('quantity, unit_price, total_price, status, return_accepted, menu_items(name), orders(status, tables(table_categories(name)))')
           .eq('destination', destination)
           .gte('created_at', dayStart.toISOString())
           .lte('created_at', dayEnd.toISOString()),
       ])
 
-      // Build sold map from live POS data
+      // Build sold map + revenue from live POS data
       const soldMap: Record<string, number> = {}
+      let salesRev = 0, salesQty = 0
+      const zoneRev: Record<string, number> = {}
       if (soldRes.data) {
         for (const item of soldRes.data as unknown as Array<{
-          quantity: number
-          status: string
-          return_accepted?: boolean
+          quantity: number; unit_price: number; total_price: number
+          status: string; return_accepted?: boolean
           menu_items: { name: string } | null
-          orders: { status: string } | null
+          orders: { status: string; tables?: { table_categories?: { name: string } } | null } | null
         }>) {
           if (item.return_accepted) continue
           if (item.orders?.status === 'cancelled') continue
           if (item.status === 'cancelled') continue
           const name = item.menu_items?.name
-          if (name) soldMap[name] = (soldMap[name] || 0) + item.quantity
+          const rev = item.total_price || (item.unit_price || 0) * (item.quantity || 0)
+          const zone = item.orders?.tables?.table_categories?.name || 'Takeaway'
+          if (name) {
+            soldMap[name] = (soldMap[name] || 0) + item.quantity
+            salesRev += rev; salesQty += item.quantity
+            zoneRev[zone] = (zoneRev[zone] || 0) + rev
+          }
         }
       }
+      setStationSales({ revenue: salesRev, qty: salesQty, byZone: zoneRev })
 
       // Build display rows — use DB entries directly, overlay live sold
       const entries = (entriesRes.data || []) as StockRow[]
@@ -184,6 +193,28 @@ export default function StockSummaryTab({ type }: Props) {
         </div>
       ) : (
         <>
+          {stationSales.revenue > 0 && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <p className="text-amber-400 text-xs font-bold uppercase tracking-wider">{label} Sales Revenue</p>
+                  <p className="text-white text-2xl font-black mt-1">₦{stationSales.revenue.toLocaleString()}</p>
+                  <p className="text-gray-400 text-xs">{stationSales.qty} items sold</p>
+                </div>
+              </div>
+              {Object.keys(stationSales.byZone).length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 pt-3 border-t border-amber-500/20">
+                  {Object.entries(stationSales.byZone).sort((a, b) => b[1] - a[1]).map(([zone, rev]) => (
+                    <div key={zone} className="text-center">
+                      <p className="text-amber-400 font-bold text-sm">₦{rev.toLocaleString()}</p>
+                      <p className="text-gray-500 text-[9px] uppercase tracking-wider">{zone}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-5 gap-2 mb-4">
             {[
               { label: 'Opening', value: totalOpening, color: 'text-white' },
