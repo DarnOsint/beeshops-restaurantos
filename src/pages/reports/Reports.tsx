@@ -257,7 +257,9 @@ export default function Reports() {
       ] = await Promise.all([
         supabase
           .from('orders')
-          .select('*, profiles(full_name), tables(name, table_categories(name)), order_items(total_price, return_requested, return_accepted, status)')
+          .select(
+            '*, profiles(full_name), tables(name, table_categories(name)), order_items(total_price, return_requested, return_accepted, status)'
+          )
           .gte('created_at', start)
           .lte('created_at', end),
         supabase
@@ -295,7 +297,11 @@ export default function Reports() {
         quantity?: number
         total_price?: number
         unit_price?: number
-        orders?: { status?: string } | null
+        status?: string | null
+        return_requested?: boolean | null
+        return_accepted?: boolean | null
+        order_id?: string
+        orders?: { created_at?: string; status?: string } | null
         menu_items?: {
           name?: string
           price?: number
@@ -331,12 +337,21 @@ export default function Reports() {
         returnCountMap[r.item_name] = (returnCountMap[r.item_name] || 0) + (r.quantity || 0)
       })
 
-      const grossRevenue = paidOrders.reduce((s, o) => {
-        const net = (o.order_items || [])
-          .filter((i: any) => !i.return_requested && !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled')
-          .reduce((ss: number, i: any) => ss + (i.total_price || 0), 0)
-        return s + net
-      }, 0)
+      const filteredItems = allItems.filter((i) => {
+        const cancelled = (i.status || '').toLowerCase() === 'cancelled'
+        const returned = i.return_requested || i.return_accepted
+        return i.orders?.status === 'paid' && !cancelled && !returned
+      })
+
+      const perOrderNet: Record<string, number> = {}
+      filteredItems.forEach((i) => {
+        const id = i.order_id || ''
+        if (!id) return
+        const rev = i.total_price || (i.unit_price || 0) * (i.quantity || 0)
+        perOrderNet[id] = (perOrderNet[id] || 0) + rev
+      })
+
+      const grossRevenue = Object.values(perOrderNet).reduce((s, v) => s + v, 0)
       const totalExpenses = payouts.reduce((s, p) => s + (p.amount || 0), 0)
       const roomRevenue = roomStays
         .filter((r) => r.status === 'checked_out')
@@ -357,7 +372,8 @@ export default function Reports() {
         else if (pm.startsWith('cash+card')) key = 'Cash + POS'
         else if (pm === 'complimentary') key = 'Complimentary'
         else key = 'Other'
-        byPayment[key] = (byPayment[key] || 0) + (o.total_amount || 0)
+        const net = perOrderNet[o.id] ?? o.total_amount ?? 0
+        byPayment[key] = (byPayment[key] || 0) + net
       })
       const paymentList = Object.entries(byPayment)
         .map(([label, value]) => ({ label, value }))
@@ -365,26 +381,22 @@ export default function Reports() {
         .sort((a, b) => b.value - a.value)
 
       const categoryMap: Record<string, CategoryStat> = {}
-      allItems
-        .filter((i) => i.orders?.status === 'paid')
-        .forEach((item) => {
-          const cat = item.menu_items?.menu_categories?.name || 'Unknown'
-          if (!categoryMap[cat]) categoryMap[cat] = { name: cat, revenue: 0, quantity: 0 }
-          const revenue = item.total_price || (item.unit_price || 0) * (item.quantity || 0)
-          categoryMap[cat].revenue += revenue
-          categoryMap[cat].quantity += item.quantity || 0
-        })
+      filteredItems.forEach((item) => {
+        const cat = item.menu_items?.menu_categories?.name || 'Unknown'
+        if (!categoryMap[cat]) categoryMap[cat] = { name: cat, revenue: 0, quantity: 0 }
+        const revenue = item.total_price || (item.unit_price || 0) * (item.quantity || 0)
+        categoryMap[cat].revenue += revenue
+        categoryMap[cat].quantity += item.quantity || 0
+      })
 
       const itemMap: Record<string, ItemStat> = {}
-      allItems
-        .filter((i) => i.orders?.status === 'paid')
-        .forEach((item) => {
-          const n = item.menu_items?.name || 'Unknown'
-          if (!itemMap[n]) itemMap[n] = { name: n, quantity: 0, revenue: 0, returned: 0 }
-          const revenue = item.total_price || (item.unit_price || 0) * (item.quantity || 0)
-          itemMap[n].quantity += item.quantity || 0
-          itemMap[n].revenue += revenue
-        })
+      filteredItems.forEach((item) => {
+        const n = item.menu_items?.name || 'Unknown'
+        if (!itemMap[n]) itemMap[n] = { name: n, quantity: 0, revenue: 0, returned: 0 }
+        const revenue = item.total_price || (item.unit_price || 0) * (item.quantity || 0)
+        itemMap[n].quantity += item.quantity || 0
+        itemMap[n].revenue += revenue
+      })
       // Merge return counts into item stats
       for (const [name, count] of Object.entries(returnCountMap)) {
         if (itemMap[name]) {
@@ -399,7 +411,7 @@ export default function Reports() {
         const n = o.profiles?.full_name || 'Unknown'
         if (!staffMap[n]) staffMap[n] = { name: n, orders: 0, revenue: 0 }
         staffMap[n].orders++
-        staffMap[n].revenue += o.total_amount || 0
+        staffMap[n].revenue += perOrderNet[o.id] ?? o.total_amount ?? 0
       })
 
       const hourMap: Record<number, ChartPoint> = {}
@@ -407,7 +419,7 @@ export default function Reports() {
       paidOrders.forEach((o) => {
         const h = new Date(o.created_at).getHours()
         hourMap[h].orders++
-        hourMap[h].revenue += o.total_amount || 0
+        hourMap[h].revenue += perOrderNet[o.id] ?? o.total_amount ?? 0
       })
 
       const dayMap: Record<string, ChartPoint> = {}
@@ -417,7 +429,7 @@ export default function Reports() {
           day: 'numeric',
         })
         if (!dayMap[d]) dayMap[d] = { label: d, revenue: 0, orders: 0 }
-        dayMap[d].revenue += o.total_amount || 0
+        dayMap[d].revenue += perOrderNet[o.id] ?? o.total_amount ?? 0
         dayMap[d].orders++
       })
 
@@ -428,7 +440,7 @@ export default function Reports() {
           const t = o.tables!.name!
           if (!tableMap[t]) tableMap[t] = { table: t, orders: 0, revenue: 0 }
           tableMap[t].orders++
-          tableMap[t].revenue += o.total_amount || 0
+          tableMap[t].revenue += perOrderNet[o.id] ?? o.total_amount ?? 0
         })
 
       setReport({
@@ -515,7 +527,9 @@ export default function Reports() {
       ['Avg Order Value', '₦' + report.avgOrderValue.toLocaleString()],
       [],
       ['PAYMENT METHODS'],
-      ...Object.entries(report.byPayment).filter(([, v]) => v > 0).map(([k, v]) => [k, '₦' + v.toLocaleString()]),
+      ...Object.entries(report.byPayment)
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => [k, '₦' + v.toLocaleString()]),
       [],
       ['ITEMS SOLD'],
       ['Item', 'Qty Sold', 'Returned', 'Return Rate', 'Revenue'],
@@ -912,33 +926,44 @@ export default function Reports() {
                     .filter(([, v]) => v > 0)
                     .sort(([, a], [, b]) => b - a)
                     .map(([label, value], i) => {
-                      const colors = ['bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-amber-500', 'bg-cyan-500', 'bg-pink-500', 'bg-red-500', 'bg-indigo-500']
+                      const colors = [
+                        'bg-emerald-500',
+                        'bg-blue-500',
+                        'bg-purple-500',
+                        'bg-amber-500',
+                        'bg-cyan-500',
+                        'bg-pink-500',
+                        'bg-red-500',
+                        'bg-indigo-500',
+                      ]
                       const item = { label, value, color: colors[i % colors.length] }
                       return item
-                    }).map((item) => (
-                    <div key={item.label}>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-400">{item.label}</span>
-                        <span className="text-white font-medium">
-                          ₦{item.value.toLocaleString()} (
-                          {report.grossRevenue
-                            ? Math.round((item.value / report.grossRevenue) * 100)
-                            : 0}
-                          %)
-                        </span>
+                    })
+                    .map((item) => (
+                      <div key={item.label}>
+                        <div className="flex justify-between text-sm mb-1">
+                          <span className="text-gray-400">{item.label}</span>
+                          <span className="text-white font-medium">
+                            ₦{item.value.toLocaleString()} (
+                            {report.grossRevenue
+                              ? Math.round((item.value / report.grossRevenue) * 100)
+                              : 0}
+                            %)
+                          </span>
+                        </div>
+                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full ${item.color} rounded-full`}
+                            style={{
+                              width:
+                                (report.grossRevenue
+                                  ? (item.value / report.grossRevenue) * 100
+                                  : 0) + '%',
+                            }}
+                          />
+                        </div>
                       </div>
-                      <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full ${item.color} rounded-full`}
-                          style={{
-                            width:
-                              (report.grossRevenue ? (item.value / report.grossRevenue) * 100 : 0) +
-                              '%',
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </div>
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
@@ -1054,7 +1079,10 @@ export default function Reports() {
                         iconSize={8}
                         formatter={(value: string) => {
                           const cat = report.byCategory.find((c) => c.name === value)
-                          const pct = report.grossRevenue > 0 ? Math.round((cat?.revenue || 0) / report.grossRevenue * 100) : 0
+                          const pct =
+                            report.grossRevenue > 0
+                              ? Math.round(((cat?.revenue || 0) / report.grossRevenue) * 100)
+                              : 0
                           return `${value} ${pct}%`
                         }}
                         wrapperStyle={{ fontSize: '11px', color: '#9ca3af', lineHeight: '20px' }}
