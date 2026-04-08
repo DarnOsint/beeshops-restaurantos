@@ -147,8 +147,7 @@ export default function Management() {
       supabase
         .from('attendance')
         .select('staff_id')
-        .is('clock_out', null)
-        .gte('clock_in', start.toISOString()),
+        .is('clock_out', null),
       supabase
         .from('orders')
         .select('total_amount, order_items(total_price, return_requested, return_accepted, status)')
