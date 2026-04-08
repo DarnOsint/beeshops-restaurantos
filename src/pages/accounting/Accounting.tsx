@@ -100,6 +100,7 @@ export default function Accounting() {
   const [orders, setOrders] = useState<Order[]>([])
   const [waitronStats, setWaitronStats] = useState<WaitronStat[]>([])
   const [creditByWaitron, setCreditByWaitron] = useState<Record<string, number>>({})
+  const [creditDetailsList, setCreditDetailsList] = useState<Array<{ name: string; amount: number; notes: string; date: string; by: string }>>([])
   const [trendData, setTrendData] = useState<TrendPoint[]>([])
   const [tillSessions, setTillSessions] = useState<TillSession[]>([])
   const [timesheet, setTimesheet] = useState<TimesheetEntry[]>([])
@@ -248,16 +249,20 @@ export default function Accounting() {
     const { start: dStart, end: dEnd } = getDateBounds()
     const { data: unpaidDebts } = await supabase
       .from('debtors')
-      .select('name, current_balance')
+      .select('name, current_balance, notes, created_at, recorded_by_name')
       .in('status', ['outstanding', 'partial'])
       .in('debt_type', ['credit_order', 'table_order', 'fridge'])
       .gte('created_at', dStart)
       .lt('created_at', dEnd)
+      .order('created_at', { ascending: false })
     const creditMap: Record<string, number> = {}
-    for (const d of (unpaidDebts || []) as Array<{ name: string; current_balance: number }>) {
+    const creditDetails: Array<{ name: string; amount: number; notes: string; date: string; by: string }> = []
+    for (const d of (unpaidDebts || []) as Array<{ name: string; current_balance: number; notes: string; created_at: string; recorded_by_name: string }>) {
       creditMap[d.name] = (creditMap[d.name] || 0) + (d.current_balance || 0)
+      creditDetails.push({ name: d.name, amount: d.current_balance, notes: d.notes || '', date: d.created_at, by: d.recorded_by_name || '' })
     }
     setCreditByWaitron(creditMap)
+    setCreditDetailsList(creditDetails)
 
     const dayMap: Record<string, TrendPoint> = {}
     ;(trendRes.data || []).forEach((o) => {
@@ -474,6 +479,7 @@ export default function Accounting() {
             sessionEndDate={getDateBounds().end.slice(0, 10)}
             dateRangeType={dateRange}
             creditByWaitron={creditByWaitron}
+            creditDetails={creditDetailsList}
             onRecordPayout={() => setActiveTab('payouts')}
           />
         )}

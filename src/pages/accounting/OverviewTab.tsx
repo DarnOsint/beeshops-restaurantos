@@ -39,6 +39,7 @@ interface Props {
   sessionEndDate?: string
   dateRangeType?: string
   creditByWaitron?: Record<string, number>
+  creditDetails?: Array<{ name: string; amount: number; notes: string; date: string; by: string }>
   onRecordPayout: () => void
 }
 
@@ -61,6 +62,7 @@ export default function OverviewTab({
   sessionEndDate,
   dateRangeType,
   creditByWaitron = {},
+  creditDetails = [],
   onRecordPayout,
 }: Props) {
   const { profile } = useAuth()
@@ -514,6 +516,29 @@ export default function OverviewTab({
               </div>
               )
             })}
+          </div>
+          {/* Credit debt details */}
+          {creditDetails.length > 0 && (
+            <div className="mt-3 pt-2 border-t border-gray-700">
+              <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">Credit / Pay Later Details</p>
+              <div className="space-y-1.5">
+                {creditDetails.map((d, i) => (
+                  <div key={i} className="bg-gray-800 rounded-lg px-3 py-2 flex items-center justify-between">
+                    <div>
+                      <p className="text-white text-xs font-medium">{d.name}</p>
+                      <p className="text-gray-500 text-[10px]">
+                        {new Date(d.date).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', timeZone: 'Africa/Lagos' })}
+                        {' · '}
+                        {new Date(d.date).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Africa/Lagos' })}
+                        {d.notes ? ` · ${d.notes}` : ''}
+                      </p>
+                    </div>
+                    <span className="text-red-400 text-xs font-bold">₦{d.amount.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           </div>
           <div className="text-right text-sm text-gray-300 mt-2">
             Total Outstanding:{' '}
