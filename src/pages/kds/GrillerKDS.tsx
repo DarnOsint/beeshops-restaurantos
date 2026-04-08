@@ -478,6 +478,20 @@ function GrillerKDSInner() {
     fetchTickets()
   }
 
+  const rejectOrder = async (ticket: GrillerTicket) => {
+    const ids = ticket.items.filter((i) => i.status !== 'ready' && i.status !== 'delivered').map((i) => i.id)
+    if (!ids.length) return
+    const { error } = await supabase.from('order_items').update({ status: 'cancelled' }).in('id', ids)
+    if (error) { toast.error('Error', error.message); return }
+    const { data: remaining } = await supabase.from('order_items').select('total_price, status').eq('order_id', ticket.orderId)
+    const newTotal = (remaining || []).filter((r: { status: string }) => r.status !== 'cancelled').reduce((s: number, r: { total_price: number }) => s + (r.total_price || 0), 0)
+    await supabase.from('orders').update({ total_amount: newTotal, updated_at: new Date().toISOString() }).eq('id', ticket.orderId)
+    if (ticket.staffId) await sendPushToStaff(ticket.staffId, '❌ Grill Rejected', `Grill rejected items for ${ticket.tableName}`).catch(() => {})
+    audit({ action: 'GRILLER_ORDER_REJECTED', entity: 'orders', entityId: ticket.orderId, entityName: ticket.tableName, newValue: { items: ids.length, newTotal }, performer: profile as any })
+    toast.success('Rejected', 'Grill items cancelled and total updated')
+    fetchTickets()
+  }
+
   useEffect(() => {
     fetchTickets()
     fetchReturnHistory()
@@ -898,12 +912,20 @@ function GrillerKDSInner() {
                       </div>
 
                       {ticket.items.some((i) => i.status !== 'ready') && (
-                        <button
-                          onClick={() => markAllReady(ticket)}
-                          className="w-full bg-green-600 hover:bg-green-500 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
-                        >
-                          <CheckCircle size={13} /> All Done — Ticket Complete
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => markAllReady(ticket)}
+                            className="flex-1 bg-green-600 hover:bg-green-500 text-white text-xs font-bold py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <CheckCircle size={13} /> All Done
+                          </button>
+                          <button
+                            onClick={() => rejectOrder(ticket)}
+                            className="bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-bold py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 border border-red-500/30"
+                          >
+                            <X size={13} /> Reject
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>

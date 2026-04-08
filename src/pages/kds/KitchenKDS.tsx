@@ -506,6 +506,22 @@ function KitchenKDSInner() {
     fetchOrders()
   }
 
+  const rejectOrder = async (order: KdsOrder) => {
+    const kitchenItemIds = order.order_items
+      .filter((i) => i.menu_items?.menu_categories?.destination === 'kitchen' && i.status !== 'ready' && i.status !== 'delivered')
+      .map((i) => i.id)
+    if (!kitchenItemIds.length) return
+    const { error } = await supabase.from('order_items').update({ status: 'cancelled' }).in('id', kitchenItemIds)
+    if (error) { toast.error('Error', error.message); return }
+    const { data: remaining } = await supabase.from('order_items').select('total_price, status').eq('order_id', order.id)
+    const newTotal = (remaining || []).filter((r: { status: string }) => r.status !== 'cancelled').reduce((s: number, r: { total_price: number }) => s + (r.total_price || 0), 0)
+    await supabase.from('orders').update({ total_amount: newTotal, updated_at: new Date().toISOString() }).eq('id', order.id)
+    if (order.staff_id) await sendPushToStaff(order.staff_id, '❌ Kitchen Rejected', `Kitchen rejected items for ${order.tables?.name || 'a table'}`).catch(() => {})
+    audit({ action: 'KITCHEN_ORDER_REJECTED', entity: 'orders', entityId: order.id, entityName: order.tables?.name, newValue: { items: kitchenItemIds.length, newTotal }, performer: profile as any })
+    toast.success('Rejected', 'Kitchen items cancelled and total updated')
+    fetchOrders()
+  }
+
   useEffect(() => {
     fetchOrders()
     fetchReturnHistory()
@@ -868,12 +884,20 @@ function KitchenKDSInner() {
                     <Printer size={11} /> Print New Items
                   </button>
                   {order.order_items.some((i) => i.status !== 'ready') && (
-                    <button
-                      onClick={() => markAllReady(order)}
-                      className="w-full bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl py-2.5 flex items-center justify-center gap-2 transition-colors"
-                    >
-                      <CheckCircle size={16} /> All Ready
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => markAllReady(order)}
+                        className="flex-1 bg-green-500 hover:bg-green-400 text-white font-bold rounded-xl py-2.5 flex items-center justify-center gap-2 transition-colors"
+                      >
+                        <CheckCircle size={16} /> All Ready
+                      </button>
+                      <button
+                        onClick={() => rejectOrder(order)}
+                        className="bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold rounded-xl py-2.5 px-4 flex items-center justify-center gap-2 transition-colors border border-red-500/30"
+                      >
+                        <X size={16} /> Reject
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}

@@ -21,6 +21,7 @@ import {
   Wine,
   Package,
   Trophy,
+  Snowflake,
 } from 'lucide-react'
 import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
@@ -31,6 +32,7 @@ import ReturnedDrinksTab from './mgmt/ReturnedDrinksTab'
 import ChillerTab from './mgmt/ChillerTab'
 import StaffPerformanceTab from './mgmt/StaffPerformanceTab'
 import PayrollTab from './mgmt/PayrollTab'
+import KitchenFridgeTab from './mgmt/KitchenFridgeTab'
 import { useLateOrders } from '../../hooks/useLateOrders'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import type { SyncQueueEntry } from '../../lib/db'
@@ -90,6 +92,7 @@ const TABS = [
   { id: 'kitchen', label: 'Kitchen', icon: UtensilsCrossed },
   { id: 'chiller', label: 'Chiller', icon: Beer },
   { id: 'mainstore', label: 'Main Store', icon: Package },
+  { id: 'fridge', label: 'Kitchen Fridge', icon: Snowflake },
   { id: 'returns', label: 'Returns', icon: RotateCcw },
   { id: 'settings', label: 'Alert Threshold', icon: Settings },
   { id: 'cctv', label: 'CV', icon: Camera },
@@ -449,6 +452,7 @@ export default function Management() {
         {activeTab === 'payroll' && <PayrollTab />}
         {activeTab === 'chiller' && <ChillerTab />}
         {activeTab === 'mainstore' && <MainStoreSummaryTab />}
+        {activeTab === 'fridge' && <KitchenFridgeTab />}
         {activeTab === 'returns' && <ReturnedDrinksTab />}
         {activeTab === 'cctv' && <CctvPanel cvData={cvData} onResolve={resolveAlert} />}
         {activeTab === 'sync' && (
