@@ -104,10 +104,27 @@ export default function PayrollTab() {
       } catch { /* ignore */ }
     }
 
-    // Build rows — auto-populate outstanding from reconciliation
+    // Sum credit/pay-later orders per waitron for the month
+    const monthStartISO = new Date(monthStart + 'T08:00:00+01:00').toISOString()
+    const monthEndISO = new Date(monthEnd + 'T08:00:00+01:00')
+    monthEndISO.setDate(monthEndISO.getDate() + 1)
+    const { data: creditOrders } = await supabase
+      .from('orders')
+      .select('total_amount, staff_id, profiles(full_name)')
+      .eq('status', 'paid')
+      .eq('payment_method', 'credit')
+      .gte('created_at', monthStartISO)
+      .lt('created_at', monthEndISO.toISOString())
+    const creditByStaff: Record<string, number> = {}
+    for (const o of (creditOrders || []) as any[]) {
+      const name = o.profiles?.full_name || 'Unknown'
+      creditByStaff[name] = (creditByStaff[name] || 0) + (o.total_amount || 0)
+    }
+
+    // Build rows — auto-populate outstanding from reconciliation + credit orders
     const display: PayrollRow[] = ((staff || []) as Array<{ id: string; full_name: string; role: string }>).map((s) => {
       const saved = payMap[s.id]
-      const autoOutstanding = reconOutstanding[s.full_name] || 0
+      const autoOutstanding = (reconOutstanding[s.full_name] || 0) + (creditByStaff[s.full_name] || 0)
       return {
         id: saved?.id,
         staff_id: s.id,
