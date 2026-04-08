@@ -439,7 +439,7 @@ export default function Inventory({ onBack }: Props) {
                           'Stock',
                           'Min',
                           'Unit',
-                          'Cost/Unit',
+                          'Price/Unit',
                           'Stock Value',
                           'Status',
                           'Actions',
@@ -479,13 +479,10 @@ export default function Inventory({ onBack }: Props) {
                             </td>
                             <td className="px-4 py-3 text-gray-400 text-sm">{item.unit}</td>
                             <td className="px-4 py-3 text-gray-400 text-sm">
-                              ₦{item.cost_price?.toLocaleString()}
+                              ₦{(item.selling_price || item.cost_price || 0).toLocaleString()}
                             </td>
                             <td className="px-4 py-3 text-amber-400 text-sm font-medium">
-                              ₦
-                              {(
-                                (item.current_stock || 0) * (item.cost_price || 0)
-                              ).toLocaleString()}
+                              ₦{((item.current_stock || 0) * (item.selling_price || item.cost_price || 0)).toLocaleString()}
                             </td>
                             <td className="px-4 py-3">
                               <span className={`text-xs px-2 py-1 rounded-lg ${status.color}`}>

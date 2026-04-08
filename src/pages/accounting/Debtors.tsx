@@ -125,6 +125,7 @@ export default function Debtors({ onBack, embedded = false }: Props) {
   const blankPay: PayForm = { amount: '', payment_method: 'cash', payment_reference: '', notes: '' }
   const [form, setForm] = useState<DebtorForm>(blankForm)
   const [payForm, setPayForm] = useState<PayForm>(blankPay)
+  const [debtorItems, setDebtorItems] = useState<Record<string, string[]>>({})
   const f = (v: Partial<DebtorForm>) => setForm((p) => ({ ...p, ...v }))
   const pf = (v: Partial<PayForm>) => setPayForm((p) => ({ ...p, ...v }))
 
@@ -154,6 +155,17 @@ export default function Debtors({ onBack, embedded = false }: Props) {
         map[p.debtor_id].push(p)
       })
       setPayments(map)
+      // Fetch order items for each debtor with order_id
+      const orderIds = data.filter((d: any) => d.order_id).map((d: any) => d.order_id)
+      if (orderIds.length > 0) {
+        const { data: ois } = await supabase.from('order_items').select('order_id, quantity, menu_items(name)').in('order_id', orderIds)
+        const oiMap: Record<string, string[]> = {}
+        for (const oi of (ois || []) as any[]) {
+          if (!oiMap[oi.order_id]) oiMap[oi.order_id] = []
+          oiMap[oi.order_id].push(`${oi.quantity}x ${oi.menu_items?.name || 'Item'}`)
+        }
+        setDebtorItems(oiMap)
+      }
     }
     setLoading(false)
   }
@@ -508,12 +520,19 @@ export default function Debtors({ onBack, embedded = false }: Props) {
                         )}
                       </div>
                     )}
-                    {debtor.notes && (
+                    {(debtor.notes || (debtor as any).order_id) && (
                       <div className="px-4 py-3 border-b border-gray-800">
-                        <p className="text-gray-500 text-xs flex items-start gap-2">
-                          <FileText size={12} className="mt-0.5 shrink-0" />
-                          {debtor.notes}
-                        </p>
+                        {debtor.notes && (
+                          <p className="text-gray-500 text-xs flex items-start gap-2">
+                            <FileText size={12} className="mt-0.5 shrink-0" />
+                            {debtor.notes}
+                          </p>
+                        )}
+                        {(debtor as any).order_id && debtorItems[(debtor as any).order_id] && (
+                          <p className="text-amber-400 text-xs mt-1">
+                            Items: {debtorItems[(debtor as any).order_id].join(', ')}
+                          </p>
+                        )}
                       </div>
                     )}
                     <div className="px-4 py-3">
