@@ -134,10 +134,7 @@ export default function Executive() {
         supabase.from('orders').select('id').eq('status', 'open'),
         supabase.from('tables').select('status'),
         supabase.from('rooms').select('status'),
-        supabase
-          .from('attendance')
-          .select('staff_id')
-          .is('clock_out', null),
+        supabase.from('attendance').select('staff_id').is('clock_out', null),
         supabase.from('inventory').select('id, current_stock, minimum_stock').eq('is_active', true),
         supabase
           .from('orders')
@@ -147,12 +144,16 @@ export default function Executive() {
           .limit(10),
         supabase
           .from('orders')
-          .select('total_amount, order_items(total_price, return_requested, return_accepted, status)')
+          .select(
+            'total_amount, order_items(total_price, return_requested, return_accepted, status)'
+          )
           .eq('status', 'paid')
           .gte('created_at', sessionStartIso),
         supabase
           .from('orders')
-          .select('created_at, total_amount')
+          .select(
+            'created_at, total_amount, order_items(total_price, status, return_requested, return_accepted)'
+          )
           .eq('status', 'paid')
           .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
           .order('created_at', { ascending: true }),
@@ -160,7 +161,12 @@ export default function Executive() {
     setStats({
       revenue: (revenueRes.data || []).reduce((s: number, o: any) => {
         const net = (o.order_items || [])
-          .filter((i: any) => !i.return_requested && !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled')
+          .filter(
+            (i: any) =>
+              !i.return_requested &&
+              !i.return_accepted &&
+              (i.status || '').toLowerCase() !== 'cancelled'
+          )
           .reduce((ss: number, i: any) => ss + (i.total_price || 0), 0)
         return s + net
       }, 0),
@@ -181,7 +187,15 @@ export default function Executive() {
         day: 'numeric',
       })
       if (!dayMap[day]) dayMap[day] = { day, revenue: 0, orders: 0 }
-      dayMap[day].revenue += o.total_amount || 0
+      const net = (o.order_items || [])
+        .filter(
+          (i: any) =>
+            !i.return_requested &&
+            !i.return_accepted &&
+            (i.status || '').toLowerCase() !== 'cancelled'
+        )
+        .reduce((s: number, i: any) => s + (i.total_price || 0), 0)
+      dayMap[day].revenue += net
       dayMap[day].orders++
     })
     setTrendData(Object.values(dayMap))
