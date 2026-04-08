@@ -87,9 +87,27 @@ export default function PayrollTab() {
       payMap[p.staff_id] = p
     }
 
-    // Build rows
+    // Sum outstanding from daily reconciliation for the month
+    const { data: reconEntries } = await supabase
+      .from('settings')
+      .select('id, value')
+      .ilike('id', `recon_${month}-%`)
+    const reconOutstanding: Record<string, number> = {}
+    for (const entry of (reconEntries || []) as Array<{ id: string; value: string }>) {
+      try {
+        const recon = JSON.parse(entry.value)
+        if (recon.outstanding) {
+          for (const [name, amt] of Object.entries(recon.outstanding as Record<string, number>)) {
+            if (amt > 0) reconOutstanding[name] = (reconOutstanding[name] || 0) + amt
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Build rows — auto-populate outstanding from reconciliation
     const display: PayrollRow[] = ((staff || []) as Array<{ id: string; full_name: string; role: string }>).map((s) => {
       const saved = payMap[s.id]
+      const autoOutstanding = reconOutstanding[s.full_name] || 0
       return {
         id: saved?.id,
         staff_id: s.id,
@@ -98,7 +116,7 @@ export default function PayrollTab() {
         bank_name: saved?.bank_name || '',
         account_number: saved?.account_number || '',
         base_salary: saved?.base_salary || 0,
-        outstanding: saved?.outstanding || 0,
+        outstanding: (saved?.outstanding || 0) + autoOutstanding,
         docking: saved?.docking || 0,
         days_worked: daysMap[s.id]?.size || 0,
         total_days: totalDays,
