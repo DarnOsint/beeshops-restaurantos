@@ -947,35 +947,24 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
               .ilike('name', debtorName)
               .eq('is_active', true)
               .limit(1))
-        const existing = existingDebtors?.[0] as { id: string; current_balance: number } | undefined
-        if (existing) {
-          await supabase
-            .from('debtors')
-            .update({
-              current_balance: existing.current_balance + total,
-              status: 'outstanding',
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', existing.id)
-        } else {
-          await supabase.from('debtors').insert({
-            id: crypto.randomUUID(),
-            created_at: new Date().toISOString(),
-            name: debtorName,
-            phone: debtorPhone,
-            debt_type: 'table_order',
-            order_id: order.id,
-            credit_limit: total,
-            current_balance: total,
-            amount_paid: 0,
-            status: 'outstanding',
-            is_active: true,
-            due_date: dueDate || null,
-            notes: 'Auto-created from POS - ' + (table?.name || ''),
-            recorded_by: profile?.id,
-            recorded_by_name: profile?.full_name,
-          })
-        }
+        // Always create a separate entry for each credit order — never lump
+        await supabase.from('debtors').insert({
+          id: crypto.randomUUID(),
+          created_at: new Date().toISOString(),
+          name: debtorName,
+          phone: debtorPhone,
+          debt_type: 'credit_order',
+          order_id: order.id,
+          credit_limit: total,
+          current_balance: total,
+          amount_paid: 0,
+          status: 'outstanding',
+          is_active: true,
+          due_date: dueDate || null,
+          notes: `Credit order — ${table?.name || 'Counter'} — by ${profile?.full_name || 'Staff'}`,
+          recorded_by: profile?.id,
+          recorded_by_name: profile?.full_name,
+        })
         await depleteInventory(order.id)
         await audit({
           action: 'ORDER_PAID',
