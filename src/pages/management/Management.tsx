@@ -33,6 +33,7 @@ import ChillerTab from './mgmt/ChillerTab'
 import StaffPerformanceTab from './mgmt/StaffPerformanceTab'
 import PayrollTab from './mgmt/PayrollTab'
 import KitchenFridgeTab from './mgmt/KitchenFridgeTab'
+import StationSalesTab from './mgmt/StationSalesTab'
 import { useLateOrders } from '../../hooks/useLateOrders'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
 import type { SyncQueueEntry } from '../../lib/db'
@@ -89,7 +90,9 @@ const TABS = [
   { id: 'performance', label: 'Staff Performance', icon: Trophy },
   { id: 'payroll', label: 'Payroll', icon: DollarSign },
   { id: 'till', label: 'Till', icon: DollarSign },
-  { id: 'kitchen', label: 'Kitchen', icon: UtensilsCrossed },
+  { id: 'kitchen', label: 'Kitchen Sales', icon: UtensilsCrossed },
+  { id: 'grillersales', label: 'Grill Sales', icon: Flame },
+  { id: 'mixosales', label: 'Mixologist Sales', icon: Wine },
   { id: 'chiller', label: 'Chiller', icon: Beer },
   { id: 'mainstore', label: 'Main Store', icon: Package },
   { id: 'fridge', label: 'Kitchen Fridge', icon: Snowflake },
@@ -446,7 +449,9 @@ export default function Management() {
           <OrdersByWaitronTab destinations={['games']} title="Games Orders per Waitron" />
         )}
         {activeTab === 'till' && <TillManagement />}
-        {activeTab === 'kitchen' && <KitchenStock onBack={() => setActiveTab('overview')} />}
+        {activeTab === 'kitchen' && <StationSalesTab destination="kitchen" label="Kitchen" />}
+        {activeTab === 'grillersales' && <StationSalesTab destination="griller" label="Griller" />}
+        {activeTab === 'mixosales' && <StationSalesTab destination="mixologist" label="Mixologist" />}
         {activeTab === 'performance' && <StaffPerformanceTab />}
         {activeTab === 'payroll' && <PayrollTab />}
         {activeTab === 'chiller' && <ChillerTab />}
