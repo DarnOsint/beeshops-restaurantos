@@ -404,7 +404,13 @@ export default function OrderPanel({
       return
     }
 
-    // Non-bar items: mark return_requested so kitchen/grill see it, then send to manager + log
+    // Kitchen and griller items cannot be returned — orders are final once accepted
+    if (itemDest === 'kitchen' || itemDest === 'griller') {
+      toast.error('Cannot Return', 'Kitchen and grill orders cannot be returned once accepted.')
+      return
+    }
+
+    // Non-bar items (mixologist etc): mark return_requested and send to manager
     await supabase
       .from('order_items')
       .update({

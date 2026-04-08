@@ -243,6 +243,12 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       item.destination ||
       'bar'
 
+    // Kitchen and griller orders cannot be returned
+    if (itemDest === 'kitchen' || itemDest === 'griller') {
+      toast.error('Cannot Return', 'Kitchen and grill orders are final and cannot be returned.')
+      return
+    }
+
     // Check station mode — if printer-only (no screen), auto-accept since nobody is there to approve
     let autoAccept = false
     if (itemDest === 'kitchen' || itemDest === 'griller') {
@@ -1572,7 +1578,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           {(order?.order_items || []).length > 0 && (
             <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
               <p className="text-gray-300 font-semibold text-sm mb-3">↩ Returned Items</p>
-              {['bar', 'kitchen', 'griller'].map((dest) => {
+              {['bar', 'mixologist'].map((dest) => {
                 const destItems = (order?.order_items || []).filter((i) => {
                   const itemDest =
                     (
