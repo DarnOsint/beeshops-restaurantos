@@ -249,17 +249,28 @@ export default function Accounting() {
     const { start: dStart, end: dEnd } = getDateBounds()
     const { data: unpaidDebts } = await supabase
       .from('debtors')
-      .select('name, current_balance, notes, created_at, recorded_by_name')
+      .select('name, current_balance, notes, created_at, recorded_by_name, order_id')
       .in('status', ['outstanding', 'partial'])
       .in('debt_type', ['credit_order', 'table_order', 'fridge'])
       .gte('created_at', dStart)
       .lt('created_at', dEnd)
       .order('created_at', { ascending: false })
+    // Fetch order items for each debt
+    const orderIds = (unpaidDebts || []).map((d: any) => d.order_id).filter(Boolean)
+    const { data: debtOrderItems } = orderIds.length > 0
+      ? await supabase.from('order_items').select('order_id, quantity, menu_items(name)').in('order_id', orderIds)
+      : { data: [] }
+    const itemsByOrder: Record<string, string[]> = {}
+    for (const oi of (debtOrderItems || []) as any[]) {
+      if (!itemsByOrder[oi.order_id]) itemsByOrder[oi.order_id] = []
+      itemsByOrder[oi.order_id].push(`${oi.quantity}x ${oi.menu_items?.name || 'Item'}`)
+    }
     const creditMap: Record<string, number> = {}
-    const creditDetails: Array<{ name: string; amount: number; notes: string; date: string; by: string }> = []
-    for (const d of (unpaidDebts || []) as Array<{ name: string; current_balance: number; notes: string; created_at: string; recorded_by_name: string }>) {
+    const creditDetails: Array<{ name: string; amount: number; notes: string; date: string; by: string; items: string }> = []
+    for (const d of (unpaidDebts || []) as Array<{ name: string; current_balance: number; notes: string; created_at: string; recorded_by_name: string; order_id: string }>) {
       creditMap[d.name] = (creditMap[d.name] || 0) + (d.current_balance || 0)
-      creditDetails.push({ name: d.name, amount: d.current_balance, notes: d.notes || '', date: d.created_at, by: d.recorded_by_name || '' })
+      const items = d.order_id ? (itemsByOrder[d.order_id] || []).join(', ') : ''
+      creditDetails.push({ name: d.name, amount: d.current_balance, notes: d.notes || '', date: d.created_at, by: d.recorded_by_name || '', items })
     }
     setCreditByWaitron(creditMap)
     setCreditDetailsList(creditDetails)

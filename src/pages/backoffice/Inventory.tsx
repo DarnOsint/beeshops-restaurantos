@@ -299,7 +299,7 @@ export default function Inventory({ onBack }: Props) {
   })
   const lowStockCount = items.filter((i) => i.current_stock <= i.minimum_stock).length
   const totalStockValue = items.reduce(
-    (s, i) => s + (i.current_stock || 0) * (i.cost_price || 0),
+    (s, i) => s + (i.current_stock || 0) * (i.selling_price || i.cost_price || 0),
     0
   )
 

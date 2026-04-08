@@ -39,7 +39,7 @@ interface Props {
   sessionEndDate?: string
   dateRangeType?: string
   creditByWaitron?: Record<string, number>
-  creditDetails?: Array<{ name: string; amount: number; notes: string; date: string; by: string }>
+  creditDetails?: Array<{ name: string; amount: number; notes: string; date: string; by: string; items?: string }>
   onRecordPayout: () => void
 }
 
@@ -532,6 +532,7 @@ export default function OverviewTab({
                         {new Date(d.date).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Africa/Lagos' })}
                         {d.notes ? ` · ${d.notes}` : ''}
                       </p>
+                      {d.items && <p className="text-gray-400 text-[10px] mt-0.5">{d.items}</p>}
                     </div>
                     <span className="text-red-400 text-xs font-bold">₦{d.amount.toLocaleString()}</span>
                   </div>
