@@ -73,7 +73,9 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
             (i as any).destination ||
             'bar'
           )?.toLowerCase()
-          return itemDest === destination && i.orders && !i.return_accepted
+          const cancelled = (i.status || '').toLowerCase() === 'cancelled'
+          const hasReturn = i.return_accepted || (i as any).return_requested
+          return itemDest === destination && i.orders && !cancelled && !hasReturn
         })
 
         const itemMap = new Map<string, Map<string, number>>()
