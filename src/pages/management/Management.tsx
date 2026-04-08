@@ -90,9 +90,12 @@ const TABS = [
   { id: 'performance', label: 'Staff Performance', icon: Trophy },
   { id: 'payroll', label: 'Payroll', icon: DollarSign },
   { id: 'till', label: 'Till', icon: DollarSign },
+  { id: 'barsales', label: 'Bar Sales', icon: Beer },
   { id: 'kitchen', label: 'Kitchen Sales', icon: UtensilsCrossed },
   { id: 'grillersales', label: 'Grill Sales', icon: Flame },
   { id: 'mixosales', label: 'Mixologist Sales', icon: Wine },
+  { id: 'shishasales', label: 'Shisha Sales', icon: Wind },
+  { id: 'gamessales', label: 'Games Sales', icon: Gamepad2 },
   { id: 'chiller', label: 'Chiller', icon: Beer },
   { id: 'mainstore', label: 'Main Store', icon: Package },
   { id: 'fridge', label: 'Kitchen Fridge', icon: Snowflake },
@@ -449,9 +452,12 @@ export default function Management() {
           <OrdersByWaitronTab destinations={['games']} title="Games Orders per Waitron" />
         )}
         {activeTab === 'till' && <TillManagement />}
+        {activeTab === 'barsales' && <StationSalesTab destination="bar" label="Bar" />}
         {activeTab === 'kitchen' && <StationSalesTab destination="kitchen" label="Kitchen" />}
         {activeTab === 'grillersales' && <StationSalesTab destination="griller" label="Griller" />}
         {activeTab === 'mixosales' && <StationSalesTab destination="mixologist" label="Mixologist" />}
+        {activeTab === 'shishasales' && <StationSalesTab destination="shisha" label="Shisha" />}
+        {activeTab === 'gamessales' && <StationSalesTab destination="games" label="Games" />}
         {activeTab === 'performance' && <StaffPerformanceTab />}
         {activeTab === 'payroll' && <PayrollTab />}
         {activeTab === 'chiller' && <ChillerTab />}
