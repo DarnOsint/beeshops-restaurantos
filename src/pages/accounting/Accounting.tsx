@@ -99,6 +99,7 @@ export default function Accounting() {
   })
   const [orders, setOrders] = useState<Order[]>([])
   const [waitronStats, setWaitronStats] = useState<WaitronStat[]>([])
+  const [creditByWaitron, setCreditByWaitron] = useState<Record<string, number>>({})
   const [trendData, setTrendData] = useState<TrendPoint[]>([])
   const [tillSessions, setTillSessions] = useState<TillSession[]>([])
   const [timesheet, setTimesheet] = useState<TimesheetEntry[]>([])
@@ -242,6 +243,16 @@ export default function Accounting() {
       wMap[name].revenue += netOrderAmount(o)
     })
     setWaitronStats(Object.values(wMap).sort((a, b) => b.revenue - a.revenue))
+
+    // Compute credit (pay later) per waitron for auto-outstanding
+    const creditMap: Record<string, number> = {}
+    paidOrders
+      .filter((o) => o.payment_method === 'credit')
+      .forEach((o) => {
+        const name = (o as Order & { profiles?: { full_name: string } }).profiles?.full_name || 'Unknown'
+        creditMap[name] = (creditMap[name] || 0) + netOrderAmount(o)
+      })
+    setCreditByWaitron(creditMap)
 
     const dayMap: Record<string, TrendPoint> = {}
     ;(trendRes.data || []).forEach((o) => {
@@ -455,6 +466,7 @@ export default function Accounting() {
             waitronStats={waitronStats}
             dateLabel={dateRange === 'Custom' ? `${customStart} – ${customEnd}` : dateRange}
             sessionDate={getDateBounds().start.slice(0, 10)}
+            creditByWaitron={creditByWaitron}
             onRecordPayout={() => setActiveTab('payouts')}
           />
         )}

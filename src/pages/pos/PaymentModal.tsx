@@ -222,10 +222,11 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       i.menu_items?.name,
       catName
     )
-    // shisha and games should not block payment; bar and mixologist must be ready/approved
+    // shisha and games should not block payment
     if (normDest === 'shisha' || normDest === 'games') return false
-    const isBlocking = normDest === 'bar' || normDest === 'mixologist'
-    return isBlocking && i.status === 'pending' && !i.return_requested && !i.return_accepted
+    // All station items (bar, kitchen, griller, mixologist) must be ready/delivered before payment
+    if (i.return_requested || i.return_accepted) return false
+    return i.status === 'pending' || i.status === 'preparing'
   })
   const hasUnreadyItems = unreadyItems.length > 0
 
@@ -1712,8 +1713,8 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
               <p className="text-red-400 font-semibold text-sm mb-2">⚠️ Items not yet ready</p>
               <p className="text-gray-400 text-xs mb-2">
-                The following items have not been marked ready by the bar/kitchen. Payment is
-                blocked until all items are served:
+                These items have not been marked ready/delivered by the station. Payment is
+                blocked until all items are prepared and served:
               </p>
               <div className="space-y-1">
                 {unreadyItems.map((item) => (

@@ -36,6 +36,7 @@ interface Props {
   waitronStats: WaitronStat[]
   dateLabel: string
   sessionDate?: string
+  creditByWaitron?: Record<string, number>
   onRecordPayout: () => void
 }
 
@@ -55,6 +56,7 @@ export default function OverviewTab({
   waitronStats,
   dateLabel,
   sessionDate,
+  creditByWaitron = {},
   onRecordPayout,
 }: Props) {
   const { profile } = useAuth()
@@ -147,7 +149,12 @@ export default function OverviewTab({
   const totalBankReceived = Object.values(recon.bankEntries).reduce((s, v) => s + (v || 0), 0)
   const totalPOSReceived = Object.values(recon.posEntries).reduce((s, v) => s + (v || 0), 0)
   const totalDebts = recon.debts.reduce((s, d) => s + (d.amount || 0), 0)
-  const totalOutstanding = Object.values(recon.outstanding).reduce((s, v) => s + (v || 0), 0)
+  // Merge manual outstanding + auto credit (pay later) per waitron
+  const mergedOutstanding: Record<string, number> = { ...recon.outstanding }
+  for (const [name, amt] of Object.entries(creditByWaitron)) {
+    mergedOutstanding[name] = (mergedOutstanding[name] || 0) + amt
+  }
+  const totalOutstanding = Object.values(mergedOutstanding).reduce((s, v) => s + (v || 0), 0)
   const totalReceived = totalCashCollected + totalBankReceived + totalPOSReceived
   const expectedRevenue = summary.total
   const shortfall = expectedRevenue - totalReceived - totalDebts - totalOutstanding - totalPayouts
@@ -450,15 +457,20 @@ export default function OverviewTab({
             <AlertTriangle size={13} className="text-red-400" /> Outstanding / Shortage per Waitron
           </h4>
           <p className="text-gray-600 text-xs mb-2">
-            Enter shortages for today (8am–8am). Tracked separately; does not affect shortfall math.
+            Credit (Pay Later) orders are auto-added. Enter additional shortages manually.
           </p>
           <div className="space-y-1.5">
-            {activeWaitrons.map((w) => (
+            {activeWaitrons.map((w) => {
+              const credit = creditByWaitron[w.name] || 0
+              return (
               <div key={w.name} className="flex items-center gap-2">
                 <span className="text-gray-400 text-sm w-32 truncate">{w.name}</span>
+                {credit > 0 && (
+                  <span className="text-amber-400 text-xs shrink-0">Credit: ₦{credit.toLocaleString()}</span>
+                )}
                 <input
                   type="number"
-                  placeholder="₦ outstanding"
+                  placeholder="₦ additional"
                   value={recon.outstanding[w.name] ?? ''}
                   onChange={(e) =>
                     setRecon((prev) => ({
@@ -469,7 +481,8 @@ export default function OverviewTab({
                   className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
                 />
               </div>
-            ))}
+              )
+            })}
           </div>
           <div className="text-right text-sm text-gray-300 mt-2">
             Total Outstanding:{' '}
