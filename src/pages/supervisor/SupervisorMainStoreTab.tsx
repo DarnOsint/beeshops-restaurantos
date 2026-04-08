@@ -73,9 +73,16 @@ export default function SupervisorMainStoreTab() {
     notes: '',
   })
   const [saving, setSaving] = useState(false)
+  const [reqDate, setReqDate] = useState(() => {
+    const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+    if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
+    return wat.toLocaleDateString('en-CA')
+  })
 
   const fetchData = useCallback(async () => {
     setLoading(true)
+    const dayStart = new Date(reqDate + 'T08:00:00+01:00')
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1)
     const [{ data: inv }, { data: reqs }] = await Promise.all([
       supabase
         .from('inventory')
@@ -85,13 +92,14 @@ export default function SupervisorMainStoreTab() {
       supabase
         .from('store_requests')
         .select('*')
-        .eq('status', 'pending')
+        .gte('created_at', dayStart.toISOString())
+        .lt('created_at', dayEnd.toISOString())
         .order('created_at', { ascending: true }),
     ])
     setItems((inv || []) as InventoryItem[])
     setRequests((reqs || []) as StoreRequest[])
     setLoading(false)
-  }, [])
+  }, [reqDate])
 
   useEffect(() => {
     fetchData()
@@ -315,6 +323,12 @@ export default function SupervisorMainStoreTab() {
         >
           Stock Levels
         </button>
+        <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)}
+          className="bg-gray-800 border border-gray-700 text-white rounded-xl px-2 py-1.5 text-xs" />
+        <button onClick={() => { const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })); if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1); setReqDate(wat.toLocaleDateString('en-CA')) }}
+          className={`px-2 py-1.5 rounded-xl text-xs font-medium ${reqDate === (() => { const w = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })); if (w.getHours() < 8) w.setDate(w.getDate() - 1); return w.toLocaleDateString('en-CA') })() ? 'bg-amber-500 text-black' : 'bg-gray-900 text-gray-400'}`}>Today</button>
+        <button onClick={() => { const d = new Date(reqDate); d.setDate(d.getDate() - 1); setReqDate(d.toLocaleDateString('en-CA')) }}
+          className="px-2 py-1.5 rounded-xl text-xs bg-gray-900 text-gray-400 hover:text-white">Prev Day</button>
         <button onClick={fetchData} className="p-2 text-gray-400 hover:text-white">
           <RefreshCw size={14} />
         </button>

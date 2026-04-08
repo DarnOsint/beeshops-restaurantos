@@ -48,9 +48,16 @@ export default function StoreRequestPanel() {
   const [reason, setReason] = useState('')
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [reqDate, setReqDate] = useState(() => {
+    const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+    if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
+    return wat.toLocaleDateString('en-CA')
+  })
 
   const fetchData = useCallback(async () => {
     setLoading(true)
+    const dayStart = new Date(reqDate + 'T08:00:00+01:00')
+    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1)
     const [{ data: inv }, { data: reqs }] = await Promise.all([
       supabase
         .from('inventory')
@@ -62,13 +69,14 @@ export default function StoreRequestPanel() {
         .from('store_requests')
         .select('*')
         .eq('requested_by', profile?.id)
-        .order('created_at', { ascending: false })
-        .limit(30),
+        .gte('created_at', dayStart.toISOString())
+        .lt('created_at', dayEnd.toISOString())
+        .order('created_at', { ascending: false }),
     ])
     setStoreItems((inv || []) as InventoryItem[])
     setMyRequests((reqs || []) as MyRequest[])
     setLoading(false)
-  }, [profile?.id])
+  }, [profile?.id, reqDate])
 
   useEffect(() => {
     fetchData()
@@ -144,7 +152,13 @@ export default function StoreRequestPanel() {
         <h2 className="text-white font-bold text-lg flex items-center gap-2">
           <Package size={18} className="text-amber-400" /> Store Requests
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)}
+            className="bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1 text-xs" />
+          <button onClick={() => { const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })); if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1); setReqDate(wat.toLocaleDateString('en-CA')) }}
+            className="px-2 py-1 rounded-lg text-xs bg-amber-500 text-black font-medium">Today</button>
+          <button onClick={() => { const d = new Date(reqDate); d.setDate(d.getDate() - 1); setReqDate(d.toLocaleDateString('en-CA')) }}
+            className="px-2 py-1 rounded-lg text-xs bg-gray-800 text-gray-400">Prev</button>
           <button onClick={fetchData} className="text-gray-400 hover:text-white p-1">
             <RefreshCw size={14} />
           </button>
