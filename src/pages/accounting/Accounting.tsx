@@ -244,14 +244,19 @@ export default function Accounting() {
     })
     setWaitronStats(Object.values(wMap).sort((a, b) => b.revenue - a.revenue))
 
-    // Compute credit (pay later) per waitron for auto-outstanding
+    // Compute UNPAID credit debts per waitron (from debtors table, respects paid status)
+    const { start: dStart, end: dEnd } = getDateBounds()
+    const { data: unpaidDebts } = await supabase
+      .from('debtors')
+      .select('name, current_balance')
+      .in('status', ['outstanding', 'partial'])
+      .in('debt_type', ['credit_order', 'table_order', 'fridge'])
+      .gte('created_at', dStart)
+      .lt('created_at', dEnd)
     const creditMap: Record<string, number> = {}
-    paidOrders
-      .filter((o) => o.payment_method === 'credit')
-      .forEach((o) => {
-        const name = (o as Order & { profiles?: { full_name: string } }).profiles?.full_name || 'Unknown'
-        creditMap[name] = (creditMap[name] || 0) + netOrderAmount(o)
-      })
+    for (const d of (unpaidDebts || []) as Array<{ name: string; current_balance: number }>) {
+      creditMap[d.name] = (creditMap[d.name] || 0) + (d.current_balance || 0)
+    }
     setCreditByWaitron(creditMap)
 
     const dayMap: Record<string, TrendPoint> = {}
