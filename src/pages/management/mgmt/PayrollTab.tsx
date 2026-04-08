@@ -104,21 +104,23 @@ export default function PayrollTab() {
       } catch { /* ignore */ }
     }
 
-    // Sum credit/pay-later orders per waitron for the month
+    // Sum UNPAID credit debts per waitron for the month (from debtors table)
+    // This respects paid/partial status — paid debts are excluded
     const monthStartISO = new Date(monthStart + 'T08:00:00+01:00').toISOString()
     const monthEndISO = new Date(monthEnd + 'T08:00:00+01:00')
     monthEndISO.setDate(monthEndISO.getDate() + 1)
-    const { data: creditOrders } = await supabase
-      .from('orders')
-      .select('total_amount, staff_id, profiles(full_name)')
-      .eq('status', 'paid')
-      .eq('payment_method', 'credit')
+    const { data: unpaidDebts } = await supabase
+      .from('debtors')
+      .select('name, current_balance, recorded_by_name')
+      .in('status', ['outstanding', 'partial'])
+      .in('debt_type', ['credit_order', 'table_order', 'fridge'])
       .gte('created_at', monthStartISO)
       .lt('created_at', monthEndISO.toISOString())
     const creditByStaff: Record<string, number> = {}
-    for (const o of (creditOrders || []) as any[]) {
-      const name = o.profiles?.full_name || 'Unknown'
-      creditByStaff[name] = (creditByStaff[name] || 0) + (o.total_amount || 0)
+    for (const d of (unpaidDebts || []) as any[]) {
+      // Use the debtor name (which is the waitron name for credit_order type)
+      const name = d.name || 'Unknown'
+      creditByStaff[name] = (creditByStaff[name] || 0) + (d.current_balance || 0)
     }
 
     // Build rows — auto-populate outstanding from reconciliation + credit orders
