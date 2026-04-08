@@ -346,14 +346,12 @@ export default function Login() {
       void supabase.from('profiles').update({ pin: entered }).eq('id', profile.id)
     }
 
-    // Auto-confirm attendance: if manager clocked this person in but they
-    // haven't logged in yet, mark confirmed_at now (proves they are present)
-    void supabase
+    // Auto-confirm attendance: mark confirmed_at on active shift (proves they are present)
+    await supabase
       .from('attendance')
       .update({ confirmed_at: new Date().toISOString() })
       .eq('staff_id', profile.id)
       .is('clock_out', null)
-      .is('confirmed_at', null)
 
     void fetch('https://api.ipify.org?format=json')
       .then((r) => r.json())
