@@ -323,6 +323,23 @@ export default function Login() {
     }
     resetAttempts('rl_pin')
 
+    // Operational roles must be clocked in before they can log in
+    const clockInRequired = ['waitron', 'kitchen', 'bar', 'griller', 'mixologist', 'games_master', 'shisha_attendant']
+    if (clockInRequired.includes(profile.role)) {
+      const { data: activeShift } = await supabase
+        .from('attendance')
+        .select('id')
+        .eq('staff_id', profile.id)
+        .is('clock_out', null)
+        .limit(1)
+      if (!activeShift || activeShift.length === 0) {
+        setError('You must be clocked in by a manager before logging in.')
+        setPin('')
+        setLoading(false)
+        return
+      }
+    }
+
     // Normalize PIN storage: if stored as PBKDF2 hash, replace with plaintext
     // so the server-side RPC can verify it directly next time (faster, no fallback loop)
     if (profile.pin && profile.pin.startsWith('pbkdf2:')) {
