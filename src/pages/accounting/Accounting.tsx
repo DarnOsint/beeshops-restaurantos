@@ -466,6 +466,8 @@ export default function Accounting() {
             waitronStats={waitronStats}
             dateLabel={dateRange === 'Custom' ? `${customStart} – ${customEnd}` : dateRange}
             sessionDate={getDateBounds().start.slice(0, 10)}
+            sessionEndDate={getDateBounds().end.slice(0, 10)}
+            dateRangeType={dateRange}
             creditByWaitron={creditByWaitron}
             onRecordPayout={() => setActiveTab('payouts')}
           />

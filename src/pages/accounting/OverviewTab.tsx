@@ -36,6 +36,8 @@ interface Props {
   waitronStats: WaitronStat[]
   dateLabel: string
   sessionDate?: string
+  sessionEndDate?: string
+  dateRangeType?: string
   creditByWaitron?: Record<string, number>
   onRecordPayout: () => void
 }
@@ -56,6 +58,8 @@ export default function OverviewTab({
   waitronStats,
   dateLabel,
   sessionDate,
+  sessionEndDate,
+  dateRangeType,
   creditByWaitron = {},
   onRecordPayout,
 }: Props) {
@@ -83,6 +87,7 @@ export default function OverviewTab({
   useEffect(() => {
     if (sessionDate) setReconDate(sessionDate)
   }, [sessionDate])
+  const isSingleDay = !dateRangeType || dateRangeType === 'Today' || dateRangeType === 'Prev Day'
   const activeWaitrons =
     waitronStats.filter((w) => (w.revenue || 0) > 0 || (w.orders || 0) > 0) || waitronStats
 
@@ -111,23 +116,43 @@ export default function OverviewTab({
       })
   }, [])
 
-  // Load saved reconciliation for the date
-  const loadRecon = useCallback(async (d: string) => {
-    const { data } = await supabase.from('settings').select('value').eq('id', `recon_${d}`).single()
-    if (data?.value) {
-      try {
-        setRecon(JSON.parse(data.value))
-      } catch {
-        /* */
+  // Load saved reconciliation — single day or aggregate for range
+  const loadRecon = useCallback(async () => {
+    const isSingleDay = !dateRangeType || dateRangeType === 'Today' || dateRangeType === 'Prev Day'
+
+    if (isSingleDay) {
+      const { data } = await supabase.from('settings').select('value').eq('id', `recon_${reconDate}`).single()
+      if (data?.value) {
+        try { setRecon(JSON.parse(data.value)) } catch { /* */ }
+      } else {
+        setRecon({ cashCollected: {}, outstanding: {}, bankEntries: {}, posEntries: {}, debts: [] })
       }
     } else {
-      setRecon({ cashCollected: {}, outstanding: {}, bankEntries: {}, posEntries: {}, debts: [] })
+      // Aggregate all recon entries between sessionDate and sessionEndDate
+      const startDate = sessionDate || reconDate
+      const endDate = sessionEndDate || reconDate
+      const { data: allRecons } = await supabase.from('settings').select('id, value')
+        .gte('id', `recon_${startDate}`)
+        .lte('id', `recon_${endDate}`)
+      const merged: Reconciliation = { cashCollected: {}, outstanding: {}, bankEntries: {}, posEntries: {}, debts: [] }
+      for (const entry of (allRecons || [])) {
+        if (!entry.id.startsWith('recon_')) continue
+        try {
+          const r = JSON.parse(entry.value) as Reconciliation
+          for (const [k, v] of Object.entries(r.cashCollected || {})) merged.cashCollected[k] = (merged.cashCollected[k] || 0) + (v || 0)
+          for (const [k, v] of Object.entries(r.outstanding || {})) merged.outstanding[k] = (merged.outstanding[k] || 0) + (v || 0)
+          for (const [k, v] of Object.entries(r.bankEntries || {})) merged.bankEntries[k] = (merged.bankEntries[k] || 0) + (v || 0)
+          for (const [k, v] of Object.entries(r.posEntries || {})) merged.posEntries[k] = (merged.posEntries[k] || 0) + (v || 0)
+          merged.debts.push(...(r.debts || []))
+        } catch { /* */ }
+      }
+      setRecon(merged)
     }
-  }, [])
+  }, [reconDate, dateRangeType, sessionDate, sessionEndDate])
 
   useEffect(() => {
-    loadRecon(reconDate)
-  }, [reconDate, loadRecon])
+    loadRecon()
+  }, [loadRecon])
 
   const saveRecon = async () => {
     setSaving(true)
@@ -390,17 +415,23 @@ export default function OverviewTab({
       <div className="bg-gray-900 border border-amber-500/20 rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-amber-400 font-bold flex items-center gap-2">
-            <DollarSign size={16} /> Daily Reconciliation
+            <DollarSign size={16} /> {isSingleDay ? 'Daily Reconciliation' : 'Reconciliation Summary'}
           </h3>
           <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-xs">{new Date(reconDate).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-            <button
-              onClick={saveRecon}
-              disabled={saving}
-              className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <Save size={12} /> {saving ? 'Saving...' : 'Save'}
-            </button>
+            <span className="text-gray-400 text-xs">
+              {isSingleDay
+                ? new Date(reconDate).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
+                : dateLabel}
+            </span>
+            {isSingleDay && (
+              <button
+                onClick={saveRecon}
+                disabled={saving}
+                className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <Save size={12} /> {saving ? 'Saving...' : 'Save'}
+              </button>
+            )}
             <button
               onClick={printDailySummary}
               className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded-lg transition-colors"
