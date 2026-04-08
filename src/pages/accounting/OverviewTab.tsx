@@ -539,7 +539,6 @@ export default function OverviewTab({
               </div>
             </div>
           )}
-          </div>
           <div className="text-right text-sm text-gray-300 mt-2">
             Total Outstanding:{' '}
             <span className="text-red-400 font-semibold">₦{totalOutstanding.toLocaleString()}</span>
