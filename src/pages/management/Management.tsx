@@ -81,12 +81,6 @@ const TABS = [
   { id: 'shifts', label: 'Shifts', icon: Clock },
   { id: 'tables', label: 'Zone Assignment', icon: Users },
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
-  { id: 'barwaitron', label: 'Bar Orders', icon: Beer },
-  { id: 'kitchenwaitron', label: 'Kitchen Orders', icon: UtensilsCrossed },
-  { id: 'grillwaitron', label: 'Grill Orders', icon: Flame },
-  { id: 'mixologistwaitron', label: 'Mixologist Orders', icon: Wine },
-  { id: 'shishawaitron', label: 'Shisha Orders', icon: Wind },
-  { id: 'gameswaitron', label: 'Games Orders', icon: Gamepad2 },
   { id: 'performance', label: 'Staff Performance', icon: Trophy },
   { id: 'payroll', label: 'Payroll', icon: DollarSign },
   { id: 'till', label: 'Till', icon: DollarSign },
@@ -433,24 +427,6 @@ export default function Management() {
         {activeTab === 'shifts' && <ShiftManager onRefreshStats={fetchStats} />}
         {activeTab === 'tables' && <TableAssignment />}
         {activeTab === 'orders' && <OpenOrdersTab />}
-        {activeTab === 'barwaitron' && (
-          <OrdersByWaitronTab destinations={['bar']} title="Bar Orders per Waitron" />
-        )}
-        {activeTab === 'kitchenwaitron' && (
-          <OrdersByWaitronTab destinations={['kitchen']} title="Kitchen Orders per Waitron" />
-        )}
-        {activeTab === 'grillwaitron' && (
-          <OrdersByWaitronTab destinations={['griller']} title="Griller Orders per Waitron" />
-        )}
-        {activeTab === 'mixologistwaitron' && (
-          <OrdersByWaitronTab destinations={['mixologist']} title="Mixologist Orders per Waitron" />
-        )}
-        {activeTab === 'shishawaitron' && (
-          <OrdersByWaitronTab destinations={['shisha']} title="Shisha Orders per Waitron" />
-        )}
-        {activeTab === 'gameswaitron' && (
-          <OrdersByWaitronTab destinations={['games']} title="Games Orders per Waitron" />
-        )}
         {activeTab === 'till' && <TillManagement />}
         {activeTab === 'barsales' && <StationSalesTab destination="bar" label="Bar" />}
         {activeTab === 'kitchen' && <StationSalesTab destination="kitchen" label="Kitchen" />}
