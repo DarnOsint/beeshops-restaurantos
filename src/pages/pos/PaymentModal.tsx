@@ -222,9 +222,15 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       i.menu_items?.name,
       catName
     )
-    // shisha and games should not block payment
-    if (normDest === 'shisha' || normDest === 'games') return false
-    // All station items (bar, kitchen, griller, mixologist) must be ready/delivered before payment
+    // shisha, games, kitchen, and grill should not block payment
+    if (
+      normDest === 'shisha' ||
+      normDest === 'games' ||
+      normDest === 'kitchen' ||
+      normDest === 'griller'
+    )
+      return false
+    // Bar and mixologist items must be ready/delivered before payment
     if (i.return_requested || i.return_accepted) return false
     return i.status === 'pending' || i.status === 'preparing'
   })
@@ -1278,10 +1284,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
             >
               <Printer size={13} /> Print
             </button>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white shrink-0"
-            >
+            <button onClick={onClose} className="text-gray-400 hover:text-white shrink-0">
               <X size={20} />
             </button>
           </div>
@@ -1300,7 +1303,12 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
               onClick={() => printPendingForStation('kitchen')}
               className={`flex items-center justify-center gap-1 text-[11px] font-bold py-2 rounded-lg border transition-colors ${kitchenPendingCount > 0 ? 'bg-emerald-600 text-white border-emerald-500 hover:bg-emerald-500' : 'bg-emerald-900/30 text-emerald-400 border-emerald-800 hover:bg-emerald-800/40'}`}
             >
-              Kitchen New {kitchenPendingCount > 0 && <span className="bg-white text-emerald-700 text-[10px] font-black px-1.5 rounded-full ml-0.5">{kitchenPendingCount}</span>}
+              Kitchen New{' '}
+              {kitchenPendingCount > 0 && (
+                <span className="bg-white text-emerald-700 text-[10px] font-black px-1.5 rounded-full ml-0.5">
+                  {kitchenPendingCount}
+                </span>
+              )}
             </button>
             <button
               onClick={() => printAllForStation('griller')}
@@ -1312,7 +1320,12 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
               onClick={() => printPendingForStation('griller')}
               className={`flex items-center justify-center gap-1 text-[11px] font-bold py-2 rounded-lg border transition-colors ${grillPendingCount > 0 ? 'bg-amber-600 text-white border-amber-500 hover:bg-amber-500' : 'bg-amber-900/30 text-amber-400 border-amber-800 hover:bg-amber-800/40'}`}
             >
-              Grill New {grillPendingCount > 0 && <span className="bg-white text-amber-700 text-[10px] font-black px-1.5 rounded-full ml-0.5">{grillPendingCount}</span>}
+              Grill New{' '}
+              {grillPendingCount > 0 && (
+                <span className="bg-white text-amber-700 text-[10px] font-black px-1.5 rounded-full ml-0.5">
+                  {grillPendingCount}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -1622,7 +1635,11 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
                             <div className="flex items-center gap-2 shrink-0">
                               {!isReturned && !isPending && !isRequesting && (
                                 <button
-                                  onClick={() => { setReturningItemId(item.id); setReturnQty(1); setReturnReason(''); }}
+                                  onClick={() => {
+                                    setReturningItemId(item.id)
+                                    setReturnQty(1)
+                                    setReturnReason('')
+                                  }}
                                   className="text-xs bg-red-500/20 hover:bg-red-500/30 text-red-400 px-2 py-1 rounded-lg transition-colors"
                                 >
                                   Return
@@ -1650,50 +1667,70 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
                 )
               })}
               {/* Inline return form with quantity selector */}
-              {returningItemId && (() => {
-                const retItem = (order?.order_items || []).find((i) => i.id === returningItemId)
-                const maxQty = retItem?.quantity || 1
-                return (
-                <div className="mt-3 space-y-2 bg-red-500/5 border border-red-500/20 rounded-xl p-3">
-                  <p className="text-white text-sm font-semibold">
-                    Return: {retItem?.menu_items?.name || 'Item'}
-                  </p>
-                  {maxQty > 1 && (
-                    <div className="flex items-center gap-3">
-                      <span className="text-gray-400 text-xs">Qty to return:</span>
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => setReturnQty(Math.max(1, returnQty - 1))}
-                          className="w-8 h-8 rounded-lg bg-gray-700 text-white text-sm flex items-center justify-center hover:bg-gray-600">-</button>
-                        <span className="w-10 text-center text-white font-bold">{returnQty}</span>
-                        <button onClick={() => setReturnQty(Math.min(maxQty, returnQty + 1))}
-                          className="w-8 h-8 rounded-lg bg-gray-700 text-white text-sm flex items-center justify-center hover:bg-gray-600">+</button>
+              {returningItemId &&
+                (() => {
+                  const retItem = (order?.order_items || []).find((i) => i.id === returningItemId)
+                  const maxQty = retItem?.quantity || 1
+                  return (
+                    <div className="mt-3 space-y-2 bg-red-500/5 border border-red-500/20 rounded-xl p-3">
+                      <p className="text-white text-sm font-semibold">
+                        Return: {retItem?.menu_items?.name || 'Item'}
+                      </p>
+                      {maxQty > 1 && (
+                        <div className="flex items-center gap-3">
+                          <span className="text-gray-400 text-xs">Qty to return:</span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => setReturnQty(Math.max(1, returnQty - 1))}
+                              className="w-8 h-8 rounded-lg bg-gray-700 text-white text-sm flex items-center justify-center hover:bg-gray-600"
+                            >
+                              -
+                            </button>
+                            <span className="w-10 text-center text-white font-bold">
+                              {returnQty}
+                            </span>
+                            <button
+                              onClick={() => setReturnQty(Math.min(maxQty, returnQty + 1))}
+                              className="w-8 h-8 rounded-lg bg-gray-700 text-white text-sm flex items-center justify-center hover:bg-gray-600"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <span className="text-gray-500 text-xs">of {maxQty}</span>
+                        </div>
+                      )}
+                      <input
+                        value={returnReason}
+                        onChange={(e) => setReturnReason(e.target.value)}
+                        placeholder="Reason for return (optional)..."
+                        className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-red-400"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            requestReturn(returningItemId)
+                            setReturningItemId(null)
+                            setReturnReason('')
+                            setReturnQty(1)
+                          }}
+                          className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm font-semibold py-2 rounded-lg transition-colors"
+                        >
+                          Return {returnQty} item{returnQty > 1 ? 's' : ''}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setReturningItemId(null)
+                            setReturnReason('')
+                            setReturnQty(1)
+                          }}
+                          className="bg-gray-700 hover:bg-gray-600 text-gray-400 text-sm px-3 py-2 rounded-lg transition-colors"
+                        >
+                          Cancel
+                        </button>
                       </div>
-                      <span className="text-gray-500 text-xs">of {maxQty}</span>
                     </div>
-                  )}
-                  <input
-                    value={returnReason}
-                    onChange={(e) => setReturnReason(e.target.value)}
-                    placeholder="Reason for return (optional)..."
-                    className="w-full bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-red-400"
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => { requestReturn(returningItemId); setReturningItemId(null); setReturnReason(''); setReturnQty(1); }}
-                      className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 text-sm font-semibold py-2 rounded-lg transition-colors"
-                    >
-                      Return {returnQty} item{returnQty > 1 ? 's' : ''}
-                    </button>
-                    <button
-                      onClick={() => { setReturningItemId(null); setReturnReason(''); setReturnQty(1); }}
-                      className="bg-gray-700 hover:bg-gray-600 text-gray-400 text-sm px-3 py-2 rounded-lg transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-                )
-              })()}
+                  )
+                })()}
               {returnedTotal > 0 && (
                 <div className="mt-3 pt-2 border-t border-gray-700 flex justify-between text-sm">
                   <span className="text-gray-400">Returns deducted:</span>
@@ -1708,8 +1745,8 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
             <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
               <p className="text-red-400 font-semibold text-sm mb-2">⚠️ Items not yet ready</p>
               <p className="text-gray-400 text-xs mb-2">
-                These items have not been marked ready/delivered by the station. Payment is
-                blocked until all items are prepared and served:
+                These items have not been marked ready/delivered by the station. Payment is blocked
+                until all items are prepared and served:
               </p>
               <div className="space-y-1">
                 {unreadyItems.map((item) => (
