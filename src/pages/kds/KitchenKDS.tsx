@@ -8,66 +8,12 @@ import GeofenceBlock from '../../components/GeofenceBlock'
 import { useAuth } from '../../context/AuthContext'
 import KitchenStock from '../backoffice/KitchenStock'
 import ErrorBoundary from '../../components/ErrorBoundary'
-import {
-  ChefHat,
-  Clock,
-  LogOut,
-  RefreshCw,
-  CheckCircle,
-  BarChart2,
-  Printer,
-  RotateCcw,
-  X,
-  History,
-} from 'lucide-react'
+import { ChefHat, Clock, LogOut, RefreshCw, CheckCircle, BarChart2, Printer, X } from 'lucide-react'
 import type { KdsOrder } from './types'
 import { useToast } from '../../context/ToastContext'
 import DailySummaryTab from './DailySummaryTab'
 
-const HELP_TIPS = [
-  {
-    id: 'kds-tabs',
-    title: 'Orders & Stock Register',
-    description:
-      'The Kitchen Display has two tabs: Orders (incoming tickets) and Stock Register (daily food accountability). Switch between them using the tab buttons in the header.',
-  },
-  {
-    id: 'kds-incoming',
-    title: 'Incoming Orders',
-    description:
-      'Kitchen-destined items from any table order appear here automatically the moment a waitron confirms on the POS. Orders are sorted oldest first — always work from the top down.',
-  },
-  {
-    id: 'kds-status',
-    title: 'Item Status',
-    description:
-      'Each item starts as Pending. Tap to move to Preparing (amber), tap again when plated to mark Ready (green). Items move in one direction only — you cannot revert a Ready item.',
-  },
-  {
-    id: 'kds-allready',
-    title: 'All Ready Button',
-    description:
-      'Marks every kitchen item on the ticket ready at once. Hidden when all items are already ready. When tapped, the waitron is notified automatically to come and collect.',
-  },
-  {
-    id: 'kds-urgency',
-    title: 'Urgency Colours',
-    description:
-      'Grey = normal (under 10 min). Amber = getting late (10–20 min). Red = urgent (20+ min). Based on when the order was placed, not when items were added.',
-  },
-  {
-    id: 'kds-notify',
-    title: 'Waitron Notification',
-    description:
-      'Marking any item or the full order ready sends an automatic push notification to the assigned waitron. No need to call out across the kitchen.',
-  },
-  {
-    id: 'kds-stockregister',
-    title: 'Stock Register Tab',
-    description:
-      'Record what raw ingredients were received at the start of service. The system auto-syncs what was sold from POS and calculates what should remain. Entries are locked once submitted — contact a manager to make corrections. Benchmarks show expected yield so you know immediately if something is off.',
-  },
-]
+const HELP_TIPS: Array<{ id: string; title: string; description: string }> = []
 
 function getElapsed(createdAt: string): string {
   const total = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000)
@@ -144,6 +90,7 @@ function KitchenKDSInner() {
       centre('** KITCHEN ORDER **'),
       divider,
       fmtRow('Table:', order.tables?.name ?? 'N/A'),
+      fmtRow('Waitron:', order.profiles?.full_name ?? 'N/A'),
       fmtRow(
         'Time:',
         new Date(order.created_at).toLocaleTimeString('en-NG', {
@@ -240,67 +187,16 @@ function KitchenKDSInner() {
     }
   }
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
-  const [tab, setTab] = useState<'orders' | 'stock' | 'summary' | 'returns' | 'history'>('orders')
+  const [tab, setTab] = useState<'orders' | 'stock' | 'summary'>('orders')
   const [orders, setOrders] = useState<KdsOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
   const [returnItems, setReturnItems] = useState<
     (KdsOrder['order_items'][0] & { tableName: string; orderId: string; staffId?: string | null })[]
   >([])
-  const [historyDate, setHistoryDate] = useState(new Date().toISOString().slice(0, 10))
-  const [returnHistory, setReturnHistory] = useState<
-    Array<{
-      id: string
-      item_name: string
-      quantity: number
-      item_total: number
-      table_name: string | null
-      waitron_name: string | null
-      return_reason: string | null
-      status: string
-      requested_at: string
-      resolved_at: string | null
-    }>
-  >([])
-
-  const fetchReturnHistory = useCallback(
-    async (d?: string) => {
-      if (!profile) return
-      const targetDate = d || historyDate
-      const dayStart = new Date(targetDate)
-      dayStart.setHours(8, 0, 0, 0)
-      const dayEnd = new Date(dayStart)
-      dayEnd.setDate(dayEnd.getDate() + 1)
-      // Kitchen returns — filter by checking if item was kitchen-destined
-      const { data } = await supabase
-        .from('returns_log')
-        .select(
-          'id, item_name, quantity, item_total, table_name, waitron_name, return_reason, status, requested_at, resolved_at, order_item_id'
-        )
-        .gte('requested_at', dayStart.toISOString())
-        .lte('requested_at', dayEnd.toISOString())
-        .order('requested_at', { ascending: false })
-      if (data) {
-        // Filter to kitchen items by checking the order_items destination
-        const itemIds = data.map((r) => r.order_item_id)
-        if (itemIds.length > 0) {
-          const { data: items } = await supabase
-            .from('order_items')
-            .select(
-              'id, destination, modifier_notes, notes, menu_items(menu_categories(destination))'
-            )
-            .in('id', itemIds)
-          const kitchenIds = new Set(
-            (items || []).filter((i: any) => isKitchenItem(i as any)).map((i: any) => i.id)
-          )
-          setReturnHistory(data.filter((r) => kitchenIds.has(r.order_item_id)))
-        } else {
-          setReturnHistory([])
-        }
-      }
-    },
-    [profile, historyDate]
-  )
+  // Returns/history disabled for kitchen KDS
+  const [historyDate] = useState(new Date().toISOString().slice(0, 10))
+  const [returnHistory] = useState<Array<any>>([])
 
   const acceptReturn = async (itemId: string, staffId?: string | null, tableName?: string) => {
     const { error } = await supabase
@@ -351,7 +247,13 @@ function KitchenKDSInner() {
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
-    audit({ action: 'KITCHEN_RETURN_ACCEPTED', entity: 'order_items', entityId: itemId, newValue: { table: tableName }, performer: profile as any })
+    audit({
+      action: 'KITCHEN_RETURN_ACCEPTED',
+      entity: 'order_items',
+      entityId: itemId,
+      newValue: { table: tableName },
+      performer: profile as any,
+    })
     toast.success('Return Accepted', 'Item tentatively removed — awaiting manager final approval')
     if (staffId)
       await sendPushToStaff(
@@ -396,7 +298,13 @@ function KitchenKDSInner() {
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
-    audit({ action: 'KITCHEN_RETURN_REJECTED', entity: 'order_items', entityId: itemId, newValue: { table: tableName }, performer: profile as any })
+    audit({
+      action: 'KITCHEN_RETURN_REJECTED',
+      entity: 'order_items',
+      entityId: itemId,
+      newValue: { table: tableName },
+      performer: profile as any,
+    })
     toast.success('Return Rejected', 'Item stays on bill')
     if (staffId)
       await sendPushToStaff(
@@ -508,16 +416,47 @@ function KitchenKDSInner() {
 
   const rejectOrder = async (order: KdsOrder) => {
     const kitchenItemIds = order.order_items
-      .filter((i) => i.menu_items?.menu_categories?.destination === 'kitchen' && i.status !== 'ready' && i.status !== 'delivered')
+      .filter(
+        (i) =>
+          i.menu_items?.menu_categories?.destination === 'kitchen' &&
+          i.status !== 'ready' &&
+          i.status !== 'delivered'
+      )
       .map((i) => i.id)
     if (!kitchenItemIds.length) return
-    const { error } = await supabase.from('order_items').update({ status: 'cancelled' }).in('id', kitchenItemIds)
-    if (error) { toast.error('Error', error.message); return }
-    const { data: remaining } = await supabase.from('order_items').select('total_price, status').eq('order_id', order.id)
-    const newTotal = (remaining || []).filter((r: { status: string }) => r.status !== 'cancelled').reduce((s: number, r: { total_price: number }) => s + (r.total_price || 0), 0)
-    await supabase.from('orders').update({ total_amount: newTotal, updated_at: new Date().toISOString() }).eq('id', order.id)
-    if (order.staff_id) await sendPushToStaff(order.staff_id, '❌ Kitchen Rejected', `Kitchen rejected items for ${order.tables?.name || 'a table'}`).catch(() => {})
-    audit({ action: 'KITCHEN_ORDER_REJECTED', entity: 'orders', entityId: order.id, entityName: order.tables?.name, newValue: { items: kitchenItemIds.length, newTotal }, performer: profile as any })
+    const { error } = await supabase
+      .from('order_items')
+      .update({ status: 'cancelled' })
+      .in('id', kitchenItemIds)
+    if (error) {
+      toast.error('Error', error.message)
+      return
+    }
+    const { data: remaining } = await supabase
+      .from('order_items')
+      .select('total_price, status')
+      .eq('order_id', order.id)
+    const newTotal = (remaining || [])
+      .filter((r: { status: string }) => r.status !== 'cancelled')
+      .reduce((s: number, r: { total_price: number }) => s + (r.total_price || 0), 0)
+    await supabase
+      .from('orders')
+      .update({ total_amount: newTotal, updated_at: new Date().toISOString() })
+      .eq('id', order.id)
+    if (order.staff_id)
+      await sendPushToStaff(
+        order.staff_id,
+        '❌ Kitchen Rejected',
+        `Kitchen rejected items for ${order.tables?.name || 'a table'}`
+      ).catch(() => {})
+    audit({
+      action: 'KITCHEN_ORDER_REJECTED',
+      entity: 'orders',
+      entityId: order.id,
+      entityName: order.tables?.name,
+      newValue: { items: kitchenItemIds.length, newTotal },
+      performer: profile as any,
+    })
     toast.success('Rejected', 'Kitchen items cancelled and total updated')
     fetchOrders()
   }
