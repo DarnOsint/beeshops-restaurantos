@@ -67,13 +67,50 @@ interface Props {
   onClose: () => void
 }
 
-const normalizeDestination = (dest?: string | null): ItemDestination => {
+const normalizeDestination = (
+  dest?: string | null,
+  name?: string | null,
+  catName?: string | null
+): ItemDestination => {
   const d = (dest || '').trim().toLowerCase()
-  if (d === 'kitchen') return 'kitchen'
-  if (d === 'griller' || d === 'grill' || d === 'grilling') return 'griller'
-  if (d === 'shisha' || d === 'hookah') return 'shisha'
-  if (d === 'games' || d === 'game' || d === 'games_master') return 'games'
-  if (d === 'mixologist' || d === 'cocktail' || d === 'cocktails') return 'mixologist'
+  const lowerName = (name || '').toLowerCase()
+  const lowerCat = (catName || '').toLowerCase()
+
+  const isMixologistItem =
+    lowerName.includes('cocktail') ||
+    lowerName.includes('mocktail') ||
+    lowerName.includes('milkshake') ||
+    lowerName.includes('shake') ||
+    lowerName.includes('smoothie') ||
+    lowerName.includes('fruit punch') ||
+    lowerName.includes('punch') ||
+    lowerCat.includes('cocktail') ||
+    lowerCat.includes('mocktail') ||
+    lowerCat.includes('milkshake') ||
+    lowerCat.includes('smoothie') ||
+    lowerCat.includes('punch')
+
+  if (d === 'kitchen' || lowerCat.includes('kitchen') || lowerName.includes('kitchen'))
+    return 'kitchen'
+  if (
+    d === 'griller' ||
+    d === 'grill' ||
+    d === 'grilling' ||
+    lowerCat.includes('grill') ||
+    lowerName.includes('grill')
+  )
+    return 'griller'
+  if (
+    d === 'shisha' ||
+    d === 'hookah' ||
+    lowerCat.includes('shisha') ||
+    lowerName.includes('shisha')
+  )
+    return 'shisha'
+  if (d === 'games' || d === 'game' || d === 'games_master' || lowerCat.includes('game'))
+    return 'games'
+  if (d === 'mixologist' || d === 'cocktail' || d === 'cocktails' || isMixologistItem)
+    return 'mixologist'
   return 'bar'
 }
 
@@ -98,12 +135,14 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       const isKitchen = (i: any) =>
         normalizeDestination(
           i.destination || i.menu_items?.menu_categories?.destination || 'bar',
-          i.menu_items?.name
+          i.menu_items?.name,
+          i.menu_items?.menu_categories?.name
         ) === 'kitchen'
       const isGrill = (i: any) =>
         normalizeDestination(
           i.destination || i.menu_items?.menu_categories?.destination || 'bar',
-          i.menu_items?.name
+          i.menu_items?.name,
+          i.menu_items?.menu_categories?.name
         ) === 'griller'
       setKitchenPendingCount(
         items.filter((i: any) => isKitchen(i) && i.status === 'pending').length
@@ -153,12 +192,14 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     const isKitchen = (i: any) =>
       normalizeDestination(
         i.destination || i.menu_items?.menu_categories?.destination || 'bar',
-        i.menu_items?.name
+        i.menu_items?.name,
+        i.menu_items?.menu_categories?.name
       ) === 'kitchen'
     const isGrill = (i: any) =>
       normalizeDestination(
         i.destination || i.menu_items?.menu_categories?.destination || 'bar',
-        i.menu_items?.name
+        i.menu_items?.name,
+        i.menu_items?.menu_categories?.name
       ) === 'griller'
     setKitchenTotalCount(items.filter(isKitchen).length)
     setGrillTotalCount(items.filter(isGrill).length)
@@ -649,7 +690,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     const stationItems = (order?.order_items || []).filter(
       (i) =>
         normalizeDestination(
-          i.destination || (i as any)?.menu_items?.menu_categories?.destination || 'bar'
+          i.destination || (i as any)?.menu_items?.menu_categories?.destination || 'bar',
+          (i as any)?.menu_items?.name,
+          (i as any)?.menu_items?.menu_categories?.name
         ) === station
     )
     if (stationItems.length === 0) {
@@ -706,7 +749,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     const pending = (order?.order_items || []).filter((i) => {
       const isStation =
         normalizeDestination(
-          i.destination || (i as any)?.menu_items?.menu_categories?.destination || 'bar'
+          i.destination || (i as any)?.menu_items?.menu_categories?.destination || 'bar',
+          (i as any)?.menu_items?.name,
+          (i as any)?.menu_items?.menu_categories?.name
         ) === station
       if (!isStation || i.status !== 'pending') return false
       if (!lastPrinted) return true
