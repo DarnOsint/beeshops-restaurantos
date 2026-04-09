@@ -82,11 +82,14 @@ export default function SupervisorMainStoreTab() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     const dayStart = new Date(reqDate + 'T08:00:00+01:00')
-    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1)
+    const dayEnd = new Date(dayStart)
+    dayEnd.setDate(dayEnd.getDate() + 1)
     const [{ data: inv }, { data: reqs }] = await Promise.all([
       supabase
         .from('inventory')
-        .select('id, item_name, category, unit, current_stock, minimum_stock, cost_price, is_active')
+        .select(
+          'id, item_name, category, unit, current_stock, minimum_stock, cost_price, is_active'
+        )
         .eq('is_active', true)
         .order('item_name'),
       supabase
@@ -116,73 +119,16 @@ export default function SupervisorMainStoreTab() {
   const approveRequest = async (req: StoreRequest) => {
     setSaving(true)
     try {
-      // Check stock
-      const { data: inv } = await supabase
-        .from('inventory')
-        .select('current_stock')
-        .eq('id', req.inventory_id)
-        .single()
-      if (!inv || inv.current_stock < req.quantity) {
-        toast.error('Insufficient Stock', `Only ${inv?.current_stock ?? 0} ${req.unit} available`)
+      const { data, error } = await supabase.rpc('approve_store_request', {
+        req_id: req.id,
+        approver_name: profile?.full_name ?? null,
+      })
+      if (error) throw error
+      if (!data || (data as any)?.status !== 'approved') {
+        toast.info('Already handled')
         setSaving(false)
         return
       }
-
-      // Deduct from main store
-      const { error: invErr } = await supabase
-        .from('inventory')
-        .update({
-          current_stock: inv.current_stock - req.quantity,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', req.inventory_id)
-      if (invErr) throw invErr
-
-      // Add to barman's chiller — use 8am-8am session date
-      const watNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
-      const sessionDate = new Date(watNow)
-      if (watNow.getHours() < 8) sessionDate.setDate(sessionDate.getDate() - 1)
-      const today = sessionDate.toLocaleDateString('en-CA')
-      const { data: chillerRow } = await supabase
-        .from('bar_chiller_stock')
-        .select('id, received_qty')
-        .eq('date', today)
-        .eq('item_name', req.item_name)
-        .single()
-
-      if (chillerRow?.id) {
-        await supabase
-          .from('bar_chiller_stock')
-          .update({
-            received_qty: (chillerRow.received_qty || 0) + req.quantity,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', chillerRow.id)
-      } else {
-        await supabase.from('bar_chiller_stock').insert({
-          date: today,
-          item_name: req.item_name,
-          unit: req.unit,
-          opening_qty: 0,
-          received_qty: req.quantity,
-          sold_qty: 0,
-          void_qty: 0,
-          closing_qty: 0,
-        })
-      }
-
-      // Update request status
-      const { error: reqErr } = await supabase
-        .from('store_requests')
-        .update({
-          status: 'approved',
-          approved_by: profile?.id ?? null,
-          approved_by_name: profile?.full_name ?? null,
-          resolved_at: new Date().toISOString(),
-        })
-        .eq('id', req.id)
-        .eq('status', 'pending')
-      if (reqErr) throw reqErr
 
       await audit({
         action: 'STORE_REQUEST_APPROVED',
@@ -199,7 +145,12 @@ export default function SupervisorMainStoreTab() {
       })
 
       // Notify barman
-      if (req.requested_by) sendPushToStaff(req.requested_by, '✅ Request Approved', `${req.quantity}x ${req.item_name} released to chiller`).catch(() => {})
+      if (req.requested_by)
+        sendPushToStaff(
+          req.requested_by,
+          '✅ Request Approved',
+          `${req.quantity}x ${req.item_name} released to chiller`
+        ).catch(() => {})
       toast.success('Approved', `${req.quantity} ${req.unit} of ${req.item_name} sent to chiller`)
       fetchData()
     } catch (e: any) {
@@ -231,7 +182,12 @@ export default function SupervisorMainStoreTab() {
         performer: profile as Profile,
       })
 
-      if (req.requested_by) sendPushToStaff(req.requested_by, '❌ Request Rejected', `${req.item_name} — ${reason || 'No reason'}`).catch(() => {})
+      if (req.requested_by)
+        sendPushToStaff(
+          req.requested_by,
+          '❌ Request Rejected',
+          `${req.item_name} — ${reason || 'No reason'}`
+        ).catch(() => {})
       toast.success('Rejected', `Request for ${req.item_name} rejected`)
       fetchData()
     } catch (e: any) {
@@ -300,7 +256,9 @@ export default function SupervisorMainStoreTab() {
   )
 
   const outOfStock = items.filter((i) => i.current_stock <= 0).length
-  const lowStock = items.filter((i) => i.current_stock > 0 && i.current_stock <= i.minimum_stock).length
+  const lowStock = items.filter(
+    (i) => i.current_stock > 0 && i.current_stock <= i.minimum_stock
+  ).length
 
   return (
     <div className="space-y-3">
@@ -323,23 +281,48 @@ export default function SupervisorMainStoreTab() {
         >
           Stock Levels
         </button>
-        <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)}
-          className="bg-gray-800 border border-gray-700 text-white rounded-xl px-2 py-1.5 text-xs" />
-        <button onClick={() => { const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })); if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1); setReqDate(wat.toLocaleDateString('en-CA')) }}
-          className={`px-2 py-1.5 rounded-xl text-xs font-medium ${reqDate === (() => { const w = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })); if (w.getHours() < 8) w.setDate(w.getDate() - 1); return w.toLocaleDateString('en-CA') })() ? 'bg-amber-500 text-black' : 'bg-gray-900 text-gray-400'}`}>Today</button>
-        <button onClick={() => { const d = new Date(reqDate); d.setDate(d.getDate() - 1); setReqDate(d.toLocaleDateString('en-CA')) }}
-          className="px-2 py-1.5 rounded-xl text-xs bg-gray-900 text-gray-400 hover:text-white">Prev Day</button>
+        <input
+          type="date"
+          value={reqDate}
+          onChange={(e) => setReqDate(e.target.value)}
+          className="bg-gray-800 border border-gray-700 text-white rounded-xl px-2 py-1.5 text-xs"
+        />
+        <button
+          onClick={() => {
+            const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+            if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
+            setReqDate(wat.toLocaleDateString('en-CA'))
+          }}
+          className={`px-2 py-1.5 rounded-xl text-xs font-medium ${
+            reqDate ===
+            (() => {
+              const w = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+              if (w.getHours() < 8) w.setDate(w.getDate() - 1)
+              return w.toLocaleDateString('en-CA')
+            })()
+              ? 'bg-amber-500 text-black'
+              : 'bg-gray-900 text-gray-400'
+          }`}
+        >
+          Today
+        </button>
+        <button
+          onClick={() => {
+            const d = new Date(reqDate)
+            d.setDate(d.getDate() - 1)
+            setReqDate(d.toLocaleDateString('en-CA'))
+          }}
+          className="px-2 py-1.5 rounded-xl text-xs bg-gray-900 text-gray-400 hover:text-white"
+        >
+          Prev Day
+        </button>
         <button onClick={fetchData} className="p-2 text-gray-400 hover:text-white">
           <RefreshCw size={14} />
         </button>
         {(outOfStock > 0 || lowStock > 0) && (
           <div className="ml-auto flex items-center gap-2 text-xs">
-            {outOfStock > 0 && (
-              <span className="text-red-400 font-bold">{outOfStock} out</span>
-            )}
-            {lowStock > 0 && (
-              <span className="text-amber-400 font-bold">{lowStock} low</span>
-            )}
+            {outOfStock > 0 && <span className="text-red-400 font-bold">{outOfStock} out</span>}
+            {lowStock > 0 && <span className="text-amber-400 font-bold">{lowStock} low</span>}
           </div>
         )}
       </div>
