@@ -109,6 +109,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [hasChanges, setHasChanges] = useState(false)
   const [savedVoidQty, setSavedVoidQty] = useState<Record<string, number>>({})
+  const [pendingVoidQty, setPendingVoidQty] = useState<Record<string, number>>({})
   const [search, setSearch] = useState('')
 
   // Load bar menu items
@@ -239,17 +240,30 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         }
       }
 
-      // Load today's entries
-      const { data: todayData } = await supabase
-        .from('bar_chiller_stock')
-        .select('*')
-        .eq('date', d)
-        .order('item_name')
+      // Load today's entries and pending management approvals
+      const dayStart = new Date(d)
+      dayStart.setHours(8, 0, 0, 0)
+      const dayEnd = new Date(dayStart)
+      dayEnd.setDate(dayEnd.getDate() + 1)
+      const [{ data: todayData }, { data: pendingRequests }] = await Promise.all([
+        supabase.from('bar_chiller_stock').select('*').eq('date', d).order('item_name'),
+        supabase
+          .from('void_requests')
+          .select('item_name, quantity')
+          .eq('station', 'bar')
+          .eq('status', 'pending')
+          .gte('requested_at', dayStart.toISOString())
+          .lt('requested_at', dayEnd.toISOString()),
+      ])
       const existing: Record<string, StockEntry> = {}
       if (todayData) {
         for (const row of todayData as Array<StockEntry & { id: string }>) {
           existing[row.item_name] = row
         }
+      }
+      const pendingMap: Record<string, number> = {}
+      for (const req of (pendingRequests || []) as Array<{ item_name: string; quantity: number }>) {
+        pendingMap[req.item_name] = (pendingMap[req.item_name] || 0) + (req.quantity || 0)
       }
 
       // Build stock data — start from menu drinks, then add any chiller entries not in menu
@@ -293,6 +307,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         origVoids[name] = entry.void_qty
       }
       setSavedVoidQty(origVoids)
+      setPendingVoidQty(pendingMap)
       setHasChanges(false)
       setLoading(false)
     },
@@ -312,18 +327,23 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
       for (const [name, entry] of Object.entries(stockData)) {
         if (!entry.id) continue
         const posSold = soldMap[name] || 0
-        const closing = Math.max(0, entry.opening_qty + entry.received_qty - posSold - entry.void_qty)
-        if (posSold > 0 || entry.received_qty > 0 || entry.void_qty > 0) {
-          await supabase.from('bar_chiller_stock')
-            .update({ sold_qty: posSold, closing_qty: closing, updated_at: new Date().toISOString() })
+        const approvedVoid = savedVoidQty[name] ?? entry.void_qty ?? 0
+        const closing = Math.max(0, entry.opening_qty + entry.received_qty - posSold - approvedVoid)
+        if (posSold > 0 || entry.received_qty > 0 || approvedVoid > 0) {
+          await supabase
+            .from('bar_chiller_stock')
+            .update({
+              sold_qty: posSold,
+              closing_qty: closing,
+              updated_at: new Date().toISOString(),
+            })
             .eq('id', entry.id)
         }
       }
     }
     const iv = setInterval(syncToDb, 5 * 60 * 1000) // every 5 minutes
     return () => clearInterval(iv)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stockData, soldMap, date])
+  }, [stockData, soldMap, date, savedVoidQty])
 
   const updateField = (itemName: string, field: keyof StockEntry, value: number | string) => {
     setStockData((prev) => ({
@@ -350,8 +370,13 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         continue
 
       const actualSold = soldMap[name] || entry.sold_qty || 0
+      const approvedVoid = savedVoidQty[name] || 0
+      const requestedVoid = Math.max(0, Number(entry.void_qty) || 0)
       // Always save auto-computed closing so it carries over correctly
-      const autoClosing = Math.max(0, entry.opening_qty + entry.received_qty - actualSold - entry.void_qty)
+      const autoClosing = Math.max(
+        0,
+        entry.opening_qty + entry.received_qty - actualSold - approvedVoid
+      )
       const row = {
         date,
         item_name: name,
@@ -359,7 +384,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         opening_qty: entry.opening_qty,
         received_qty: entry.received_qty,
         sold_qty: actualSold,
-        void_qty: entry.void_qty,
+        void_qty: approvedVoid,
         closing_qty: autoClosing,
         note: entry.note || null,
         recorded_by: profile?.id,
@@ -394,8 +419,9 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
       }
       // Create void request for any newly added void quantities
       const prevVoid = savedVoidQty[name] || 0
-      if (entry.void_qty > prevVoid) {
-        const delta = entry.void_qty - prevVoid
+      const prevPending = pendingVoidQty[name] || 0
+      if (requestedVoid > prevVoid + prevPending) {
+        const delta = requestedVoid - prevVoid - prevPending
         await supabase.from('void_requests').insert({
           id: crypto.randomUUID(),
           item_name: name,
@@ -423,6 +449,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     0
   )
   const totalVoid = Object.values(stockData).reduce((s, e) => s + e.void_qty, 0)
+  const totalPendingVoid = Object.values(pendingVoidQty).reduce((s, qty) => s + qty, 0)
   const totalClosing = Math.max(0, totalOpening + totalReceived - totalSold - totalVoid)
 
   const handleDelete = async (itemName: string) => {
@@ -476,7 +503,12 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
 
   // Only show items that have stock entries or were sold today — hide empty items
   const activeMenuDrinks = menuDrinks.filter(
-    (d) => stockData[d.name]?.opening_qty > 0 || stockData[d.name]?.received_qty > 0 || soldMap[d.name] > 0 || stockData[d.name]?.void_qty > 0
+    (d) =>
+      stockData[d.name]?.opening_qty > 0 ||
+      stockData[d.name]?.received_qty > 0 ||
+      soldMap[d.name] > 0 ||
+      stockData[d.name]?.void_qty > 0 ||
+      pendingVoidQty[d.name] > 0
   )
 
   const filtered = search
@@ -549,12 +581,13 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
 
       <div className="p-4 max-w-2xl mx-auto">
         {/* Stats */}
-        <div className="grid grid-cols-5 gap-2 mb-4">
+        <div className="grid grid-cols-6 gap-2 mb-4">
           {[
             { label: 'Opening', value: totalOpening, color: 'text-white' },
             { label: 'Received', value: totalReceived, color: 'text-green-400' },
             { label: 'Sold (POS)', value: totalSold, color: 'text-blue-400' },
             { label: 'Void', value: totalVoid, color: 'text-red-400' },
+            { label: 'Pending', value: totalPendingVoid, color: 'text-amber-400' },
             { label: 'Closing', value: totalClosing, color: 'text-cyan-400' },
           ].map(({ label, value, color }) => (
             <div
@@ -591,6 +624,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
             {drinks.map((drink) => {
               const isExpanded = expanded === drink.name
               const sold = drink.autoSold || drink.sold_qty || 0
+              const pendingVoid = pendingVoidQty[drink.name] || 0
               const rawExpected = drink.opening_qty + drink.received_qty - sold - drink.void_qty
               const effectiveClosing = Math.max(0, rawExpected)
               const variance = 0
@@ -599,6 +633,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
                 drink.received_qty > 0 ||
                 effectiveClosing > 0 ||
                 drink.void_qty > 0 ||
+                pendingVoid > 0 ||
                 sold > 0
 
               return (
@@ -627,11 +662,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
                       ) : null}
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
-                      {sold > 0 && (
-                        <span className="text-xs font-bold text-red-400">
-                          −{sold}
-                        </span>
-                      )}
+                      {sold > 0 && <span className="text-xs font-bold text-red-400">−{sold}</span>}
                       {isExpanded ? (
                         <ChevronUp size={14} className="text-gray-500" />
                       ) : (
@@ -712,11 +743,26 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
 
                       {/* Formula breakdown */}
                       <div className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2">
-                        <span className="text-gray-400 text-xs">Closing = Open + Rcvd − Sold − Void</span>
+                        <span className="text-gray-400 text-xs">
+                          Closing = Open + Rcvd − Sold − Void
+                        </span>
                         <span className="text-cyan-400 text-sm font-bold">
-                          {drink.opening_qty} + {drink.received_qty} − {sold} − {drink.void_qty} = {effectiveClosing}
+                          {drink.opening_qty} + {drink.received_qty} − {sold} − {drink.void_qty} ={' '}
+                          {effectiveClosing}
                         </span>
                       </div>
+
+                      {pendingVoid > 0 && (
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                          <p className="text-amber-400 text-xs font-medium">
+                            {pendingVoid} pending void{pendingVoid > 1 ? 's' : ''} awaiting
+                            management approval
+                          </p>
+                          <p className="text-amber-400/70 text-xs mt-0.5">
+                            Stock stays in chiller until management approves the void.
+                          </p>
+                        </div>
+                      )}
 
                       {isManager && (
                         <button

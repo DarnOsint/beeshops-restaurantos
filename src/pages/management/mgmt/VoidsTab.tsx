@@ -56,6 +56,9 @@ export default function VoidsTab() {
   const rejected = voids.filter((v) => v.status === 'rejected')
 
   const approveVoid = async (v: VoidRequest) => {
+    const targetDate = new Date(v.requested_at).toLocaleDateString('en-CA', {
+      timeZone: 'Africa/Lagos',
+    })
     await supabase
       .from('void_requests')
       .update({
@@ -64,6 +67,31 @@ export default function VoidsTab() {
         resolved_by_name: profile?.full_name,
       })
       .eq('id', v.id)
+    const tableName = v.station === 'kitchen' ? 'kitchen_stock' : 'bar_chiller_stock'
+    const { data: stockRow } = await supabase
+      .from(tableName)
+      .select('id, void_qty, opening_qty, received_qty, sold_qty')
+      .eq('item_name', v.item_name)
+      .eq('date', targetDate)
+      .single()
+    if (stockRow?.id) {
+      const nextVoidQty = (stockRow.void_qty || 0) + v.quantity
+      const closingQty = Math.max(
+        0,
+        (stockRow.opening_qty || 0) +
+          (stockRow.received_qty || 0) -
+          (stockRow.sold_qty || 0) -
+          nextVoidQty
+      )
+      await supabase
+        .from(tableName)
+        .update({
+          void_qty: nextVoidQty,
+          closing_qty: closingQty,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', stockRow.id)
+    }
     await audit({
       action: 'VOID_APPROVED',
       entity: 'void_requests',
@@ -82,7 +110,6 @@ export default function VoidsTab() {
   }
 
   const rejectVoid = async (v: VoidRequest) => {
-    // Rejected void — item should be added back to chiller stock
     await supabase
       .from('void_requests')
       .update({
@@ -91,20 +118,6 @@ export default function VoidsTab() {
         resolved_by_name: profile?.full_name,
       })
       .eq('id', v.id)
-    // Reduce the void_qty in the chiller stock for today
-    const tableName = v.station === 'kitchen' ? 'kitchen_stock' : 'bar_chiller_stock'
-    const { data: stockRow } = await supabase
-      .from(tableName)
-      .select('id, void_qty')
-      .eq('item_name', v.item_name)
-      .eq('date', date)
-      .single()
-    if (stockRow) {
-      await supabase
-        .from(tableName)
-        .update({ void_qty: Math.max(0, (stockRow.void_qty || 0) - v.quantity) })
-        .eq('id', stockRow.id)
-    }
     await audit({
       action: 'VOID_REJECTED',
       entity: 'void_requests',
@@ -118,7 +131,7 @@ export default function VoidsTab() {
       },
       performer: profile as Profile,
     })
-    toast.success('Void Rejected', `${v.quantity}x ${v.item_name} restored to stock`)
+    toast.success('Void Rejected', `${v.quantity}x ${v.item_name} left unchanged in stock`)
     fetchVoids(date)
   }
 

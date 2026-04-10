@@ -49,6 +49,7 @@ import SettingsTab from './mgmt/SettingsTab'
 import ActivityLogTab from './mgmt/ActivityLogTab'
 import MainStoreSummaryTab from './mgmt/MainStoreSummaryTab'
 import OrdersByWaitronTab from './mgmt/OrdersByWaitronTab'
+import VoidsTab from './mgmt/VoidsTab'
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
@@ -94,6 +95,7 @@ const TABS = [
   { id: 'mainstore', label: 'Main Store', icon: Package },
   { id: 'fridge', label: 'Kitchen Fridge', icon: Snowflake },
   { id: 'returns', label: 'Returns', icon: RotateCcw },
+  { id: 'voids', label: 'Voids', icon: AlertTriangle },
   { id: 'settings', label: 'Alert Threshold', icon: Settings },
   { id: 'cctv', label: 'CV', icon: Camera },
   { id: 'sync', label: 'Sync', icon: RefreshCw },
@@ -144,10 +146,7 @@ export default function Management() {
       supabase.from('orders').select('id').eq('status', 'open'),
       supabase.from('tables').select('id').eq('status', 'occupied'),
       supabase.from('rooms').select('status'),
-      supabase
-        .from('attendance')
-        .select('staff_id')
-        .is('clock_out', null),
+      supabase.from('attendance').select('staff_id').is('clock_out', null),
       supabase
         .from('orders')
         .select('total_amount, order_items(total_price, return_requested, return_accepted, status)')
@@ -162,7 +161,12 @@ export default function Management() {
         .size,
       todayRevenue: (revenueRes.data || []).reduce((s: number, o: any) => {
         const net = (o.order_items || [])
-          .filter((i: any) => !i.return_requested && !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled')
+          .filter(
+            (i: any) =>
+              !i.return_requested &&
+              !i.return_accepted &&
+              (i.status || '').toLowerCase() !== 'cancelled'
+          )
           .reduce((ss: number, i: any) => ss + (i.total_price || 0), 0)
         return s + net
       }, 0),
@@ -431,7 +435,9 @@ export default function Management() {
         {activeTab === 'barsales' && <StationSalesTab destination="bar" label="Bar" />}
         {activeTab === 'kitchen' && <StationSalesTab destination="kitchen" label="Kitchen" />}
         {activeTab === 'grillersales' && <StationSalesTab destination="griller" label="Griller" />}
-        {activeTab === 'mixosales' && <StationSalesTab destination="mixologist" label="Mixologist" />}
+        {activeTab === 'mixosales' && (
+          <StationSalesTab destination="mixologist" label="Mixologist" />
+        )}
         {activeTab === 'shishasales' && <StationSalesTab destination="shisha" label="Shisha" />}
         {activeTab === 'gamessales' && <StationSalesTab destination="games" label="Games" />}
         {activeTab === 'performance' && <StaffPerformanceTab />}
@@ -440,6 +446,7 @@ export default function Management() {
         {activeTab === 'mainstore' && <MainStoreSummaryTab />}
         {activeTab === 'fridge' && <KitchenFridgeTab />}
         {activeTab === 'returns' && <ReturnedDrinksTab />}
+        {activeTab === 'voids' && <VoidsTab />}
         {activeTab === 'cctv' && <CctvPanel cvData={cvData} onResolve={resolveAlert} />}
         {activeTab === 'sync' && (
           <SyncTab
