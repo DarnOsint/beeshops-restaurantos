@@ -34,14 +34,12 @@ export default function ZonePricing({ onBack }: Props) {
       supabase.from('table_categories').select('*').order('name'),
       supabase.from('menu_item_zone_prices').select('*'),
     ])
-    const barItems = (itemsRes.data || []).filter(
-      (i: MenuItem) => i.menu_categories?.destination === 'bar'
-    ) as MenuItem[]
-    setItems(barItems)
+    const menuItems = (itemsRes.data || []) as MenuItem[]
+    setItems(menuItems)
     setZones((zonesRes.data || []) as Zone[])
     setMenuCategories([
       'All',
-      ...new Set(barItems.map((i) => i.menu_categories?.name).filter(Boolean)),
+      ...new Set(menuItems.map((i) => i.menu_categories?.name).filter(Boolean)),
     ] as string[])
     const priceMap: Record<string, number> = {}
     ;(pricesRes.data || []).forEach(
@@ -110,7 +108,7 @@ export default function ZonePricing({ onBack }: Props) {
           </button>
           <div>
             <h1 className="text-white font-bold">Zone Pricing</h1>
-            <p className="text-gray-400 text-xs">Set drink prices per zone</p>
+            <p className="text-gray-400 text-xs">Set menu prices per zone</p>
           </div>
         </div>
         <button
@@ -140,7 +138,7 @@ export default function ZonePricing({ onBack }: Props) {
           ))}
         </div>
         {filtered.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">No bar items found</div>
+          <div className="text-center py-12 text-gray-500">No menu items found</div>
         ) : (
           <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
             <div className="overflow-x-auto">
