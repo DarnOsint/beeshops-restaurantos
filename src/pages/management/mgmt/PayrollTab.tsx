@@ -39,6 +39,19 @@ const daysInMonth = (m: string) => {
   return new Date(parseInt(y), parseInt(mo), 0).getDate()
 }
 
+const formatErrorMessage = (err: unknown) => {
+  if (err instanceof Error) return err.message
+  if (err && typeof err === 'object') {
+    const maybeMessage = 'message' in err ? err.message : null
+    const maybeDetails = 'details' in err ? err.details : null
+    const maybeHint = 'hint' in err ? err.hint : null
+    return (
+      [maybeMessage, maybeDetails, maybeHint].filter(Boolean).join(' | ') || JSON.stringify(err)
+    )
+  }
+  return String(err)
+}
+
 export default function PayrollTab() {
   const { profile } = useAuth()
   const toast = useToast()
@@ -193,6 +206,17 @@ export default function PayrollTab() {
     setEdited((prev) => ({ ...prev, [staffId]: { ...(prev[staffId] || {}), [field]: value } }))
   }
 
+  const copyAccountNumber = async (accountNumber: string) => {
+    const trimmed = accountNumber.trim()
+    if (!trimmed) return
+    try {
+      await navigator.clipboard.writeText(trimmed)
+      toast.success('Copied', `${trimmed} copied to clipboard`)
+    } catch (err) {
+      toast.error('Copy failed', formatErrorMessage(err))
+    }
+  }
+
   const hasEdits = Object.keys(edited).length > 0
 
   const saveAll = async () => {
@@ -232,7 +256,7 @@ export default function PayrollTab() {
       toast.success('Saved', `${count} payroll record${count !== 1 ? 's' : ''} updated`)
       await fetchData()
     } catch (err) {
-      toast.error('Save failed', err instanceof Error ? err.message : String(err))
+      toast.error('Save failed', formatErrorMessage(err))
     } finally {
       setSaving(false)
     }
@@ -302,7 +326,7 @@ export default function PayrollTab() {
       toast.success('Added', `${newStaff.name.trim()} added to payroll`)
       await fetchData()
     } catch (err) {
-      toast.error('Add failed', err instanceof Error ? err.message : String(err))
+      toast.error('Add failed', formatErrorMessage(err))
     } finally {
       setSaving(false)
     }
@@ -580,10 +604,14 @@ export default function PayrollTab() {
                         type="text"
                         value={m.account_number}
                         placeholder="Acct No"
+                        onClick={() => void copyAccountNumber(m.account_number)}
                         onChange={(e) =>
                           updateField(row.staff_id, 'account_number', e.target.value)
                         }
-                        className="w-24 bg-gray-800 border border-gray-700 text-white rounded px-1 py-1 text-xs focus:outline-none focus:border-amber-500"
+                        title={
+                          m.account_number ? 'Click to copy account number' : 'Enter account number'
+                        }
+                        className="w-24 cursor-copy bg-gray-800 border border-gray-700 text-white rounded px-1 py-1 text-xs focus:outline-none focus:border-amber-500"
                       />
                     </td>
                     <td className="px-1 py-1">
