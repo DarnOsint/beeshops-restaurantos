@@ -92,6 +92,11 @@ interface StaffForm {
   notes: string
   is_active: boolean
 }
+
+interface PasswordResetForm {
+  password: string
+  confirm: string
+}
 interface Props {
   onBack: () => void
 }
@@ -122,6 +127,8 @@ export default function StaffManagement({ onBack }: Props) {
   const [saving, setSaving] = useState(false)
   const [showPin, setShowPin] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [showResetPassword, setShowResetPassword] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [activeTab, setActiveTab] = useState<'info' | 'security'>('info')
   const [showRoleModal, setShowRoleModal] = useState(false)
   const [roleForm, setRoleForm] = useState<{ name: string; access: AccessMode }>({
@@ -142,6 +149,10 @@ export default function StaffManagement({ onBack }: Props) {
     is_active: true,
   }
   const [form, setForm] = useState<StaffForm>(blankForm)
+  const [resetPasswordForm, setResetPasswordForm] = useState<PasswordResetForm>({
+    password: '',
+    confirm: '',
+  })
   const f = (v: Partial<StaffForm>) => setForm((prev) => ({ ...prev, ...v }))
 
   useEffect(() => {
@@ -184,6 +195,7 @@ export default function StaffManagement({ onBack }: Props) {
   const openAdd = () => {
     setEditingStaff(null)
     setForm(blankForm)
+    setResetPasswordForm({ password: '', confirm: '' })
     setActiveTab('info')
     setShowModal(true)
   }
@@ -204,6 +216,7 @@ export default function StaffManagement({ onBack }: Props) {
       notes: (member as unknown as { notes?: string }).notes || '',
       is_active: (member as unknown as { is_active?: boolean }).is_active ?? true,
     })
+    setResetPasswordForm({ password: '', confirm: '' })
     setActiveTab('info')
     setShowModal(true)
   }
@@ -251,6 +264,61 @@ export default function StaffManagement({ onBack }: Props) {
       setRoleForm({ name: '', access: 'office' })
       setShowRoleModal(false)
       toast.success('Role Added', `${formatRoleLabel(normalized)} is now available`)
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : (e as { message?: string })?.message || JSON.stringify(e)
+      toast.error('Error', msg)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const resetStaffPassword = async () => {
+    if (!editingStaff) return
+    if (isFloorRole(form.role)) {
+      toast.info('Notice', 'Floor staff use PIN login and do not have email passwords')
+      return
+    }
+    if (!form.email.trim()) {
+      toast.info('Notice', 'This staff member does not have an email account')
+      return
+    }
+    if (!resetPasswordForm.password || resetPasswordForm.password.length < 8) {
+      toast.info('Notice', 'New password must be at least 8 characters')
+      return
+    }
+    if (resetPasswordForm.password !== resetPasswordForm.confirm) {
+      toast.info('Notice', 'Password confirmation does not match')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (!session?.access_token)
+        throw new Error('You need to log in again before resetting passwords')
+
+      const res = await fetch('/api/staff-reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          staffId: editingStaff.id,
+          newPassword: resetPasswordForm.password,
+        }),
+      })
+
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(payload?.error || payload?.message || 'Failed to reset staff password')
+      }
+
+      setResetPasswordForm({ password: '', confirm: '' })
+      toast.success('Password Updated', `${editingStaff.full_name}'s password was reset`)
     } catch (e) {
       const msg =
         e instanceof Error ? e.message : (e as { message?: string })?.message || JSON.stringify(e)
@@ -765,6 +833,84 @@ export default function StaffManagement({ onBack }: Props) {
                           {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                         </button>
                       </div>
+                    </div>
+                  )}
+                  {!isFloorRole(form.role) && editingStaff && (
+                    <div className="space-y-3 rounded-xl border border-purple-500/20 bg-purple-500/10 p-4">
+                      <div>
+                        <p className="text-purple-300 text-sm font-semibold">
+                          Reset Login Password
+                        </p>
+                        <p className="text-purple-200/70 text-xs mt-1">
+                          Set a new password for this email user account.
+                        </p>
+                      </div>
+                      <div>
+                        <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                          New Password
+                        </label>
+                        <div className="relative">
+                          <Shield
+                            size={14}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+                          />
+                          <input
+                            type={showResetPassword ? 'text' : 'password'}
+                            value={resetPasswordForm.password}
+                            onChange={(e) =>
+                              setResetPasswordForm((prev) => ({
+                                ...prev,
+                                password: e.target.value,
+                              }))
+                            }
+                            className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-9 pr-10 py-3 focus:outline-none focus:border-amber-500 text-sm"
+                            placeholder="Min. 8 characters"
+                          />
+                          <button
+                            onClick={() => setShowResetPassword(!showResetPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                          >
+                            {showResetPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                          Confirm New Password
+                        </label>
+                        <div className="relative">
+                          <Shield
+                            size={14}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+                          />
+                          <input
+                            type={showResetConfirm ? 'text' : 'password'}
+                            value={resetPasswordForm.confirm}
+                            onChange={(e) =>
+                              setResetPasswordForm((prev) => ({
+                                ...prev,
+                                confirm: e.target.value,
+                              }))
+                            }
+                            className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-9 pr-10 py-3 focus:outline-none focus:border-amber-500 text-sm"
+                            placeholder="Re-enter new password"
+                          />
+                          <button
+                            onClick={() => setShowResetConfirm(!showResetConfirm)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                          >
+                            {showResetConfirm ? <EyeOff size={14} /> : <Eye size={14} />}
+                          </button>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={resetStaffPassword}
+                        disabled={saving}
+                        className="w-full rounded-xl bg-purple-500 px-4 py-3 text-sm font-bold text-black transition-colors hover:bg-purple-400 disabled:bg-gray-700 disabled:text-gray-400"
+                      >
+                        {saving ? 'Updating...' : 'Update Password'}
+                      </button>
                     </div>
                   )}
                   <div>
