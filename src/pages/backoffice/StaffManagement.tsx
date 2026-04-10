@@ -24,7 +24,7 @@ import {
 import type { Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
 
-const ROLES = [
+const DEFAULT_ROLES = [
   'waitron',
   'kitchen',
   'bar',
@@ -43,7 +43,7 @@ const ROLES = [
   'auditor',
   'owner',
 ] as const
-const FLOOR_ROLES = [
+const DEFAULT_FLOOR_ROLES = [
   'waitron',
   'kitchen',
   'bar',
@@ -56,6 +56,11 @@ const FLOOR_ROLES = [
   'hypeman',
   'social_media_manager',
 ]
+type AccessMode = 'floor' | 'office'
+interface CustomRoleConfig {
+  role: string
+  access: AccessMode
+}
 const roleColors: Record<string, string> = {
   owner: 'bg-amber-500/20 text-amber-400',
   manager: 'bg-purple-500/20 text-purple-400',
@@ -91,8 +96,23 @@ interface Props {
   onBack: () => void
 }
 
+const normalizeRoleValue = (value: string) =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+const formatRoleLabel = (role: string) =>
+  role
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+
 export default function StaffManagement({ onBack }: Props) {
   const [staff, setStaff] = useState<Profile[]>([])
+  const [customRoles, setCustomRoles] = useState<CustomRoleConfig[]>([])
   const [loading, setLoading] = useState(true)
   const toast = useToast()
   const [search, setSearch] = useState('')
@@ -103,6 +123,11 @@ export default function StaffManagement({ onBack }: Props) {
   const [showPin, setShowPin] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [activeTab, setActiveTab] = useState<'info' | 'security'>('info')
+  const [showRoleModal, setShowRoleModal] = useState(false)
+  const [roleForm, setRoleForm] = useState<{ name: string; access: AccessMode }>({
+    name: '',
+    access: 'office',
+  })
 
   const blankForm: StaffForm = {
     full_name: '',
@@ -124,12 +149,37 @@ export default function StaffManagement({ onBack }: Props) {
   }, [])
 
   const fetchStaff = async () => {
-    const { data, error } = await supabase.from('profiles').select('*').order('full_name')
-    if (!error) setStaff((data || []) as Profile[])
+    const [profilesRes, settingsRes] = await Promise.all([
+      supabase.from('profiles').select('*').order('full_name'),
+      supabase.from('settings').select('value').eq('id', 'staff_roles_custom').maybeSingle(),
+    ])
+    if (!profilesRes.error) setStaff((profilesRes.data || []) as Profile[])
+    if (!settingsRes.error) {
+      try {
+        const parsed = JSON.parse(settingsRes.data?.value || '[]')
+        setCustomRoles(
+          Array.isArray(parsed)
+            ? parsed.filter(
+                (entry): entry is CustomRoleConfig =>
+                  !!entry &&
+                  typeof entry.role === 'string' &&
+                  (entry.access === 'floor' || entry.access === 'office')
+              )
+            : []
+        )
+      } catch {
+        setCustomRoles([])
+      }
+    }
     setLoading(false)
   }
 
-  const isFloorRole = (role: string) => FLOOR_ROLES.includes(role)
+  const allRoles = Array.from(
+    new Set([...DEFAULT_ROLES, ...customRoles.map((entry) => entry.role)])
+  )
+  const isFloorRole = (role: string) =>
+    DEFAULT_FLOOR_ROLES.includes(role) ||
+    customRoles.some((entry) => entry.role === role && entry.access === 'floor')
 
   const openAdd = () => {
     setEditingStaff(null)
@@ -172,6 +222,42 @@ export default function StaffManagement({ onBack }: Props) {
       }
     }
     return null
+  }
+
+  const saveRole = async () => {
+    const normalized = normalizeRoleValue(roleForm.name)
+    if (!normalized) {
+      toast.info('Notice', 'Role name is required')
+      return
+    }
+    if (allRoles.includes(normalized)) {
+      toast.info('Notice', 'That role already exists')
+      return
+    }
+    setSaving(true)
+    try {
+      const nextRoles = [...customRoles, { role: normalized, access: roleForm.access }]
+      const { error } = await supabase.from('settings').upsert(
+        {
+          id: 'staff_roles_custom',
+          value: JSON.stringify(nextRoles),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      )
+      if (error) throw error
+      setCustomRoles(nextRoles)
+      f({ role: normalized })
+      setRoleForm({ name: '', access: 'office' })
+      setShowRoleModal(false)
+      toast.success('Role Added', `${formatRoleLabel(normalized)} is now available`)
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : (e as { message?: string })?.message || JSON.stringify(e)
+      toast.error('Error', msg)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const saveStaff = async () => {
@@ -348,13 +434,13 @@ export default function StaffManagement({ onBack }: Props) {
             />
           </div>
           <div className="flex gap-2 overflow-x-auto">
-            {(['All', ...ROLES] as string[]).map((role) => (
+            {(['All', ...allRoles] as string[]).map((role) => (
               <button
                 key={role}
                 onClick={() => setFilterRole(role)}
                 className={`px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-colors capitalize ${filterRole === role ? 'bg-amber-500 text-black' : 'bg-gray-900 border border-gray-800 text-gray-400 hover:text-white'}`}
               >
-                {role}
+                {role === 'All' ? role : formatRoleLabel(role)}
               </button>
             ))}
           </div>
@@ -388,7 +474,7 @@ export default function StaffManagement({ onBack }: Props) {
                         <span
                           className={`text-xs px-2 py-0.5 rounded-lg capitalize ${roleColors[member.role] || 'bg-gray-700 text-gray-400'}`}
                         >
-                          {member.role}
+                          {formatRoleLabel(member.role)}
                         </span>
                       </div>
                     </div>
@@ -527,13 +613,20 @@ export default function StaffManagement({ onBack }: Props) {
                         onChange={(e) => f({ role: e.target.value })}
                         className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-9 pr-4 py-3 focus:outline-none focus:border-amber-500 text-sm capitalize appearance-none"
                       >
-                        {ROLES.map((r) => (
+                        {allRoles.map((r) => (
                           <option key={r} value={r}>
-                            {r.charAt(0).toUpperCase() + r.slice(1)}
+                            {formatRoleLabel(r)}
                           </option>
                         ))}
                       </select>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowRoleModal(true)}
+                      className="mt-2 text-xs text-amber-400 hover:text-amber-300"
+                    >
+                      + Create Role
+                    </button>
                     <p
                       className={`text-xs mt-1 ${isFloorRole(form.role) ? 'text-blue-400' : 'text-purple-400'}`}
                     >
@@ -737,6 +830,74 @@ export default function StaffManagement({ onBack }: Props) {
                 {saving ? 'Saving...' : editingStaff ? 'Update Staff Member' : 'Add Staff Member'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showRoleModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
+          <div className="bg-gray-900 rounded-2xl w-full max-w-sm border border-gray-800 p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-white font-bold">Create Role</h3>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  Add a staff role and choose its login type
+                </p>
+              </div>
+              <button
+                onClick={() => setShowRoleModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div>
+              <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                Role Name
+              </label>
+              <input
+                value={roleForm.name}
+                onChange={(e) => setRoleForm((prev) => ({ ...prev, name: e.target.value }))}
+                className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 text-sm"
+                placeholder="e.g. cashier"
+              />
+              <p className="text-gray-500 text-xs mt-1">
+                Saved as: {normalizeRoleValue(roleForm.name) || 'role_name'}
+              </p>
+            </div>
+            <div>
+              <label className="text-gray-400 text-xs uppercase tracking-wide block mb-2">
+                Access Type
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    ['floor', 'Floor / PIN'],
+                    ['office', 'Office / Email'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setRoleForm((prev) => ({ ...prev, access: value }))}
+                    className={`rounded-xl border px-3 py-3 text-sm font-medium ${
+                      roleForm.access === value
+                        ? 'border-amber-500 bg-amber-500/10 text-amber-400'
+                        : 'border-gray-700 bg-gray-800 text-gray-400'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={saveRole}
+              disabled={saving}
+              className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black font-bold rounded-xl py-3"
+            >
+              {saving ? 'Saving...' : 'Save Role'}
+            </button>
           </div>
         </div>
       )}
