@@ -24,12 +24,82 @@ interface WaitronOrder {
   order_items?: Array<{
     quantity: number
     total_price: number
-    menu_items?: { name: string } | null
+    destination?: string
+    menu_items?: {
+      name: string
+      menu_categories?: { name: string; destination?: string } | null
+    } | null
     modifier_notes?: string
     return_requested?: boolean
     return_accepted?: boolean
     status?: string
   }>
+}
+
+type StationKey = 'bar' | 'kitchen' | 'griller' | 'shisha' | 'games' | 'mixologist'
+type BarBucket = 'drinks' | 'spirits'
+
+const STATION_LABELS: Record<StationKey, string> = {
+  bar: 'Bar',
+  kitchen: 'Kitchen',
+  griller: 'Grill',
+  shisha: 'Shisha',
+  games: 'Games',
+  mixologist: 'Mixologist',
+}
+
+const normalizeDestination = (
+  dest?: string | null,
+  name?: string | null,
+  catName?: string | null
+): StationKey => {
+  const d = (dest || '').trim().toLowerCase()
+  const lowerName = (name || '').toLowerCase()
+  const lowerCat = (catName || '').toLowerCase()
+
+  const isMixologistItem =
+    lowerName.includes('cocktail') ||
+    lowerName.includes('mocktail') ||
+    lowerName.includes('milkshake') ||
+    lowerName.includes('shake') ||
+    lowerName.includes('smoothie') ||
+    lowerName.includes('fruit punch') ||
+    lowerName.includes('punch') ||
+    lowerCat.includes('cocktail') ||
+    lowerCat.includes('mocktail') ||
+    lowerCat.includes('milkshake') ||
+    lowerCat.includes('smoothie') ||
+    lowerCat.includes('punch')
+
+  if (d === 'kitchen' || lowerCat.includes('kitchen') || lowerName.includes('kitchen'))
+    return 'kitchen'
+  if (
+    d === 'griller' ||
+    d === 'grill' ||
+    d === 'grilling' ||
+    lowerCat.includes('grill') ||
+    lowerName.includes('grill')
+  )
+    return 'griller'
+  if (
+    d === 'shisha' ||
+    d === 'hookah' ||
+    lowerCat.includes('shisha') ||
+    lowerName.includes('shisha')
+  )
+    return 'shisha'
+  if (d === 'games' || d === 'game' || d === 'games_master' || lowerCat.includes('game'))
+    return 'games'
+  if (d === 'mixologist' || d === 'cocktail' || d === 'cocktails' || isMixologistItem)
+    return 'mixologist'
+  return 'bar'
+}
+
+const getBarBucket = (name?: string | null, catName?: string | null): BarBucket => {
+  const lowerName = (name || '').toLowerCase()
+  const lowerCat = (catName || '').toLowerCase()
+  if (lowerCat.includes('spirit') || lowerName.includes('spirit')) return 'spirits'
+  return 'drinks'
 }
 
 const sessionWindow = (dateStr: string) => {
@@ -82,7 +152,7 @@ export default function WaitronOrdersTab() {
     const { data } = await supabase
       .from('orders')
       .select(
-        'id, total_amount, payment_method, order_type, created_at, closed_at, tables(name, table_categories(name)), order_items(quantity, total_price, modifier_notes, return_requested, return_accepted, status, menu_items(name))'
+        'id, total_amount, payment_method, order_type, created_at, closed_at, tables(name, table_categories(name)), order_items(quantity, total_price, destination, modifier_notes, return_requested, return_accepted, status, menu_items(name, menu_categories(name, destination)))'
       )
       .eq('staff_id', staffId)
       .eq('status', 'paid')
@@ -96,7 +166,8 @@ export default function WaitronOrdersTab() {
   const selectedShift = shifts.find((s) => s.staff_id === selectedStaff)
   const validItems = (items: WaitronOrder['order_items']) =>
     (items || []).filter(
-      (i) => !i.return_requested && !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled'
+      (i) =>
+        !i.return_requested && !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled'
     )
   const totalSales = orders.reduce(
     (s, o) => s + validItems(o.order_items).reduce((ss, i) => ss + (i.total_price || 0), 0),
@@ -122,6 +193,140 @@ export default function WaitronOrdersTab() {
       month: 'short',
       year: 'numeric',
     })
+    const summary = {
+      bar: {
+        totalAmount: 0,
+        totalQty: 0,
+        items: new Map<string, { qty: number; amount: number }>(),
+        drinks: {
+          totalAmount: 0,
+          totalQty: 0,
+          items: new Map<string, { qty: number; amount: number }>(),
+        },
+        spirits: {
+          totalAmount: 0,
+          totalQty: 0,
+          items: new Map<string, { qty: number; amount: number }>(),
+        },
+      },
+      kitchen: {
+        totalAmount: 0,
+        totalQty: 0,
+        items: new Map<string, { qty: number; amount: number }>(),
+      },
+      griller: {
+        totalAmount: 0,
+        totalQty: 0,
+        items: new Map<string, { qty: number; amount: number }>(),
+      },
+      shisha: {
+        totalAmount: 0,
+        totalQty: 0,
+        items: new Map<string, { qty: number; amount: number }>(),
+      },
+      games: {
+        totalAmount: 0,
+        totalQty: 0,
+        items: new Map<string, { qty: number; amount: number }>(),
+      },
+      mixologist: {
+        totalAmount: 0,
+        totalQty: 0,
+        items: new Map<string, { qty: number; amount: number }>(),
+      },
+    }
+
+    const addToBucket = (
+      bucket: {
+        totalAmount: number
+        totalQty: number
+        items: Map<string, { qty: number; amount: number }>
+      },
+      label: string,
+      qty: number,
+      amount: number
+    ) => {
+      bucket.totalQty += qty
+      bucket.totalAmount += amount
+      const existing = bucket.items.get(label) || { qty: 0, amount: 0 }
+      existing.qty += qty
+      existing.amount += amount
+      bucket.items.set(label, existing)
+    }
+
+    for (const order of orders) {
+      for (const item of validItems(order.order_items)) {
+        const itemName = item.menu_items?.name || item.modifier_notes || 'Item'
+        const categoryName = item.menu_items?.menu_categories?.name || ''
+        const station = normalizeDestination(
+          item.destination || item.menu_items?.menu_categories?.destination,
+          item.menu_items?.name,
+          categoryName
+        )
+        const qty = item.quantity || 0
+        const amount = item.total_price || 0
+
+        if (station === 'bar') {
+          const bucket = getBarBucket(item.menu_items?.name, categoryName)
+          addToBucket(summary.bar, itemName, qty, amount)
+          addToBucket(summary.bar[bucket], itemName, qty, amount)
+          continue
+        }
+
+        addToBucket(summary[station], itemName, qty, amount)
+      }
+    }
+
+    const renderBucket = (bucket: {
+      totalAmount: number
+      totalQty: number
+      items: Map<string, { qty: number; amount: number }>
+    }) =>
+      Array.from(bucket.items.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([name, data]) => row(`  ${data.qty}x ${name}`, `N${data.amount.toLocaleString()}`))
+        .join('\n')
+
+    const sectionBlocks: string[] = []
+    ;(['bar', 'kitchen', 'griller', 'shisha', 'games', 'mixologist'] as StationKey[]).forEach(
+      (station) => {
+        const bucket = summary[station]
+        if (bucket.totalQty === 0) return
+
+        if (station === 'bar') {
+          const barSections: string[] = [
+            STATION_LABELS.bar.toUpperCase(),
+            row('  Total Qty:', String(bucket.totalQty)),
+            row('  Total Sales:', `N${bucket.totalAmount.toLocaleString()}`),
+          ]
+
+          ;(['drinks', 'spirits'] as BarBucket[]).forEach((barBucket) => {
+            const barSummary = summary.bar[barBucket]
+            if (barSummary.totalQty === 0) return
+            barSections.push(div)
+            barSections.push((barBucket === 'drinks' ? 'Drinks' : 'Spirits').toUpperCase())
+            barSections.push(row('  Qty:', String(barSummary.totalQty)))
+            barSections.push(row('  Sales:', `N${barSummary.totalAmount.toLocaleString()}`))
+            const lines = renderBucket(barSummary)
+            if (lines) barSections.push(lines)
+          })
+
+          sectionBlocks.push(barSections.join('\n'))
+          return
+        }
+
+        sectionBlocks.push(
+          [
+            STATION_LABELS[station].toUpperCase(),
+            row('  Qty:', String(bucket.totalQty)),
+            row('  Sales:', `N${bucket.totalAmount.toLocaleString()}`),
+            renderBucket(bucket),
+          ]
+            .filter(Boolean)
+            .join('\n')
+        )
+      }
+    )
 
     const lines = [
       '',
@@ -134,34 +339,9 @@ export default function WaitronOrdersTab() {
       row('Total Sales:', `N${totalSales.toLocaleString()}`),
       row('Total Items:', String(totalItems)),
       div,
-      ...orders.map((o, idx) => {
-        const zone =
-          (o.tables as unknown as { table_categories?: { name: string } })?.table_categories
-            ?.name || ''
-        const pm = (o.payment_method || '').replace('_', ' ').toUpperCase()
-        const time = new Date(o.closed_at || o.created_at).toLocaleTimeString('en-NG', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true,
-        })
-        const itemLines = validItems(o.order_items)
-          .map((i) =>
-            row(
-              `  ${i.quantity}x ${i.menu_items?.name || i.modifier_notes || 'Item'}`,
-              `N${(i.total_price || 0).toLocaleString()}`
-            )
-          )
-          .join('\n')
-        return [
-          row(
-            `${idx + 1}. ${o.tables?.name || o.order_type}${zone ? ` (${zone})` : ''}`,
-            `N${o.total_amount.toLocaleString()}`
-          ),
-          row(`   ${time}`, pm),
-          itemLines,
-          '',
-        ].join('\n')
-      }),
+      ctr('SUMMARY BY STATION'),
+      div,
+      ...sectionBlocks.flatMap((block, index) => (index === 0 ? [block] : ['', block])),
       sol,
       row('TOTAL:', `N${totalSales.toLocaleString()}`),
       sol,
