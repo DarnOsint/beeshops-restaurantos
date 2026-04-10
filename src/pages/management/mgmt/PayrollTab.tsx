@@ -11,6 +11,7 @@ interface PayrollRow {
   staff_id: string
   staff_name: string
   role: string
+  is_active: boolean
   bank_name: string
   account_number: string
   base_salary: number
@@ -80,8 +81,7 @@ export default function PayrollTab() {
     // Get all staff
     const { data: staff } = await supabase
       .from('profiles')
-      .select('id, full_name, role')
-      .eq('is_active', true)
+      .select('id, full_name, role, is_active')
       .order('full_name')
 
     // Get attendance for the month
@@ -146,7 +146,7 @@ export default function PayrollTab() {
 
     // Build rows — auto-populate outstanding from reconciliation + credit orders
     const display: PayrollRow[] = (
-      (staff || []) as Array<{ id: string; full_name: string; role: string }>
+      (staff || []) as Array<{ id: string; full_name: string; role: string; is_active: boolean }>
     ).map((s) => {
       const saved = payMap[s.id]
       const autoOutstanding =
@@ -156,6 +156,7 @@ export default function PayrollTab() {
         staff_id: s.id,
         staff_name: s.full_name,
         role: saved?.role || s.role || '',
+        is_active: s.is_active ?? true,
         bank_name: saved?.bank_name || '',
         account_number: saved?.account_number || '',
         base_salary: saved?.base_salary || 0,
@@ -174,6 +175,7 @@ export default function PayrollTab() {
           staff_id: p.staff_id,
           staff_name: p.staff_name,
           role: p.role || '',
+          is_active: false,
           bank_name: p.bank_name || '',
           account_number: p.account_number || '',
           base_salary: p.base_salary || 0,
@@ -185,7 +187,10 @@ export default function PayrollTab() {
       }
     }
 
-    display.sort((a, b) => a.staff_name.localeCompare(b.staff_name))
+    display.sort((a, b) => {
+      if (a.is_active !== b.is_active) return a.is_active ? -1 : 1
+      return a.staff_name.localeCompare(b.staff_name)
+    })
     setRows(display)
     setLoading(false)
   }, [month])
@@ -437,6 +442,7 @@ export default function PayrollTab() {
     'manager',
     'supervisor',
     'accountant',
+    'auditor',
     'floor_staff',
     'dj',
     'hypeman',
@@ -564,9 +570,24 @@ export default function PayrollTab() {
                 return (
                   <tr
                     key={row.staff_id}
-                    className={`border-t border-gray-800 ${isEdited ? 'bg-amber-500/5' : 'hover:bg-gray-800/50'}`}
+                    className={`border-t border-gray-800 ${
+                      !m.is_active
+                        ? 'bg-gray-900/60 text-gray-500'
+                        : isEdited
+                          ? 'bg-amber-500/5'
+                          : 'hover:bg-gray-800/50'
+                    }`}
                   >
-                    <td className="text-white px-3 py-2 font-medium">{m.staff_name}</td>
+                    <td
+                      className={`px-3 py-2 font-medium ${m.is_active ? 'text-white' : 'text-gray-500'}`}
+                    >
+                      {m.staff_name}
+                      {!m.is_active && (
+                        <span className="ml-2 text-[10px] uppercase tracking-wider text-gray-600">
+                          Inactive
+                        </span>
+                      )}
+                    </td>
                     <td className="px-1 py-1">
                       <select
                         value={m.role}
