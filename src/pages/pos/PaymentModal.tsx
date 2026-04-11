@@ -865,7 +865,6 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         },
         performer: profile as Profile,
       })
-      await depleteInventory(order.id)
       setPaidOrder({ ...order, payment_method: 'split' })
       setSuccess(true)
       setShowReceipt(true)
@@ -873,70 +872,6 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       const nextPerson = allPeople.find((p) => !paidPeople.includes(p))!
       setCurrentSplitPerson(nextPerson - 1)
       setSplitPayMethod('cash')
-    }
-  }
-
-  const depleteInventory = async (orderId: string) => {
-    try {
-      // Guard: check if already depleted (prevents double-depletion on retry)
-      const { data: orderCheck } = await supabase
-        .from('orders')
-        .select('depleted_at')
-        .eq('id', orderId)
-        .single()
-      if (orderCheck?.depleted_at) return // Already depleted — skip
-
-      // Mark as depleted first (atomic guard)
-      await supabase
-        .from('orders')
-        .update({ depleted_at: new Date().toISOString() })
-        .eq('id', orderId)
-        .is('depleted_at', null) // Only update if not already set
-
-      const { data: items } = await supabase
-        .from('order_items')
-        .select('menu_item_id, quantity')
-        .eq('order_id', orderId)
-      if (!items?.length) return
-      const menuItemIds = items.map((i: { menu_item_id: string }) => i.menu_item_id).filter(Boolean)
-      const { data: invRows } = await supabase
-        .from('inventory')
-        .select('id, menu_item_id, item_name, current_stock')
-        .in('menu_item_id', menuItemIds)
-        .eq('is_active', true)
-      if (!invRows?.length) return
-      for (const inv of invRows as {
-        id: string
-        menu_item_id: string
-        item_name: string
-        current_stock: number
-      }[]) {
-        const orderItem = (items as { menu_item_id: string; quantity: number }[]).find(
-          (i) => i.menu_item_id === inv.menu_item_id
-        )
-        if (!orderItem) continue
-        const qty = orderItem.quantity,
-          before = inv.current_stock,
-          after = Math.max(0, before - qty)
-        await supabase
-          .from('inventory')
-          .update({ current_stock: after, updated_at: new Date().toISOString() })
-          .eq('id', inv.id)
-        await supabase.from('inventory_log').insert({
-          inventory_id: inv.id,
-          menu_item_id: inv.menu_item_id,
-          item_name: inv.item_name,
-          order_id: orderId,
-          change_type: 'deduction',
-          quantity_change: -qty,
-          stock_before: before,
-          stock_after: after,
-          notes: 'Auto-deducted on payment',
-          created_by: profile?.id,
-        })
-      }
-    } catch (e) {
-      console.error('Inventory depletion error:', e)
     }
   }
 
@@ -1016,7 +951,6 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           recorded_by: profile?.id,
           recorded_by_name: profile?.full_name,
         })
-        await depleteInventory(order.id)
         await audit({
           action: 'ORDER_PAID',
           entity: 'order',
@@ -1054,7 +988,6 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         .from('tables')
         .update({ status: 'available', assigned_staff: null })
         .eq('id', table.id)
-      await depleteInventory(order.id)
       await audit({
         action: 'ORDER_PAID',
         entity: 'order',

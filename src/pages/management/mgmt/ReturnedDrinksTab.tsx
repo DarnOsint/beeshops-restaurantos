@@ -53,49 +53,20 @@ export default function ReturnedDrinksTab() {
     const expiry = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const { data: expired } = await supabase
       .from('returns_log')
-      .select('id, order_item_id, order_id, item_total, item_name, quantity')
+      .select('id, order_item_id')
       .eq('status', 'bar_accepted')
       .lt('resolved_at', expiry)
     if (expired && expired.length > 0) {
-      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
       // Auto-revert expired returns — items go back to waitron's account
       for (const exp of expired as Array<{
         id: string
         order_item_id: string
-        order_id: string
-        item_total: number
-        item_name: string
-        quantity: number
       }>) {
         await supabase
           .from('order_items')
           .update({ return_accepted: false, return_requested: false, return_reason: null })
           .eq('id', exp.order_item_id)
         await supabase.from('returns_log').update({ status: 'expired' }).eq('id', exp.id)
-        // Recalculate order total — item is back on the order
-        const { data: remaining } = await supabase
-          .from('order_items')
-          .select('total_price, return_accepted')
-          .eq('order_id', exp.order_id)
-        const newTotal = (remaining || [])
-          .filter((r: { return_accepted?: boolean }) => !r.return_accepted)
-          .reduce((s: number, r: { total_price: number }) => s + (r.total_price || 0), 0)
-        await supabase.from('orders').update({ total_amount: newTotal }).eq('id', exp.order_id)
-        // Re-deduct from chiller — item was returned to chiller on bar acceptance, now take it back
-        if (exp.item_name) {
-          const { data: stockRow } = await supabase
-            .from('bar_chiller_stock')
-            .select('id, sold_qty')
-            .eq('date', today)
-            .eq('item_name', exp.item_name)
-            .single()
-          if (stockRow?.id) {
-            await supabase
-              .from('bar_chiller_stock')
-              .update({ sold_qty: (stockRow.sold_qty || 0) + (exp.quantity || 1), updated_at: new Date().toISOString() })
-              .eq('id', stockRow.id)
-          }
-        }
       }
     }
 
@@ -146,6 +117,25 @@ export default function ReturnedDrinksTab() {
         .eq('id', r.order_id)
       if (orderErr) throw orderErr
 
+      if (r.item_name) {
+        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+        const { data: stockRow, error: stockErr } = await supabase
+          .from('bar_chiller_stock')
+          .select('id, sold_qty')
+          .eq('date', today)
+          .eq('item_name', r.item_name)
+          .single()
+        if (stockErr && stockErr.code !== 'PGRST116') throw stockErr
+        if (stockRow?.id) {
+          const newSold = Math.max(0, (stockRow.sold_qty || 0) - (r.quantity || 1))
+          const { error: updStockErr } = await supabase
+            .from('bar_chiller_stock')
+            .update({ sold_qty: newSold, updated_at: new Date().toISOString() })
+            .eq('id', stockRow.id)
+          if (updStockErr) throw updStockErr
+        }
+      }
+
       const { error: retErr } = await supabase
         .from('returns_log')
         .update({
@@ -153,6 +143,7 @@ export default function ReturnedDrinksTab() {
           reviewed: true,
           reviewed_by_name: profile?.full_name ?? null,
           reviewed_at: new Date().toISOString(),
+          resolved_at: new Date().toISOString(),
         })
         .eq('id', r.id)
       if (retErr) throw retErr
@@ -170,7 +161,12 @@ export default function ReturnedDrinksTab() {
         },
         performer: profile as Profile,
       })
-      if (r.waitron_id) sendPushToStaff(r.waitron_id, '✅ Return Approved', `${r.quantity}x ${r.item_name} approved by management`).catch(() => {})
+      if (r.waitron_id)
+        sendPushToStaff(
+          r.waitron_id,
+          '✅ Return Approved',
+          `${r.quantity}x ${r.item_name} approved by management`
+        ).catch(() => {})
       toast.success('Return Approved', `${r.quantity}x ${r.item_name} permanently removed`)
       fetchReturns(date)
     } catch (e) {
@@ -193,6 +189,7 @@ export default function ReturnedDrinksTab() {
           reviewed: true,
           reviewed_by_name: profile?.full_name ?? null,
           reviewed_at: new Date().toISOString(),
+          resolved_at: new Date().toISOString(),
         })
         .eq('id', r.id)
       if (retErr) throw retErr
@@ -211,23 +208,6 @@ export default function ReturnedDrinksTab() {
         .eq('id', r.order_id)
       if (orderErr) throw orderErr
 
-      // Re-deduct from chiller — item was returned to chiller on bar acceptance, now take it back
-      if (r.item_name) {
-        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
-        const { data: stockRow } = await supabase
-          .from('bar_chiller_stock')
-          .select('id, sold_qty')
-          .eq('date', today)
-          .eq('item_name', r.item_name)
-          .single()
-        if (stockRow?.id) {
-          await supabase
-            .from('bar_chiller_stock')
-            .update({ sold_qty: (stockRow.sold_qty || 0) + (r.quantity || 1), updated_at: new Date().toISOString() })
-            .eq('id', stockRow.id)
-        }
-      }
-
       await audit({
         action: 'RETURN_MANAGER_REJECTED',
         entity: 'returns_log',
@@ -241,7 +221,12 @@ export default function ReturnedDrinksTab() {
         },
         performer: profile as Profile,
       })
-      if (r.waitron_id) sendPushToStaff(r.waitron_id, '❌ Return Rejected', `${r.quantity}x ${r.item_name} restored to your order`).catch(() => {})
+      if (r.waitron_id)
+        sendPushToStaff(
+          r.waitron_id,
+          '❌ Return Rejected',
+          `${r.quantity}x ${r.item_name} restored to your order`
+        ).catch(() => {})
       toast.success('Return Rejected', `${r.quantity}x ${r.item_name} added back to order`)
       fetchReturns(date)
     } catch (e) {
@@ -491,7 +476,16 @@ export default function ReturnedDrinksTab() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-gray-500 mb-2">
-                  <span>Barman: {r.barman_name ? r.barman_name : r.status === 'pending' ? 'Pending' : r.status === 'bar_accepted' ? 'Accepted' : 'Direct approval'}</span>
+                  <span>
+                    Barman:{' '}
+                    {r.barman_name
+                      ? r.barman_name
+                      : r.status === 'pending'
+                        ? 'Pending'
+                        : r.status === 'bar_accepted'
+                          ? 'Accepted'
+                          : 'Direct approval'}
+                  </span>
                   <span>·</span>
                   <span>
                     {new Date(r.requested_at).toLocaleTimeString('en-NG', {

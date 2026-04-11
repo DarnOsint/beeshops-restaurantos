@@ -318,24 +318,6 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
     return true
   }
 
-  const depleteInventory = async (items: OrderItemLocal[]) => {
-    for (const item of items) {
-      if (!item.id) continue
-      const { data: inv } = await supabase
-        .from('inventory')
-        .select('id, current_stock')
-        .eq('menu_item_id', item.id)
-        .eq('is_active', true)
-        .maybeSingle()
-      if (!inv) continue
-      const newStock = Math.max(0, (inv as { current_stock: number }).current_stock - item.quantity)
-      await supabase
-        .from('inventory')
-        .update({ current_stock: newStock, updated_at: new Date().toISOString() })
-        .eq('id', (inv as { id: string }).id)
-    }
-  }
-
   const processOrder = async () => {
     if (orderItems.length === 0) return toast.warning('Required', 'Add at least one item')
     if (isTakeaway && !customerName)
@@ -402,7 +384,6 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         const { error } = await offlineInsert('order_items', item)
         if (error) throw error
       }
-      await depleteInventory(orderItems)
       // Auto-print station tickets — kitchen/griller
       const stations: ItemDestination[] = ['kitchen', 'griller', 'mixologist', 'games']
       for (const station of stations) {
