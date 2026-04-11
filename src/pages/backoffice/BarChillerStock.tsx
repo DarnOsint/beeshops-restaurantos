@@ -44,6 +44,38 @@ interface IssueEntry {
   created_at: string
 }
 
+const buildIssueFallback = (
+  d: string,
+  rows: Array<{
+    id: string
+    order_id: string
+    quantity: number
+    unit_price: number | null
+    total_price: number | null
+    created_at: string
+    menu_items?: { name?: string | null } | null
+    orders?: {
+      table_id?: string | null
+      staff_id?: string | null
+      tables?: { name?: string | null } | null
+      profiles?: { full_name?: string | null } | null
+    } | null
+  }>
+): IssueEntry[] =>
+  rows.map((row) => ({
+    id: `fallback-${row.id}`,
+    issue_date: d,
+    order_id: row.order_id,
+    order_item_id: row.id,
+    table_name: row.orders?.tables?.name || null,
+    waitron_name: row.orders?.profiles?.full_name || null,
+    item_name: row.menu_items?.name || 'Item',
+    quantity: row.quantity || 0,
+    unit_price: row.unit_price || 0,
+    total_price: row.total_price || 0,
+    created_at: row.created_at,
+  }))
+
 interface Props {
   onBack: () => void
   embedded?: boolean
@@ -402,7 +434,50 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     }
 
     setIssueLogAvailable(true)
-    setIssueLog((data || []) as IssueEntry[])
+    if (data && data.length > 0) {
+      setIssueLog((data || []) as IssueEntry[])
+      return
+    }
+
+    const dayStart = new Date(d + 'T08:00:00+01:00')
+    const dayEnd = new Date(dayStart)
+    dayEnd.setDate(dayEnd.getDate() + 1)
+    const { data: fallbackRows, error: fallbackErr } = await supabase
+      .from('order_items')
+      .select(
+        'id, order_id, quantity, unit_price, total_price, created_at, menu_items(name), orders(table_id, staff_id, tables(name), profiles(full_name))'
+      )
+      .eq('destination', 'bar')
+      .gte('created_at', dayStart.toISOString())
+      .lt('created_at', dayEnd.toISOString())
+      .order('created_at', { ascending: false })
+
+    if (fallbackErr) {
+      console.warn('bar issue fallback fetch failed:', fallbackErr.message)
+      setIssueLog([])
+      return
+    }
+
+    setIssueLog(
+      buildIssueFallback(
+        d,
+        (fallbackRows || []) as Array<{
+          id: string
+          order_id: string
+          quantity: number
+          unit_price: number | null
+          total_price: number | null
+          created_at: string
+          menu_items?: { name?: string | null } | null
+          orders?: {
+            table_id?: string | null
+            staff_id?: string | null
+            tables?: { name?: string | null } | null
+            profiles?: { full_name?: string | null } | null
+          } | null
+        }>
+      )
+    )
   }, [])
 
   useEffect(() => {
