@@ -356,6 +356,7 @@ export default function OrderPanel({
           return_requested_at: new Date().toISOString(),
         })
         .eq('id', dbId)
+      await supabase.from('returns_log').delete().eq('order_item_id', dbId).eq('status', 'pending')
       // Log to returns_log
       await supabase.from('returns_log').insert({
         order_id: activeOrder?.id,

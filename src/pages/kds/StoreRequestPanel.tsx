@@ -57,7 +57,8 @@ export default function StoreRequestPanel() {
   const fetchData = useCallback(async () => {
     setLoading(true)
     const dayStart = new Date(reqDate + 'T08:00:00+01:00')
-    const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1)
+    const dayEnd = new Date(dayStart)
+    dayEnd.setDate(dayEnd.getDate() + 1)
     const [{ data: inv }, { data: reqs }] = await Promise.all([
       supabase
         .from('inventory')
@@ -101,17 +102,48 @@ export default function StoreRequestPanel() {
     }
     setSending(true)
     try {
-      const { error } = await supabase.from('store_requests').insert({
-        item_name: selectedItem.item_name,
-        inventory_id: selectedItem.id,
-        quantity,
-        unit: selectedItem.unit,
-        requested_by: profile?.id,
-        requested_by_name: profile?.full_name,
-        reason: reason || null,
-        status: 'pending',
-      })
-      if (error) throw error
+      const dayStart = new Date(reqDate + 'T08:00:00+01:00')
+      const dayEnd = new Date(dayStart)
+      dayEnd.setDate(dayEnd.getDate() + 1)
+      const { data: existingPending, error: existingErr } = await supabase
+        .from('store_requests')
+        .select('id, quantity, reason')
+        .eq('requested_by', profile?.id)
+        .eq('inventory_id', selectedItem.id)
+        .eq('status', 'pending')
+        .gte('created_at', dayStart.toISOString())
+        .lt('created_at', dayEnd.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (existingErr) throw existingErr
+
+      if (existingPending?.id) {
+        const mergedReason =
+          reason && reason !== existingPending.reason
+            ? [existingPending.reason, reason].filter(Boolean).join(' | ')
+            : existingPending.reason || reason || null
+        const { error } = await supabase
+          .from('store_requests')
+          .update({
+            quantity: Number(existingPending.quantity || 0) + quantity,
+            reason: mergedReason,
+          })
+          .eq('id', existingPending.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('store_requests').insert({
+          item_name: selectedItem.item_name,
+          inventory_id: selectedItem.id,
+          quantity,
+          unit: selectedItem.unit,
+          requested_by: profile?.id,
+          requested_by_name: profile?.full_name,
+          reason: reason || null,
+          status: 'pending',
+        })
+        if (error) throw error
+      }
 
       await audit({
         action: 'STORE_REQUEST_CREATED',
@@ -122,11 +154,22 @@ export default function StoreRequestPanel() {
       })
 
       // Notify supervisors
-      const { data: supervisors } = await supabase.from('profiles').select('id').in('role', ['supervisor', 'manager', 'owner']).eq('is_active', true)
-      for (const s of (supervisors || [])) {
-        sendPushToStaff(s.id, '📦 Store Request', `${quantity}x ${selectedItem.item_name} requested by ${profile?.full_name}`).catch(() => {})
+      const { data: supervisors } = await supabase
+        .from('profiles')
+        .select('id')
+        .in('role', ['supervisor', 'manager', 'owner'])
+        .eq('is_active', true)
+      for (const s of supervisors || []) {
+        sendPushToStaff(
+          s.id,
+          '📦 Store Request',
+          `${quantity}x ${selectedItem.item_name} requested by ${profile?.full_name}`
+        ).catch(() => {})
       }
-      toast.success('Request Sent', `${quantity} ${selectedItem.unit} of ${selectedItem.item_name} requested`)
+      toast.success(
+        'Request Sent',
+        `${quantity} ${selectedItem.unit} of ${selectedItem.item_name} requested`
+      )
       setShowForm(false)
       setSelectedItem(null)
       setQty('')
@@ -153,12 +196,32 @@ export default function StoreRequestPanel() {
           <Package size={18} className="text-amber-400" /> Store Requests
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
-          <input type="date" value={reqDate} onChange={(e) => setReqDate(e.target.value)}
-            className="bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1 text-xs" />
-          <button onClick={() => { const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })); if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1); setReqDate(wat.toLocaleDateString('en-CA')) }}
-            className="px-2 py-1 rounded-lg text-xs bg-amber-500 text-black font-medium">Today</button>
-          <button onClick={() => { const d = new Date(reqDate); d.setDate(d.getDate() - 1); setReqDate(d.toLocaleDateString('en-CA')) }}
-            className="px-2 py-1 rounded-lg text-xs bg-gray-800 text-gray-400">Prev</button>
+          <input
+            type="date"
+            value={reqDate}
+            onChange={(e) => setReqDate(e.target.value)}
+            className="bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1 text-xs"
+          />
+          <button
+            onClick={() => {
+              const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+              if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
+              setReqDate(wat.toLocaleDateString('en-CA'))
+            }}
+            className="px-2 py-1 rounded-lg text-xs bg-amber-500 text-black font-medium"
+          >
+            Today
+          </button>
+          <button
+            onClick={() => {
+              const d = new Date(reqDate)
+              d.setDate(d.getDate() - 1)
+              setReqDate(d.toLocaleDateString('en-CA'))
+            }}
+            className="px-2 py-1 rounded-lg text-xs bg-gray-800 text-gray-400"
+          >
+            Prev
+          </button>
           <button onClick={fetchData} className="text-gray-400 hover:text-white p-1">
             <RefreshCw size={14} />
           </button>
@@ -275,7 +338,9 @@ export default function StoreRequestPanel() {
         <div className="text-amber-500 text-center py-6">Loading...</div>
       ) : myRequests.length === 0 ? (
         <div className="text-center py-8">
-          <p className="text-gray-500 text-sm">No requests yet. Tap "Request from Store" to start.</p>
+          <p className="text-gray-500 text-sm">
+            No requests yet. Tap "Request from Store" to start.
+          </p>
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -299,18 +364,18 @@ export default function StoreRequestPanel() {
                 <span
                   className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${req.status === 'pending' ? 'bg-amber-500/20 text-amber-400' : req.status === 'approved' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}
                 >
-                  {req.status === 'pending' ? 'Pending' : req.status === 'approved' ? 'Approved' : 'Rejected'}
+                  {req.status === 'pending'
+                    ? 'Pending'
+                    : req.status === 'approved'
+                      ? 'Approved'
+                      : 'Rejected'}
                 </span>
               </div>
               {req.status === 'approved' && req.approved_by_name && (
-                <p className="text-green-400/70 text-xs mt-1">
-                  Approved by {req.approved_by_name}
-                </p>
+                <p className="text-green-400/70 text-xs mt-1">Approved by {req.approved_by_name}</p>
               )}
               {req.status === 'rejected' && req.reject_reason && (
-                <p className="text-red-400/70 text-xs mt-1">
-                  Reason: {req.reject_reason}
-                </p>
+                <p className="text-red-400/70 text-xs mt-1">Reason: {req.reject_reason}</p>
               )}
             </div>
           ))}

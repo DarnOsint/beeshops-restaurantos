@@ -411,6 +411,12 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         })
         .eq('id', itemId)
 
+      await supabase
+        .from('returns_log')
+        .delete()
+        .eq('order_item_id', itemId)
+        .eq('status', 'pending')
+
       // Log to returns_log for manager/accountant review
       await supabase.from('returns_log').insert({
         order_id: order.id,
