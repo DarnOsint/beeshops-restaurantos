@@ -137,20 +137,28 @@ function BarKDSInner() {
 
   const fetchOrders = useCallback(async () => {
     // Fetch open orders AND paid orders that still have pending bar items (cash sales/takeaway)
-    const { data, error } = await supabase
-      .from('orders')
-      .select(
-        `id, created_at, notes, staff_id, order_type, customer_name,
+    const [{ data, error }, { data: pendingReturns, error: pendingErr }] = await Promise.all([
+      supabase
+        .from('orders')
+        .select(
+          `id, created_at, notes, staff_id, order_type, customer_name,
         tables(name),
         profiles(full_name),
         order_items(id, quantity, status, destination, notes, return_requested, return_accepted, return_reason,
           menu_items(name, menu_categories(name, destination)))`
-      )
-      .in('status', ['open', 'paid'])
-      .order('created_at', { ascending: true })
+        )
+        .in('status', ['open', 'paid'])
+        .order('created_at', { ascending: true }),
+      supabase.from('returns_log').select('order_item_id').eq('status', 'pending'),
+    ])
 
-    if (!error && data) {
+    if (!error && !pendingErr && data) {
       const allOrders = data as unknown as KdsOrder[]
+      const pendingReturnIds = new Set(
+        ((pendingReturns || []) as Array<{ order_item_id: string | null }>)
+          .map((row) => row.order_item_id)
+          .filter(Boolean)
+      )
 
       // Active bar orders (not ready/delivered, not return_accepted)
       const bar = allOrders
@@ -175,7 +183,7 @@ function BarKDSInner() {
       const returns: typeof returnItems = []
       allOrders.forEach((o) => {
         o.order_items.forEach((i) => {
-          if (isBarItem(i) && i.return_requested && !i.return_accepted) {
+          if (isBarItem(i) && pendingReturnIds.has(i.id)) {
             returns.push({
               ...i,
               tableName: (o.tables as { name: string } | null)?.name ?? 'Unknown',
@@ -399,26 +407,38 @@ function BarKDSInner() {
 
   const acceptReturn = async (itemId: string, staffId?: string | null, tableName?: string) => {
     // Barman acceptance is only a review checkpoint; stock and sales move on manager approval.
-    const { count } = await supabase
+    const resolvedAt = new Date().toISOString()
+    const { error, count } = await supabase
       .from('returns_log')
       .update({
         status: 'bar_accepted',
         barman_id: profile?.id ?? null,
         barman_name: profile?.full_name ?? null,
-        resolved_at: new Date().toISOString(),
+        resolved_at: resolvedAt,
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
       .select('id', { count: 'exact', head: true })
+    if (error) {
+      toast.error('Error', 'Failed to accept return: ' + error.message)
+      return
+    }
     // If no pending row found, still record barman name on whatever status exists
     if (!count || count === 0) {
-      await supabase
+      const { error: fallbackError } = await supabase
         .from('returns_log')
         .update({
           barman_id: profile?.id ?? null,
           barman_name: profile?.full_name ?? null,
         })
         .eq('order_item_id', itemId)
+      if (fallbackError) {
+        toast.error('Error', 'Failed to accept return: ' + fallbackError.message)
+        return
+      }
+      toast.info('Already handled', 'This return is no longer pending')
+      fetchOrders()
+      return
     }
     toast.success(
       'Return Accepted',
@@ -430,6 +450,7 @@ function BarKDSInner() {
         '↩ Return Accepted by Bar',
         `Return accepted for ${tableName ?? 'table'} — pending manager approval`
       )
+    setReturnItems((current) => current.filter((item) => item.id !== itemId))
     fetchOrders()
   }
 
