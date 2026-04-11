@@ -73,6 +73,21 @@ const TABS = [
   { id: 'kitchen_stock', label: 'Kitchen Stock', icon: ChefHat },
 ] as const
 
+const getWaitronRemittance = (paymentMethod: string | null | undefined, amount: number) => {
+  const pm = (paymentMethod || '').toLowerCase()
+  if (pm === 'cash') return { cash: amount, transfer: 0 }
+  if (pm.startsWith('transfer') || pm === 'transfer') return { cash: 0, transfer: amount }
+  if (pm.startsWith('cash+transfer')) {
+    const payload = pm.split(':')[1] || ''
+    const [cashPart, transferPart] = payload.split('+')
+    return {
+      cash: parseFloat(cashPart || '0') || 0,
+      transfer: parseFloat(transferPart || '0') || 0,
+    }
+  }
+  return { cash: 0, transfer: 0 }
+}
+
 export default function Accounting() {
   useAuth()
 
@@ -100,7 +115,9 @@ export default function Accounting() {
   const [orders, setOrders] = useState<Order[]>([])
   const [waitronStats, setWaitronStats] = useState<WaitronStat[]>([])
   const [creditByWaitron, setCreditByWaitron] = useState<Record<string, number>>({})
-  const [creditDetailsList, setCreditDetailsList] = useState<Array<{ name: string; amount: number; notes: string; date: string; by: string }>>([])
+  const [creditDetailsList, setCreditDetailsList] = useState<
+    Array<{ name: string; amount: number; notes: string; date: string; by: string }>
+  >([])
   const [trendData, setTrendData] = useState<TrendPoint[]>([])
   const [tillSessions, setTillSessions] = useState<TillSession[]>([])
   const [timesheet, setTimesheet] = useState<TimesheetEntry[]>([])
@@ -239,9 +256,15 @@ export default function Accounting() {
     paidOrders.forEach((o) => {
       const name =
         (o as Order & { profiles?: { full_name: string } }).profiles?.full_name || 'Unknown'
-      if (!wMap[name]) wMap[name] = { name, orders: 0, revenue: 0 }
+      if (!wMap[name]) {
+        wMap[name] = { name, orders: 0, revenue: 0, cashExpected: 0, transferExpected: 0 }
+      }
+      const netAmount = netOrderAmount(o)
+      const remittance = getWaitronRemittance(o.payment_method, netAmount)
       wMap[name].orders++
-      wMap[name].revenue += netOrderAmount(o)
+      wMap[name].revenue += netAmount
+      wMap[name].cashExpected = (wMap[name].cashExpected || 0) + remittance.cash
+      wMap[name].transferExpected = (wMap[name].transferExpected || 0) + remittance.transfer
     })
     setWaitronStats(Object.values(wMap).sort((a, b) => b.revenue - a.revenue))
 
@@ -257,20 +280,45 @@ export default function Accounting() {
       .order('created_at', { ascending: false })
     // Fetch order items for each debt
     const orderIds = (unpaidDebts || []).map((d: any) => d.order_id).filter(Boolean)
-    const { data: debtOrderItems } = orderIds.length > 0
-      ? await supabase.from('order_items').select('order_id, quantity, menu_items(name)').in('order_id', orderIds)
-      : { data: [] }
+    const { data: debtOrderItems } =
+      orderIds.length > 0
+        ? await supabase
+            .from('order_items')
+            .select('order_id, quantity, menu_items(name)')
+            .in('order_id', orderIds)
+        : { data: [] }
     const itemsByOrder: Record<string, string[]> = {}
     for (const oi of (debtOrderItems || []) as any[]) {
       if (!itemsByOrder[oi.order_id]) itemsByOrder[oi.order_id] = []
       itemsByOrder[oi.order_id].push(`${oi.quantity}x ${oi.menu_items?.name || 'Item'}`)
     }
     const creditMap: Record<string, number> = {}
-    const creditDetails: Array<{ name: string; amount: number; notes: string; date: string; by: string; items: string }> = []
-    for (const d of (unpaidDebts || []) as Array<{ name: string; current_balance: number; notes: string; created_at: string; recorded_by_name: string; order_id: string }>) {
+    const creditDetails: Array<{
+      name: string
+      amount: number
+      notes: string
+      date: string
+      by: string
+      items: string
+    }> = []
+    for (const d of (unpaidDebts || []) as Array<{
+      name: string
+      current_balance: number
+      notes: string
+      created_at: string
+      recorded_by_name: string
+      order_id: string
+    }>) {
       creditMap[d.name] = (creditMap[d.name] || 0) + (d.current_balance || 0)
       const items = d.order_id ? (itemsByOrder[d.order_id] || []).join(', ') : ''
-      creditDetails.push({ name: d.name, amount: d.current_balance, notes: d.notes || '', date: d.created_at, by: d.recorded_by_name || '', items })
+      creditDetails.push({
+        name: d.name,
+        amount: d.current_balance,
+        notes: d.notes || '',
+        date: d.created_at,
+        by: d.recorded_by_name || '',
+        items,
+      })
     }
     setCreditByWaitron(creditMap)
     setCreditDetailsList(creditDetails)

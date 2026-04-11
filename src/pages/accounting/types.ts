@@ -14,6 +14,8 @@ export interface WaitronStat {
   name: string
   orders: number
   revenue: number
+  cashExpected?: number
+  transferExpected?: number
 }
 
 export interface TrendPoint {

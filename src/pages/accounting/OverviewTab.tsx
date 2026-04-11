@@ -39,16 +39,21 @@ interface Props {
   sessionEndDate?: string
   dateRangeType?: string
   creditByWaitron?: Record<string, number>
-  creditDetails?: Array<{ name: string; amount: number; notes: string; date: string; by: string; items?: string }>
+  creditDetails?: Array<{
+    name: string
+    amount: number
+    notes: string
+    date: string
+    by: string
+    items?: string
+  }>
   onRecordPayout: () => void
 }
 
 interface Reconciliation {
   cashCollected: Record<string, number> // waitron name → cash collected
+  transferReceipts: Record<string, number> // waitron name → transfer receipt handed in
   outstanding: Record<string, number> // waitron name → outstanding/shortage for the day
-  bankEntries: Record<string, number> // bank name → amount received
-  posEntries: Record<string, number> // POS machine → amount received
-  debts: Array<{ name: string; amount: number; note: string }>
 }
 
 export default function OverviewTab({
@@ -69,15 +74,9 @@ export default function OverviewTab({
   const toast = useToast()
   const [recon, setRecon] = useState<Reconciliation>({
     cashCollected: {},
+    transferReceipts: {},
     outstanding: {},
-    bankEntries: {},
-    posEntries: {},
-    debts: [],
   })
-  const [bankAccounts, setBankAccounts] = useState<
-    Array<{ id: string; bank_name: string; account_number: string }>
-  >([])
-  const [posMachines, setPosMachines] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [reconDate, setReconDate] = useState(() => {
     if (sessionDate) return sessionDate
@@ -93,60 +92,62 @@ export default function OverviewTab({
   const activeWaitrons =
     waitronStats.filter((w) => (w.revenue || 0) > 0 || (w.orders || 0) > 0) || waitronStats
 
-  // Load bank accounts and POS machines
-  useEffect(() => {
-    supabase
-      .from('bank_accounts')
-      .select('id, bank_name, account_number')
-      .eq('is_active', true)
-      .then(({ data }) => {
-        if (data) setBankAccounts(data)
-      })
-    supabase
-      .from('settings')
-      .select('value')
-      .eq('id', 'pos_machines')
-      .single()
-      .then(({ data }) => {
-        if (data?.value) {
-          try {
-            setPosMachines(JSON.parse(data.value))
-          } catch {
-            /* */
-          }
-        }
-      })
-  }, [])
+  const normalizeRecon = (value: Partial<Reconciliation> | null | undefined): Reconciliation => ({
+    cashCollected: value?.cashCollected || {},
+    transferReceipts: value?.transferReceipts || {},
+    outstanding: value?.outstanding || {},
+  })
 
   // Load saved reconciliation — single day or aggregate for range
   const loadRecon = useCallback(async () => {
     const isSingleDay = !dateRangeType || dateRangeType === 'Today' || dateRangeType === 'Prev Day'
 
     if (isSingleDay) {
-      const { data } = await supabase.from('settings').select('value').eq('id', `recon_${reconDate}`).single()
+      const { data } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('id', `recon_${reconDate}`)
+        .single()
       if (data?.value) {
-        try { setRecon(JSON.parse(data.value)) } catch { /* */ }
+        try {
+          setRecon(normalizeRecon(JSON.parse(data.value)))
+        } catch {
+          /* */
+        }
       } else {
-        setRecon({ cashCollected: {}, outstanding: {}, bankEntries: {}, posEntries: {}, debts: [] })
+        setRecon({
+          cashCollected: {},
+          transferReceipts: {},
+          outstanding: {},
+        })
       }
     } else {
       // Aggregate all recon entries between sessionDate and sessionEndDate
       const startDate = sessionDate || reconDate
       const endDate = sessionEndDate || reconDate
-      const { data: allRecons } = await supabase.from('settings').select('id, value')
+      const { data: allRecons } = await supabase
+        .from('settings')
+        .select('id, value')
         .gte('id', `recon_${startDate}`)
         .lte('id', `recon_${endDate}`)
-      const merged: Reconciliation = { cashCollected: {}, outstanding: {}, bankEntries: {}, posEntries: {}, debts: [] }
-      for (const entry of (allRecons || [])) {
+      const merged: Reconciliation = {
+        cashCollected: {},
+        transferReceipts: {},
+        outstanding: {},
+      }
+      for (const entry of allRecons || []) {
         if (!entry.id.startsWith('recon_')) continue
         try {
-          const r = JSON.parse(entry.value) as Reconciliation
-          for (const [k, v] of Object.entries(r.cashCollected || {})) merged.cashCollected[k] = (merged.cashCollected[k] || 0) + (v || 0)
-          for (const [k, v] of Object.entries(r.outstanding || {})) merged.outstanding[k] = (merged.outstanding[k] || 0) + (v || 0)
-          for (const [k, v] of Object.entries(r.bankEntries || {})) merged.bankEntries[k] = (merged.bankEntries[k] || 0) + (v || 0)
-          for (const [k, v] of Object.entries(r.posEntries || {})) merged.posEntries[k] = (merged.posEntries[k] || 0) + (v || 0)
-          merged.debts.push(...(r.debts || []))
-        } catch { /* */ }
+          const r = normalizeRecon(JSON.parse(entry.value) as Reconciliation)
+          for (const [k, v] of Object.entries(r.cashCollected || {}))
+            merged.cashCollected[k] = (merged.cashCollected[k] || 0) + (v || 0)
+          for (const [k, v] of Object.entries(r.transferReceipts || {}))
+            merged.transferReceipts[k] = (merged.transferReceipts[k] || 0) + (v || 0)
+          for (const [k, v] of Object.entries(r.outstanding || {}))
+            merged.outstanding[k] = (merged.outstanding[k] || 0) + (v || 0)
+        } catch {
+          /* */
+        }
       }
       setRecon(merged)
     }
@@ -156,35 +157,65 @@ export default function OverviewTab({
     loadRecon()
   }, [loadRecon])
 
+  const autoOutstanding = activeWaitrons.reduce(
+    (acc, w) => {
+      const expectedCash = w.cashExpected || 0
+      const expectedTransfer = w.transferExpected || 0
+      const remittedCash = recon.cashCollected[w.name] || 0
+      const remittedTransfer = recon.transferReceipts[w.name] || 0
+      const shortage =
+        Math.max(0, expectedCash - remittedCash) + Math.max(0, expectedTransfer - remittedTransfer)
+      if (shortage > 0) acc[w.name] = shortage
+      return acc
+    },
+    {} as Record<string, number>
+  )
+
   const saveRecon = async () => {
     setSaving(true)
+    const payload: Reconciliation = {
+      ...recon,
+      outstanding: autoOutstanding,
+    }
     await supabase.from('settings').upsert(
       {
         id: `recon_${reconDate}`,
-        value: JSON.stringify(recon),
+        value: JSON.stringify(payload),
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'id' }
     )
-    audit({ action: 'RECONCILIATION_SAVED', entity: 'settings', entityName: `recon_${reconDate}`, newValue: { totalCash: totalCashCollected, totalBank: totalBankReceived, totalPOS: totalPOSReceived, shortfall }, performer: profile as any })
+    setRecon(payload)
+    audit({
+      action: 'RECONCILIATION_SAVED',
+      entity: 'settings',
+      entityName: `recon_${reconDate}`,
+      newValue: {
+        totalCash: totalCashCollected,
+        totalTransferReceipts: totalTransferReceipts,
+        shortfall,
+      },
+      performer: profile as any,
+    })
     setSaving(false)
     toast.success('Saved', 'Reconciliation data saved')
   }
 
   // Calculations
   const totalCashCollected = Object.values(recon.cashCollected).reduce((s, v) => s + (v || 0), 0)
-  const totalBankReceived = Object.values(recon.bankEntries).reduce((s, v) => s + (v || 0), 0)
-  const totalPOSReceived = Object.values(recon.posEntries).reduce((s, v) => s + (v || 0), 0)
-  const totalDebts = recon.debts.reduce((s, d) => s + (d.amount || 0), 0)
-  // Merge manual outstanding + auto credit (pay later) per waitron
-  const mergedOutstanding: Record<string, number> = { ...recon.outstanding }
+  const totalTransferReceipts = Object.values(recon.transferReceipts).reduce(
+    (s, v) => s + (v || 0),
+    0
+  )
+  // Merge auto shortage + auto credit (pay later) per waitron
+  const mergedOutstanding: Record<string, number> = { ...autoOutstanding }
   for (const [name, amt] of Object.entries(creditByWaitron)) {
     mergedOutstanding[name] = (mergedOutstanding[name] || 0) + amt
   }
   const totalOutstanding = Object.values(mergedOutstanding).reduce((s, v) => s + (v || 0), 0)
-  const totalReceived = totalCashCollected + totalBankReceived + totalPOSReceived
+  const totalReceived = totalCashCollected + totalTransferReceipts
   const expectedRevenue = summary.total
-  const shortfall = expectedRevenue - totalReceived - totalDebts - totalOutstanding - totalPayouts
+  const shortfall = expectedRevenue - totalReceived - totalOutstanding - totalPayouts
 
   const printDailySummary = () => {
     const W = 40
@@ -217,22 +248,31 @@ export default function OverviewTab({
       div,
       ctr('PAYMENT BREAKDOWN'),
       div,
-      ...Object.entries(summary.byMethod || {}).filter(([,v]) => v > 0).map(([k, v]) => row(k + ':', `N${v.toLocaleString()}`)),
+      ...Object.entries(summary.byMethod || {})
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => row(k + ':', `N${v.toLocaleString()}`)),
       div,
       ctr('STAFF SALES'),
       div,
       ...waitronStats.map((w) => row(w.name, `N${w.revenue.toLocaleString()} (${w.orders})`)),
       div,
-      ctr('CASH COLLECTED'),
+      ctr('WAITRON REMITTANCE'),
       div,
-      ...Object.entries(recon.cashCollected)
-        .filter(([, v]) => v > 0)
-        .map(([name, amt]) => row(name, `N${amt.toLocaleString()}`)),
+      ...activeWaitrons.flatMap((w) => {
+        const cash = recon.cashCollected[w.name] || 0
+        const transfer = recon.transferReceipts[w.name] || 0
+        if (cash <= 0 && transfer <= 0) return []
+        return [
+          row(`${w.name} Cash:`, `N${cash.toLocaleString()}`),
+          row(`${w.name} Transfer:`, `N${transfer.toLocaleString()}`),
+        ]
+      }),
       row('TOTAL CASH:', `N${totalCashCollected.toLocaleString()}`),
+      row('TOTAL TRANSFER:', `N${totalTransferReceipts.toLocaleString()}`),
       div,
       ctr('OUTSTANDING PER WAITRON'),
       div,
-      ...Object.entries(recon.outstanding)
+      ...Object.entries(autoOutstanding)
         .filter(([, v]) => v > 0)
         .map(([name, amt]) => row(name, `N${amt.toLocaleString()}`)),
       row('TOTAL OUTSTANDING:', `N${totalOutstanding.toLocaleString()}`),
@@ -272,9 +312,16 @@ export default function OverviewTab({
       row('Total Sales (POS):', `N${expectedRevenue.toLocaleString()}`),
       row('Total Received:', `N${totalReceived.toLocaleString()}`),
       row('Payouts:', `N${totalPayouts.toLocaleString()}`),
-      row('Debts:', `N${totalDebts.toLocaleString()}`),
-      row('Outstanding (Waitrons):', `N${totalOutstanding.toLocaleString()}`),
-      row('Accounted For:', `N${(totalReceived + totalDebts + totalOutstanding + totalPayouts).toLocaleString()}`),
+      row(
+        'Outstanding (Waitrons):',
+        `N${Object.values(autoOutstanding)
+          .reduce((s, v) => s + v, 0)
+          .toLocaleString()}`
+      ),
+      row(
+        'Accounted For:',
+        `N${(totalReceived + totalOutstanding + totalPayouts).toLocaleString()}`
+      ),
       sol,
       row(
         shortfall > 0 ? 'SHORTFALL:' : shortfall < 0 ? 'SURPLUS:' : 'BALANCED:',
@@ -346,7 +393,16 @@ export default function OverviewTab({
     },
   ]
 
-  const barColors = ['bg-emerald-500', 'bg-blue-500', 'bg-purple-500', 'bg-amber-500', 'bg-cyan-500', 'bg-pink-500', 'bg-red-500', 'bg-indigo-500']
+  const barColors = [
+    'bg-emerald-500',
+    'bg-blue-500',
+    'bg-purple-500',
+    'bg-amber-500',
+    'bg-cyan-500',
+    'bg-pink-500',
+    'bg-red-500',
+    'bg-indigo-500',
+  ]
   const paymentBars = Object.entries(summary.byMethod || {})
     .sort(([, a], [, b]) => b - a)
     .map(([label, value], i) => ({ label, value, color: barColors[i % barColors.length] }))
@@ -417,12 +473,17 @@ export default function OverviewTab({
       <div className="bg-gray-900 border border-amber-500/20 rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-amber-400 font-bold flex items-center gap-2">
-            <DollarSign size={16} /> {isSingleDay ? 'Daily Reconciliation' : 'Reconciliation Summary'}
+            <DollarSign size={16} />{' '}
+            {isSingleDay ? 'Daily Reconciliation' : 'Reconciliation Summary'}
           </h3>
           <div className="flex items-center gap-2">
             <span className="text-gray-400 text-xs">
               {isSingleDay
-                ? new Date(reconDate).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
+                ? new Date(reconDate).toLocaleDateString('en-NG', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  })
                 : dateLabel}
             </span>
             {isSingleDay && (
@@ -443,24 +504,24 @@ export default function OverviewTab({
           </div>
         </div>
 
-        {/* Cash Collected Per Waitron */}
+        {/* Waitron Remittance Per Waitron */}
         <div className="mb-5">
           <h4 className="text-gray-300 text-sm font-semibold mb-2 flex items-center gap-1.5">
-            <Banknote size={13} className="text-emerald-400" /> Cash Collected from Waitrons
+            <Banknote size={13} className="text-emerald-400" /> Waitron Remittance
           </h4>
           <p className="text-gray-600 text-xs mb-2">
-            Enter the actual cash each waitron handed over
+            Enter cash collected and transfer receipt submitted by each waitron
           </p>
           <div className="space-y-1.5">
             {activeWaitrons.map((w) => (
               <div key={w.name} className="flex items-center gap-2">
                 <span className="text-gray-400 text-sm w-32 truncate">{w.name}</span>
-                <span className="text-gray-600 text-xs w-20">
-                  sold ₦{w.revenue.toLocaleString()}
+                <span className="text-gray-600 text-xs w-32">
+                  exp cash ₦{(w.cashExpected || 0).toLocaleString()}
                 </span>
                 <input
                   type="number"
-                  placeholder="₦ collected"
+                  placeholder="₦ cash"
                   value={recon.cashCollected[w.name] || ''}
                   onChange={(e) =>
                     setRecon((prev) => ({
@@ -473,12 +534,36 @@ export default function OverviewTab({
                   }
                   className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500"
                 />
+                <span className="text-gray-600 text-xs w-36">
+                  exp transfer ₦{(w.transferExpected || 0).toLocaleString()}
+                </span>
+                <input
+                  type="number"
+                  placeholder="₦ transfer"
+                  value={recon.transferReceipts[w.name] || ''}
+                  onChange={(e) =>
+                    setRecon((prev) => ({
+                      ...prev,
+                      transferReceipts: {
+                        ...prev.transferReceipts,
+                        [w.name]: parseFloat(e.target.value) || 0,
+                      },
+                    }))
+                  }
+                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500"
+                />
               </div>
             ))}
             <div className="flex justify-between pt-1 border-t border-gray-700">
               <span className="text-gray-400 text-sm font-medium">Total Cash Collected</span>
               <span className="text-emerald-400 font-bold">
                 ₦{totalCashCollected.toLocaleString()}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400 text-sm font-medium">Total Transfer Receipts</span>
+              <span className="text-purple-400 font-bold">
+                ₦{totalTransferReceipts.toLocaleString()}
               </span>
             </div>
           </div>
@@ -490,51 +575,71 @@ export default function OverviewTab({
             <AlertTriangle size={13} className="text-red-400" /> Outstanding / Shortage per Waitron
           </h4>
           <p className="text-gray-600 text-xs mb-2">
-            Credit (Pay Later) orders are auto-added. Enter additional shortages manually.
+            Shortages are calculated automatically from cash and transfer remittance. Surplus counts
+            as zero. Credit and pay-later orders are added automatically.
           </p>
           <div className="space-y-1.5">
             {activeWaitrons.map((w) => {
+              const shortage = autoOutstanding[w.name] || 0
               const credit = creditByWaitron[w.name] || 0
               return (
-              <div key={w.name} className="flex items-center gap-2">
-                <span className="text-gray-400 text-sm w-32 truncate">{w.name}</span>
-                {credit > 0 && (
-                  <span className="text-amber-400 text-xs shrink-0">Credit: ₦{credit.toLocaleString()}</span>
-                )}
-                <input
-                  type="number"
-                  placeholder="₦ additional"
-                  value={recon.outstanding[w.name] ?? ''}
-                  onChange={(e) =>
-                    setRecon((prev) => ({
-                      ...prev,
-                      outstanding: { ...prev.outstanding, [w.name]: Number(e.target.value) || 0 },
-                    }))
-                  }
-                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
-                />
-              </div>
+                <div key={w.name} className="flex items-center gap-2">
+                  <span className="text-gray-400 text-sm w-32 truncate">{w.name}</span>
+                  <span className="text-gray-500 text-xs shrink-0">
+                    remitted ₦
+                    {(
+                      (recon.cashCollected[w.name] || 0) + (recon.transferReceipts[w.name] || 0)
+                    ).toLocaleString()}
+                  </span>
+                  <span className="text-gray-500 text-xs shrink-0">
+                    expected ₦{((w.cashExpected || 0) + (w.transferExpected || 0)).toLocaleString()}
+                  </span>
+                  <span className="text-red-400 text-xs shrink-0">
+                    shortage: ₦{shortage.toLocaleString()}
+                  </span>
+                  {credit > 0 && (
+                    <span className="text-amber-400 text-xs shrink-0">
+                      Credit: ₦{credit.toLocaleString()}
+                    </span>
+                  )}
+                </div>
               )
             })}
           </div>
           {/* Credit debt details */}
           {creditDetails.length > 0 && (
             <div className="mt-3 pt-2 border-t border-gray-700">
-              <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">Credit / Pay Later Details</p>
+              <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">
+                Credit / Pay Later Details
+              </p>
               <div className="space-y-1.5">
                 {creditDetails.map((d, i) => (
-                  <div key={i} className="bg-gray-800 rounded-lg px-3 py-2 flex items-center justify-between">
+                  <div
+                    key={i}
+                    className="bg-gray-800 rounded-lg px-3 py-2 flex items-center justify-between"
+                  >
                     <div>
                       <p className="text-white text-xs font-medium">{d.name}</p>
                       <p className="text-gray-500 text-[10px]">
-                        {new Date(d.date).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', timeZone: 'Africa/Lagos' })}
+                        {new Date(d.date).toLocaleDateString('en-NG', {
+                          day: '2-digit',
+                          month: 'short',
+                          timeZone: 'Africa/Lagos',
+                        })}
                         {' · '}
-                        {new Date(d.date).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Africa/Lagos' })}
+                        {new Date(d.date).toLocaleTimeString('en-NG', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true,
+                          timeZone: 'Africa/Lagos',
+                        })}
                         {d.notes ? ` · ${d.notes}` : ''}
                       </p>
                       {d.items && <p className="text-gray-400 text-[10px] mt-0.5">{d.items}</p>}
                     </div>
-                    <span className="text-red-400 text-xs font-bold">₦{d.amount.toLocaleString()}</span>
+                    <span className="text-red-400 text-xs font-bold">
+                      ₦{d.amount.toLocaleString()}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -543,152 +648,6 @@ export default function OverviewTab({
           <div className="text-right text-sm text-gray-300 mt-2">
             Total Outstanding:{' '}
             <span className="text-red-400 font-semibold">₦{totalOutstanding.toLocaleString()}</span>
-          </div>
-        </div>
-
-        {/* Bank Account Entries */}
-        <div className="mb-5">
-          <h4 className="text-gray-300 text-sm font-semibold mb-2 flex items-center gap-1.5">
-            <Smartphone size={13} className="text-purple-400" /> Bank Transfer Receipts
-          </h4>
-          <p className="text-gray-600 text-xs mb-2">How much entered each bank account today</p>
-          <div className="space-y-1.5">
-            {bankAccounts.map((bank) => (
-              <div key={bank.id} className="flex items-center gap-2">
-                <span className="text-gray-400 text-sm w-40 truncate">
-                  {bank.bank_name} ({bank.account_number.slice(-4)})
-                </span>
-                <input
-                  type="number"
-                  placeholder="₦ received"
-                  value={recon.bankEntries[bank.bank_name] || ''}
-                  onChange={(e) =>
-                    setRecon((prev) => ({
-                      ...prev,
-                      bankEntries: {
-                        ...prev.bankEntries,
-                        [bank.bank_name]: parseFloat(e.target.value) || 0,
-                      },
-                    }))
-                  }
-                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500"
-                />
-              </div>
-            ))}
-            {bankAccounts.length === 0 && (
-              <p className="text-gray-600 text-xs">No bank accounts configured</p>
-            )}
-            <div className="flex justify-between pt-1 border-t border-gray-700">
-              <span className="text-gray-400 text-sm font-medium">Total Bank Transfers</span>
-              <span className="text-purple-400 font-bold">
-                ₦{totalBankReceived.toLocaleString()}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* POS Machine Entries */}
-        <div className="mb-5">
-          <h4 className="text-gray-300 text-sm font-semibold mb-2 flex items-center gap-1.5">
-            <CreditCard size={13} className="text-blue-400" /> POS Machine Receipts
-          </h4>
-          <p className="text-gray-600 text-xs mb-2">How much each POS terminal collected today</p>
-          <div className="space-y-1.5">
-            {posMachines.map((pos) => (
-              <div key={pos} className="flex items-center gap-2">
-                <span className="text-gray-400 text-sm w-32 truncate">{pos}</span>
-                <input
-                  type="number"
-                  placeholder="₦ received"
-                  value={recon.posEntries[pos] || ''}
-                  onChange={(e) =>
-                    setRecon((prev) => ({
-                      ...prev,
-                      posEntries: { ...prev.posEntries, [pos]: parseFloat(e.target.value) || 0 },
-                    }))
-                  }
-                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500"
-                />
-              </div>
-            ))}
-            {posMachines.length === 0 && (
-              <p className="text-gray-600 text-xs">No POS machines configured</p>
-            )}
-            <div className="flex justify-between pt-1 border-t border-gray-700">
-              <span className="text-gray-400 text-sm font-medium">Total POS</span>
-              <span className="text-blue-400 font-bold">₦{totalPOSReceived.toLocaleString()}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Debts / IOUs */}
-        <div className="mb-5">
-          <h4 className="text-gray-300 text-sm font-semibold mb-2 flex items-center gap-1.5">
-            <AlertTriangle size={13} className="text-red-400" /> Outstanding Debts / IOUs
-          </h4>
-          <p className="text-gray-600 text-xs mb-2">Record who owes the company and how much</p>
-          <div className="space-y-1.5">
-            {recon.debts.map((debt, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="Name"
-                  value={debt.name}
-                  onChange={(e) => {
-                    const updated = [...recon.debts]
-                    updated[idx] = { ...updated[idx], name: e.target.value }
-                    setRecon((prev) => ({ ...prev, debts: updated }))
-                  }}
-                  className="w-28 bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-red-500"
-                />
-                <input
-                  type="number"
-                  placeholder="₦ owed"
-                  value={debt.amount || ''}
-                  onChange={(e) => {
-                    const updated = [...recon.debts]
-                    updated[idx] = { ...updated[idx], amount: parseFloat(e.target.value) || 0 }
-                    setRecon((prev) => ({ ...prev, debts: updated }))
-                  }}
-                  className="w-24 bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-red-500"
-                />
-                <input
-                  type="text"
-                  placeholder="Note"
-                  value={debt.note}
-                  onChange={(e) => {
-                    const updated = [...recon.debts]
-                    updated[idx] = { ...updated[idx], note: e.target.value }
-                    setRecon((prev) => ({ ...prev, debts: updated }))
-                  }}
-                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:border-red-500"
-                />
-                <button
-                  onClick={() => {
-                    const updated = recon.debts.filter((_, i) => i !== idx)
-                    setRecon((prev) => ({ ...prev, debts: updated }))
-                  }}
-                  className="text-red-400 hover:text-red-300 text-xs px-1"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-            <button
-              onClick={() =>
-                setRecon((prev) => ({
-                  ...prev,
-                  debts: [...prev.debts, { name: '', amount: 0, note: '' }],
-                }))
-              }
-              className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300"
-            >
-              <Plus size={12} /> Add Debt Entry
-            </button>
-            <div className="flex justify-between pt-1 border-t border-gray-700">
-              <span className="text-gray-400 text-sm font-medium">Total Outstanding Debts</span>
-              <span className="text-red-400 font-bold">₦{totalDebts.toLocaleString()}</span>
-            </div>
           </div>
         </div>
 
@@ -704,20 +663,12 @@ export default function OverviewTab({
             <span className="text-emerald-400">₦{totalCashCollected.toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-gray-400">Bank Transfers</span>
-            <span className="text-purple-400">₦{totalBankReceived.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-400">POS Receipts</span>
-            <span className="text-blue-400">₦{totalPOSReceived.toLocaleString()}</span>
+            <span className="text-gray-400">Transfer Receipts</span>
+            <span className="text-purple-400">₦{totalTransferReceipts.toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">Expenses/Payouts</span>
             <span className="text-red-400">₦{totalPayouts.toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-400">Outstanding Debts</span>
-            <span className="text-red-400">₦{totalDebts.toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-gray-400">Outstanding / Shortage (Waitrons)</span>
@@ -727,7 +678,7 @@ export default function OverviewTab({
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Total Accounted For</span>
               <span className="text-white font-bold">
-                ₦{(totalReceived + totalDebts + totalOutstanding + totalPayouts).toLocaleString()}
+                ₦{(totalReceived + totalOutstanding + totalPayouts).toLocaleString()}
               </span>
             </div>
           </div>
