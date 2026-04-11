@@ -114,6 +114,46 @@ const normalizeDestination = (
   return 'bar'
 }
 
+const getStationItemTime = (item: OrderItemExtended, fallbackCreatedAt: string): string =>
+  item.created_at || fallbackCreatedAt
+
+const getLatestPendingBatch = (
+  items: OrderItemExtended[],
+  station: 'kitchen' | 'griller',
+  orderCreatedAt: string,
+  lastPrintedAt: string | null
+): OrderItemExtended[] => {
+  const stationPending = items
+    .filter((item) => {
+      const isStation =
+        normalizeDestination(
+          item.destination || item.menu_items?.menu_categories?.destination || 'bar',
+          item.menu_items?.name,
+          item.menu_items?.menu_categories?.name
+        ) === station
+      return isStation && item.status === 'pending'
+    })
+    .sort(
+      (a, b) =>
+        new Date(getStationItemTime(a, orderCreatedAt)).getTime() -
+        new Date(getStationItemTime(b, orderCreatedAt)).getTime()
+    )
+
+  if (!stationPending.length) return []
+
+  if (lastPrintedAt) {
+    const unprinted = stationPending.filter(
+      (item) =>
+        new Date(getStationItemTime(item, orderCreatedAt)).getTime() >
+        new Date(lastPrintedAt).getTime()
+    )
+    if (unprinted.length) return unprinted
+  }
+
+  const latestTime = getStationItemTime(stationPending[stationPending.length - 1], orderCreatedAt)
+  return stationPending.filter((item) => getStationItemTime(item, orderCreatedAt) === latestTime)
+}
+
 export default function PaymentModal({ order: orderProp, table, onSuccess, onClose }: Props) {
   const [order, setOrder] = useState(orderProp)
   // Sync when parent refreshes the order (realtime DB update)
@@ -203,22 +243,13 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       ) === 'griller'
     setKitchenTotalCount(items.filter(isKitchen).length)
     setGrillTotalCount(items.filter(isGrill).length)
-
-    // Count "new" items the same way the print function filters them:
-    // pending status AND created after the last print timestamp
-    const countNew = (filterFn: (i: any) => boolean, lastPrinted: string | null) =>
-      items.filter((i) => {
-        if (!filterFn(i) || i.status !== 'pending') return false
-        if (!lastPrinted) return true
-        const created = new Date(i.created_at || order?.created_at || Date.now())
-        return created.getTime() > new Date(lastPrinted).getTime()
-      }).length
-    setKitchenPendingCount(countNew(isKitchen, lastPrintedKitchenAt))
-    setGrillPendingCount(countNew(isGrill, lastPrintedGrillAt))
-
-    // On first open, set marker so only truly new items (added after opening) count as "new"
-    if (!lastPrintedKitchenAt) setLastPrintedKitchenAt(new Date().toISOString())
-    if (!lastPrintedGrillAt) setLastPrintedGrillAt(new Date().toISOString())
+    const orderCreatedAt = order?.created_at || new Date().toISOString()
+    setKitchenPendingCount(
+      getLatestPendingBatch(items, 'kitchen', orderCreatedAt, lastPrintedKitchenAt).length
+    )
+    setGrillPendingCount(
+      getLatestPendingBatch(items, 'griller', orderCreatedAt, lastPrintedGrillAt).length
+    )
   }, [order?.order_items, lastPrintedKitchenAt, lastPrintedGrillAt])
 
   useState(() => {
@@ -746,18 +777,13 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         : station === 'griller'
           ? lastPrintedGrillAt
           : null
-    const pending = (order?.order_items || []).filter((i) => {
-      const isStation =
-        normalizeDestination(
-          i.destination || (i as any)?.menu_items?.menu_categories?.destination || 'bar',
-          (i as any)?.menu_items?.name,
-          (i as any)?.menu_items?.menu_categories?.name
-        ) === station
-      if (!isStation || i.status !== 'pending') return false
-      if (!lastPrinted) return true
-      const created = new Date((i as any).created_at || (order as any)?.created_at || Date.now())
-      return created.getTime() > new Date(lastPrinted).getTime()
-    })
+    const orderCreatedAt = order?.created_at || new Date().toISOString()
+    const pending = getLatestPendingBatch(
+      order?.order_items || [],
+      station,
+      orderCreatedAt,
+      lastPrinted
+    )
     if (pending.length === 0) {
       toast.info('No pending items', `No waiting ${station} items to print.`)
       return
@@ -778,7 +804,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       orderRef: (order?.id || '').slice(0, 8).toUpperCase(),
       staffName: profile?.full_name || '',
       items: ticket,
-      createdAt: new Date().toISOString(),
+      createdAt: getStationItemTime(pending[0], orderCreatedAt),
     })
     const copies = 2
     for (let c = 0; c < copies; c++) {
@@ -799,8 +825,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         }, 150)
     }
     // Move marker so subsequent "New" prints only later additions
-    if (station === 'kitchen') setLastPrintedKitchenAt(new Date().toISOString())
-    else setLastPrintedGrillAt(new Date().toISOString())
+    const latestPrintedAt = getStationItemTime(pending[pending.length - 1], orderCreatedAt)
+    if (station === 'kitchen') setLastPrintedKitchenAt(latestPrintedAt)
+    else setLastPrintedGrillAt(latestPrintedAt)
   }
 
   const orderItems = order?.order_items || []
