@@ -19,9 +19,11 @@ import {
   History,
   Snowflake,
   Package,
+  ClipboardList,
 } from 'lucide-react'
 import BarChillerStock from '../backoffice/BarChillerStock'
 import StoreRequestPanel from './StoreRequestPanel'
+import BarIssueLogTab from './BarIssueLogTab'
 import type { KdsOrder } from './types'
 import DailySummaryTab from './DailySummaryTab'
 import { useToast } from '../../context/ToastContext'
@@ -114,7 +116,14 @@ function BarKDSInner() {
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
   const [activeTab, setActiveTab] = useState<
-    'orders' | 'returns' | 'summary' | 'history' | 'chiller' | 'requests' | 'store_requests'
+    | 'orders'
+    | 'returns'
+    | 'summary'
+    | 'history'
+    | 'chiller'
+    | 'issue_log'
+    | 'requests'
+    | 'store_requests'
   >('orders')
   const [returnHistory, setReturnHistory] = useState<
     Array<{
@@ -601,6 +610,16 @@ function BarKDSInner() {
           <Snowflake size={14} /> Chiller
         </button>
         <button
+          onClick={() => setActiveTab('issue_log')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'issue_log'
+              ? 'border-cyan-500 text-cyan-400'
+              : 'border-transparent text-gray-400 hover:text-white'
+          }`}
+        >
+          <ClipboardList size={14} /> Waitron Issue Log
+        </button>
+        <button
           onClick={() => {
             setActiveTab('requests')
             loadMixoRequests()
@@ -650,6 +669,8 @@ function BarKDSInner() {
           <BarChillerStock onBack={() => setActiveTab('orders')} embedded />
         </div>
       )}
+
+      {activeTab === 'issue_log' && <BarIssueLogTab />}
 
       {/* Store Requests Tab */}
       {activeTab === 'store_requests' && (
