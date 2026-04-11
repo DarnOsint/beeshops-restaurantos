@@ -38,6 +38,68 @@ function getStatusColor(status: string): string {
   return 'bg-gray-700 text-gray-400'
 }
 
+function getStatusRank(status: string): number {
+  if (status === 'pending') return 0
+  if (status === 'preparing') return 1
+  if (status === 'ready') return 2
+  return 3
+}
+
+function getItemTime(item: KdsOrder['order_items'][number], fallback: string): string {
+  return item.created_at || fallback
+}
+
+function sortKitchenItems(
+  items: KdsOrder['order_items'],
+  fallbackCreatedAt: string
+): KdsOrder['order_items'] {
+  return [...items].sort((a, b) => {
+    const rankDiff = getStatusRank(a.status) - getStatusRank(b.status)
+    if (rankDiff !== 0) return rankDiff
+    return (
+      new Date(getItemTime(a, fallbackCreatedAt)).getTime() -
+      new Date(getItemTime(b, fallbackCreatedAt)).getTime()
+    )
+  })
+}
+
+function getLatestPendingTime(
+  items: KdsOrder['order_items'],
+  fallbackCreatedAt: string
+): string | null {
+  const pending = items.filter((item) => item.status === 'pending')
+  if (!pending.length) return null
+  return pending.reduce(
+    (latest, item) => {
+      const itemTime = getItemTime(item, fallbackCreatedAt)
+      return new Date(itemTime).getTime() > new Date(latest).getTime() ? itemTime : latest
+    },
+    getItemTime(pending[0], fallbackCreatedAt)
+  )
+}
+
+function getLatestPendingItems(
+  items: KdsOrder['order_items'],
+  fallbackCreatedAt: string
+): KdsOrder['order_items'] {
+  const latestPendingTime = getLatestPendingTime(items, fallbackCreatedAt)
+  if (!latestPendingTime) return []
+  return items
+    .filter(
+      (item) =>
+        item.status === 'pending' && getItemTime(item, fallbackCreatedAt) === latestPendingTime
+    )
+    .sort(
+      (a, b) =>
+        new Date(getItemTime(a, fallbackCreatedAt)).getTime() -
+        new Date(getItemTime(b, fallbackCreatedAt)).getTime()
+    )
+}
+
+function getKitchenOrderSortTime(order: KdsOrder): string {
+  return getLatestPendingTime(order.order_items, order.created_at) || order.created_at
+}
+
 // Treat takeaway packs (no menu relation) as kitchen items
 const isKitchenItem = (item: KdsOrder['order_items'][number]): boolean => {
   const dest = item.menu_items?.menu_categories?.destination || item.destination
@@ -135,7 +197,10 @@ function KitchenKDSInner() {
       const space = W - l.length - r.length
       return l + ' '.repeat(Math.max(1, space)) + r
     }
-    const pendingItems = order.order_items.filter((i) => isKitchenItem(i) && i.status === 'pending')
+    const pendingItems = getLatestPendingItems(
+      order.order_items.filter((i) => isKitchenItem(i)),
+      order.created_at
+    )
     if (!pendingItems.length) return
     const itemLines = pendingItems
       .map((i) =>
@@ -153,7 +218,7 @@ function KitchenKDSInner() {
       fmtRow('Table:', order.tables?.name ?? 'N/A'),
       fmtRow(
         'Time:',
-        new Date().toLocaleTimeString('en-NG', {
+        new Date(getItemTime(pendingItems[0], order.created_at)).toLocaleTimeString('en-NG', {
           hour: '2-digit',
           minute: '2-digit',
           hour12: true,
@@ -321,11 +386,11 @@ function KitchenKDSInner() {
       .select(
         `id, created_at, notes, staff_id,
         tables(name),
-        order_items(id, quantity, status, destination, notes, modifier_notes, return_requested, return_accepted, return_reason,
+        order_items(id, quantity, status, destination, created_at, notes, modifier_notes, return_requested, return_accepted, return_reason,
           menu_items(name, menu_categories(name, destination)))`
       )
       .eq('status', 'open')
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
 
     if (!error && data) {
       const allOrders = data as unknown as KdsOrder[]
@@ -334,15 +399,23 @@ function KitchenKDSInner() {
       const kitchen = allOrders
         .map((o) => ({
           ...o,
-          order_items: o.order_items.filter(
-            (i) =>
-              isKitchenItem(i) &&
-              (i.status !== 'delivered' || isTakeawayPack(i)) &&
-              i.status !== 'ready' &&
-              !i.return_accepted
+          order_items: sortKitchenItems(
+            o.order_items.filter(
+              (i) =>
+                isKitchenItem(i) &&
+                (i.status !== 'delivered' || isTakeawayPack(i)) &&
+                i.status !== 'ready' &&
+                !i.return_accepted
+            ),
+            o.created_at
           ),
         }))
         .filter((o) => o.order_items.length > 0)
+        .sort(
+          (a, b) =>
+            new Date(getKitchenOrderSortTime(b)).getTime() -
+            new Date(getKitchenOrderSortTime(a)).getTime()
+        )
       setOrders(kitchen)
 
       // Return requests (kitchen items with return_requested but not yet accepted/rejected)

@@ -95,6 +95,55 @@ const URGENCY_STYLES: Record<
   },
 }
 
+function getStatusRank(status: string): number {
+  if (status === 'pending') return 0
+  if (status === 'preparing') return 1
+  if (status === 'ready') return 2
+  return 3
+}
+
+function getItemTime(item: GrillerItem, fallback: string): string {
+  return item.created_at || fallback
+}
+
+function sortGrillItems(items: GrillerItem[], fallbackCreatedAt: string): GrillerItem[] {
+  return [...items].sort((a, b) => {
+    const rankDiff = getStatusRank(a.status) - getStatusRank(b.status)
+    if (rankDiff !== 0) return rankDiff
+    return (
+      new Date(getItemTime(a, fallbackCreatedAt)).getTime() -
+      new Date(getItemTime(b, fallbackCreatedAt)).getTime()
+    )
+  })
+}
+
+function getLatestPendingTime(items: GrillerItem[], fallbackCreatedAt: string): string | null {
+  const pending = items.filter((item) => item.status === 'pending')
+  if (!pending.length) return null
+  return pending.reduce(
+    (latest, item) => {
+      const itemTime = getItemTime(item, fallbackCreatedAt)
+      return new Date(itemTime).getTime() > new Date(latest).getTime() ? itemTime : latest
+    },
+    getItemTime(pending[0], fallbackCreatedAt)
+  )
+}
+
+function getLatestPendingItems(items: GrillerItem[], fallbackCreatedAt: string): GrillerItem[] {
+  const latestPendingTime = getLatestPendingTime(items, fallbackCreatedAt)
+  if (!latestPendingTime) return []
+  return items
+    .filter(
+      (item) =>
+        item.status === 'pending' && getItemTime(item, fallbackCreatedAt) === latestPendingTime
+    )
+    .sort(
+      (a, b) =>
+        new Date(getItemTime(a, fallbackCreatedAt)).getTime() -
+        new Date(getItemTime(b, fallbackCreatedAt)).getTime()
+    )
+}
+
 function GrillerKDSInner() {
   const { profile, signOut } = useAuth()
   const printOrderTicket = (ticket: GrillerTicket) => {
@@ -150,7 +199,7 @@ function GrillerKDSInner() {
     }
   }
   const printPendingTicket = (ticket: GrillerTicket) => {
-    const pending = ticket.items.filter((i) => i.status === 'pending')
+    const pending = getLatestPendingItems(ticket.items, ticket.createdAt)
     if (!pending.length) return
     const W = 40
     const divider = '-'.repeat(W)
@@ -169,7 +218,7 @@ function GrillerKDSInner() {
       fmtRow('Table:', ticket.tableName ?? 'N/A'),
       fmtRow(
         'Time:',
-        new Date(ticket.createdAt).toLocaleTimeString('en-NG', {
+        new Date(getItemTime(pending[0], ticket.createdAt)).toLocaleTimeString('en-NG', {
           hour: '2-digit',
           minute: '2-digit',
           hour12: true,
@@ -312,7 +361,13 @@ function GrillerKDSInner() {
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
-    audit({ action: 'GRILLER_RETURN_ACCEPTED', entity: 'order_items', entityId: itemId, newValue: { table: tableName }, performer: profile as any })
+    audit({
+      action: 'GRILLER_RETURN_ACCEPTED',
+      entity: 'order_items',
+      entityId: itemId,
+      newValue: { table: tableName },
+      performer: profile as any,
+    })
     toast.success('Return Accepted', 'Item tentatively removed — awaiting manager final approval')
     if (staffId)
       await sendPushToStaff(
@@ -357,7 +412,13 @@ function GrillerKDSInner() {
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
-    audit({ action: 'GRILLER_RETURN_REJECTED', entity: 'order_items', entityId: itemId, newValue: { table: tableName }, performer: profile as any })
+    audit({
+      action: 'GRILLER_RETURN_REJECTED',
+      entity: 'order_items',
+      entityId: itemId,
+      newValue: { table: tableName },
+      performer: profile as any,
+    })
     toast.success('Return Rejected', 'Item stays on bill')
     if (staffId)
       await sendPushToStaff(
@@ -413,11 +474,20 @@ function GrillerKDSInner() {
         }
       }
       orderMap[oid].items.push(item)
+      if (
+        new Date(getItemTime(item, orderMap[oid].createdAt)).getTime() >
+        new Date(orderMap[oid].createdAt).getTime()
+      ) {
+        orderMap[oid].createdAt = getItemTime(item, orderMap[oid].createdAt)
+      }
     })
 
-    const newTickets = Object.values(orderMap).sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    )
+    const newTickets = Object.values(orderMap)
+      .map((ticket) => ({
+        ...ticket,
+        items: sortGrillItems(ticket.items, ticket.createdAt),
+      }))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
     if (isRealtime && newTickets.length > tickets.length) audioRef.current?.play().catch(() => {})
 
@@ -479,15 +549,43 @@ function GrillerKDSInner() {
   }
 
   const rejectOrder = async (ticket: GrillerTicket) => {
-    const ids = ticket.items.filter((i) => i.status !== 'ready' && i.status !== 'delivered').map((i) => i.id)
+    const ids = ticket.items
+      .filter((i) => i.status !== 'ready' && i.status !== 'delivered')
+      .map((i) => i.id)
     if (!ids.length) return
-    const { error } = await supabase.from('order_items').update({ status: 'cancelled' }).in('id', ids)
-    if (error) { toast.error('Error', error.message); return }
-    const { data: remaining } = await supabase.from('order_items').select('total_price, status').eq('order_id', ticket.orderId)
-    const newTotal = (remaining || []).filter((r: { status: string }) => r.status !== 'cancelled').reduce((s: number, r: { total_price: number }) => s + (r.total_price || 0), 0)
-    await supabase.from('orders').update({ total_amount: newTotal, updated_at: new Date().toISOString() }).eq('id', ticket.orderId)
-    if (ticket.staffId) await sendPushToStaff(ticket.staffId, '❌ Grill Rejected', `Grill rejected items for ${ticket.tableName}`).catch(() => {})
-    audit({ action: 'GRILLER_ORDER_REJECTED', entity: 'orders', entityId: ticket.orderId, entityName: ticket.tableName, newValue: { items: ids.length, newTotal }, performer: profile as any })
+    const { error } = await supabase
+      .from('order_items')
+      .update({ status: 'cancelled' })
+      .in('id', ids)
+    if (error) {
+      toast.error('Error', error.message)
+      return
+    }
+    const { data: remaining } = await supabase
+      .from('order_items')
+      .select('total_price, status')
+      .eq('order_id', ticket.orderId)
+    const newTotal = (remaining || [])
+      .filter((r: { status: string }) => r.status !== 'cancelled')
+      .reduce((s: number, r: { total_price: number }) => s + (r.total_price || 0), 0)
+    await supabase
+      .from('orders')
+      .update({ total_amount: newTotal, updated_at: new Date().toISOString() })
+      .eq('id', ticket.orderId)
+    if (ticket.staffId)
+      await sendPushToStaff(
+        ticket.staffId,
+        '❌ Grill Rejected',
+        `Grill rejected items for ${ticket.tableName}`
+      ).catch(() => {})
+    audit({
+      action: 'GRILLER_ORDER_REJECTED',
+      entity: 'orders',
+      entityId: ticket.orderId,
+      entityName: ticket.tableName,
+      newValue: { items: ids.length, newTotal },
+      performer: profile as any,
+    })
     toast.success('Rejected', 'Grill items cancelled and total updated')
     fetchTickets()
   }
