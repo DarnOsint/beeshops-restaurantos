@@ -35,6 +35,18 @@ interface Props {
   embedded?: boolean
 }
 
+const buildAcceptedReturnsMap = (
+  rows: Array<{ item_name: string | null; quantity: number | null; status: string | null }>
+) => {
+  const map: Record<string, number> = {}
+  for (const row of rows) {
+    if (row.status !== 'accepted') continue
+    if (!row.item_name) continue
+    map[row.item_name] = (map[row.item_name] || 0) + (row.quantity || 0)
+  }
+  return map
+}
+
 // Stepper: +/- buttons + tappable number that opens a picker
 function Stepper({
   value,
@@ -140,12 +152,20 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     const dayStart = new Date(d + 'T08:00:00+01:00')
     const dayEnd = new Date(dayStart)
     dayEnd.setDate(dayEnd.getDate() + 1)
-    const { data } = await supabase
-      .from('order_items')
-      .select('quantity, status, return_accepted, menu_items(name), orders(status)')
-      .eq('destination', 'bar')
-      .gte('created_at', dayStart.toISOString())
-      .lte('created_at', dayEnd.toISOString())
+    const [{ data }, { data: acceptedReturns }] = await Promise.all([
+      supabase
+        .from('order_items')
+        .select('quantity, status, return_accepted, menu_items(name), orders(status)')
+        .eq('destination', 'bar')
+        .gte('created_at', dayStart.toISOString())
+        .lte('created_at', dayEnd.toISOString()),
+      supabase
+        .from('returns_log')
+        .select('item_name, quantity, status')
+        .eq('status', 'accepted')
+        .gte('requested_at', dayStart.toISOString())
+        .lte('requested_at', dayEnd.toISOString()),
+    ])
     if (!data) return
     const map: Record<string, number> = {}
     for (const item of data as unknown as Array<{
@@ -164,6 +184,17 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
       const name = item.menu_items?.name
       if (name) map[name] = (map[name] || 0) + item.quantity
     }
+    const acceptedMap = buildAcceptedReturnsMap(
+      (acceptedReturns || []) as Array<{
+        item_name: string | null
+        quantity: number | null
+        status: string | null
+      }>
+    )
+    for (const [name, qty] of Object.entries(acceptedMap)) {
+      if (!(name in map)) continue
+      map[name] = Math.max(0, (map[name] || 0) - qty)
+    }
     setSoldMap(map)
   }, [])
 
@@ -173,12 +204,20 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     const dayStart = new Date(d + 'T08:00:00+01:00')
     const dayEnd = new Date(dayStart)
     dayEnd.setDate(dayEnd.getDate() + 1)
-    const { data } = await supabase
-      .from('order_items')
-      .select('quantity, return_accepted, menu_items(name), orders(status)')
-      .eq('destination', 'bar')
-      .gte('created_at', dayStart.toISOString())
-      .lte('created_at', dayEnd.toISOString())
+    const [{ data }, { data: acceptedReturns }] = await Promise.all([
+      supabase
+        .from('order_items')
+        .select('quantity, return_accepted, menu_items(name), orders(status)')
+        .eq('destination', 'bar')
+        .gte('created_at', dayStart.toISOString())
+        .lte('created_at', dayEnd.toISOString()),
+      supabase
+        .from('returns_log')
+        .select('item_name, quantity, status')
+        .eq('status', 'accepted')
+        .gte('requested_at', dayStart.toISOString())
+        .lte('requested_at', dayEnd.toISOString()),
+    ])
     const map: Record<string, number> = {}
     if (data) {
       for (const item of data as unknown as Array<{
@@ -192,6 +231,17 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         const name = item.menu_items?.name
         if (name) map[name] = (map[name] || 0) + item.quantity
       }
+    }
+    const acceptedMap = buildAcceptedReturnsMap(
+      (acceptedReturns || []) as Array<{
+        item_name: string | null
+        quantity: number | null
+        status: string | null
+      }>
+    )
+    for (const [name, qty] of Object.entries(acceptedMap)) {
+      if (!(name in map)) continue
+      map[name] = Math.max(0, (map[name] || 0) - qty)
     }
     return map
   }, [])
@@ -319,11 +369,9 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, menuDrinks])
 
-  // Auto-sync sold_qty and closing_qty to DB every 5 minutes so carry-over works
+  // Keep saved chiller rows aligned with the live filtered sales count for the selected day.
   useEffect(() => {
     const syncToDb = async () => {
-      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
-      if (date !== today) return // only sync today
       for (const [name, entry] of Object.entries(stockData)) {
         if (!entry.id) continue
         const posSold = soldMap[name] || 0
@@ -341,6 +389,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         }
       }
     }
+    void syncToDb()
     const iv = setInterval(syncToDb, 5 * 60 * 1000) // every 5 minutes
     return () => clearInterval(iv)
   }, [stockData, soldMap, date, savedVoidQty])

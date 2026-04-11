@@ -25,6 +25,18 @@ interface ChillerEntry {
   updated_at?: string
 }
 
+const buildAcceptedReturnsMap = (
+  rows: Array<{ item_name: string | null; quantity: number | null; status: string | null }>
+) => {
+  const map: Record<string, number> = {}
+  for (const row of rows) {
+    if (row.status !== 'accepted') continue
+    if (!row.item_name) continue
+    map[row.item_name] = (map[row.item_name] || 0) + (row.quantity || 0)
+  }
+  return map
+}
+
 export default function ChillerSummaryTab() {
   const { profile } = useAuth()
   const isManager = profile?.role === 'owner' || profile?.role === 'manager'
@@ -47,7 +59,7 @@ export default function ChillerSummaryTab() {
     dayEnd.setDate(dayEnd.getDate() + 1)
     const dateKey = base.toISOString().slice(0, 10)
 
-    const [entriesRes, soldRes, prevRes] = await Promise.all([
+    const [entriesRes, soldRes, acceptedRes, prevRes] = await Promise.all([
       supabase.from('bar_chiller_stock').select('*').eq('date', dateKey).order('item_name'),
       supabase
         .from('order_items')
@@ -55,6 +67,12 @@ export default function ChillerSummaryTab() {
         .eq('destination', 'bar')
         .gte('created_at', dayStart.toISOString())
         .lte('created_at', dayEnd.toISOString()),
+      supabase
+        .from('returns_log')
+        .select('item_name, quantity, status')
+        .eq('status', 'accepted')
+        .gte('requested_at', dayStart.toISOString())
+        .lte('requested_at', dayEnd.toISOString()),
       supabase
         .from('bar_chiller_stock')
         .select('item_name, opening_qty, received_qty, sold_qty, void_qty, closing_qty')
@@ -75,12 +93,20 @@ export default function ChillerSummaryTab() {
         prevStart.setHours(8, 0, 0, 0)
         const prevEnd = new Date(prevStart)
         prevEnd.setDate(prevEnd.getDate() + 1)
-        const { data: prevSold } = await supabase
-          .from('order_items')
-          .select('quantity, status, return_accepted, menu_items(name), orders(status)')
-          .eq('destination', 'bar')
-          .gte('created_at', prevStart.toISOString())
-          .lte('created_at', prevEnd.toISOString())
+        const [{ data: prevSold }, { data: prevAccepted }] = await Promise.all([
+          supabase
+            .from('order_items')
+            .select('quantity, status, return_accepted, menu_items(name), orders(status)')
+            .eq('destination', 'bar')
+            .gte('created_at', prevStart.toISOString())
+            .lte('created_at', prevEnd.toISOString()),
+          supabase
+            .from('returns_log')
+            .select('item_name, quantity, status')
+            .eq('status', 'accepted')
+            .gte('requested_at', prevStart.toISOString())
+            .lte('requested_at', prevEnd.toISOString()),
+        ])
         const prevSoldMap: Record<string, number> = {}
         if (prevSold) {
           for (const item of prevSold as unknown as Array<{
@@ -96,6 +122,17 @@ export default function ChillerSummaryTab() {
             const name = item.menu_items?.name
             if (name) prevSoldMap[name] = (prevSoldMap[name] || 0) + item.quantity
           }
+        }
+        const prevAcceptedMap = buildAcceptedReturnsMap(
+          (prevAccepted || []) as Array<{
+            item_name: string | null
+            quantity: number | null
+            status: string | null
+          }>
+        )
+        for (const [name, qty] of Object.entries(prevAcceptedMap)) {
+          if (!(name in prevSoldMap)) continue
+          prevSoldMap[name] = Math.max(0, (prevSoldMap[name] || 0) - qty)
         }
         const rowsForLatest = latestRows.filter((r: { date: string }) => r.date === latestDate)
         const seedRows = rowsForLatest.map((r: ChillerEntry) => {
@@ -173,6 +210,17 @@ export default function ChillerSummaryTab() {
         const name = item.menu_items?.name
         if (name) map[name] = (map[name] || 0) + item.quantity
       }
+    }
+    const acceptedMap = buildAcceptedReturnsMap(
+      (acceptedRes.data || []) as Array<{
+        item_name: string | null
+        quantity: number | null
+        status: string | null
+      }>
+    )
+    for (const [name, qty] of Object.entries(acceptedMap)) {
+      if (!(name in map)) continue
+      map[name] = Math.max(0, (map[name] || 0) - qty)
     }
     setSoldMap(map)
 
