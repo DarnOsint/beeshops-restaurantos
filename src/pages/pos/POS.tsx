@@ -75,6 +75,12 @@ const normalizeDestination = (
   return 'bar'
 }
 
+const currentBusinessDateWAT = () => {
+  const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+  if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
+  return wat.toLocaleDateString('en-CA')
+}
+
 interface ZonePrice {
   menu_item_id: string
   category_id: string
@@ -708,24 +714,80 @@ export default function POS() {
   }
 
   const fetchMenu = async () => {
-    const [menuRes, invRes] = await Promise.all([
+    const businessDate = currentBusinessDateWAT()
+    const [menuRes, invRes, chillerRes, chillerPrevRes] = await Promise.all([
       supabase
         .from('menu_items')
         .select('*, menu_categories(name, destination)')
         .eq('is_available', true)
         .order('name'),
-      supabase.from('inventory').select('menu_item_id, current_stock').eq('is_active', true),
+      supabase
+        .from('inventory')
+        .select('menu_item_id, item_name, current_stock')
+        .eq('is_active', true),
+      supabase.from('bar_chiller_stock').select('item_name, closing_qty').eq('date', businessDate),
+      supabase
+        .from('bar_chiller_stock')
+        .select('item_name, date, opening_qty, received_qty, sold_qty, void_qty, closing_qty')
+        .lt('date', businessDate)
+        .order('date', { ascending: false }),
     ])
     if (!menuRes.error) {
       const invMap: Record<string, number> = {}
+      const invByName: Record<string, number> = {}
       if (invRes.data)
-        invRes.data.forEach((i: { menu_item_id: string; current_stock: number }) => {
-          invMap[i.menu_item_id] = i.current_stock
+        invRes.data.forEach(
+          (i: { menu_item_id: string | null; item_name: string; current_stock: number }) => {
+            if (i.menu_item_id) invMap[i.menu_item_id] = i.current_stock
+            invByName[i.item_name] = i.current_stock
+          }
+        )
+      const chillerTodayMap: Record<string, number> = {}
+      if (chillerRes.data) {
+        chillerRes.data.forEach((row: { item_name: string; closing_qty: number | null }) => {
+          chillerTodayMap[row.item_name] = row.closing_qty ?? 0
         })
+      }
+      const chillerCarryMap: Record<string, number> = {}
+      const seen = new Set<string>()
+      if (chillerPrevRes.data) {
+        chillerPrevRes.data.forEach(
+          (row: {
+            item_name: string
+            opening_qty: number | null
+            received_qty: number | null
+            sold_qty: number | null
+            void_qty: number | null
+            closing_qty: number | null
+          }) => {
+            if (seen.has(row.item_name)) return
+            seen.add(row.item_name)
+            const fallbackClosing = Math.max(
+              0,
+              (row.opening_qty || 0) +
+                (row.received_qty || 0) -
+                (row.sold_qty || 0) -
+                (row.void_qty || 0)
+            )
+            chillerCarryMap[row.item_name] = row.closing_qty ?? fallbackClosing
+          }
+        )
+      }
       setMenuItems(
         (menuRes.data || []).map((item: MenuItem) => ({
           ...item,
-          current_stock: invMap[item.id] ?? null,
+          current_stock:
+            normalizeDestination(
+              item.menu_categories?.destination,
+              item.name,
+              item.menu_categories?.name
+            ) === 'bar'
+              ? (chillerTodayMap[item.name] ??
+                chillerCarryMap[item.name] ??
+                invByName[item.name] ??
+                invMap[item.id] ??
+                null)
+              : (invMap[item.id] ?? null),
         }))
       )
     }
