@@ -215,7 +215,8 @@ export default function OverviewTab({
   const totalOutstanding = Object.values(mergedOutstanding).reduce((s, v) => s + (v || 0), 0)
   const totalReceived = totalCashCollected + totalTransferReceipts
   const expectedRevenue = summary.total
-  const shortfall = expectedRevenue - totalReceived - totalPayouts
+  const revenueGap = expectedRevenue - totalReceived - totalPayouts
+  const shortfall = totalOutstanding > 0 ? totalOutstanding : revenueGap
 
   const printDailySummary = () => {
     const W = 40
