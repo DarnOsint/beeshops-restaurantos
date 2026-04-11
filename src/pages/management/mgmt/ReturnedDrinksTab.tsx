@@ -95,6 +95,32 @@ export default function ReturnedDrinksTab() {
     fetchReturns(date)
   }, [date, fetchReturns])
 
+  const syncCreditDebtorForOrder = async (orderId: string, orderTotal: number) => {
+    const { data: debtors, error } = await supabase
+      .from('debtors')
+      .select('id, amount_paid')
+      .eq('order_id', orderId)
+      .eq('debt_type', 'credit_order')
+      .eq('is_active', true)
+    if (error) throw error
+
+    for (const debtor of debtors || []) {
+      const amountPaid = (debtor.amount_paid || 0) as number
+      const currentBalance = Math.max(0, orderTotal - amountPaid)
+      const status = currentBalance <= 0 ? 'paid' : amountPaid > 0 ? 'partial' : 'outstanding'
+      const { error: updErr } = await supabase
+        .from('debtors')
+        .update({
+          credit_limit: orderTotal,
+          current_balance: currentBalance,
+          status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', debtor.id)
+      if (updErr) throw updErr
+    }
+  }
+
   const managerApprove = async (r: ReturnEntry) => {
     try {
       const { error: oiErr } = await supabase
@@ -116,6 +142,8 @@ export default function ReturnedDrinksTab() {
         .update({ total_amount: newTotal })
         .eq('id', r.order_id)
       if (orderErr) throw orderErr
+
+      await syncCreditDebtorForOrder(r.order_id, newTotal)
 
       if (r.item_name) {
         const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
@@ -207,6 +235,8 @@ export default function ReturnedDrinksTab() {
         .update({ total_amount: newTotal })
         .eq('id', r.order_id)
       if (orderErr) throw orderErr
+
+      await syncCreditDebtorForOrder(r.order_id, newTotal)
 
       await audit({
         action: 'RETURN_MANAGER_REJECTED',

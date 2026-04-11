@@ -192,6 +192,39 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       setGrillTotalCount(items.filter(isGrill).length)
     }
   }
+
+  useEffect(() => {
+    if (!order.id) return
+
+    const channel = supabase
+      .channel(`payment-modal-order-${order.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'order_items', filter: `order_id=eq.${order.id}` },
+        () => {
+          void refreshOrder()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'returns_log', filter: `order_id=eq.${order.id}` },
+        () => {
+          void refreshOrder()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `id=eq.${order.id}` },
+        () => {
+          void refreshOrder()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [order.id])
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
   const [cashTendered, setCashTendered] = useState('')
   const [processing, setProcessing] = useState(false)
@@ -266,14 +299,16 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       })
   })
 
+  const billableItems = (order?.order_items || []).filter(
+    (i) => !i.return_requested && !i.return_accepted
+  )
+  const returnedItems = (order?.order_items || []).filter(
+    (i) => i.return_requested || i.return_accepted
+  )
   // Calculate subtotal from items directly — never trust stored total_amount alone
   // (stored total may not be updated yet after a bar return acceptance)
-  const activeItemsTotal = (order?.order_items || [])
-    .filter((i) => !i.return_requested && !i.return_accepted)
-    .reduce((sum, i) => sum + (i.total_price || 0), 0)
-  const returnedTotal = (order?.order_items || [])
-    .filter((i) => i.return_requested || i.return_accepted)
-    .reduce((sum, i) => sum + (i.total_price || 0), 0)
+  const activeItemsTotal = billableItems.reduce((sum, i) => sum + (i.total_price || 0), 0)
+  const returnedTotal = returnedItems.reduce((sum, i) => sum + (i.total_price || 0), 0)
   const subtotal = activeItemsTotal
   const total = subtotal
   const change = paymentMethod === 'cash' && cashTendered ? parseFloat(cashTendered) - total : 0
@@ -562,9 +597,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       return ' '.repeat(pad) + str
     }
 
-    const activeItems = (order.order_items || []).filter(
-      (i) => !i.return_requested && !i.return_accepted
-    )
+    const activeItems = billableItems
     const adjustedTotal = activeItems.reduce((sum, i) => sum + (i.total_price || 0), 0)
 
     // Group items by name
@@ -585,15 +618,13 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       .join('\n')
 
     const returnedGrouped = new Map<string, number>()
-    ;(order.order_items || [])
-      .filter((i) => i.return_requested || i.return_accepted)
-      .forEach((item) => {
-        const name =
-          item.menu_items?.name ||
-          (item as unknown as { modifier_notes?: string }).modifier_notes ||
-          'Item'
-        returnedGrouped.set(name, (returnedGrouped.get(name) || 0) + item.quantity)
-      })
+    returnedItems.forEach((item) => {
+      const name =
+        item.menu_items?.name ||
+        (item as unknown as { modifier_notes?: string }).modifier_notes ||
+        'Item'
+      returnedGrouped.set(name, (returnedGrouped.get(name) || 0) + item.quantity)
+    })
     const returnedLines = Array.from(returnedGrouped.entries())
       .map(([name, qty]) => fmtRow(`${qty}x ${name} [RETURNED]`, 'N0'))
       .join('\n')
@@ -836,7 +867,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     else setLastPrintedGrillAt(latestPrintedAt)
   }
 
-  const orderItems = order?.order_items || []
+  const orderItems = billableItems
   const getPersonItems = (idx: number) =>
     orderItems.filter((item) => itemAssignments[item.id] === idx)
   const getPersonTotal = (idx: number) =>
@@ -1267,7 +1298,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       <ReceiptModal
         order={paidOrder as unknown as import('../../types').Order}
         table={table}
-        items={(order.order_items || []) as import('../../types').OrderItem[]}
+        items={billableItems as import('../../types').OrderItem[]}
         staffName={profile?.full_name || 'Staff'}
         tipAmount={parseFloat(tipAmount) || 0}
         amountReceived={parseFloat(amountReceived) || 0}
@@ -1344,7 +1375,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           <div className="bg-gray-800 rounded-xl p-4">
             <p className="text-gray-400 text-xs mb-3 uppercase tracking-wide">Order Summary</p>
             <div className="space-y-2 mb-3">
-              {order?.order_items?.map((item) => (
+              {billableItems.map((item) => (
                 <div key={item.id} className="flex justify-between text-sm">
                   <span className="text-gray-300">
                     {item.quantity}x {item.menu_items?.name}
@@ -1592,7 +1623,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
             <div className="bg-gray-800/60 border border-gray-700 rounded-xl p-4">
               <p className="text-gray-300 font-semibold text-sm mb-3">↩ Returned Items</p>
               {['bar', 'mixologist'].map((dest) => {
-                const destItems = (order?.order_items || []).filter((i) => {
+                const destItems = returnedItems.filter((i) => {
                   const itemDest =
                     (
                       i as unknown as {

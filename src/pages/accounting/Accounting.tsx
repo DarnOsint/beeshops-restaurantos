@@ -293,11 +293,12 @@ export default function Accounting() {
       orderIds.length > 0
         ? await supabase
             .from('order_items')
-            .select('order_id, quantity, menu_items(name)')
+            .select('order_id, quantity, return_requested, return_accepted, menu_items(name)')
             .in('order_id', orderIds)
         : { data: [] }
     const itemsByOrder: Record<string, string[]> = {}
     for (const oi of (debtOrderItems || []) as any[]) {
+      if (oi.return_requested || oi.return_accepted) continue
       if (!itemsByOrder[oi.order_id]) itemsByOrder[oi.order_id] = []
       itemsByOrder[oi.order_id].push(`${oi.quantity}x ${oi.menu_items?.name || 'Item'}`)
     }
