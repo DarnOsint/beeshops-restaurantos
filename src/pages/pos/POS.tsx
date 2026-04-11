@@ -147,6 +147,27 @@ interface OrderPayload {
   total: number
 }
 
+interface BarIssueLogRow {
+  id: string
+  issue_date: string
+  order_id: string
+  order_item_id: string
+  table_id?: string | null
+  table_name?: string | null
+  waitron_id?: string | null
+  waitron_name?: string | null
+  menu_item_id?: string | null
+  item_name: string
+  quantity: number
+  unit_price: number
+  total_price: number
+  station: 'bar'
+  source: 'pos_order'
+  recorded_by?: string | null
+  recorded_by_name?: string | null
+  created_at: string
+}
+
 /** Desktop menu browser — shown in the left 3/4 when a table is selected */
 function DesktopMenuBrowser({
   menuItems,
@@ -692,6 +713,68 @@ export default function POS() {
 
   const [tableStaffMap, setTableStaffMap] = useState<Record<string, string>>({})
 
+  const logBarIssues = async (
+    sourceItems: OrderPayload['items'],
+    persistedRows: Array<{
+      id: string
+      order_id: string
+      menu_item_id?: string | null
+      quantity: number
+      unit_price: number
+      total_price: number
+      destination?: string | null
+      modifier_notes?: string | null
+      created_at: string
+    }>,
+    table: Table,
+    orderId: string
+  ) => {
+    const issueDate = currentBusinessDateWAT()
+    const rows: BarIssueLogRow[] = []
+
+    for (let i = 0; i < Math.min(sourceItems.length, persistedRows.length); i++) {
+      const source = sourceItems[i]
+      const persisted = persistedRows[i]
+      const station = normalizeDestination(
+        source.destination || source.menu_categories?.destination,
+        source.name,
+        source.menu_categories?.name
+      )
+      if (station !== 'bar') continue
+      if (!persisted.menu_item_id) continue
+
+      rows.push({
+        id: crypto.randomUUID(),
+        issue_date: issueDate,
+        order_id: orderId,
+        order_item_id: persisted.id,
+        table_id: table.id,
+        table_name: table.name,
+        waitron_id: profile?.id ?? null,
+        waitron_name: profile?.full_name ?? null,
+        menu_item_id: persisted.menu_item_id ?? null,
+        item_name: source.name,
+        quantity: persisted.quantity,
+        unit_price: persisted.unit_price || 0,
+        total_price: persisted.total_price || 0,
+        station: 'bar',
+        source: 'pos_order',
+        recorded_by: profile?.id ?? null,
+        recorded_by_name: profile?.full_name ?? null,
+        created_at: persisted.created_at,
+      })
+    }
+
+    if (rows.length === 0) return
+
+    const { error } = await supabase
+      .from('bar_issue_log')
+      .upsert(rows, { onConflict: 'order_item_id' })
+    if (error) {
+      console.warn('bar_issue_log insert failed:', error.message)
+    }
+  }
+
   const fetchTables = async () => {
     const [tablesRes, openOrdersRes] = await Promise.all([
       supabase.from('tables').select('*, table_categories(id, name, hire_fee)').order('name'),
@@ -967,6 +1050,7 @@ export default function POS() {
             return
           }
         }
+        await logBarIssues(items, newItems, table, activeOrder.id)
         printStationTickets(
           items.map((i) => ({
             quantity: i.quantity,
@@ -1096,6 +1180,7 @@ export default function POS() {
           return
         }
       }
+      await logBarIssues(items, orderItemRows.slice(baseItems.length), table, orderId)
       printStationTickets(
         items.map((i) => ({
           quantity: i.quantity,
