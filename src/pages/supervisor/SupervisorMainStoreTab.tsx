@@ -97,6 +97,7 @@ export default function SupervisorMainStoreTab() {
         .select('*')
         .gte('created_at', dayStart.toISOString())
         .lt('created_at', dayEnd.toISOString())
+        .eq('status', 'pending')
         .order('created_at', { ascending: true }),
     ])
     setItems((inv || []) as InventoryItem[])
@@ -152,6 +153,7 @@ export default function SupervisorMainStoreTab() {
           `${req.quantity}x ${req.item_name} released to chiller`
         ).catch(() => {})
       toast.success('Approved', `${req.quantity} ${req.unit} of ${req.item_name} sent to chiller`)
+      setRequests((current) => current.filter((request) => request.id !== req.id))
       fetchData()
     } catch (e: any) {
       toast.error('Error', e?.message || 'Failed to approve')
@@ -189,6 +191,7 @@ export default function SupervisorMainStoreTab() {
           `${req.item_name} — ${reason || 'No reason'}`
         ).catch(() => {})
       toast.success('Rejected', `Request for ${req.item_name} rejected`)
+      setRequests((current) => current.filter((request) => request.id !== req.id))
       fetchData()
     } catch (e: any) {
       toast.error('Error', e?.message || 'Failed to reject')
