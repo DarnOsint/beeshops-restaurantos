@@ -76,6 +76,7 @@ const TABS = [
 const getWaitronRemittance = (paymentMethod: string | null | undefined, amount: number) => {
   const pm = (paymentMethod || '').toLowerCase()
   if (pm === 'cash') return { cash: amount, transfer: 0 }
+  if (pm === 'card' || pm === 'bank_pos') return { cash: 0, transfer: amount }
   if (pm.startsWith('transfer') || pm === 'transfer') return { cash: 0, transfer: amount }
   if (pm.startsWith('cash+transfer')) {
     const payload = pm.split(':')[1] || ''
@@ -83,6 +84,14 @@ const getWaitronRemittance = (paymentMethod: string | null | undefined, amount: 
     return {
       cash: parseFloat(cashPart || '0') || 0,
       transfer: parseFloat(transferPart || '0') || 0,
+    }
+  }
+  if (pm.startsWith('cash+card')) {
+    const payload = pm.split(':')[1] || ''
+    const [cashPart, cardPart] = payload.split('+')
+    return {
+      cash: parseFloat(cashPart || '0') || 0,
+      transfer: parseFloat(cardPart || '0') || 0,
     }
   }
   return { cash: 0, transfer: 0 }

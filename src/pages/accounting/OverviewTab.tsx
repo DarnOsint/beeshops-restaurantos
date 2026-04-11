@@ -318,10 +318,7 @@ export default function OverviewTab({
           .reduce((s, v) => s + v, 0)
           .toLocaleString()}`
       ),
-      row(
-        'Accounted For:',
-        `N${(totalReceived + totalOutstanding + totalPayouts).toLocaleString()}`
-      ),
+      row('Accounted For:', `N${totalReceived.toLocaleString()}`),
       sol,
       row(
         shortfall > 0 ? 'SHORTFALL:' : shortfall < 0 ? 'SURPLUS:' : 'BALANCED:',
@@ -510,7 +507,7 @@ export default function OverviewTab({
             <Banknote size={13} className="text-emerald-400" /> Waitron Remittance
           </h4>
           <p className="text-gray-600 text-xs mb-2">
-            Enter cash collected and transfer receipt submitted by each waitron
+            Enter cash collected and POS/transfer receipt submitted by each waitron
           </p>
           <div className="space-y-1.5">
             {activeWaitrons.map((w) => (
@@ -535,11 +532,11 @@ export default function OverviewTab({
                   className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500"
                 />
                 <span className="text-gray-600 text-xs w-36">
-                  exp transfer ₦{(w.transferExpected || 0).toLocaleString()}
+                  exp POS+transfer ₦{(w.transferExpected || 0).toLocaleString()}
                 </span>
                 <input
                   type="number"
-                  placeholder="₦ transfer"
+                  placeholder="₦ POS/transfer"
                   value={recon.transferReceipts[w.name] || ''}
                   onChange={(e) =>
                     setRecon((prev) => ({
@@ -561,7 +558,9 @@ export default function OverviewTab({
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400 text-sm font-medium">Total Transfer Receipts</span>
+              <span className="text-gray-400 text-sm font-medium">
+                Total POS and Transfer Receipts
+              </span>
               <span className="text-purple-400 font-bold">
                 ₦{totalTransferReceipts.toLocaleString()}
               </span>
@@ -575,8 +574,8 @@ export default function OverviewTab({
             <AlertTriangle size={13} className="text-red-400" /> Outstanding / Shortage per Waitron
           </h4>
           <p className="text-gray-600 text-xs mb-2">
-            Shortages are calculated automatically from cash and transfer remittance. Surplus counts
-            as zero. Credit and pay-later orders are added automatically.
+            Shortages are calculated automatically from cash and POS/transfer remittance. Surplus
+            counts as zero. Credit and pay-later orders are added automatically.
           </p>
           <div className="space-y-1.5">
             {activeWaitrons.map((w) => {
@@ -663,7 +662,7 @@ export default function OverviewTab({
             <span className="text-emerald-400">₦{totalCashCollected.toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-gray-400">Transfer Receipts</span>
+            <span className="text-gray-400">POS and Transfer Receipts</span>
             <span className="text-purple-400">₦{totalTransferReceipts.toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-sm">
@@ -677,9 +676,7 @@ export default function OverviewTab({
           <div className="border-t-2 border-gray-700 pt-2 mt-2">
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Total Accounted For</span>
-              <span className="text-white font-bold">
-                ₦{(totalReceived + totalOutstanding + totalPayouts).toLocaleString()}
-              </span>
+              <span className="text-white font-bold">₦{totalReceived.toLocaleString()}</span>
             </div>
           </div>
           <div className="border-t-2 border-gray-600 pt-2">
