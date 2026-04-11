@@ -231,6 +231,7 @@ export default function POS() {
   const toast = useToast()
   usePushNotifications(profile?.id)
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
+  const isWaitron = profile?.role === 'waitron'
 
   const [tables, setTables] = useState<Table[]>([])
   const [menuItems, setMenuItems] = useState<MenuItemWithZone[]>([])
@@ -1083,6 +1084,10 @@ export default function POS() {
     setShowCashSale(true)
   }
 
+  useEffect(() => {
+    if (isWaitron && posTab !== 'tables') setPosTab('tables')
+  }, [isWaitron, posTab])
+
   if (geoStatus === 'outside')
     return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
 
@@ -1260,12 +1265,13 @@ export default function POS() {
       </nav>
 
       <div className="flex border-b border-gray-800 bg-gray-900 px-4">
-        {(
-          [
-            ['tables', Beer, 'Tables'],
-            ['history', History, 'My Orders'],
-            ['shift', TrendingUp, 'My Shift'],
-          ] as const
+        {(isWaitron
+          ? ([['tables', Beer, 'Tables']] as const)
+          : ([
+              ['tables', Beer, 'Tables'],
+              ['history', History, 'My Orders'],
+              ['shift', TrendingUp, 'My Shift'],
+            ] as const)
         ).map(([id, Icon, label]) => (
           <button
             key={id}
@@ -1413,9 +1419,14 @@ export default function POS() {
                         const left = l.substring(0, W - r.length - 1)
                         return left + ' '.repeat(Math.max(1, W - left.length - r.length)) + r
                       }
-                      const ctr = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
+                      const ctr = (s: string) =>
+                        ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
                       const fmt = (n: number) => `N${n.toLocaleString()}`
-                      const fmtDate = new Date().toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
+                      const fmtDate = new Date().toLocaleDateString('en-NG', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })
 
                       const lines: string[] = [
                         '',
@@ -1424,8 +1435,26 @@ export default function POS() {
                         div,
                         row('Waitron:', profile?.full_name || 'Staff'),
                         row('Date:', fmtDate),
-                        ...(shiftStats.clockIn ? [row('Clock In:', new Date(shiftStats.clockIn).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true }))] : []),
-                        row('Printed:', new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true })),
+                        ...(shiftStats.clockIn
+                          ? [
+                              row(
+                                'Clock In:',
+                                new Date(shiftStats.clockIn).toLocaleTimeString('en-NG', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                  hour12: true,
+                                })
+                              ),
+                            ]
+                          : []),
+                        row(
+                          'Printed:',
+                          new Date().toLocaleTimeString('en-NG', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+                          })
+                        ),
                         div,
                         ctr('SALES SUMMARY'),
                         div,
@@ -1441,11 +1470,22 @@ export default function POS() {
                       ]
 
                       shiftStats.recentOrders.forEach((o, idx) => {
-                        const time = new Date(o.closed_at).toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true })
-                        lines.push(row(`${idx + 1}. ${o.tables?.name || 'Cash Sale'}`, fmt(o.netTotal || 0)))
+                        const time = new Date(o.closed_at).toLocaleTimeString('en-NG', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true,
+                        })
+                        lines.push(
+                          row(`${idx + 1}. ${o.tables?.name || 'Cash Sale'}`, fmt(o.netTotal || 0))
+                        )
                         lines.push(row(`   ${time}`, ''))
                         o.order_items.forEach((i) => {
-                          lines.push(row(`   ${i.quantity}x ${i.menu_items?.name || 'Item'}`, fmt(i.total_price || 0)))
+                          lines.push(
+                            row(
+                              `   ${i.quantity}x ${i.menu_items?.name || 'Item'}`,
+                              fmt(i.total_price || 0)
+                            )
+                          )
                         })
                         lines.push('')
                       })
