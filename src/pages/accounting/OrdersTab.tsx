@@ -1,4 +1,5 @@
 import type { Order } from '../../types'
+import { getNetOrderAmount, getValidOrderItemCount } from './orderAmounts'
 
 interface OrderFilter {
   status: string
@@ -100,7 +101,7 @@ export default function OrdersTab({ orders, orderFilter, onFilterChange }: Props
                         ?.full_name || '—'}
                     </td>
                     <td className="px-4 py-3 text-gray-400 text-xs">
-                      {order.order_items?.length || 0} items
+                      {getValidOrderItemCount(order)} items
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -117,7 +118,7 @@ export default function OrdersTab({ orders, orderFilter, onFilterChange }: Props
                       </span>
                     </td>
                     <td className="px-4 py-3 text-amber-400 font-bold text-sm whitespace-nowrap">
-                      ₦{order.total_amount?.toLocaleString()}
+                      ₦{getNetOrderAmount(order).toLocaleString()}
                     </td>
                   </tr>
                 ))

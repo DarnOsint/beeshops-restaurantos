@@ -2,6 +2,7 @@ import { Monitor, CheckCircle, AlertTriangle, ChevronDown, ChevronUp } from 'luc
 import { useState } from 'react'
 import type { TimesheetEntry } from './types'
 import type { Order } from '../../types'
+import { getNetOrderAmount } from './orderAmounts'
 
 interface Props {
   timesheet: TimesheetEntry[]
@@ -68,7 +69,7 @@ export default function POSReconciliationTab({ timesheet, orders, dateLabel }: P
     ).getTime()
     const shiftClockOut = (entry as TimesheetEntry & { clock_out?: string | null }).clock_out
       ? new Date((entry as TimesheetEntry & { clock_out?: string }).clock_out!).getTime()
-      : new Date().getTime() // eslint-disable-line react-hooks/purity
+      : new Date().getTime()
 
     const staffOrders = orders.filter((o) => {
       if ((o as Order & { staff_id?: string }).staff_id !== staffId) return false
@@ -88,19 +89,19 @@ export default function POSReconciliationTab({ timesheet, orders, dateLabel }: P
       clockOut: (entry as TimesheetEntry & { clock_out?: string | null }).clock_out || null,
       durationMinutes: entry.duration_minutes || null,
       orders: staffOrders.length,
-      sales: staffOrders.reduce((s, o) => s + (o.total_amount || 0), 0),
+      sales: staffOrders.reduce((s, o) => s + getNetOrderAmount(o), 0),
       cash: staffOrders
         .filter((o) => o.payment_method === 'cash')
-        .reduce((s, o) => s + (o.total_amount || 0), 0),
+        .reduce((s, o) => s + getNetOrderAmount(o), 0),
       card: staffOrders
         .filter((o) => o.payment_method === 'card')
-        .reduce((s, o) => s + (o.total_amount || 0), 0),
+        .reduce((s, o) => s + getNetOrderAmount(o), 0),
       transfer: staffOrders
         .filter((o) => o.payment_method === 'transfer')
-        .reduce((s, o) => s + (o.total_amount || 0), 0),
+        .reduce((s, o) => s + getNetOrderAmount(o), 0),
       credit: staffOrders
         .filter((o) => o.payment_method === 'credit')
-        .reduce((s, o) => s + (o.total_amount || 0), 0),
+        .reduce((s, o) => s + getNetOrderAmount(o), 0),
     }
 
     if (!machine) {

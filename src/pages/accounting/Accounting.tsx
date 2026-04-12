@@ -37,12 +37,12 @@ import AuditTab from './AuditTab'
 import POSReconciliationTab from './POSReconciliationTab'
 import TipsTab from './TipsTab'
 import ReturnsTab from './ReturnsTab'
+import { getNetOrderAmount } from './orderAmounts'
 
 import type {
   AccountingSummary,
   WaitronStat,
   TrendPoint,
-  LedgerEntry,
   PayoutRow,
   TillSession,
   TimesheetEntry,
@@ -113,11 +113,7 @@ export default function Accounting() {
   // ── Data state ────────────────────────────────────────────────────────────
   const [summary, setSummary] = useState<AccountingSummary>({
     total: 0,
-    cash: 0,
-    card: 0,
-    transfer: 0,
-    credit: 0,
-    split: 0,
+    byMethod: {},
     orders: 0,
     avgOrder: 0,
   })
@@ -132,7 +128,6 @@ export default function Accounting() {
   const [timesheet, setTimesheet] = useState<TimesheetEntry[]>([])
   const [auditLog, setAuditLog] = useState<AuditEntry[]>([])
   const [payouts, setPayouts] = useState<PayoutRow[]>([])
-  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const getDateBounds = useCallback(() => {
@@ -205,7 +200,9 @@ export default function Accounting() {
         .order('created_at', { ascending: false }),
       supabase
         .from('orders')
-        .select('created_at, total_amount')
+        .select(
+          'created_at, order_items(total_price, extra_charge, status, return_requested, return_accepted)'
+        )
         .eq('status', 'paid')
         .gte('created_at', new Date(Date.now() - 30 * 864e5).toISOString())
         .order('created_at', { ascending: true }),
@@ -227,17 +224,7 @@ export default function Accounting() {
     const allOrders = (ordersRes.data || []) as Order[]
     const paidOrders = allOrders.filter((o) => o.status === 'paid')
 
-    const netOrderAmount = (o: Order) =>
-      (o.order_items || [])
-        .filter(
-          (i) =>
-            !i.return_requested &&
-            !i.return_accepted &&
-            (i.status || '').toLowerCase() !== 'cancelled'
-        )
-        .reduce((s, i) => s + (i.total_price || 0), 0)
-
-    const total = paidOrders.reduce((s, o) => s + netOrderAmount(o), 0)
+    const total = paidOrders.reduce((s, o) => s + getNetOrderAmount(o), 0)
     const byMethod: Record<string, number> = {}
     paidOrders.forEach((o) => {
       const pm = (o.payment_method || '').toLowerCase()
@@ -250,7 +237,7 @@ export default function Accounting() {
       else if (pm.startsWith('cash+transfer')) key = 'Cash + Transfer'
       else if (pm.startsWith('cash+card')) key = 'Cash + POS'
       else if (pm === 'complimentary') key = 'Complimentary'
-      byMethod[key] = (byMethod[key] || 0) + netOrderAmount(o)
+      byMethod[key] = (byMethod[key] || 0) + getNetOrderAmount(o)
     })
 
     setSummary({
@@ -268,7 +255,7 @@ export default function Accounting() {
       if (!wMap[name]) {
         wMap[name] = { name, orders: 0, revenue: 0, cashExpected: 0, transferExpected: 0 }
       }
-      const netAmount = netOrderAmount(o)
+      const netAmount = getNetOrderAmount(o)
       const remittance = getWaitronRemittance(o.payment_method, netAmount)
       wMap[name].orders++
       wMap[name].revenue += netAmount
@@ -334,13 +321,21 @@ export default function Accounting() {
     setCreditDetailsList(creditDetails)
 
     const dayMap: Record<string, TrendPoint> = {}
-    ;(trendRes.data || []).forEach((o) => {
+    ;(
+      trendRes.data as unknown as
+        | Array<{
+            created_at: string
+            order_items?: Order['order_items']
+          }>
+        | null
+        | undefined
+    )?.forEach((o) => {
       const day = new Date(o.created_at).toLocaleDateString('en-NG', {
         month: 'short',
         day: 'numeric',
       })
       if (!dayMap[day]) dayMap[day] = { day, revenue: 0, orders: 0 }
-      dayMap[day].revenue += o.total_amount || 0
+      dayMap[day].revenue += getNetOrderAmount(o)
       dayMap[day].orders++
     })
     setTrendData(Object.values(dayMap))
@@ -350,45 +345,6 @@ export default function Accounting() {
     setAuditLog((auditRes.data || []) as AuditEntry[])
     setPayouts((payoutsRes.data || []) as PayoutRow[])
 
-    const ledger: LedgerEntry[] = []
-    paidOrders.forEach((o) => {
-      const ord = o as Order & { profiles?: { full_name: string } }
-      ledger.push({
-        id: o.id,
-        date: o.created_at,
-        type: 'credit',
-        description:
-          (o.payment_method === 'credit' ? '[Pay Later] ' : '') +
-          (o.tables?.name || o.order_type || 'Sale'),
-        ref: o.id.slice(0, 8).toUpperCase(),
-        debit: 0,
-        credit: o.total_amount || 0,
-        method: o.payment_method ?? null,
-        staff: ord.profiles?.full_name ?? null,
-        balance: 0,
-      })
-    })
-    ;(payoutsRes.data || []).forEach((p: PayoutRow & { profiles?: { full_name: string } }) => {
-      ledger.push({
-        id: p.id,
-        date: p.created_at,
-        type: 'debit',
-        description: p.reason || 'Expense',
-        ref: p.id.slice(0, 8).toUpperCase(),
-        debit: p.amount || 0,
-        credit: 0,
-        method: p.category,
-        staff: p.profiles?.full_name ?? null,
-        balance: 0,
-      })
-    })
-    ledger.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    let bal = 0
-    ledger.forEach((e) => {
-      bal += e.credit - e.debit
-      e.balance = bal
-    })
-    setLedgerEntries(ledger.reverse())
     setLoading(false)
   }, [getDateBounds])
 
@@ -567,9 +523,7 @@ export default function Accounting() {
           <Debtors onBack={() => setActiveTab('overview')} embedded={true} />
         )}
 
-        {activeTab === 'ledger' && (
-          <LedgerTab ledgerEntries={ledgerEntries} dateRange={dateRange} />
-        )}
+        {activeTab === 'ledger' && <LedgerTab dateRange={dateRange} />}
         {activeTab === 'audit' && <AuditTab auditLog={auditLog} dateRange={dateRange} />}
         {activeTab === 'pos' && (
           <POSReconciliationTab

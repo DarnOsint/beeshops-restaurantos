@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Users, ChevronDown, ChevronUp, Printer, RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { getNetOrderAmount, getValidOrderItemCount, getValidOrderItems } from './orderAmounts'
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
 
@@ -165,18 +166,9 @@ export default function WaitronOrdersTab() {
 
   const selectedShift = shifts.find((s) => s.staff_id === selectedStaff)
   const validItems = (items: WaitronOrder['order_items']) =>
-    (items || []).filter(
-      (i) =>
-        !i.return_requested && !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled'
-    )
-  const totalSales = orders.reduce(
-    (s, o) => s + validItems(o.order_items).reduce((ss, i) => ss + (i.total_price || 0), 0),
-    0
-  )
-  const totalItems = orders.reduce(
-    (s, o) => s + validItems(o.order_items).reduce((ss, i) => ss + i.quantity, 0),
-    0
-  )
+    getValidOrderItems({ order_items: items })
+  const totalSales = orders.reduce((s, o) => s + getNetOrderAmount(o), 0)
+  const totalItems = orders.reduce((s, o) => s + getValidOrderItemCount(o), 0)
 
   const printWaitronReport = () => {
     if (!selectedShift || orders.length === 0) return
@@ -494,7 +486,7 @@ export default function WaitronOrdersTab() {
                             </div>
                             <div className="text-right">
                               <p className="text-amber-400 font-bold text-sm">
-                                ₦{o.total_amount.toLocaleString()}
+                                ₦{getNetOrderAmount(o).toLocaleString()}
                               </p>
                               <p className="text-gray-500 text-[10px]">
                                 {new Date(o.closed_at || o.created_at).toLocaleTimeString('en-NG', {
