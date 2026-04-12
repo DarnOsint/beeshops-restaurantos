@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { supabase } from '../../lib/supabase'
 import { sendPushToStaff } from '../../hooks/usePushNotifications'
 import { audit } from '../../lib/audit'
@@ -23,10 +23,11 @@ import {
 } from 'lucide-react'
 import BarChillerStock from '../backoffice/BarChillerStock'
 import StoreRequestPanel from './StoreRequestPanel'
-import BarIssueLogTab from './BarIssueLogTab'
 import type { KdsOrder } from './types'
 import DailySummaryTab from './DailySummaryTab'
 import { useToast } from '../../context/ToastContext'
+
+const BarIssueLogTab = lazy(() => import('./BarIssueLogTab'))
 
 const isBarItem = (item: KdsOrder['order_items'][number]): boolean => {
   const dest = (item.destination || '').toLowerCase()
@@ -670,7 +671,23 @@ function BarKDSInner() {
         </div>
       )}
 
-      {activeTab === 'issue_log' && <BarIssueLogTab />}
+      {activeTab === 'issue_log' && (
+        <ErrorBoundary title="Waitron Issue Log Error" fullscreen={false}>
+          <Suspense
+            fallback={
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="max-w-3xl mx-auto">
+                  <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+                    <p className="text-gray-500 text-sm">Loading waitron issue log...</p>
+                  </div>
+                </div>
+              </div>
+            }
+          >
+            <BarIssueLogTab />
+          </Suspense>
+        </ErrorBoundary>
+      )}
 
       {/* Store Requests Tab */}
       {activeTab === 'store_requests' && (

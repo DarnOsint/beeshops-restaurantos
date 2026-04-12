@@ -337,7 +337,7 @@ export default function BarIssueLogTab() {
                                 <p className="text-gray-500 text-xs">
                                   {entry.table_name || 'No table'} · Order #
                                   {entry.order_id.slice(0, 8).toUpperCase()} ·{' '}
-                                  {new Date(entry.created_at).toLocaleTimeString('en-NG', {
+                                  {new Date(entry.at).toLocaleTimeString('en-NG', {
                                     timeZone: 'Africa/Lagos',
                                     hour: '2-digit',
                                     minute: '2-digit',
