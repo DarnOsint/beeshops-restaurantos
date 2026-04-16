@@ -244,11 +244,6 @@ export default function OrderPanel({
     .filter((item) => !menuSearch || item.name.toLowerCase().includes(menuSearch.toLowerCase()))
 
   const addItem = (item: MenuItem | OrderItemLocal) => {
-    const stock = (item as unknown as { current_stock?: number | null }).current_stock
-    if (stock !== null && stock !== undefined && stock <= 0) {
-      toast.warning('Out of Stock', item.name + ' is out of stock')
-      return
-    }
     setOrderItems((prev) => {
       const newEntry = prev.find((i) => i.id === item.id && !i._existing)
       if (newEntry)
@@ -727,22 +722,16 @@ export default function OrderPanel({
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {filteredMenu.map((item) => {
-                  const stock = (item as unknown as { current_stock?: number | null }).current_stock
-                  const outOfStock = stock !== null && stock !== undefined && stock <= 0
                   return (
                     <button
                       key={item.id}
                       onClick={() => addItem(item)}
-                      disabled={outOfStock}
-                      className={`rounded-xl p-3 text-left transition-colors border ${outOfStock ? 'bg-gray-900 border-gray-800 opacity-50 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-700 border-gray-700 hover:border-amber-500/50'}`}
+                      className="rounded-xl p-3 text-left transition-colors border bg-gray-800 hover:bg-gray-700 border-gray-700 hover:border-amber-500/50"
                     >
                       <p className="text-white text-sm font-medium">{item.name}</p>
                       <p className="text-amber-400 text-sm font-bold mt-1">
                         ₦{item.price.toFixed(2)}
                       </p>
-                      {outOfStock && (
-                        <p className="text-red-400 text-xs mt-1 font-bold">Out of Stock</p>
-                      )}
                     </button>
                   )
                 })}
