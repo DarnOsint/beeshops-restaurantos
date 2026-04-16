@@ -139,8 +139,8 @@ export default function BackOffice() {
     },
     {
       id: 'qrcards',
-      label: 'QR Table Cards',
-      desc: 'Print QR codes for all tables',
+      label: 'QR Zone Cards',
+      desc: 'Print one QR code per zone (pricing only)',
       icon: QrCode,
       color: 'bg-rose-500',
       roles: ['owner', 'manager'],
@@ -300,9 +300,9 @@ export default function BackOffice() {
               },
               {
                 id: 'bo-qr',
-                title: 'QR Table Cards',
+                title: 'QR Zone Cards',
                 description:
-                  'Generate and print QR code cards for all tables. Customers scan the code to browse the menu, place orders, track item progress, and call the waiter — all without needing to flag anyone down.',
+                  'Generate and print one QR code per zone. Customers scan to check zone-based prices and rate service (thumbs up/down). Orders are placed through waitrons only.',
               },
             ]}
           />

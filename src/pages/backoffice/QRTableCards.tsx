@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
@@ -10,7 +10,13 @@ const BASE_URL = 'https://beeshop.place'
 interface TableRow {
   id: string
   name: string
-  table_categories?: { name?: string } | null
+  table_categories?: { id: string; name: string } | null
+}
+
+type ZoneCard = {
+  id: string
+  name: string
+  tables: string[]
 }
 
 declare global {
@@ -24,7 +30,7 @@ export default function QRTableCards() {
   const navigate = useNavigate()
   const [tables, setTables] = useState<TableRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedZone, setSelectedZone] = useState('All')
+  const [selectedZone, setSelectedZone] = useState<string>('All')
   const [qrLoaded, setQrLoaded] = useState(false)
   const [exporting, setExporting] = useState(false)
   const scriptRef = useRef(false)
@@ -41,7 +47,7 @@ export default function QRTableCards() {
   useEffect(() => {
     supabase
       .from('tables')
-      .select('id, name, table_categories(name)')
+      .select('id, name, table_categories(id, name)')
       .order('name')
       .then(({ data }) => {
         setTables((data || []) as TableRow[])
@@ -49,24 +55,37 @@ export default function QRTableCards() {
       })
   }, [])
 
-  const zones = [
-    'All',
-    ...new Set(tables.map((t) => t.table_categories?.name).filter(Boolean)),
-  ] as string[]
-  const filtered =
-    selectedZone === 'All'
-      ? tables
-      : tables.filter((t) => t.table_categories?.name === selectedZone)
+  const zoneCards = useMemo(() => {
+    const map = new Map<string, ZoneCard>()
+    for (const t of tables) {
+      const zoneId = t.table_categories?.id
+      const zoneName = t.table_categories?.name
+      if (!zoneId || !zoneName) continue
+      const existing = map.get(zoneId) || { id: zoneId, name: zoneName, tables: [] }
+      existing.tables.push(t.name)
+      map.set(zoneId, existing)
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [tables])
+
+  const zones = ['All', ...zoneCards.map((z) => z.id)] as string[]
+  const zoneLabel = (id: string) => {
+    if (id === 'All') return 'All'
+    return zoneCards.find((z) => z.id === id)?.name || 'Zone'
+  }
+
+  const filteredZones =
+    selectedZone === 'All' ? zoneCards : zoneCards.filter((z) => z.id === selectedZone)
 
   useEffect(() => {
-    if (!qrLoaded || tables.length === 0) return
+    if (!qrLoaded || zoneCards.length === 0) return
     setTimeout(() => {
-      filtered.forEach((table) => {
-        const el = document.getElementById(`qr-${table.id}`)
+      filteredZones.forEach((zone) => {
+        const el = document.getElementById(`qr-zone-${zone.id}`)
         if (!el || el.innerHTML !== '') return
         try {
           new window.QRCode(el, {
-            text: `${BASE_URL}/table/${table.id}`,
+            text: `${BASE_URL}/zone/${zone.id}`,
             width: 160,
             height: 160,
             colorDark: '#000000',
@@ -79,13 +98,13 @@ export default function QRTableCards() {
       })
     }, 150)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qrLoaded, tables, selectedZone])
+  }, [qrLoaded, zoneCards, selectedZone])
 
   const waitForQRCodes = useCallback(async (): Promise<boolean> => {
     const deadline = Date.now() + 7000
     while (Date.now() < deadline) {
-      const allReady = filtered.every((t) => {
-        const el = document.getElementById(`qr-${t.id}`)
+      const allReady = filteredZones.every((z) => {
+        const el = document.getElementById(`qr-zone-${z.id}`)
         if (!el) return false
         const canvas = el.querySelector('canvas')
         if (canvas) return true
@@ -97,7 +116,7 @@ export default function QRTableCards() {
       await new Promise((r) => setTimeout(r, 120))
     }
     return false
-  }, [filtered])
+  }, [filteredZones])
 
   const downloadPDF = useCallback(async () => {
     if (exporting) return
@@ -107,9 +126,9 @@ export default function QRTableCards() {
 
       const subtitle =
         selectedZone === 'All'
-          ? `${filtered.length} tables`
-          : `${selectedZone} · ${filtered.length} tables`
-      const doc = createPDF('QR Table Cards', subtitle)
+          ? `${filteredZones.length} zones`
+          : `${zoneLabel(selectedZone)} · ${filteredZones.length} zone`
+      const doc = createPDF('QR Zone Cards', subtitle)
 
       const pageW = 210
       const pageH = 297
@@ -136,8 +155,8 @@ export default function QRTableCards() {
         }
       }
 
-      filtered.forEach((table, idx) => {
-        const zone = (table.table_categories?.name || 'Table').toString().toUpperCase()
+      filteredZones.forEach((zone, idx) => {
+        const header = zone.name.toString().toUpperCase()
 
         doc.setDrawColor(210, 210, 210)
         doc.setLineWidth(0.3)
@@ -149,13 +168,13 @@ export default function QRTableCards() {
         doc.setTextColor(245, 158, 11)
         doc.setFont('helvetica', 'bold')
         doc.setFontSize(6)
-        doc.text(zone.substring(0, 24), x + 3, y + 6)
+        doc.text(header.substring(0, 24), x + 3, y + 6)
         doc.setTextColor(255, 255, 255)
         doc.setFontSize(12)
-        doc.text(table.name.toString().substring(0, 18), x + 3, y + 14)
+        doc.text('PRICE MENU', x + 3, y + 14)
 
         // QR
-        const qrEl = document.getElementById(`qr-${table.id}`)
+        const qrEl = document.getElementById(`qr-zone-${zone.id}`)
         const canvas = qrEl?.querySelector('canvas') as HTMLCanvasElement | null
         const img = qrEl?.querySelector('img') as HTMLImageElement | null
         const dataUrl = canvas?.toDataURL('image/png') || img?.src
@@ -181,7 +200,7 @@ export default function QRTableCards() {
         doc.setTextColor(107, 114, 128)
         doc.setFontSize(6.5)
         doc.setFont('helvetica', 'normal')
-        doc.text('Scan to view menu & order', x + colW / 2, y + cardH - 12, { align: 'center' })
+        doc.text('Scan to check zone prices', x + colW / 2, y + cardH - 12, { align: 'center' })
         doc.setTextColor(156, 163, 175)
         doc.setFontSize(6)
         doc.text("Beeshop's Place Lounge", x + colW / 2, y + cardH - 5, { align: 'center' })
@@ -189,16 +208,19 @@ export default function QRTableCards() {
         // Link label (tiny)
         doc.setTextColor(180, 180, 180)
         doc.setFontSize(5.5)
-        doc.text(`${BASE_URL}/table/${table.id}`.substring(0, 36), x + 2.5, y + cardH - 1.8)
+        doc.text(`${BASE_URL}/zone/${zone.id}`.substring(0, 36), x + 2.5, y + cardH - 1.8)
 
-        if (idx < filtered.length - 1) nextCell()
+        if (idx < filteredZones.length - 1) nextCell()
       })
 
-      savePDF(doc, `qr-table-cards-${selectedZone.toLowerCase().replace(/\s+/g, '-')}.pdf`)
+      savePDF(
+        doc,
+        `qr-zone-cards-${zoneLabel(selectedZone).toLowerCase().replace(/\s+/g, '-')}.pdf`
+      )
     } finally {
       setExporting(false)
     }
-  }, [exporting, filtered, selectedZone, waitForQRCodes])
+  }, [exporting, filteredZones, selectedZone, waitForQRCodes, zoneCards])
 
   if (!['owner', 'manager', 'executive'].includes(profile?.role || ''))
     return (
@@ -217,16 +239,17 @@ export default function QRTableCards() {
               <ArrowLeft size={20} />
             </button>
             <div>
-              <p className="text-white font-bold">QR Table Cards</p>
+              <p className="text-white font-bold">QR Zone Cards</p>
               <p className="text-gray-500 text-xs">
-                {filtered.length} tables · {selectedZone}
+                {filteredZones.length} zone{filteredZones.length !== 1 ? 's' : ''} ·{' '}
+                {zoneLabel(selectedZone)}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={downloadPDF}
-              disabled={exporting || loading || filtered.length === 0}
+              disabled={exporting || loading || filteredZones.length === 0}
               className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-xl text-sm transition-colors"
             >
               Download PDF
@@ -246,7 +269,7 @@ export default function QRTableCards() {
               onClick={() => setSelectedZone(z)}
               className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors ${selectedZone === z ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
             >
-              {z}
+              {zoneLabel(z)}
             </button>
           ))}
         </div>
@@ -256,9 +279,9 @@ export default function QRTableCards() {
           </div>
         ) : (
           <div className="print-grid p-4">
-            {filtered.map((table) => (
+            {filteredZones.map((zone) => (
               <div
-                key={table.id}
+                key={zone.id}
                 className="card bg-white rounded-2xl overflow-hidden shadow-lg"
                 style={{ border: '2px solid #e5e7eb' }}
               >
@@ -273,7 +296,7 @@ export default function QRTableCards() {
                       margin: 0,
                     }}
                   >
-                    {table.table_categories?.name || 'Table'}
+                    {zone.name}
                   </p>
                   <p
                     style={{
@@ -283,7 +306,7 @@ export default function QRTableCards() {
                       margin: '2px 0 0 0',
                     }}
                   >
-                    {table.name}
+                    PRICE MENU
                   </p>
                 </div>
                 <div
@@ -296,10 +319,23 @@ export default function QRTableCards() {
                     gap: '10px',
                   }}
                 >
-                  <div id={`qr-${table.id}`} style={{ width: 160, height: 160 }} />
+                  <div id={`qr-zone-${zone.id}`} style={{ width: 160, height: 160 }} />
                   <p style={{ color: '#6b7280', fontSize: '9px', textAlign: 'center', margin: 0 }}>
-                    Scan to view menu & order
+                    Scan to check zone prices
                   </p>
+                  {zone.tables.length > 0 ? (
+                    <p
+                      style={{
+                        color: '#9ca3af',
+                        fontSize: '8px',
+                        textAlign: 'center',
+                        margin: 0,
+                      }}
+                    >
+                      Use for: {zone.tables.slice(0, 8).join(', ')}
+                      {zone.tables.length > 8 ? '…' : ''}
+                    </p>
+                  ) : null}
                 </div>
                 <div
                   style={{

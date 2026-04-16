@@ -42,6 +42,7 @@ const ShishaAttendantPage = lazy(() => import('./pages/shisha/ShishaAttendantPag
 // Public customer pages
 const TableView = lazy(() => import('./pages/customer/TableView'))
 const ReceiptView = lazy(() => import('./pages/customer/ReceiptView'))
+const ZoneMenuView = lazy(() => import('./pages/customer/ZoneMenuView'))
 import type { Role } from './types'
 
 function ScrollToTop() {
@@ -418,6 +419,14 @@ function AppRoutes() {
             element={
               <EB title="Order page error">
                 <TableView />
+              </EB>
+            }
+          />
+          <Route
+            path="/zone/:zoneId"
+            element={
+              <EB title="Menu page error">
+                <ZoneMenuView />
               </EB>
             }
           />

@@ -22,6 +22,7 @@ import {
   Package,
   Trophy,
   Snowflake,
+  ThumbsUp,
 } from 'lucide-react'
 import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
@@ -50,6 +51,7 @@ import ActivityLogTab from './mgmt/ActivityLogTab'
 import MainStoreSummaryTab from './mgmt/MainStoreSummaryTab'
 import OrdersByWaitronTab from './mgmt/OrdersByWaitronTab'
 import VoidsTab from './mgmt/VoidsTab'
+import ServiceRatingsTab from './mgmt/ServiceRatingsTab'
 
 const sessionWindow = () => {
   const now = new Date()
@@ -94,6 +96,7 @@ const TABS = [
   { id: 'fridge', label: 'Kitchen Fridge', icon: Snowflake },
   { id: 'returns', label: 'Returns', icon: RotateCcw },
   { id: 'voids', label: 'Voids', icon: AlertTriangle },
+  { id: 'ratings', label: 'Ratings', icon: ThumbsUp },
   { id: 'settings', label: 'Alert Threshold', icon: Settings },
   { id: 'cctv', label: 'CV', icon: Camera },
   { id: 'sync', label: 'Sync', icon: RefreshCw },
@@ -486,6 +489,7 @@ export default function Management() {
         {activeTab === 'fridge' && <KitchenFridgeTab />}
         {activeTab === 'returns' && <ReturnedDrinksTab />}
         {activeTab === 'voids' && <VoidsTab />}
+        {activeTab === 'ratings' && <ServiceRatingsTab />}
         {activeTab === 'cctv' && <CctvPanel cvData={cvData} onResolve={resolveAlert} />}
         {activeTab === 'sync' && (
           <SyncTab
