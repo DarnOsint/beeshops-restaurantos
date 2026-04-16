@@ -177,6 +177,47 @@ export default function ZoneMenuView() {
         </div>
       </div>
 
+      <div className="border-b border-gray-800 bg-gray-900/60 px-4 py-4">
+        <div className="max-w-lg mx-auto">
+          <p className="text-gray-400 text-xs font-semibold mb-2">Rate the service</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => submitRating('up')}
+              disabled={rated || ratingBusy}
+              className={`flex-1 rounded-xl py-3 text-sm font-bold border transition-colors ${
+                rated
+                  ? 'bg-gray-800 text-gray-500 border-gray-800'
+                  : 'bg-green-500/15 text-green-400 border-green-500/30 hover:bg-green-500/20'
+              }`}
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                <ThumbsUp size={16} /> Good
+              </span>
+            </button>
+            <button
+              onClick={() => submitRating('down')}
+              disabled={rated || ratingBusy}
+              className={`flex-1 rounded-xl py-3 text-sm font-bold border transition-colors ${
+                rated
+                  ? 'bg-gray-800 text-gray-500 border-gray-800'
+                  : 'bg-red-500/10 text-red-400 border-red-500/25 hover:bg-red-500/15'
+              }`}
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                <ThumbsDown size={16} /> Bad
+              </span>
+            </button>
+          </div>
+          {ratingError ? <p className="text-red-400 text-xs mt-2">{ratingError}</p> : null}
+          {rated && !ratingError ? (
+            <p className="text-gray-500 text-xs mt-2">Thanks — rating received.</p>
+          ) : null}
+          <p className="text-gray-600 text-[11px] mt-2">
+            This QR code is for checking prices only. Orders are placed through your waitron.
+          </p>
+        </div>
+      </div>
+
       <div className="max-w-lg mx-auto w-full px-4 pt-4">
         <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -226,47 +267,6 @@ export default function ZoneMenuView() {
             ))}
           </div>
         )}
-      </div>
-
-      <div className="border-t border-gray-800 bg-gray-900 px-4 py-4">
-        <div className="max-w-lg mx-auto">
-          <p className="text-gray-400 text-xs font-semibold mb-2">Rate the service</p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => submitRating('up')}
-              disabled={rated || ratingBusy}
-              className={`flex-1 rounded-xl py-3 text-sm font-bold border transition-colors ${
-                rated
-                  ? 'bg-gray-800 text-gray-500 border-gray-800'
-                  : 'bg-green-500/15 text-green-400 border-green-500/30 hover:bg-green-500/20'
-              }`}
-            >
-              <span className="inline-flex items-center justify-center gap-2">
-                <ThumbsUp size={16} /> Good
-              </span>
-            </button>
-            <button
-              onClick={() => submitRating('down')}
-              disabled={rated || ratingBusy}
-              className={`flex-1 rounded-xl py-3 text-sm font-bold border transition-colors ${
-                rated
-                  ? 'bg-gray-800 text-gray-500 border-gray-800'
-                  : 'bg-red-500/10 text-red-400 border-red-500/25 hover:bg-red-500/15'
-              }`}
-            >
-              <span className="inline-flex items-center justify-center gap-2">
-                <ThumbsDown size={16} /> Bad
-              </span>
-            </button>
-          </div>
-          {ratingError ? <p className="text-red-400 text-xs mt-2">{ratingError}</p> : null}
-          {rated && !ratingError ? (
-            <p className="text-gray-500 text-xs mt-2">Thanks — rating received.</p>
-          ) : null}
-          <p className="text-gray-600 text-[11px] mt-2">
-            This QR code is for checking prices only. Orders are placed through your waitron.
-          </p>
-        </div>
       </div>
     </div>
   )
