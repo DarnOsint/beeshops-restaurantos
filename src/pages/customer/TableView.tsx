@@ -148,19 +148,13 @@ function ItemInfoSheet({
           <span className="text-xs px-2.5 py-1 rounded-lg bg-gray-800 text-gray-400">
             {item.menu_categories?.name}
           </span>
-          {!item.is_available && (
-            <span className="text-xs px-2.5 py-1 rounded-lg bg-red-500/10 text-red-400">
-              Unavailable
-            </span>
-          )}
         </div>
         <button
           onClick={() => {
             onAdd(item)
             onClose()
           }}
-          disabled={!item.is_available}
-          className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-colors"
+          className="w-full bg-amber-500 hover:bg-amber-400 text-black font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 transition-colors"
         >
           <Plus size={18} /> Add to Order
         </button>
@@ -201,11 +195,7 @@ export default function TableView() {
           .select('*, table_categories(name), profiles(id, full_name)')
           .eq('id', tableId!)
           .single(),
-        supabase
-          .from('menu_items')
-          .select('*, menu_categories(name, destination)')
-          .eq('is_available', true)
-          .order('name'),
+        supabase.from('menu_items').select('*, menu_categories(name, destination)').order('name'),
         supabase.from('menu_categories').select('*').order('name'),
         supabase
           .from('customer_orders')
@@ -274,7 +264,6 @@ export default function TableView() {
   }, [loading, customerOrder])
 
   const addToCart = (item: MenuItem) => {
-    if (!item.is_available) return
     setCart((prev) => {
       const ex = prev.find((i) => i.id === item.id)
       if (ex) return prev.map((i) => (i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i))
@@ -542,7 +531,7 @@ export default function TableView() {
                 return (
                   <div
                     key={item.id}
-                    className={`relative bg-gray-900 border rounded-2xl overflow-hidden transition-all ${!item.is_available ? 'border-gray-800 opacity-50' : isAdded ? 'border-green-500 scale-[0.98]' : 'border-gray-800 hover:border-amber-500/40'}`}
+                    className={`relative bg-gray-900 border rounded-2xl overflow-hidden transition-all ${isAdded ? 'border-green-500 scale-[0.98]' : 'border-gray-800 hover:border-amber-500/40'}`}
                   >
                     <button
                       onClick={(e) => {
@@ -558,11 +547,7 @@ export default function TableView() {
                         <CheckCircle size={32} className="text-green-400" />
                       </div>
                     )}
-                    <button
-                      onClick={() => item.is_available && addToCart(item)}
-                      disabled={!item.is_available}
-                      className="w-full p-3 text-left"
-                    >
+                    <button onClick={() => addToCart(item)} className="w-full p-3 text-left">
                       <div className="w-full h-20 bg-gray-800 rounded-xl overflow-hidden mb-2 flex items-center justify-center">
                         {item.image_url ? (
                           <img
@@ -578,11 +563,8 @@ export default function TableView() {
                       <p className="text-amber-400 font-bold text-sm mt-1">
                         ₦{item.price?.toLocaleString()}
                       </p>
-                      {!item.is_available && (
-                        <p className="text-red-400 text-xs mt-1">Unavailable</p>
-                      )}
                     </button>
-                    {inCart && item.is_available && (
+                    {inCart && (
                       <div className="absolute bottom-2 right-2 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center">
                         <span className="text-black text-[10px] font-bold">{inCart.quantity}</span>
                       </div>

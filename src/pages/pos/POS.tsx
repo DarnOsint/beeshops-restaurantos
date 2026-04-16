@@ -226,23 +226,17 @@ function DesktopMenuBrowser({
       <div className="flex-1 overflow-y-auto p-4">
         <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
           {filtered.map((item) => {
-            const stock = (item as unknown as { current_stock?: number | null }).current_stock
-            const outOfStock = stock !== null && stock !== undefined && stock <= 0
             return (
               <button
                 key={item.id}
                 onClick={() => onAddItem(item)}
-                disabled={outOfStock}
-                className={`rounded-xl overflow-hidden text-left transition-all border active:scale-[0.97] ${outOfStock ? 'bg-gray-900 border-gray-800 opacity-50 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-700 border-gray-700 hover:border-amber-500/50'}`}
+                className="rounded-xl overflow-hidden text-left transition-all border active:scale-[0.97] bg-gray-800 hover:bg-gray-700 border-gray-700 hover:border-amber-500/50"
               >
                 <div className="p-3">
                   <p className="text-white text-sm font-medium leading-tight truncate">
                     {item.name}
                   </p>
                   <p className="text-amber-400 text-sm font-bold mt-1">₦{item.price.toFixed(2)}</p>
-                  {outOfStock && (
-                    <p className="text-red-400 text-xs mt-0.5 font-bold">Out of stock</p>
-                  )}
                 </div>
               </button>
             )
@@ -799,11 +793,7 @@ export default function POS() {
   const fetchMenu = async () => {
     const businessDate = currentBusinessDateWAT()
     const [menuRes, invRes, chillerRes, chillerPrevRes] = await Promise.all([
-      supabase
-        .from('menu_items')
-        .select('*, menu_categories(name, destination)')
-        .eq('is_available', true)
-        .order('name'),
+      supabase.from('menu_items').select('*, menu_categories(name, destination)').order('name'),
       supabase
         .from('inventory')
         .select('menu_item_id, item_name, current_stock')
