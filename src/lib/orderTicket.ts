@@ -6,6 +6,8 @@ export interface TicketItem {
   quantity: number
   name: string
   modifier_notes?: string | null
+  unit_price?: number | null
+  total_price?: number | null
 }
 
 export interface OrderTicketData {
@@ -48,19 +50,48 @@ export function buildOrderTicketText(data: OrderTicketData): string {
     return l + ' '.repeat(Math.max(1, space)) + right
   }
 
-  const fmtTime = new Date(createdAt).toLocaleTimeString('en-NG', {
+  const printed = new Date(createdAt)
+  const fmtDate = printed.toLocaleDateString('en-NG', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+  const fmtTime = printed.toLocaleTimeString('en-NG', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
   })
 
+  const fmtMoney = (amount: number) => {
+    const value = Number.isFinite(amount) ? amount : 0
+    return `₦${Math.round(value).toLocaleString('en-NG')}`
+  }
+
   const itemLines = items
     .map((item) => {
-      const line = `  ${item.quantity}x ${item.name}`
+      const amount =
+        item.total_price != null
+          ? Number(item.total_price) || 0
+          : item.unit_price != null
+            ? (Number(item.unit_price) || 0) * (item.quantity || 0)
+            : null
+      const right = amount == null ? '' : fmtMoney(amount)
+      const left = `  ${item.quantity}x ${item.name}`
+      const line = right ? row(left, right) : left
       if (item.modifier_notes) return line + '\n     >> ' + item.modifier_notes
       return line
     })
     .join('\n')
+
+  const total = items.reduce((sum, item) => {
+    const amount =
+      item.total_price != null
+        ? Number(item.total_price) || 0
+        : item.unit_price != null
+          ? (Number(item.unit_price) || 0) * (item.quantity || 0)
+          : 0
+    return sum + amount
+  }, 0)
 
   return [
     '',
@@ -69,12 +100,14 @@ export function buildOrderTicketText(data: OrderTicketData): string {
     row('Table:', tableName),
     row('Ref:', orderRef),
     row('Waiter:', staffName.substring(0, 18)),
+    row('Date:', fmtDate),
     row('Time:', fmtTime),
     divider,
     '',
     itemLines,
     '',
     divider,
+    row('Total:', fmtMoney(total)),
     centre(items.length + ' item' + (items.length === 1 ? '' : 's')),
     '',
   ].join('\n')

@@ -981,6 +981,9 @@ export default function POS() {
       name: string
       modifier_notes?: string | null
       destination: ItemDestination
+      unit_price?: number
+      total_price?: number
+      extra_charge?: number
     }>,
     tableName: string,
     orderRef: string,
@@ -1002,7 +1005,13 @@ export default function POS() {
 
       const stationItems: TicketItem[] = items
         .filter((i) => normalizeDestination(i.destination) === station)
-        .map((i) => ({ quantity: i.quantity, name: i.name, modifier_notes: i.modifier_notes }))
+        .map((i) => ({
+          quantity: i.quantity,
+          name: i.name,
+          modifier_notes: i.modifier_notes,
+          unit_price: i.unit_price ?? null,
+          total_price: (i.total_price ?? 0) + (i.extra_charge ?? 0),
+        }))
       if (stationItems.length === 0) continue
 
       const ticketData = {
@@ -1090,6 +1099,9 @@ export default function POS() {
             quantity: i.quantity,
             name: i.name,
             modifier_notes: i.modifier_notes || null,
+            unit_price: i.price,
+            total_price: i.total,
+            extra_charge: i.extra_charge || 0,
             destination: normalizeDestination(
               i.destination || i.menu_categories?.destination,
               i.name,
@@ -1228,6 +1240,9 @@ export default function POS() {
           quantity: i.quantity,
           name: i.name,
           modifier_notes: i.modifier_notes || null,
+          unit_price: i.price,
+          total_price: i.total,
+          extra_charge: i.extra_charge || 0,
           destination: normalizeDestination(
             i.destination || i.menu_categories?.destination,
             i.name,

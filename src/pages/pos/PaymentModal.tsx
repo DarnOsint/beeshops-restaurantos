@@ -775,6 +775,10 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         (i as unknown as { modifier_notes?: string }).modifier_notes ||
         'Item',
       modifier_notes: (i as unknown as { modifier_notes?: string }).modifier_notes || null,
+      unit_price: (i as unknown as { unit_price?: number | null }).unit_price ?? null,
+      total_price:
+        ((i as unknown as { total_price?: number | null }).total_price || 0) +
+        ((i as unknown as { extra_charge?: number | null }).extra_charge || 0),
     }))
     const html = buildOrderTicketHTML({
       station: stationLabel,
@@ -834,6 +838,10 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         (i as unknown as { modifier_notes?: string }).modifier_notes ||
         'Item',
       modifier_notes: (i as unknown as { modifier_notes?: string }).modifier_notes || null,
+      unit_price: (i as unknown as { unit_price?: number | null }).unit_price ?? null,
+      total_price:
+        ((i as unknown as { total_price?: number | null }).total_price || 0) +
+        ((i as unknown as { extra_charge?: number | null }).extra_charge || 0),
     }))
     const html = buildOrderTicketHTML({
       station: stationLabel,
@@ -841,7 +849,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       orderRef: (order?.id || '').slice(0, 8).toUpperCase(),
       staffName: profile?.full_name || '',
       items: ticket,
-      createdAt: getStationItemTime(pending[0], orderCreatedAt),
+      createdAt: new Date().toISOString(),
     })
     const copies = 2
     for (let c = 0; c < copies; c++) {

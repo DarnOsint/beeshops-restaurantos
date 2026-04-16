@@ -397,7 +397,13 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
                 i.menu_categories?.name
               ) === station
           )
-          .map((i) => ({ quantity: i.quantity, name: i.name, modifier_notes: null }))
+          .map((i) => ({
+            quantity: i.quantity,
+            name: i.name,
+            modifier_notes: null,
+            unit_price: i.price,
+            total_price: i.total,
+          }))
         if (stationItems.length === 0) continue
         const ticketData = {
           station,
