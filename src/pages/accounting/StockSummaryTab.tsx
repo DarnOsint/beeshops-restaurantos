@@ -54,7 +54,11 @@ export default function StockSummaryTab({ type }: Props) {
       dayEnd.setDate(dayEnd.getDate() + 1)
 
       const [entriesRes, soldRes] = await Promise.all([
-        supabase.from(tableName).select('*').eq('date', d).order('item_name'),
+        supabase
+          .from(tableName)
+          .select('id, item_name, unit, opening_qty, received_qty, void_qty, note')
+          .eq('date', d)
+          .order('item_name'),
         supabase
           .from('order_items')
           .select(
@@ -129,7 +133,6 @@ export default function StockSummaryTab({ type }: Props) {
     [tableName, destination]
   )
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     fetchData(date)
   }, [date, fetchData])

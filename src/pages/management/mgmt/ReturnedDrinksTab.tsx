@@ -75,7 +75,9 @@ export default function ReturnedDrinksTab() {
     wideStart.setDate(wideStart.getDate() - 2)
     const { data } = await supabase
       .from('returns_log')
-      .select('*')
+      .select(
+        'id, order_id, order_item_id, item_name, quantity, item_total, table_name, waitron_id, waitron_name, barman_name, return_reason, status, requested_at, resolved_at'
+      )
       .gte('requested_at', wideStart.toISOString())
       .order('requested_at', { ascending: false })
 

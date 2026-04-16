@@ -21,7 +21,7 @@ export default function WaiterCalls() {
   const fetchCalls = useCallback(async () => {
     let query = supabase
       .from('waiter_calls')
-      .select('*')
+      .select('id, table_name, waitron_id, waitron_name, called_at, status')
       .eq('status', 'pending')
       .order('called_at', { ascending: false })
 

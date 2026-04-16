@@ -136,14 +136,18 @@ export default function Debtors({ onBack, embedded = false }: Props) {
   const fetchAll = async () => {
     const { data } = await supabase
       .from('debtors')
-      .select('*')
+      .select(
+        'id, name, phone, email, debt_type, credit_limit, current_balance, amount_paid, status, due_date, notes, recorded_by, recorded_by_name, is_active, created_at, order_id'
+      )
       .eq('is_active', true)
       .order('created_at', { ascending: false })
     setDebtors((data || []) as Debtor[])
     if (data?.length) {
       const { data: pmts } = await supabase
         .from('debt_payments')
-        .select('*')
+        .select(
+          'id, debtor_id, amount, payment_method, payment_reference, notes, recorded_by, recorded_by_name, created_at'
+        )
         .in(
           'debtor_id',
           data.map((d: { id: string }) => d.id)
@@ -158,7 +162,10 @@ export default function Debtors({ onBack, embedded = false }: Props) {
       // Fetch order items for each debtor with order_id
       const orderIds = data.filter((d: any) => d.order_id).map((d: any) => d.order_id)
       if (orderIds.length > 0) {
-        const { data: ois } = await supabase.from('order_items').select('order_id, quantity, menu_items(name)').in('order_id', orderIds)
+        const { data: ois } = await supabase
+          .from('order_items')
+          .select('order_id, quantity, menu_items(name)')
+          .in('order_id', orderIds)
         const oiMap: Record<string, string[]> = {}
         for (const oi of (ois || []) as any[]) {
           if (!oiMap[oi.order_id]) oiMap[oi.order_id] = []
@@ -214,7 +221,13 @@ export default function Debtors({ onBack, embedded = false }: Props) {
         .order('created_at', { ascending: false })
         .limit(1)
         .single()
-      audit({ action: 'DEBTOR_CREATED', entity: 'debtors', entityName: form.name, newValue: { credit_limit: parseFloat(form.credit_limit), type: form.debt_type }, performer: profile as any })
+      audit({
+        action: 'DEBTOR_CREATED',
+        entity: 'debtors',
+        entityName: form.name,
+        newValue: { credit_limit: parseFloat(form.credit_limit), type: form.debt_type },
+        performer: profile as any,
+      })
       if (newDebtor?.id) sendStatement(newDebtor.id, 'credit_sale')
       await fetchAll()
       setShowAddModal(false)
@@ -263,7 +276,14 @@ export default function Debtors({ onBack, embedded = false }: Props) {
         })
         .eq('id', debtor.id)
       if (updError) throw updError
-      audit({ action: 'DEBT_PAYMENT', entity: 'debtors', entityId: debtor.id, entityName: debtor.name, newValue: { amount, method: payForm.payment_method, newBalance, newStatus }, performer: profile as any })
+      audit({
+        action: 'DEBT_PAYMENT',
+        entity: 'debtors',
+        entityId: debtor.id,
+        entityName: debtor.name,
+        newValue: { amount, method: payForm.payment_method, newBalance, newStatus },
+        performer: profile as any,
+      })
       await fetchAll()
       sendStatement(debtor.id, 'payment')
       setShowPaymentModal(null)

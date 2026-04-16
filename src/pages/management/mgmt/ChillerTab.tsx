@@ -18,9 +18,9 @@ interface Row {
   unit: string
   opening_qty: number
   received_qty: number
-  sold: number       // live from POS
+  sold: number // live from POS
   void_qty: number
-  closing: number    // auto-computed
+  closing: number // auto-computed
   note: string
 }
 
@@ -33,7 +33,11 @@ export default function ChillerTab() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [edited, setEdited] = useState<Record<string, Partial<Row>>>({})
-  const [salesStats, setSalesStats] = useState<{ revenue: number; qty: number; byZone: Record<string, number> }>({ revenue: 0, qty: 0, byZone: {} })
+  const [salesStats, setSalesStats] = useState<{
+    revenue: number
+    qty: number
+    byZone: Record<string, number>
+  }>({ revenue: 0, qty: 0, byZone: {} })
   const [showAdd, setShowAdd] = useState(false)
   const [newItem, setNewItem] = useState({ name: '', qty: '', unit: 'bottles' })
 
@@ -47,10 +51,16 @@ export default function ChillerTab() {
     dayEnd.setDate(dayEnd.getDate() + 1)
 
     const [{ data: entries }, { data: soldData }] = await Promise.all([
-      supabase.from('bar_chiller_stock').select('*').eq('date', d).order('item_name'),
+      supabase
+        .from('bar_chiller_stock')
+        .select('id, item_name, unit, opening_qty, received_qty, void_qty, note')
+        .eq('date', d)
+        .order('item_name'),
       supabase
         .from('order_items')
-        .select('quantity, unit_price, total_price, status, return_accepted, menu_items(name), orders(status, tables(name, table_categories(name)))')
+        .select(
+          'quantity, unit_price, total_price, status, return_accepted, menu_items(name), orders(status, tables(name, table_categories(name)))'
+        )
         .eq('destination', 'bar')
         .gte('created_at', dayStart.toISOString())
         .lte('created_at', dayEnd.toISOString()),
@@ -63,8 +73,16 @@ export default function ChillerTab() {
     const zoneRevenue: Record<string, number> = {}
     if (soldData) {
       for (const item of soldData as unknown as Array<{
-        quantity: number; unit_price: number; total_price: number; status: string; return_accepted?: boolean
-        menu_items: { name: string } | null; orders: { status: string; tables?: { name: string; table_categories?: { name: string } } | null } | null
+        quantity: number
+        unit_price: number
+        total_price: number
+        status: string
+        return_accepted?: boolean
+        menu_items: { name: string } | null
+        orders: {
+          status: string
+          tables?: { name: string; table_categories?: { name: string } } | null
+        } | null
       }>) {
         if (item.return_accepted) continue
         if (item.orders?.status === 'cancelled') continue
@@ -83,10 +101,17 @@ export default function ChillerTab() {
     setSalesStats({ revenue: totalSalesRevenue, qty: totalSalesQty, byZone: zoneRevenue })
 
     // Build rows from DB entries + overlay live sold
-    const display: Row[] = ((entries || []) as Array<{
-      id: string; item_name: string; unit: string
-      opening_qty: number; received_qty: number; void_qty: number; note: string
-    }>).map((e) => {
+    const display: Row[] = (
+      (entries || []) as Array<{
+        id: string
+        item_name: string
+        unit: string
+        opening_qty: number
+        received_qty: number
+        void_qty: number
+        note: string
+      }>
+    ).map((e) => {
       const sold = soldMap[e.item_name] || 0
       return {
         id: e.id,
@@ -106,8 +131,14 @@ export default function ChillerTab() {
     for (const [name, qty] of Object.entries(soldMap)) {
       if (!entryNames.has(name)) {
         display.push({
-          item_name: name, unit: 'bottles', opening_qty: 0, received_qty: 0,
-          sold: qty, void_qty: 0, closing: 0, note: 'Sold without stock entry',
+          item_name: name,
+          unit: 'bottles',
+          opening_qty: 0,
+          received_qty: 0,
+          sold: qty,
+          void_qty: 0,
+          closing: 0,
+          note: 'Sold without stock entry',
         })
       }
     }
@@ -118,14 +149,19 @@ export default function ChillerTab() {
   }, [])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { fetchData(date) }, [date, fetchData])
+  useEffect(() => {
+    fetchData(date)
+  }, [date, fetchData])
 
   const getRow = (name: string) => {
     const base = rows.find((r) => r.item_name === name)
     const edits = edited[name]
     if (!base) return null
     const merged = { ...base, ...edits }
-    merged.closing = Math.max(0, merged.opening_qty + merged.received_qty - merged.sold - merged.void_qty)
+    merged.closing = Math.max(
+      0,
+      merged.opening_qty + merged.received_qty - merged.sold - merged.void_qty
+    )
     return merged
   }
 
@@ -180,9 +216,13 @@ export default function ChillerTab() {
   const addItem = async () => {
     const name = newItem.name.trim()
     const qty = parseInt(newItem.qty) || 0
-    if (!name) { toast.warning('Required', 'Enter item name'); return }
+    if (!name) {
+      toast.warning('Required', 'Enter item name')
+      return
+    }
     if (rows.find((r) => r.item_name.toLowerCase() === name.toLowerCase())) {
-      toast.warning('Exists', `${name} is already in the chiller`); return
+      toast.warning('Exists', `${name} is already in the chiller`)
+      return
     }
     setSaving(true)
     try {
@@ -242,14 +282,21 @@ export default function ChillerTab() {
           menuItemId = inserted?.id
           // Link inventory to menu item
           if (menuItemId) {
-            await supabase.from('inventory').update({ menu_item_id: menuItemId }).eq('item_name', name)
+            await supabase
+              .from('inventory')
+              .update({ menu_item_id: menuItemId })
+              .eq('item_name', name)
           }
         }
       }
 
       // 4. Log restock
       if (qty > 0) {
-        const { data: invRow } = await supabase.from('inventory').select('id').eq('item_name', name).single()
+        const { data: invRow } = await supabase
+          .from('inventory')
+          .select('id')
+          .eq('item_name', name)
+          .single()
         if (invRow) {
           await supabase.from('restock_log').insert({
             inventory_id: invRow.id,
@@ -315,22 +362,45 @@ export default function ChillerTab() {
       return left + ' '.repeat(Math.max(1, W - left.length - rv.length)) + rv
     }
     const ctr = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
-    const fmtDate = new Date(date).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
+    const fmtDate = new Date(date).toLocaleDateString('en-NG', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
     const lines = [
-      '', ctr("BEESHOP'S PLACE"), ctr('BAR CHILLER REPORT'), div,
-      r('Date:', fmtDate), r('Items:', String(rows.length)), div,
-      r('Opening:', String(totals.opening)), r('Received:', String(totals.received)),
-      r('Sold:', String(totals.sold)), r('Void:', String(totals.void_qty)),
-      r('Closing:', String(totals.closing)), sol, div,
-      ctr('ITEM BREAKDOWN'), div,
+      '',
+      ctr("BEESHOP'S PLACE"),
+      ctr('BAR CHILLER REPORT'),
+      div,
+      r('Date:', fmtDate),
+      r('Items:', String(rows.length)),
+      div,
+      r('Opening:', String(totals.opening)),
+      r('Received:', String(totals.received)),
+      r('Sold:', String(totals.sold)),
+      r('Void:', String(totals.void_qty)),
+      r('Closing:', String(totals.closing)),
+      sol,
+      div,
+      ctr('ITEM BREAKDOWN'),
+      div,
       ...rows.map((row) => {
         const m = getRow(row.item_name) || row
         return [
-          r(m.item_name, `O:${m.opening_qty} R:${m.received_qty} S:${m.sold} V:${m.void_qty} C:${m.closing}`),
-          m.note ? `  ${m.note}` : '', '',
-        ].filter(Boolean).join('\n')
+          r(
+            m.item_name,
+            `O:${m.opening_qty} R:${m.received_qty} S:${m.sold} V:${m.void_qty} C:${m.closing}`
+          ),
+          m.note ? `  ${m.note}` : '',
+          '',
+        ]
+          .filter(Boolean)
+          .join('\n')
       }),
-      div, '', ctr('*** END ***'), '',
+      div,
+      '',
+      ctr('*** END ***'),
+      '',
     ].join('\n')
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Chiller — ${fmtDate}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;color:#000;background:#fff;width:80mm;padding:4mm;white-space:pre}@media print{body{width:80mm}@page{margin:0;size:80mm auto}}</style></head><body>${lines}</body></html>`
     const w = window.open('', '_blank', 'width=500,height=700,toolbar=no,menubar=no')
@@ -338,21 +408,41 @@ export default function ChillerTab() {
     w.document.open('text/html', 'replace')
     w.document.write(html)
     w.document.close()
-    w.onload = () => setTimeout(() => { try { w.print() } catch { /* */ } }, 200)
+    w.onload = () =>
+      setTimeout(() => {
+        try {
+          w.print()
+        } catch {
+          /* */
+        }
+      }, 200)
   }
 
   return (
     <div>
       {/* Controls */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <input type="date" value={date} max={todayWAT()} onChange={(e) => setDate(e.target.value)}
-          className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
-        <button onClick={() => setDate(todayWAT())}
-          className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${date === todayWAT() ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}>
+        <input
+          type="date"
+          value={date}
+          max={todayWAT()}
+          onChange={(e) => setDate(e.target.value)}
+          className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+        />
+        <button
+          onClick={() => setDate(todayWAT())}
+          className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${date === todayWAT() ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+        >
           Today
         </button>
-        <button onClick={() => { const d = new Date(date); d.setDate(d.getDate() - 1); setDate(d.toLocaleDateString('en-CA')) }}
-          className="px-3 py-2 rounded-xl text-xs bg-gray-800 text-gray-400 hover:text-white">
+        <button
+          onClick={() => {
+            const d = new Date(date)
+            d.setDate(d.getDate() - 1)
+            setDate(d.toLocaleDateString('en-CA'))
+          }}
+          className="px-3 py-2 rounded-xl text-xs bg-gray-800 text-gray-400 hover:text-white"
+        >
           Prev Day
         </button>
         <button onClick={() => fetchData(date)} className="text-gray-400 hover:text-white p-2">
@@ -360,22 +450,34 @@ export default function ChillerTab() {
         </button>
         <div className="relative flex-1 min-w-[140px] max-w-xs">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input type="text" placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+          <input
+            type="text"
+            placeholder="Search..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl pl-8 pr-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+          />
         </div>
         {hasEdits && (
-          <button onClick={saveAll} disabled={saving}
-            className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs px-4 py-2 rounded-xl">
+          <button
+            onClick={saveAll}
+            disabled={saving}
+            className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs px-4 py-2 rounded-xl"
+          >
             <Save size={13} /> {saving ? 'Saving...' : 'Save Changes'}
           </button>
         )}
-        <button onClick={() => setShowAdd(true)}
-          className="flex items-center gap-1 bg-green-600 hover:bg-green-500 text-white font-bold text-xs px-3 py-2 rounded-xl">
+        <button
+          onClick={() => setShowAdd(true)}
+          className="flex items-center gap-1 bg-green-600 hover:bg-green-500 text-white font-bold text-xs px-3 py-2 rounded-xl"
+        >
           <Plus size={13} /> Add Item
         </button>
         {rows.length > 0 && (
-          <button onClick={printReport}
-            className="flex items-center gap-1 px-3 py-2 bg-gray-800 text-gray-400 hover:text-white rounded-xl text-xs ml-auto">
+          <button
+            onClick={printReport}
+            className="flex items-center gap-1 px-3 py-2 bg-gray-800 text-gray-400 hover:text-white rounded-xl text-xs ml-auto"
+          >
             <Printer size={12} /> Print
           </button>
         )}
@@ -387,18 +489,34 @@ export default function ChillerTab() {
           <div className="bg-gray-950 border border-gray-800 rounded-2xl w-full max-w-sm p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-white font-bold">Add Item to Chiller</h3>
-              <button onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-white"><X size={18} /></button>
+              <button onClick={() => setShowAdd(false)} className="text-gray-400 hover:text-white">
+                <X size={18} />
+              </button>
             </div>
-            <p className="text-gray-500 text-xs mb-4">This will also add the item to the drink menu and main store inventory.</p>
+            <p className="text-gray-500 text-xs mb-4">
+              This will also add the item to the drink menu and main store inventory.
+            </p>
             <div className="space-y-3">
-              <input type="text" placeholder="Item name" value={newItem.name}
+              <input
+                type="text"
+                placeholder="Item name"
+                value={newItem.name}
                 onChange={(e) => setNewItem((p) => ({ ...p, name: e.target.value }))}
-                className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500" autoFocus />
-              <input type="number" placeholder="Opening quantity" value={newItem.qty}
+                className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+                autoFocus
+              />
+              <input
+                type="number"
+                placeholder="Opening quantity"
+                value={newItem.qty}
                 onChange={(e) => setNewItem((p) => ({ ...p, qty: e.target.value }))}
-                className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500" />
-              <select value={newItem.unit} onChange={(e) => setNewItem((p) => ({ ...p, unit: e.target.value }))}
-                className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500">
+                className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+              />
+              <select
+                value={newItem.unit}
+                onChange={(e) => setNewItem((p) => ({ ...p, unit: e.target.value }))}
+                className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+              >
                 <option value="bottles">Bottles</option>
                 <option value="crates">Crates</option>
                 <option value="packs">Packs</option>
@@ -407,10 +525,17 @@ export default function ChillerTab() {
               </select>
             </div>
             <div className="flex gap-2 mt-4">
-              <button onClick={() => setShowAdd(false)}
-                className="flex-1 px-3 py-2 bg-gray-800 text-gray-300 rounded-xl text-sm">Cancel</button>
-              <button onClick={addItem} disabled={saving}
-                className="flex-1 px-3 py-2 bg-amber-500 text-black font-bold rounded-xl text-sm hover:bg-amber-400 disabled:opacity-50">
+              <button
+                onClick={() => setShowAdd(false)}
+                className="flex-1 px-3 py-2 bg-gray-800 text-gray-300 rounded-xl text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addItem}
+                disabled={saving}
+                className="flex-1 px-3 py-2 bg-amber-500 text-black font-bold rounded-xl text-sm hover:bg-amber-400 disabled:opacity-50"
+              >
                 {saving ? 'Adding...' : 'Add Item'}
               </button>
             </div>
@@ -432,19 +557,25 @@ export default function ChillerTab() {
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-4">
               <div className="flex items-center justify-between mb-3">
                 <div>
-                  <p className="text-amber-400 text-xs font-bold uppercase tracking-wider">Bar Sales Revenue</p>
-                  <p className="text-white text-2xl font-black mt-1">₦{salesStats.revenue.toLocaleString()}</p>
+                  <p className="text-amber-400 text-xs font-bold uppercase tracking-wider">
+                    Bar Sales Revenue
+                  </p>
+                  <p className="text-white text-2xl font-black mt-1">
+                    ₦{salesStats.revenue.toLocaleString()}
+                  </p>
                   <p className="text-gray-400 text-xs">{salesStats.qty} drinks sold</p>
                 </div>
               </div>
               {Object.keys(salesStats.byZone).length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 pt-3 border-t border-amber-500/20">
-                  {Object.entries(salesStats.byZone).sort((a, b) => b[1] - a[1]).map(([zone, rev]) => (
-                    <div key={zone} className="text-center">
-                      <p className="text-amber-400 font-bold text-sm">₦{rev.toLocaleString()}</p>
-                      <p className="text-gray-500 text-[9px] uppercase tracking-wider">{zone}</p>
-                    </div>
-                  ))}
+                  {Object.entries(salesStats.byZone)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([zone, rev]) => (
+                      <div key={zone} className="text-center">
+                        <p className="text-amber-400 font-bold text-sm">₦{rev.toLocaleString()}</p>
+                        <p className="text-gray-500 text-[9px] uppercase tracking-wider">{zone}</p>
+                      </div>
+                    ))}
                 </div>
               )}
             </div>
@@ -459,7 +590,10 @@ export default function ChillerTab() {
               { label: 'Void', value: totals.void_qty, color: 'text-red-400' },
               { label: 'Closing', value: totals.closing, color: 'text-cyan-400' },
             ].map((k) => (
-              <div key={k.label} className="bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-center">
+              <div
+                key={k.label}
+                className="bg-gray-900 border border-gray-800 rounded-xl p-2.5 text-center"
+              >
                 <p className={`text-lg font-bold ${k.color}`}>{k.value}</p>
                 <p className="text-gray-500 text-[9px] uppercase tracking-wider">{k.label}</p>
               </div>
@@ -485,31 +619,57 @@ export default function ChillerTab() {
                   const m = getRow(row.item_name) || row
                   const isEdited = !!edited[row.item_name]
                   return (
-                    <tr key={row.id || row.item_name} className={`border-t border-gray-800 ${isEdited ? 'bg-amber-500/5' : 'hover:bg-gray-800/50'}`}>
+                    <tr
+                      key={row.id || row.item_name}
+                      className={`border-t border-gray-800 ${isEdited ? 'bg-amber-500/5' : 'hover:bg-gray-800/50'}`}
+                    >
                       <td className="text-white px-3 py-2 font-medium">{m.item_name}</td>
                       <td className="px-1 py-1">
-                        <input type="number" value={m.opening_qty}
-                          onChange={(e) => updateField(m.item_name, 'opening_qty', Number(e.target.value) || 0)}
-                          className="w-14 bg-gray-800 border border-gray-700 text-white text-right rounded px-1 py-1 text-xs focus:outline-none focus:border-amber-500" />
+                        <input
+                          type="number"
+                          value={m.opening_qty}
+                          onChange={(e) =>
+                            updateField(m.item_name, 'opening_qty', Number(e.target.value) || 0)
+                          }
+                          className="w-14 bg-gray-800 border border-gray-700 text-white text-right rounded px-1 py-1 text-xs focus:outline-none focus:border-amber-500"
+                        />
                       </td>
                       <td className="px-1 py-1">
-                        <input type="number" value={m.received_qty}
-                          onChange={(e) => updateField(m.item_name, 'received_qty', Number(e.target.value) || 0)}
-                          className="w-14 bg-gray-800 border border-gray-700 text-green-400 text-right rounded px-1 py-1 text-xs focus:outline-none focus:border-green-500" />
+                        <input
+                          type="number"
+                          value={m.received_qty}
+                          onChange={(e) =>
+                            updateField(m.item_name, 'received_qty', Number(e.target.value) || 0)
+                          }
+                          className="w-14 bg-gray-800 border border-gray-700 text-green-400 text-right rounded px-1 py-1 text-xs focus:outline-none focus:border-green-500"
+                        />
                       </td>
-                      <td className="text-blue-400 text-right px-2 py-2 font-medium">{m.sold || '–'}</td>
+                      <td className="text-blue-400 text-right px-2 py-2 font-medium">
+                        {m.sold || '–'}
+                      </td>
                       <td className="px-1 py-1">
-                        <input type="number" value={m.void_qty}
-                          onChange={(e) => updateField(m.item_name, 'void_qty', Number(e.target.value) || 0)}
-                          className="w-14 bg-gray-800 border border-gray-700 text-red-400 text-right rounded px-1 py-1 text-xs focus:outline-none focus:border-red-500" />
+                        <input
+                          type="number"
+                          value={m.void_qty}
+                          onChange={(e) =>
+                            updateField(m.item_name, 'void_qty', Number(e.target.value) || 0)
+                          }
+                          className="w-14 bg-gray-800 border border-gray-700 text-red-400 text-right rounded px-1 py-1 text-xs focus:outline-none focus:border-red-500"
+                        />
                       </td>
-                      <td className={`text-right px-2 py-2 font-bold ${m.sold > 0 ? 'text-amber-400' : 'text-cyan-400'}`}>
+                      <td
+                        className={`text-right px-2 py-2 font-bold ${m.sold > 0 ? 'text-amber-400' : 'text-cyan-400'}`}
+                      >
                         {m.closing}
                       </td>
                       <td className="px-1 py-1">
-                        <input type="text" value={m.note} placeholder="–"
+                        <input
+                          type="text"
+                          value={m.note}
+                          placeholder="–"
                           onChange={(e) => updateField(m.item_name, 'note', e.target.value)}
-                          className="w-24 bg-gray-800 border border-gray-700 text-gray-400 rounded px-1 py-1 text-xs focus:outline-none focus:border-amber-500 truncate" />
+                          className="w-24 bg-gray-800 border border-gray-700 text-gray-400 rounded px-1 py-1 text-xs focus:outline-none focus:border-amber-500 truncate"
+                        />
                       </td>
                     </tr>
                   )

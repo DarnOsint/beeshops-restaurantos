@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import {
@@ -50,8 +50,6 @@ import ActivityLogTab from './mgmt/ActivityLogTab'
 import MainStoreSummaryTab from './mgmt/MainStoreSummaryTab'
 import OrdersByWaitronTab from './mgmt/OrdersByWaitronTab'
 import VoidsTab from './mgmt/VoidsTab'
-
-/* eslint-disable react-hooks/set-state-in-effect */
 
 const sessionWindow = () => {
   const now = new Date()
@@ -139,6 +137,11 @@ export default function Management() {
     shelfAlerts: [],
   })
 
+  const statsRefreshTimer = useRef<number | null>(null)
+  const statsRefreshInFlight = useRef(false)
+  const lastStatsFetchAt = useRef(0)
+  const isVisible = () => document.visibilityState === 'visible'
+
   const fetchStats = useCallback(async () => {
     void supabase.rpc('free_orphaned_tables')
     const { start } = sessionWindow()
@@ -173,19 +176,42 @@ export default function Management() {
     })
   }, [])
 
+  const scheduleFetchStats = useCallback(
+    (maxFrequencyMs = 8000) => {
+      if (!isVisible()) return
+      if (statsRefreshTimer.current) return
+      const now = Date.now()
+      const earliest = lastStatsFetchAt.current + maxFrequencyMs
+      const delay = Math.max(0, earliest - now)
+      statsRefreshTimer.current = window.setTimeout(async () => {
+        statsRefreshTimer.current = null
+        if (!isVisible()) return
+        if (statsRefreshInFlight.current) return
+        statsRefreshInFlight.current = true
+        try {
+          await fetchStats()
+          lastStatsFetchAt.current = Date.now()
+        } finally {
+          statsRefreshInFlight.current = false
+        }
+      }, delay)
+    },
+    [fetchStats]
+  )
+
   const fetchCvData = useCallback(async () => {
     const { start } = sessionWindow()
     const [alertsRes, shelfRes, occupancyRes, heatmapRes, tillRes] = await Promise.all([
       supabase
         .from('cv_alerts')
-        .select('*')
+        .select('id, camera_id, alert_type, description, severity, created_at')
         .eq('resolved', false)
         .gte('created_at', start.toISOString())
         .order('created_at', { ascending: false })
         .limit(15),
       supabase
         .from('cv_shelf_events')
-        .select('*')
+        .select('id, drink_name, alert_level, created_at')
         .neq('alert_level', 'normal')
         .gte('created_at', start.toISOString())
         .order('created_at', { ascending: false })
@@ -203,7 +229,7 @@ export default function Management() {
         .limit(10),
       supabase
         .from('cv_till_events')
-        .select('*')
+        .select('id, alert_type, created_at')
         .neq('alert_type', 'normal')
         .gte('created_at', start.toISOString())
         .order('created_at', { ascending: false })
@@ -224,38 +250,51 @@ export default function Management() {
   }, [activeTab])
 
   useEffect(() => {
-    fetchStats()
+    scheduleFetchStats(0)
+    const iv = setInterval(() => scheduleFetchStats(15000), 60000)
     const ch = supabase
       .channel('management-channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchStats)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, fetchStats)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_stays' }, fetchStats)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, fetchStats)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () =>
+        scheduleFetchStats(10000)
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, () =>
+        scheduleFetchStats(10000)
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_stays' }, () =>
+        scheduleFetchStats(10000)
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, () =>
+        scheduleFetchStats(10000)
+      )
       .subscribe()
     return () => {
+      clearInterval(iv)
+      if (statsRefreshTimer.current) window.clearTimeout(statsRefreshTimer.current)
       supabase.removeChannel(ch)
     }
-  }, [fetchStats])
+  }, [scheduleFetchStats])
 
   useEffect(() => {
+    if (activeTab !== 'cctv') return
+    if (!isVisible()) return
     fetchCvData()
     const ch = supabase
       .channel('mgmt-cv')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'cv_alerts' },
-        fetchCvData
+        () => void fetchCvData()
       )
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'cv_shelf_events' },
-        fetchCvData
+        () => void fetchCvData()
       )
       .subscribe()
     return () => {
       supabase.removeChannel(ch)
     }
-  }, [fetchCvData])
+  }, [activeTab, fetchCvData])
 
   useEffect(() => {
     const load = async () => {

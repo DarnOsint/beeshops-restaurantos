@@ -98,13 +98,16 @@ export default function LedgerTab({ dateRange }: Props) {
     const [ordersRes, payoutsRes] = await Promise.all([
       supabase
         .from('orders')
-        .select('*, profiles(full_name), tables(id, name), order_items(*, menu_items(name, price))')
+        .select(
+          'id, created_at, closed_at, status, payment_method, order_type, total_amount, staff_id, profiles(full_name), tables(id, name), order_items(id, quantity, total_price, extra_charge, status, destination, modifier_notes, return_requested, return_accepted, menu_items(name, price))'
+        )
+        .eq('status', 'paid')
         .gte('created_at', activePeriod.start)
         .lte('created_at', activePeriod.end)
         .order('created_at', { ascending: false }),
       supabase
         .from('payouts')
-        .select('*, profiles(full_name)')
+        .select('id, amount, reason, category, paid_to, created_at, profiles(full_name)')
         .gte('created_at', activePeriod.start)
         .lte('created_at', activePeriod.end)
         .order('created_at', { ascending: false }),
@@ -112,9 +115,7 @@ export default function LedgerTab({ dateRange }: Props) {
 
     const ledger: LedgerRecord[] = []
 
-    for (const order of ((ordersRes.data || []) as LedgerOrder[]).filter(
-      (row) => row.status === 'paid'
-    )) {
+    for (const order of (ordersRes.data || []) as unknown as LedgerOrder[]) {
       ledger.push({
         id: order.id,
         date: order.created_at,
@@ -131,7 +132,7 @@ export default function LedgerTab({ dateRange }: Props) {
       })
     }
 
-    for (const payout of (payoutsRes.data || []) as Array<
+    for (const payout of (payoutsRes.data || []) as unknown as Array<
       PayoutRow & { profiles?: { full_name: string } | null }
     >) {
       ledger.push({

@@ -187,19 +187,23 @@ export default function Accounting() {
     const [ordersRes, tillRes, payoutsRes, trendRes, timesheetRes, auditRes] = await Promise.all([
       supabase
         .from('orders')
-        .select('*, profiles(full_name), tables(name), order_items(*, menu_items(name))')
+        .select(
+          'id, status, total_amount, payment_method, order_type, created_at, closed_at, staff_id, profiles(full_name), tables(name), order_items(id, quantity, total_price, extra_charge, status, destination, modifier_notes, return_requested, return_accepted, menu_items(name))'
+        )
         .gte('created_at', start)
         .lte('created_at', end)
         .order('created_at', { ascending: false }),
       supabase
         .from('till_sessions')
-        .select('*, profiles(full_name)')
+        .select(
+          'id, opening_float, closing_float, expected_cash, status, opened_at, profiles(full_name)'
+        )
         .gte('opened_at', start)
         .lte('opened_at', end)
         .order('opened_at', { ascending: false }),
       supabase
         .from('payouts')
-        .select('*, profiles(full_name)')
+        .select('id, amount, reason, category, paid_to, created_at')
         .gte('created_at', start)
         .lte('created_at', end)
         .order('created_at', { ascending: false }),
@@ -213,20 +217,24 @@ export default function Accounting() {
         .order('created_at', { ascending: true }),
       supabase
         .from('attendance')
-        .select('*')
+        .select(
+          'id, staff_id, staff_name, role, date, clock_in, clock_out, duration_minutes, pos_machine'
+        )
         .gte('clock_in', start)
         .lte('clock_in', end)
         .order('clock_in', { ascending: false }),
       supabase
         .from('audit_log')
-        .select('*')
+        .select(
+          'id, action, entity, entity_name, performed_by_name, performed_by_role, new_value, created_at'
+        )
         .gte('created_at', start)
         .lte('created_at', end)
         .order('created_at', { ascending: false })
         .limit(200),
     ])
 
-    const allOrders = (ordersRes.data || []) as Order[]
+    const allOrders = (ordersRes.data || []) as unknown as Order[]
     const paidOrders = allOrders.filter((o) => o.status === 'paid')
 
     const total = paidOrders.reduce((s, o) => s + getNetOrderAmount(o), 0)
@@ -345,7 +353,7 @@ export default function Accounting() {
     })
     setTrendData(Object.values(dayMap))
 
-    setTillSessions((tillRes.data || []) as TillSession[])
+    setTillSessions((tillRes.data || []) as unknown as TillSession[])
     setTimesheet((timesheetRes.data || []) as TimesheetEntry[])
     setAuditLog((auditRes.data || []) as AuditEntry[])
     setPayouts((payoutsRes.data || []) as PayoutRow[])

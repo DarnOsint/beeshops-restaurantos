@@ -99,7 +99,12 @@ export default function PayrollTab() {
     }
 
     // Get saved payroll for this month
-    const { data: payroll } = await supabase.from('payroll').select('*').eq('month', month)
+    const { data: payroll } = await supabase
+      .from('payroll')
+      .select(
+        'id, staff_id, staff_name, role, is_active, bank_name, account_number, base_salary, outstanding, docking'
+      )
+      .eq('month', month)
 
     const payMap: Record<string, any> = {}
     for (const p of (payroll || []) as any[]) {

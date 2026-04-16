@@ -37,7 +37,9 @@ export default function VoidsTab() {
     dayEnd.setDate(dayEnd.getDate() + 1)
     const { data } = await supabase
       .from('void_requests')
-      .select('*')
+      .select(
+        'id, item_name, quantity, reason, station, requested_by, requested_by_name, status, requested_at, resolved_at, resolved_by_name'
+      )
       .gte('requested_at', dayStart.toISOString())
       .lte('requested_at', dayEnd.toISOString())
       .order('requested_at', { ascending: false })
@@ -47,7 +49,10 @@ export default function VoidsTab() {
 
   useEffect(() => {
     fetchVoids(date)
-    const poll = setInterval(() => fetchVoids(date), 10000)
+    const poll = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      fetchVoids(date)
+    }, 30000)
     return () => clearInterval(poll)
   }, [date, fetchVoids])
 

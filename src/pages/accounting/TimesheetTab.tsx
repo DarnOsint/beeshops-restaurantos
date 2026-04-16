@@ -34,7 +34,9 @@ export default function TimesheetTab() {
     setLoading(true)
     const { data } = await supabase
       .from('attendance')
-      .select('*')
+      .select(
+        'id, staff_id, staff_name, role, date, clock_in, clock_out, duration_minutes, pos_machine'
+      )
       .eq('date', d)
       .order('clock_in', { ascending: true })
     setEntries((data || []) as TimesheetEntry[])

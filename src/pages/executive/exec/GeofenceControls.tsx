@@ -250,7 +250,7 @@ function BankAccountsManager({ inp }: { inp: string }) {
   useEffect(() => {
     supabase
       .from('bank_accounts')
-      .select('*')
+      .select('id, bank_name, account_number, account_name, is_active')
       .eq('is_active', true)
       .order('created_at')
       .then(({ data }) => {
@@ -269,7 +269,7 @@ function BankAccountsManager({ inp }: { inp: string }) {
         account_name: newBank.account_name,
         is_active: true,
       })
-      .select()
+      .select('id, bank_name, account_number, account_name, is_active')
       .single()
     if (data) setBanks((prev) => [...prev, data as BankAccount])
     setNewBank({ bank_name: '', account_number: '', account_name: '' })

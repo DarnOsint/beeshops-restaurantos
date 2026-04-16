@@ -60,7 +60,13 @@ export default function ChillerSummaryTab() {
     const dateKey = base.toISOString().slice(0, 10)
 
     const [entriesRes, soldRes, acceptedRes, prevRes] = await Promise.all([
-      supabase.from('bar_chiller_stock').select('*').eq('date', dateKey).order('item_name'),
+      supabase
+        .from('bar_chiller_stock')
+        .select(
+          'id, date, item_name, unit, opening_qty, received_qty, sold_qty, void_qty, closing_qty, note, updated_at'
+        )
+        .eq('date', dateKey)
+        .order('item_name'),
       supabase
         .from('order_items')
         .select('quantity, status, return_accepted, menu_items(name), orders(status)')
@@ -84,7 +90,9 @@ export default function ChillerSummaryTab() {
     if (!entriesRes.data || entriesRes.data.length === 0) {
       const { data: latestRows } = await supabase
         .from('bar_chiller_stock')
-        .select('*')
+        .select(
+          'id, date, item_name, unit, opening_qty, received_qty, sold_qty, void_qty, closing_qty, note, updated_at'
+        )
         .order('date', { ascending: false })
         .limit(400)
       if (latestRows && latestRows.length > 0) {
@@ -167,7 +175,9 @@ export default function ChillerSummaryTab() {
           const { data: inserted, error } = await supabase
             .from('bar_chiller_stock')
             .insert(seedRows)
-            .select()
+            .select(
+              'id, date, item_name, unit, opening_qty, received_qty, sold_qty, void_qty, closing_qty, note, updated_at'
+            )
           seededRows = (inserted || seedRows) as ChillerEntry[]
           if (error) console.warn('Carryover insert failed', error.message)
         }

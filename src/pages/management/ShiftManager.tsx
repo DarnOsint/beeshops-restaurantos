@@ -89,7 +89,9 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
   const fetchActiveShifts = async () => {
     const { data } = await supabase
       .from('attendance')
-      .select('*')
+      .select(
+        'id, staff_id, staff_name, role, clock_in, clock_out, confirmed_at, duration_minutes, date, pos_machine'
+      )
       .is('clock_out', null)
       .order('clock_in', { ascending: true })
     if (data) {
@@ -117,7 +119,9 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
     end.setDate(end.getDate() + 1)
     const { data } = await supabase
       .from('attendance')
-      .select('*')
+      .select(
+        'id, staff_id, staff_name, role, clock_in, clock_out, confirmed_at, duration_minutes, date, pos_machine'
+      )
       .gte('clock_in', start.toISOString())
       .lt('clock_in', end.toISOString())
       .order('clock_in', { ascending: false })

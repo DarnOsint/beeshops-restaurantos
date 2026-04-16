@@ -40,7 +40,9 @@ export default function ReturnsTab({ dateRange }: Props) {
     setLoading(true)
     const { data } = await supabase
       .from('returns_log')
-      .select('*')
+      .select(
+        'id, order_id, order_item_id, item_name, quantity, item_total, table_name, waitron_name, barman_name, return_reason, status, requested_at, resolved_at, shift_date, reviewed, reviewed_by_name, reviewed_at, notes'
+      )
       .gte('shift_date', dateRange.start)
       .lte('shift_date', dateRange.end)
       .order('requested_at', { ascending: false })

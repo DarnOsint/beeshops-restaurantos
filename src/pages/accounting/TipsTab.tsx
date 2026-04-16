@@ -46,7 +46,9 @@ export default function TipsTab({ dateRange }: Props) {
     setLoading(true)
     const { data } = await supabase
       .from('tips')
-      .select('*')
+      .select(
+        'id, order_id, waitron_id, waitron_name, table_name, order_total, amount_received, tip_amount, payment_method, shift_date, status, disbursed_at, disbursed_by_name, notes, created_at'
+      )
       .gte('shift_date', dateRange.from)
       .lte('shift_date', dateRange.to)
       .order('created_at', { ascending: false })

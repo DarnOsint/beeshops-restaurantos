@@ -54,7 +54,9 @@ export default function MainStoreSummaryTab() {
         .order('item_name'),
       supabase
         .from('store_requests')
-        .select('*')
+        .select(
+          'id, item_name, quantity, unit, requested_by_name, status, approved_by_name, reject_reason, created_at, resolved_at'
+        )
         .gte('created_at', dayStart.toISOString())
         .lt('created_at', dayEnd.toISOString())
         .order('created_at', { ascending: false }),
@@ -86,10 +88,7 @@ export default function MainStoreSummaryTab() {
   const lowStock = items.filter(
     (i) => i.current_stock > 0 && i.current_stock <= i.minimum_stock
   ).length
-  const totalValue = items.reduce(
-    (s, i) => s + (i.current_stock || 0) * (i.cost_price || 0),
-    0
-  )
+  const totalValue = items.reduce((s, i) => s + (i.current_stock || 0) * (i.cost_price || 0), 0)
 
   const approvedReqs = requests.filter((r) => r.status === 'approved')
   const rejectedReqs = requests.filter((r) => r.status === 'rejected')
@@ -340,12 +339,8 @@ export default function MainStoreSummaryTab() {
                         })}
                       </td>
                       <td className="text-white px-2 py-2 font-medium">{r.item_name}</td>
-                      <td className="text-blue-400 text-right px-2 py-2 font-bold">
-                        {r.quantity}
-                      </td>
-                      <td className="text-gray-300 px-2 py-2">
-                        {r.requested_by_name || '—'}
-                      </td>
+                      <td className="text-blue-400 text-right px-2 py-2 font-bold">{r.quantity}</td>
+                      <td className="text-gray-300 px-2 py-2">{r.requested_by_name || '—'}</td>
                       <td className="px-2 py-2">
                         <span
                           className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${r.status === 'approved' ? 'bg-green-500/20 text-green-400' : r.status === 'rejected' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}
