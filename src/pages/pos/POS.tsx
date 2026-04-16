@@ -598,7 +598,11 @@ export default function POS() {
     if (current) {
       supabase
         .from('orders')
-        .select('*, order_items(*, menu_items(name, price, menu_categories(name, destination)))')
+        .select(
+          `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes,
+          order_items(id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
+            menu_items(name, price, menu_categories(name, destination)))`
+        )
         .eq('id', current.id)
         .single()
         .then(({ data }) => {
@@ -709,11 +713,17 @@ export default function POS() {
         })()
     const { data } = await supabase
       .from('orders')
-      .select('*, tables(name), order_items(*, menu_items(name))')
+      .select(
+        `id, closed_at, payment_method, order_type, status, customer_name,
+        tables(name),
+        order_items(id, menu_item_id, quantity, total_price, status, return_requested, return_accepted, destination, modifier_notes, extra_charge, created_at,
+          menu_items(name))`
+      )
       .eq('status', 'paid')
       .eq('staff_id', profile?.id)
       .gte('closed_at', windowStart.toISOString())
       .order('closed_at', { ascending: false })
+      .limit(60)
     setOrderHistory((data || []) as HistoryOrder[])
     setHistoryLoading(false)
   }
@@ -784,7 +794,12 @@ export default function POS() {
 
   const fetchTables = async () => {
     const [tablesRes, openOrdersRes] = await Promise.all([
-      supabase.from('tables').select('*, table_categories(id, name, hire_fee)').order('name'),
+      supabase
+        .from('tables')
+        .select(
+          'id, name, status, category_id, capacity, assigned_staff, table_categories(id, name, hire_fee)'
+        )
+        .order('name'),
       supabase
         .from('orders')
         .select('table_id, staff_id')
@@ -890,7 +905,9 @@ export default function POS() {
   }
 
   const fetchZonePrices = async () => {
-    const { data, error } = await supabase.from('menu_item_zone_prices').select('*')
+    const { data, error } = await supabase
+      .from('menu_item_zone_prices')
+      .select('menu_item_id, category_id, price')
     if (!error) setZonePrices(data || [])
   }
 
@@ -921,7 +938,11 @@ export default function POS() {
     // (table may be 'available' but have an orphaned open order, or vice versa)
     const { data: openOrders } = await supabase
       .from('orders')
-      .select('*, order_items(*, menu_items(name))')
+      .select(
+        `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes, covers, total_amount,
+        order_items(id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
+          menu_items(name, price, menu_categories(name, destination)))`
+      )
       .eq('table_id', table.id)
       .eq('status', 'open')
       .order('created_at', { ascending: false })
@@ -1090,7 +1111,11 @@ export default function POS() {
         })
         const { data: refreshed } = await supabase
           .from('orders')
-          .select('*, order_items(*, menu_items(name))')
+          .select(
+            `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes,
+            order_items(id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
+              menu_items(name, price, menu_categories(name, destination)))`
+          )
           .eq('id', activeOrder.id)
           .single()
         if (refreshed) setActiveOrder(refreshed)
@@ -1101,7 +1126,11 @@ export default function POS() {
       // Last-chance DB check — prevent duplicate open orders on same table
       const { data: existingOpen } = await supabase
         .from('orders')
-        .select('*, order_items(*, menu_items(name))')
+        .select(
+          `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes,
+          order_items(id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
+            menu_items(name, price, menu_categories(name, destination)))`
+        )
         .eq('table_id', table.id)
         .eq('status', 'open')
         .limit(1)
@@ -1222,7 +1251,11 @@ export default function POS() {
       // Reload the newly created order so PaymentModal has full order_items
       const { data: freshOrder } = await supabase
         .from('orders')
-        .select('*, order_items(*, menu_items(name))')
+        .select(
+          `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes, covers, total_amount,
+          order_items(id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
+            menu_items(name, price, menu_categories(name, destination)))`
+        )
         .eq('id', (newOrder as Order).id)
         .single()
       if (freshOrder) {

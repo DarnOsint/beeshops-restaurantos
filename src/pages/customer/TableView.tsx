@@ -192,14 +192,19 @@ export default function TableView() {
       const [tableRes, menuRes, catRes, custOrderRes, liveOrderRes] = await Promise.all([
         supabase
           .from('tables')
-          .select('*, table_categories(name), profiles(id, full_name)')
+          .select('id, name, table_categories(name), profiles(id, full_name)')
           .eq('id', tableId!)
           .single(),
-        supabase.from('menu_items').select('*, menu_categories(name, destination)').order('name'),
-        supabase.from('menu_categories').select('*').order('name'),
+        supabase
+          .from('menu_items')
+          .select(
+            'id, name, price, description, image_url, is_available, menu_categories(name, destination)'
+          )
+          .order('name'),
+        supabase.from('menu_categories').select('id, name').order('name'),
         supabase
           .from('customer_orders')
-          .select('*')
+          .select('id, status, created_at, total_amount, items, accepted_by_name, decline_reason')
           .eq('table_id', tableId!)
           .in('status', ['pending', 'accepted'])
           .gte('created_at', today.toISOString())
@@ -208,7 +213,10 @@ export default function TableView() {
           .maybeSingle(),
         supabase
           .from('orders')
-          .select('*, order_items(*, menu_items(name))')
+          .select(
+            `id, created_at, status, table_id,
+            order_items(id, menu_item_id, quantity, status, total_price, created_at, menu_items(name))`
+          )
           .eq('table_id', tableId!)
           .eq('status', 'open')
           .gte('created_at', today.toISOString())
