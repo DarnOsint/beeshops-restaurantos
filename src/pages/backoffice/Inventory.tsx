@@ -114,6 +114,8 @@ export default function Inventory({ onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterLow, setFilterLow] = useState(false)
+  const [logStart, setLogStart] = useState('')
+  const [logEnd, setLogEnd] = useState('')
   const [showAddItem, setShowAddItem] = useState(false)
   const [showRestock, setShowRestock] = useState(false)
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
@@ -124,15 +126,22 @@ export default function Inventory({ onBack }: Props) {
   const fi = (v: Partial<ItemForm>) => setItemForm((p) => ({ ...p, ...v }))
   const fr = (v: Partial<RestockForm>) => setRestockForm((p) => ({ ...p, ...v }))
 
-  const fetchAll = async () => {
+  const fetchAll = async (opts?: { logStart?: string; logEnd?: string }) => {
     setLoading(true)
+    const start = opts?.logStart ?? logStart
+    const end = opts?.logEnd ?? logEnd
     const [invRes, logRes, menuRes] = await Promise.all([
       supabase.from('inventory').select('*').eq('is_active', true).order('item_name'),
-      supabase
-        .from('restock_log')
-        .select('*')
-        .order('restocked_at', { ascending: false })
-        .limit(100),
+      (() => {
+        let q = supabase.from('restock_log').select('*').order('restocked_at', { ascending: false })
+        if (start) q = q.gte('restocked_at', new Date(start + 'T00:00:00+01:00').toISOString())
+        if (end) {
+          const e = new Date(end + 'T00:00:00+01:00')
+          e.setDate(e.getDate() + 1)
+          q = q.lt('restocked_at', e.toISOString())
+        }
+        return q.limit(200)
+      })(),
       supabase
         .from('menu_items')
         .select('id, name, menu_categories(name, destination)')
@@ -482,7 +491,11 @@ export default function Inventory({ onBack }: Props) {
                               ₦{(item.selling_price || item.cost_price || 0).toLocaleString()}
                             </td>
                             <td className="px-4 py-3 text-amber-400 text-sm font-medium">
-                              ₦{((item.current_stock || 0) * (item.selling_price || item.cost_price || 0)).toLocaleString()}
+                              ₦
+                              {(
+                                (item.current_stock || 0) *
+                                (item.selling_price || item.cost_price || 0)
+                              ).toLocaleString()}
                             </td>
                             <td className="px-4 py-3">
                               <span className={`text-xs px-2 py-1 rounded-lg ${status.color}`}>
@@ -528,6 +541,37 @@ export default function Inventory({ onBack }: Props) {
                 Total spent: ₦
                 {restockLog.reduce((s, r) => s + (r.total_cost || 0), 0).toLocaleString()}
               </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="date"
+                value={logStart}
+                onChange={(e) => setLogStart(e.target.value)}
+                className="bg-gray-900 border border-gray-800 text-white text-xs rounded-lg px-2 py-1.5"
+              />
+              <span className="text-gray-600 text-xs">to</span>
+              <input
+                type="date"
+                value={logEnd}
+                onChange={(e) => setLogEnd(e.target.value)}
+                className="bg-gray-900 border border-gray-800 text-white text-xs rounded-lg px-2 py-1.5"
+              />
+              <button
+                onClick={() => fetchAll({ logStart, logEnd })}
+                className="px-3 py-1.5 text-xs rounded-lg bg-gray-900 text-gray-400 border border-gray-800 hover:text-white"
+              >
+                Apply
+              </button>
+              <button
+                onClick={() => {
+                  setLogStart('')
+                  setLogEnd('')
+                  fetchAll({ logStart: '', logEnd: '' })
+                }}
+                className="px-3 py-1.5 text-xs rounded-lg bg-gray-900 text-gray-400 border border-gray-800 hover:text-white"
+              >
+                Clear
+              </button>
             </div>
             {restockLog.length === 0 ? (
               <div className="text-center py-12 text-gray-500">No restock history yet</div>

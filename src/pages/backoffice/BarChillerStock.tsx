@@ -16,7 +16,11 @@ import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { audit } from '../../lib/audit'
 
-const todayStr = () => new Date().toISOString().slice(0, 10)
+const todayStr = () => {
+  const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+  if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
+  return wat.toLocaleDateString('en-CA')
+}
 
 interface StockEntry {
   id?: string

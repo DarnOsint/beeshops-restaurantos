@@ -19,6 +19,7 @@ import {
   ChefHat,
   ClipboardList,
   CalendarDays,
+  Package,
 } from 'lucide-react'
 
 import WaitronOrdersTab from './WaitronOrdersTab'
@@ -37,6 +38,8 @@ import AuditTab from './AuditTab'
 import POSReconciliationTab from './POSReconciliationTab'
 import TipsTab from './TipsTab'
 import ReturnsTab from './ReturnsTab'
+import MainStoreTab from './MainStoreTab'
+import StoreToChillerTab from './StoreToChillerTab'
 import { getNetOrderAmount } from './orderAmounts'
 
 import type {
@@ -71,6 +74,8 @@ const TABS = [
   { id: 'waitron_orders', label: 'Waitron Orders', icon: ClipboardList },
   { id: 'bar_stock', label: 'Bar Stock', icon: Beer },
   { id: 'kitchen_stock', label: 'Kitchen Stock', icon: ChefHat },
+  { id: 'store_to_chiller', label: 'Store → Chiller', icon: Package },
+  { id: 'main_store', label: 'Main Store', icon: Package },
 ] as const
 
 const getWaitronRemittance = (paymentMethod: string | null | undefined, amount: number) => {
@@ -559,6 +564,8 @@ export default function Accounting() {
         {activeTab === 'waitron_orders' && <WaitronOrdersTab />}
         {activeTab === 'bar_stock' && <StockSummaryTab type="bar" />}
         {activeTab === 'kitchen_stock' && <StockSummaryTab type="kitchen" />}
+        {activeTab === 'store_to_chiller' && <StoreToChillerTab />}
+        {activeTab === 'main_store' && <MainStoreTab />}
       </div>
     </div>
   )
