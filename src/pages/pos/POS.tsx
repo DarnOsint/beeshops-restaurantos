@@ -457,34 +457,47 @@ export default function POS() {
   // Realtime: refresh active order when order_items or orders change
   // This catches manager DB edits, bar return acceptances, etc.
   useEffect(() => {
+    const current = activeOrderRef.current
+    if (!current?.id) return
+
     const refreshActiveOrder = () => {
-      const current = activeOrderRef.current
-      if (!current) return
+      const cur = activeOrderRef.current
+      if (!cur?.id) return
       supabase
         .from('orders')
-        .select('*, order_items(*, menu_items(name, price, menu_categories(name, destination)))')
-        .eq('id', current.id)
+        .select(
+          `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes,
+          order_items(id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
+            menu_items(name, price, menu_categories(name, destination)))`
+        )
+        .eq('id', cur.id)
         .single()
         .then(({ data }) => {
           if (data) setActiveOrder(data)
         })
     }
+
     const ch = supabase
-      .channel('active-order-sync')
+      .channel(`active-order-sync-${current.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'order_items' },
+        { event: '*', schema: 'public', table: 'order_items', filter: `order_id=eq.${current.id}` },
         refreshActiveOrder
       )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, refreshActiveOrder)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders', filter: `id=eq.${current.id}` },
+        refreshActiveOrder
+      )
       .subscribe()
-    // Also poll every 15s as safety net
+
+    // Also poll every 15s as safety net (only while a table/order is open)
     const poll = setInterval(refreshActiveOrder, 15000)
     return () => {
       supabase.removeChannel(ch)
       clearInterval(poll)
     }
-  }, [])
+  }, [activeOrder?.id])
 
   useEffect(() => {
     if (!profile) return
@@ -792,8 +805,18 @@ export default function POS() {
 
   const fetchMenu = async () => {
     const businessDate = currentBusinessDateWAT()
+    const prevBusinessDate = (() => {
+      const d = new Date(businessDate + 'T00:00:00+01:00')
+      d.setDate(d.getDate() - 1)
+      return d.toLocaleDateString('en-CA')
+    })()
     const [menuRes, invRes, chillerRes, chillerPrevRes] = await Promise.all([
-      supabase.from('menu_items').select('*, menu_categories(name, destination)').order('name'),
+      supabase
+        .from('menu_items')
+        .select(
+          'id, name, price, description, image_url, is_available, menu_categories(name, destination)'
+        )
+        .order('name'),
       supabase
         .from('inventory')
         .select('menu_item_id, item_name, current_stock')
@@ -801,9 +824,9 @@ export default function POS() {
       supabase.from('bar_chiller_stock').select('item_name, closing_qty').eq('date', businessDate),
       supabase
         .from('bar_chiller_stock')
-        .select('item_name, date, opening_qty, received_qty, sold_qty, void_qty, closing_qty')
-        .lt('date', businessDate)
-        .order('date', { ascending: false }),
+        .select('item_name, opening_qty, received_qty, sold_qty, void_qty, closing_qty')
+        .eq('date', prevBusinessDate)
+        .order('item_name'),
     ])
     if (!menuRes.error) {
       const invMap: Record<string, number> = {}

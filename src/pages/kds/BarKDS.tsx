@@ -508,13 +508,21 @@ function BarKDSInner() {
     const tickTimer = setInterval(() => setTick((t) => t + 1), 1000)
     // Poll every 10s as safety net — realtime can drop silently
     const pollTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
       fetchOrders()
+    }, 30000)
+    const slowPollTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
       fetchReturnHistory()
       loadMixoRequests()
-    }, 10000)
+    }, 120000)
     const channel = supabase
       .channel('bar-channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchOrders)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'order_items', filter: 'destination=eq.bar' },
+        fetchOrders
+      )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, loadMixoRequests)
       .subscribe()
@@ -525,6 +533,7 @@ function BarKDSInner() {
     return () => {
       clearInterval(tickTimer)
       clearInterval(pollTimer)
+      clearInterval(slowPollTimer)
       supabase.removeChannel(channel)
       document.removeEventListener('visibilitychange', onVisible)
     }
