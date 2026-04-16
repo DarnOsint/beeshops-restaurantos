@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Printer, RefreshCw } from 'lucide-react'
+import { createPDF, savePDF } from '../../lib/pdfExport'
 
 const BASE_URL = 'https://beeshop.place'
 
@@ -25,6 +26,7 @@ export default function QRTableCards() {
   const [loading, setLoading] = useState(true)
   const [selectedZone, setSelectedZone] = useState('All')
   const [qrLoaded, setQrLoaded] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const scriptRef = useRef(false)
 
   useEffect(() => {
@@ -79,6 +81,125 @@ export default function QRTableCards() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qrLoaded, tables, selectedZone])
 
+  const waitForQRCodes = useCallback(async (): Promise<boolean> => {
+    const deadline = Date.now() + 7000
+    while (Date.now() < deadline) {
+      const allReady = filtered.every((t) => {
+        const el = document.getElementById(`qr-${t.id}`)
+        if (!el) return false
+        const canvas = el.querySelector('canvas')
+        if (canvas) return true
+        const img = el.querySelector('img') as HTMLImageElement | null
+        return Boolean(img?.src)
+      })
+      if (allReady) return true
+
+      await new Promise((r) => setTimeout(r, 120))
+    }
+    return false
+  }, [filtered])
+
+  const downloadPDF = useCallback(async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      await waitForQRCodes()
+
+      const subtitle =
+        selectedZone === 'All'
+          ? `${filtered.length} tables`
+          : `${selectedZone} · ${filtered.length} tables`
+      const doc = createPDF('QR Table Cards', subtitle)
+
+      const pageW = 210
+      const pageH = 297
+      const marginX = 10
+      const startY = 35
+      const gap = 4
+      const cols = 3
+      const colW = (pageW - marginX * 2 - gap * (cols - 1)) / cols
+      const cardH = 86
+
+      let x = marginX
+      let y = startY
+
+      const nextCell = () => {
+        x += colW + gap
+        if (x + colW > pageW - marginX + 0.1) {
+          x = marginX
+          y += cardH + gap
+        }
+        if (y + cardH > pageH - 12) {
+          doc.addPage()
+          x = marginX
+          y = startY
+        }
+      }
+
+      filtered.forEach((table, idx) => {
+        const zone = (table.table_categories?.name || 'Table').toString().toUpperCase()
+
+        doc.setDrawColor(210, 210, 210)
+        doc.setLineWidth(0.3)
+        doc.rect(x, y, colW, cardH)
+
+        // Header
+        doc.setFillColor(26, 26, 46)
+        doc.rect(x, y, colW, 18, 'F')
+        doc.setTextColor(245, 158, 11)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(6)
+        doc.text(zone.substring(0, 24), x + 3, y + 6)
+        doc.setTextColor(255, 255, 255)
+        doc.setFontSize(12)
+        doc.text(table.name.toString().substring(0, 18), x + 3, y + 14)
+
+        // QR
+        const qrEl = document.getElementById(`qr-${table.id}`)
+        const canvas = qrEl?.querySelector('canvas') as HTMLCanvasElement | null
+        const img = qrEl?.querySelector('img') as HTMLImageElement | null
+        const dataUrl = canvas?.toDataURL('image/png') || img?.src
+
+        const qrSize = Math.min(48, colW - 12)
+        const qrX = x + (colW - qrSize) / 2
+        const qrY = y + 22
+
+        if (dataUrl) {
+          try {
+            doc.addImage(dataUrl, 'PNG', qrX, qrY, qrSize, qrSize)
+          } catch {
+            // ignore broken images; keep PDF generation going
+          }
+        } else {
+          doc.setTextColor(120, 120, 120)
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(8)
+          doc.text('QR not ready', x + colW / 2, qrY + qrSize / 2, { align: 'center' })
+        }
+
+        // Caption + footer
+        doc.setTextColor(107, 114, 128)
+        doc.setFontSize(6.5)
+        doc.setFont('helvetica', 'normal')
+        doc.text('Scan to view menu & order', x + colW / 2, y + cardH - 12, { align: 'center' })
+        doc.setTextColor(156, 163, 175)
+        doc.setFontSize(6)
+        doc.text("Beeshop's Place Lounge", x + colW / 2, y + cardH - 5, { align: 'center' })
+
+        // Link label (tiny)
+        doc.setTextColor(180, 180, 180)
+        doc.setFontSize(5.5)
+        doc.text(`${BASE_URL}/table/${table.id}`.substring(0, 36), x + 2.5, y + cardH - 1.8)
+
+        if (idx < filtered.length - 1) nextCell()
+      })
+
+      savePDF(doc, `qr-table-cards-${selectedZone.toLowerCase().replace(/\s+/g, '-')}.pdf`)
+    } finally {
+      setExporting(false)
+    }
+  }, [exporting, filtered, selectedZone, waitForQRCodes])
+
   if (!['owner', 'manager', 'executive'].includes(profile?.role || ''))
     return (
       <div className="min-h-full bg-gray-950 flex items-center justify-center text-gray-400">
@@ -88,7 +209,7 @@ export default function QRTableCards() {
 
   return (
     <>
-      <style>{`@media print{.no-print{display:none!important}.print-grid{display:grid!important;grid-template-columns:repeat(3,1fr)!important;gap:0!important;padding:0!important}.card{break-inside:avoid;page-break-inside:avoid;border:1.5px solid #ccc!important;margin:6px!important}body{background:white!important}}@media screen{.print-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}}`}</style>
+      <style>{`@media print{.no-print{display:none!important}.app-shell-sidebar,.app-shell-topbar{display:none!important}#main-scroll{overflow:visible!important;height:auto!important}#main-scroll .app-shell-main{height:auto!important}.print-grid{display:grid!important;grid-template-columns:repeat(3,1fr)!important;gap:0!important;padding:0!important}.card{break-inside:avoid;page-break-inside:avoid;border:1.5px solid #ccc!important;margin:6px!important}html,body{background:white!important;height:auto!important;overflow:visible!important}}@media screen{.print-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}}`}</style>
       <div className="min-h-full bg-gray-950">
         <div className="no-print bg-gray-900 border-b border-gray-800 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -102,12 +223,21 @@ export default function QRTableCards() {
               </p>
             </div>
           </div>
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-xl text-sm transition-colors"
-          >
-            <Printer size={15} /> Print
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={downloadPDF}
+              disabled={exporting || loading || filtered.length === 0}
+              className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-xl text-sm transition-colors"
+            >
+              Download PDF
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-black font-bold px-4 py-2 rounded-xl text-sm transition-colors"
+            >
+              <Printer size={15} /> Print
+            </button>
+          </div>
         </div>
         <div className="no-print px-4 py-3 flex gap-2 overflow-x-auto">
           {zones.map((z) => (

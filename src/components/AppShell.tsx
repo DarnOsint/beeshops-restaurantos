@@ -193,11 +193,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     )
 
   return (
-    <div className="flex flex-col h-screen bg-gray-950 overflow-hidden">
+    <div className="app-shell-root flex flex-col h-screen bg-gray-950 overflow-hidden">
       <OfflineBanner />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="app-shell-body flex flex-1 overflow-hidden">
         {/* Desktop sidebar */}
-        <aside className="hidden lg:flex flex-col w-56 xl:w-64 bg-gray-900 border-r border-gray-800 flex-shrink-0">
+        <aside className="app-shell-sidebar hidden lg:flex flex-col w-56 xl:w-64 bg-gray-900 border-r border-gray-800 flex-shrink-0">
           <div className="px-4 py-4 border-b border-gray-800 flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0">
               <Beer size={16} className="text-black" />
@@ -252,7 +252,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         {/* Tablet icon sidebar */}
-        <aside className="hidden md:flex lg:hidden flex-col w-16 bg-gray-900 border-r border-gray-800 flex-shrink-0 items-center py-4 gap-2">
+        <aside className="app-shell-sidebar hidden md:flex lg:hidden flex-col w-16 bg-gray-900 border-r border-gray-800 flex-shrink-0 items-center py-4 gap-2">
           <div className="w-9 h-9 rounded-lg bg-amber-500 flex items-center justify-center mb-2">
             <Beer size={16} className="text-black" />
           </div>
@@ -283,7 +283,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Main content */}
         <main id="main-scroll" className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="md:hidden flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 sticky top-0 z-30">
+          <div className="app-shell-topbar md:hidden flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 sticky top-0 z-30">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg bg-amber-500 flex items-center justify-center">
                 <Beer size={13} className="text-black" />
@@ -302,7 +302,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </div>
           </div>
-          <div className="h-full">{children}</div>
+          <div className="app-shell-main h-full">{children}</div>
         </main>
       </div>
 
