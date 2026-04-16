@@ -23,6 +23,7 @@ import {
   X,
   BarChart2,
   Camera,
+  ChevronDown,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -102,40 +103,73 @@ function NavButton({
 }
 
 function TableWidget({ tables }: { tables: TableRow[] }) {
+  const [collapsed, setCollapsed] = useState(true)
+  const occupiedCount = tables.filter((t) => t.status === 'occupied').length
+  const freeCount = tables.filter((t) => t.status === 'available').length
+
   return (
-    <div className="px-3 py-3 border-b border-gray-800">
-      <p className="text-gray-500 text-xs font-medium uppercase tracking-wider px-1 mb-2">Tables</p>
-      {ZONES.map((zone) => {
-        const zone_tables = tables.filter((t) => t.table_categories?.name === zone)
-        if (!zone_tables.length) return null
-        return (
-          <div key={zone} className="mb-2">
-            <p className="text-gray-600 text-[9px] uppercase tracking-wider px-0.5 mb-1">{zone}</p>
-            <div className="flex flex-wrap gap-1">
-              {zone_tables.map((t) => (
-                <div
-                  key={t.id}
-                  title={`${t.name} — ${t.status}`}
-                  className={`w-5 h-5 rounded-sm flex items-center justify-center text-[9px] font-bold cursor-default
+    <div className="px-3 py-2 border-b border-gray-800">
+      <button
+        type="button"
+        onClick={() => setCollapsed((v) => !v)}
+        className="w-full flex items-center justify-between gap-2 px-1"
+        title={collapsed ? 'Show tables' : 'Hide tables'}
+      >
+        <p className="text-gray-500 text-xs font-medium uppercase tracking-wider">Tables</p>
+        <div className="flex items-center gap-2 text-[10px] text-gray-500">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm bg-amber-500 inline-block" />
+            {occupiedCount}
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm bg-gray-700 inline-block" />
+            {freeCount}
+          </span>
+          <ChevronDown
+            size={14}
+            className={`text-gray-600 transition-transform ${collapsed ? '' : 'rotate-180'}`}
+          />
+        </div>
+      </button>
+
+      {!collapsed && (
+        <>
+          <div className="mt-2 max-h-32 overflow-y-auto pr-1">
+            {ZONES.map((zone) => {
+              const zone_tables = tables.filter((t) => t.table_categories?.name === zone)
+              if (!zone_tables.length) return null
+              return (
+                <div key={zone} className="mb-2">
+                  <p className="text-gray-600 text-[9px] uppercase tracking-wider px-0.5 mb-1">
+                    {zone}
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {zone_tables.map((t) => (
+                      <div
+                        key={t.id}
+                        title={`${t.name} — ${t.status}`}
+                        className={`w-4 h-4 rounded-sm flex items-center justify-center text-[8px] font-bold cursor-default
                     ${t.status === 'occupied' ? 'bg-amber-500 text-black' : t.status === 'reserved' ? 'bg-red-500 text-white' : 'bg-gray-700 text-gray-400'}`}
-                >
-                  {t.name?.replace(/[^0-9]/g, '') || '·'}
+                      >
+                        {t.name?.replace(/[^0-9]/g, '') || '·'}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
+              )
+            })}
           </div>
-        )
-      })}
-      <div className="flex items-center gap-3 mt-2 px-1">
-        <span className="flex items-center gap-1 text-[10px] text-gray-500">
-          <span className="w-2 h-2 rounded-sm bg-amber-500 inline-block" />{' '}
-          {tables.filter((t) => t.status === 'occupied').length} occupied
-        </span>
-        <span className="flex items-center gap-1 text-[10px] text-gray-500">
-          <span className="w-2 h-2 rounded-sm bg-gray-700 inline-block" />{' '}
-          {tables.filter((t) => t.status === 'available').length} free
-        </span>
-      </div>
+          <div className="flex items-center gap-3 mt-2 px-1">
+            <span className="flex items-center gap-1 text-[10px] text-gray-500">
+              <span className="w-2 h-2 rounded-sm bg-amber-500 inline-block" /> {occupiedCount}{' '}
+              occupied
+            </span>
+            <span className="flex items-center gap-1 text-[10px] text-gray-500">
+              <span className="w-2 h-2 rounded-sm bg-gray-700 inline-block" /> {freeCount} free
+            </span>
+          </div>
+        </>
+      )}
     </div>
   )
 }
