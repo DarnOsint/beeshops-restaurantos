@@ -87,24 +87,36 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
     if (data) setStaff(data)
   }
   const fetchActiveShifts = async () => {
-    const { data } = await supabase
-      .from('attendance')
-      .select(
-        'id, staff_id, staff_name, role, clock_in, clock_out, confirmed_at, duration_minutes, date, pos_machine'
-      )
-      .is('clock_out', null)
-      .order('clock_in', { ascending: true })
-    if (data) {
+    const baseQuery = supabase.from('attendance').is('clock_out', null).order('clock_in', {
+      ascending: true,
+    })
+
+    // Some deployments may have column-level privileges on attendance (RLS/GRANT).
+    // Try richer payload first, then fall back to minimal columns if blocked.
+    const full = await baseQuery.select(
+      'id, staff_id, staff_name, role, clock_in, confirmed_at, pos_machine'
+    )
+    const res = full.error
+      ? await baseQuery.select('id, staff_id, staff_name, role, clock_in')
+      : full
+
+    if (full.error) {
+      console.warn('ShiftManager: falling back to minimal attendance columns', full.error.message)
+    }
+
+    if (res.data) {
       // Deduplicate by staff_id — keep the most recent row per staff
       // (guards against duplicate clock-ins that slipped through before the live-check fix)
-      const seen = new Map<string, (typeof data)[0]>()
-      for (const row of data) {
+      const seen = new Map<string, any>()
+      for (const row of res.data) {
         const existing = seen.get(row.staff_id)
         if (!existing || new Date(row.clock_in) > new Date(existing.clock_in)) {
           seen.set(row.staff_id, row)
         }
       }
       setActiveShifts(Array.from(seen.values()))
+    } else if (res.error) {
+      toast.error('Error', 'Could not load active shifts: ' + res.error.message)
     }
   }
   const fetchTodayLog = async (d?: string) => {
@@ -117,15 +129,30 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
     if (dateToFetch === todayStr && now.getHours() < 8) start.setDate(start.getDate() - 1)
     const end = new Date(start)
     end.setDate(end.getDate() + 1)
-    const { data } = await supabase
+    const full = await supabase
       .from('attendance')
-      .select(
-        'id, staff_id, staff_name, role, clock_in, clock_out, confirmed_at, duration_minutes, date, pos_machine'
-      )
+      .select('id, staff_id, staff_name, role, clock_in, clock_out, confirmed_at, pos_machine')
       .gte('clock_in', start.toISOString())
       .lt('clock_in', end.toISOString())
       .order('clock_in', { ascending: false })
-    if (data) setTodayLog(data)
+
+    const res = full.error
+      ? await supabase
+          .from('attendance')
+          .select('id, staff_id, staff_name, role, clock_in, clock_out')
+          .gte('clock_in', start.toISOString())
+          .lt('clock_in', end.toISOString())
+          .order('clock_in', { ascending: false })
+      : full
+
+    if (full.error) {
+      console.warn(
+        'ShiftManager log: falling back to minimal attendance columns',
+        full.error.message
+      )
+    }
+    if (res.data) setTodayLog(res.data as Shift[])
+    else if (res.error) toast.error('Error', 'Could not load shift log: ' + res.error.message)
   }
 
   const fetchAll = useCallback(async () => {
