@@ -38,9 +38,12 @@ export default function StoreToChillerTab() {
         'id, item_name, quantity, unit, requested_by_name, approved_by_name, status, created_at, resolved_at'
       )
       .eq('status', 'approved')
-      .gte('resolved_at', dayStart.toISOString())
-      .lt('resolved_at', dayEnd.toISOString())
-      .order('resolved_at', { ascending: false })
+      // Prefer resolved_at when available (actual approval time), otherwise fall back to created_at.
+      // Some older rows/functions may not populate resolved_at on approval.
+      .or(
+        `and(resolved_at.gte.${dayStart.toISOString()},resolved_at.lt.${dayEnd.toISOString()}),and(resolved_at.is.null,created_at.gte.${dayStart.toISOString()},created_at.lt.${dayEnd.toISOString()})`
+      )
+      .order('created_at', { ascending: false })
 
     setRows((data || []) as Row[])
     setLoading(false)
