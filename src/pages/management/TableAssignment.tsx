@@ -79,7 +79,7 @@ export default function TableAssignment({ onClose }: Props) {
     const { data: attendance } = await supabase
       .from('attendance')
       .select('staff_id')
-      .is('clock_out', null)
+      .filter('clock_out', 'is', null)
     if (!attendance || attendance.length === 0) {
       setStaff([])
       return

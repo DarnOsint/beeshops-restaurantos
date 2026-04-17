@@ -87,9 +87,12 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
     if (data) setStaff(data)
   }
   const fetchActiveShifts = async () => {
-    const baseQuery = supabase.from('attendance').is('clock_out', null).order('clock_in', {
-      ascending: true,
-    })
+    const baseQuery = supabase
+      .from('attendance')
+      .filter('clock_out', 'is', null)
+      .order('clock_in', {
+        ascending: true,
+      })
 
     // Some deployments may have column-level privileges on attendance (RLS/GRANT).
     // Try richer payload first, then fall back to minimal columns if blocked.
@@ -173,7 +176,7 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
       .from('attendance')
       .select('id')
       .eq('staff_id', member.id)
-      .is('clock_out', null)
+      .filter('clock_out', 'is', null)
       .limit(1)
     if (live && live.length > 0) {
       toast.warning('Already Clocked In', member.full_name + ' is already clocked in')

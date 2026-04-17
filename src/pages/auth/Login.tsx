@@ -2,11 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { verifyPinServer, verifyPbkdf2, hashPin } from '../../lib/pinHash'
-import {
-  cacheCredential,
-  verifyOfflinePassword,
-  verifyOfflinePin,
-} from '../../lib/offlineAuth'
+import { cacheCredential, verifyOfflinePassword, verifyOfflinePin } from '../../lib/offlineAuth'
 import { Eye, EyeOff, Delete } from 'lucide-react'
 
 const EMAIL_MAX = 5
@@ -185,7 +181,9 @@ export default function Login() {
         setError(`Too many failed attempts. Locked out for ${fmtTime(rem)}.`)
       } else {
         const left = EMAIL_MAX - ns.attempts
-        setError(`${err?.message ?? 'Login failed'} — ${left} attempt${left !== 1 ? 's' : ''} remaining.`)
+        setError(
+          `${err?.message ?? 'Login failed'} — ${left} attempt${left !== 1 ? 's' : ''} remaining.`
+        )
       }
       setLoading(false)
       return
@@ -198,9 +196,17 @@ export default function Login() {
     if (userId) {
       const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).single()
       if (prof) {
-        void cacheCredential(prof as unknown as { id: string; full_name: string; role: string; email?: string; created_at?: string }, 'password', password).catch(
-          (e) => console.warn('cacheCredential(password) failed', e)
-        )
+        void cacheCredential(
+          prof as unknown as {
+            id: string
+            full_name: string
+            role: string
+            email?: string
+            created_at?: string
+          },
+          'password',
+          password
+        ).catch((e) => console.warn('cacheCredential(password) failed', e))
         setOfflineSession(
           {
             id: prof.id,
@@ -324,13 +330,21 @@ export default function Login() {
     resetAttempts('rl_pin')
 
     // Operational roles must be clocked in before they can log in
-    const clockInRequired = ['waitron', 'kitchen', 'bar', 'griller', 'mixologist', 'games_master', 'shisha_attendant']
+    const clockInRequired = [
+      'waitron',
+      'kitchen',
+      'bar',
+      'griller',
+      'mixologist',
+      'games_master',
+      'shisha_attendant',
+    ]
     if (clockInRequired.includes(profile.role)) {
       const { data: activeShift } = await supabase
         .from('attendance')
         .select('id')
         .eq('staff_id', profile.id)
-        .is('clock_out', null)
+        .filter('clock_out', 'is', null)
         .limit(1)
       if (!activeShift || activeShift.length === 0) {
         setError('You must be clocked in by a manager before logging in.')
@@ -351,7 +365,7 @@ export default function Login() {
       .from('attendance')
       .update({ confirmed_at: new Date().toISOString() })
       .eq('staff_id', profile.id)
-      .is('clock_out', null)
+      .filter('clock_out', 'is', null)
 
     void fetch('https://api.ipify.org?format=json')
       .then((r) => r.json())
@@ -391,7 +405,7 @@ export default function Login() {
         created_at: new Date().toISOString(),
       },
       'pin'
-      )
+    )
     setLoading(false)
     window.location.replace('/dashboard')
   }

@@ -150,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .from('attendance')
           .update({ confirmed_at: new Date().toISOString() })
           .eq('staff_id', userId)
-          .is('clock_out', null)
+          .filter('clock_out', 'is', null)
         return
       }
       if (attempt < 2) await new Promise((r) => setTimeout(r, 500))

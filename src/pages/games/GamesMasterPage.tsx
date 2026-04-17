@@ -98,7 +98,7 @@ export default function GamesMasterPage() {
       supabase
         .from('attendance')
         .select('staff_id, staff_name')
-        .is('clock_out', null)
+        .filter('clock_out', 'is', null)
         .order('staff_name'),
     ])
     if (typesRes.data) {

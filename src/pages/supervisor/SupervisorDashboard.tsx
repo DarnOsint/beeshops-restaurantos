@@ -133,9 +133,9 @@ function SupervisorDashboardInner() {
   const [calls, setCalls] = useState<WaiterCall[]>([])
   const [voids, setVoids] = useState<VoidEntry[]>([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<'floor' | 'staff' | 'calls' | 'voids' | 'shift' | 'tables' | 'store'>(
-    'floor'
-  )
+  const [tab, setTab] = useState<
+    'floor' | 'staff' | 'calls' | 'voids' | 'shift' | 'tables' | 'store'
+  >('floor')
   const [zoneFilter, setZoneFilter] = useState('All')
   const [lateCount] = useState(0) // SUSPENDED
   const [pendingStore, setPendingStore] = useState(0)
@@ -155,7 +155,7 @@ function SupervisorDashboardInner() {
       supabase
         .from('attendance')
         .select('id,staff_id,staff_name,role,clock_in')
-        .is('clock_out', null)
+        .filter('clock_out', 'is', null)
         .order('clock_in', { ascending: true }),
       supabase
         .from('waiter_calls')
@@ -229,7 +229,13 @@ function SupervisorDashboardInner() {
       badgeRed: lateCount > 0,
     },
     { id: 'staff' as const, label: 'Staff', icon: Users, badge: shifts.length, badgeRed: false },
-    { id: 'store' as const, label: 'Store', icon: Package, badge: pendingStore, badgeRed: pendingStore > 0 },
+    {
+      id: 'store' as const,
+      label: 'Store',
+      icon: Package,
+      badge: pendingStore,
+      badgeRed: pendingStore > 0,
+    },
     { id: 'shift' as const, label: 'Shift', icon: UserCheck, badge: 0, badgeRed: false },
     { id: 'tables' as const, label: 'Tables', icon: LayoutGrid, badge: 0, badgeRed: false },
   ]

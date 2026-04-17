@@ -225,7 +225,7 @@ export default function Reports() {
         .select('*, profiles(full_name)')
         .gte('clock_in', start)
         .lte('clock_in', end)
-        .is('clock_out', null)
+        .filter('clock_out', 'is', null)
       if (openShifts && openShifts.length > 0) {
         const names = openShifts
           .map(
