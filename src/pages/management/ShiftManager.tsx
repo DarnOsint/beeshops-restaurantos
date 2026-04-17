@@ -86,16 +86,17 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
     if (data) setStaff(data)
   }
   const fetchActiveShifts = async () => {
-    const baseQuery = supabase.from('attendance').or('clock_out.is.null').order('clock_in', {
-      ascending: true,
-    })
+    const makeQuery = (columns: string) =>
+      supabase
+        .from('attendance')
+        .select(columns)
+        .or('clock_out.is.null')
+        .order('clock_in', { ascending: true })
 
     // Some deployments may have column-level privileges on attendance (RLS/GRANT).
     // Try richer payload first, then fall back to minimal columns if blocked.
-    const full = await baseQuery.select('id, staff_id, staff_name, role, clock_in, pos_machine')
-    const res = full.error
-      ? await baseQuery.select('id, staff_id, staff_name, role, clock_in')
-      : full
+    const full = await makeQuery('id, staff_id, staff_name, role, clock_in, pos_machine')
+    const res = full.error ? await makeQuery('id, staff_id, staff_name, role, clock_in') : full
 
     if (full.error) {
       console.warn('ShiftManager: falling back to minimal attendance columns', full.error.message)

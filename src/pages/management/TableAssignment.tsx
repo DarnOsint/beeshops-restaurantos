@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { X, Users, UserPlus, UserMinus } from 'lucide-react'
 import { useToast } from '../../context/ToastContext'
+import { useAuth } from '../../context/AuthContext'
+import { audit } from '../../lib/audit'
 
 interface CategoryColors {
   card: string
@@ -64,6 +66,7 @@ export default function TableAssignment({ onClose }: Props) {
   const [selectedStaff, setSelectedStaff] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const toast = useToast()
+  const { profile } = useAuth()
   const [staffSearch, setStaffSearch] = useState('')
 
   const fetchCategories = async () => {
