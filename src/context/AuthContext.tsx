@@ -10,6 +10,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { audit } from '../lib/audit'
 import { setAuditPerformer } from '../lib/auditContext'
+import { getCachedProfileById } from '../lib/offlineAuth'
 import type { Profile } from '../types'
 import type { User } from '@supabase/supabase-js'
 
@@ -168,6 +169,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const parsed = JSON.parse(pinSession) as { id: string; logged_in_at: string }
           const hoursSince = (Date.now() - new Date(parsed.logged_in_at).getTime()) / 3_600_000
           if (hoursSince < 12 && parsed.id) {
+            // Offline mode: hydrate profile from cached credentials (device-trust),
+            // so POS/KDS can operate without internet.
+            if (!navigator.onLine) {
+              const cached = await getCachedProfileById(parsed.id)
+              if (cancelled) return
+              if (!cached) {
+                localStorage.removeItem('pin_session')
+              } else {
+                setProfile(cached)
+                setAuditPerformer(cached)
+                setUser({ id: cached.id, pin_session: true } as unknown as User)
+                setLoading(false)
+                return
+              }
+            }
             const { data: freshProfile, error } = await supabase
               .from('profiles')
               .select('*')

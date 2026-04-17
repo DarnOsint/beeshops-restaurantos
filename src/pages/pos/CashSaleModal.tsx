@@ -204,7 +204,11 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
           closed_at: new Date().toISOString(),
         })
         .eq('id', orderId)
-      await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', orderId)
+      await supabase
+        .from('order_items')
+        .update({ status: 'delivered' })
+        .eq('order_id', orderId)
+        .neq('destination', 'bar')
 
       if (isCredit) {
         const { data: existingDebtors } = await (customerPhone

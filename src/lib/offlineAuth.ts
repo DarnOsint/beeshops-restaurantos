@@ -84,3 +84,17 @@ export async function verifyOfflinePassword(
   }
   return null
 }
+
+export async function getCachedProfileById(id: string): Promise<Profile | null> {
+  const creds = await getCredentials()
+  const cred = creds.find((c) => c.id === id)
+  if (!cred) return null
+  return {
+    id: cred.id,
+    full_name: cred.full_name,
+    role: cred.role as Profile['role'],
+    email: cred.email,
+    is_active: true,
+    created_at: cred.created_at ?? new Date(0).toISOString(),
+  }
+}

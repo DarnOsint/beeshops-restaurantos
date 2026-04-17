@@ -42,6 +42,8 @@ import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
 import type { Table, MenuItem, Order, OrderItem, Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
+import { localBulkPut, localGetAll } from '../../lib/db'
+import { offlineInsertNoReturn, offlineUpdateNoReturn } from '../../lib/offlineWrite'
 
 const normalizeDestination = (
   dest?: string | null,
@@ -806,7 +808,15 @@ export default function POS() {
         .eq('status', 'open')
         .not('table_id', 'is', null),
     ])
-    if (!tablesRes.error) setTables(tablesRes.data || [])
+    if (!tablesRes.error) {
+      setTables(tablesRes.data || [])
+      if (tablesRes.data) {
+        void localBulkPut('tables', tablesRes.data as Array<{ id: string }>)
+      }
+    } else if (!navigator.onLine) {
+      const cached = await localGetAll<any>('tables')
+      if (cached.length > 0) setTables(cached as any)
+    }
     // Build map: table_id → staff_id (who is serving each occupied table)
     if (!openOrdersRes.error && openOrdersRes.data) {
       const map: Record<string, string> = {}
@@ -844,6 +854,9 @@ export default function POS() {
         .order('item_name'),
     ])
     if (!menuRes.error) {
+      if (menuRes.data) {
+        void localBulkPut('menu_items', menuRes.data as Array<{ id: string }>)
+      }
       const invMap: Record<string, number> = {}
       const invByName: Record<string, number> = {}
       if (invRes.data)
@@ -901,6 +914,16 @@ export default function POS() {
               : (invMap[item.id] ?? null),
         }))
       )
+    } else if (!navigator.onLine) {
+      const cached = await localGetAll<any>('menu_items')
+      if (cached.length > 0) {
+        setMenuItems(
+          cached.map((item: any) => ({
+            ...item,
+            current_stock: item.current_stock ?? null,
+          })) as any
+        )
+      }
     }
   }
 
@@ -908,7 +931,29 @@ export default function POS() {
     const { data, error } = await supabase
       .from('menu_item_zone_prices')
       .select('menu_item_id, category_id, price')
-    if (!error) setZonePrices(data || [])
+    if (!error) {
+      setZonePrices(data || [])
+      if (data) {
+        void localBulkPut(
+          'menu_item_zone_prices',
+          data.map((zp: any) => ({
+            ...zp,
+            id: `${zp.menu_item_id}:${zp.category_id}`,
+          })) as Array<{ id: string }>
+        )
+      }
+    } else if (!navigator.onLine) {
+      const cached = await localGetAll<any>('menu_item_zone_prices')
+      if (cached.length > 0) {
+        setZonePrices(
+          cached.map((zp: any) => ({
+            menu_item_id: zp.menu_item_id,
+            category_id: zp.category_id,
+            price: zp.price,
+          })) as any
+        )
+      }
+    }
   }
 
   const getMenuItemsWithZonePrices = (table: Table | null): MenuItemWithZone[] => {
@@ -931,6 +976,14 @@ export default function POS() {
         if (exists) return prev.filter((t) => t.id !== table.id)
         return [...prev, table]
       })
+      return
+    }
+
+    if (!navigator.onLine) {
+      // Offline: we can't query existing open orders; allow selecting and creating a new one.
+      setActiveOrder(null)
+      setShowPayment(false)
+      setPendingTable(table)
       return
     }
 
@@ -1153,12 +1206,10 @@ export default function POS() {
       }
 
       const orderId = crypto.randomUUID()
-      // Use direct Supabase call — offlineInsert's .single() can fail silently
-      // leaving the order in the sync queue instead of the DB
       const hireFeeAmt =
         (table as unknown as { table_categories?: { hire_fee?: number | null } }).table_categories
           ?.hire_fee || 0
-      const { error: orderError } = await supabase.from('orders').insert({
+      const orderRecord = {
         id: orderId,
         table_id: table.id,
         staff_id: profile!.id,
@@ -1168,7 +1219,10 @@ export default function POS() {
         notes,
         covers: pendingCovers,
         created_at: new Date().toISOString(),
-      })
+      }
+      const { error: orderError } = navigator.onLine
+        ? await supabase.from('orders').insert(orderRecord)
+        : await offlineInsertNoReturn('orders', orderRecord as any)
       setPendingCovers(null)
       if (orderError) {
         console.error('Order error:', orderError)
@@ -1228,11 +1282,17 @@ export default function POS() {
         }),
       ]
       for (const item of orderItemRows) {
-        const { error } = await supabase.from('order_items').insert(item)
+        const { error } = navigator.onLine
+          ? await supabase.from('order_items').insert(item)
+          : await offlineInsertNoReturn('order_items', item as any)
         if (error) {
           toast.error('Error', 'Error adding items: ' + error.message)
           return
         }
+      }
+      if (!navigator.onLine) {
+        // Persist occupied state locally and queue update; remote will be updated on sync.
+        void offlineUpdateNoReturn('tables', table.id, { status: 'occupied' } as any)
       }
       await logBarIssues(items, orderItemRows.slice(baseItems.length), table, orderId)
       printStationTickets(

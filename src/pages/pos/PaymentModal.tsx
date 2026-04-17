@@ -920,7 +920,13 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
             ']',
         })
         .eq('id', order.id)
-      await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', order.id)
+      // Mark non-bar items delivered. Bar items remain pending/ready so BarKDS can still accept them
+      // even if the order is paid while POS is offline or bar served already.
+      await supabase
+        .from('order_items')
+        .update({ status: 'delivered' })
+        .eq('order_id', order.id)
+        .neq('destination', 'bar')
       await supabase
         .from('tables')
         .update({ status: 'available', assigned_staff: null })
@@ -986,7 +992,11 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           })
           .eq('id', order.id)
         if (creditOrderErr) throw creditOrderErr
-        await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', order.id)
+        await supabase
+          .from('order_items')
+          .update({ status: 'delivered' })
+          .eq('order_id', order.id)
+          .neq('destination', 'bar')
         await supabase
           .from('tables')
           .update({ status: 'available', assigned_staff: null })
@@ -1055,7 +1065,11 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         })
         .eq('id', order.id)
       if (orderErr) throw orderErr
-      await supabase.from('order_items').update({ status: 'delivered' }).eq('order_id', order.id)
+      await supabase
+        .from('order_items')
+        .update({ status: 'delivered' })
+        .eq('order_id', order.id)
+        .neq('destination', 'bar')
       await supabase
         .from('tables')
         .update({ status: 'available', assigned_staff: null })

@@ -8,6 +8,63 @@ export interface OfflineResult<T> {
   offline: boolean
 }
 
+export async function offlineInsertNoReturn<T extends { id: string }>(
+  tableName: StoreName,
+  record: T
+): Promise<{ error: null | { message?: string }; offline: boolean }> {
+  const localRecord = { ...record, synced: false }
+  if (localRecord.id) await localPut(tableName, localRecord)
+
+  if (!navigator.onLine) {
+    await queueSync(tableName, 'INSERT', record.id, record as Record<string, unknown>)
+    return { error: null, offline: true }
+  }
+
+  const { error } = await supabase.from(tableName).insert(record)
+  if (!error) {
+    if (localRecord.id) await localPut(tableName, { ...record, synced: true })
+    return { error: null, offline: false }
+  }
+
+  if (!navigator.onLine) {
+    await queueSync(tableName, 'INSERT', record.id, record as Record<string, unknown>)
+    return { error: null, offline: true }
+  }
+
+  return { error, offline: false }
+}
+
+export async function offlineUpdateNoReturn<T extends { id: string }>(
+  tableName: StoreName,
+  id: string,
+  updates: Partial<T>
+): Promise<{ error: null | { message?: string }; offline: boolean }> {
+  const current = await localGet<T>(tableName, id)
+  const updated = { ...current, id, ...updates, synced: false } as T
+  await localPut(tableName, updated)
+
+  if (!navigator.onLine) {
+    await queueSync(tableName, 'UPDATE', id, updated as Record<string, unknown>)
+    return { error: null, offline: true }
+  }
+
+  const { error } = await supabase.from(tableName).update(updates).eq('id', id)
+  if (!error) {
+    await localPut(tableName, {
+      ...(updated as unknown as Record<string, unknown>),
+      synced: true,
+    } as T)
+    return { error: null, offline: false }
+  }
+
+  if (!navigator.onLine) {
+    await queueSync(tableName, 'UPDATE', id, updated as Record<string, unknown>)
+    return { error: null, offline: true }
+  }
+
+  return { error, offline: false }
+}
+
 export async function offlineInsert<T extends { id: string }>(
   tableName: StoreName,
   record: T
