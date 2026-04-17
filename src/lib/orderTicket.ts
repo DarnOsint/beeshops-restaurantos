@@ -19,13 +19,19 @@ export interface OrderTicketData {
   createdAt: string
 }
 
+type TicketTextOptions = {
+  currencySymbol?: string
+}
+
 /**
  * Build a plain-text ticket as raw bytes.
  * No ESC/POS commands — just ASCII text + newlines.
  * Works on every thermal printer connected via TCP:9100.
  */
 export function buildOrderTicket(data: OrderTicketData): Uint8Array {
-  const text = buildOrderTicketText(data)
+  // Most thermal printers (raw TCP) don't render the Naira (₦) glyph.
+  // Use ASCII-safe currency to avoid printing "?".
+  const text = buildOrderTicketText(data, { currencySymbol: 'NGN ' })
   // Add a few newlines at the end so the paper feeds past the cutter
   return new TextEncoder().encode(text + '\n\n\n\n\n')
 }
@@ -33,11 +39,12 @@ export function buildOrderTicket(data: OrderTicketData): Uint8Array {
 /**
  * Build plain text version of the ticket (used by both raw and HTML).
  */
-export function buildOrderTicketText(data: OrderTicketData): string {
+export function buildOrderTicketText(data: OrderTicketData, opts: TicketTextOptions = {}): string {
   const { station, tableName, orderRef, staffName, items, createdAt } = data
   const W = 32 // 58mm printers = ~32 chars, 80mm = ~42 chars. Use 32 for safety.
   const divider = '-'.repeat(W)
   const doubleDivider = '='.repeat(W)
+  const currencySymbol = opts.currencySymbol ?? '₦'
 
   const centre = (s: string) => {
     const pad = Math.max(0, Math.floor((W - s.length) / 2))
@@ -64,7 +71,7 @@ export function buildOrderTicketText(data: OrderTicketData): string {
 
   const fmtMoney = (amount: number) => {
     const value = Number.isFinite(amount) ? amount : 0
-    return `₦${Math.round(value).toLocaleString('en-NG')}`
+    return `${currencySymbol}${Math.round(value).toLocaleString('en-NG')}`
   }
 
   const itemLines = items
@@ -118,7 +125,8 @@ export function buildOrderTicketText(data: OrderTicketData): string {
  * Fallback for print servers that render HTML.
  */
 export function buildOrderTicketHTML(data: OrderTicketData): string {
-  const text = buildOrderTicketText(data)
+  // HTML print (browser) can render the Naira glyph correctly on most devices.
+  const text = buildOrderTicketText(data, { currencySymbol: '₦' })
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${data.station.toUpperCase()} Order</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
