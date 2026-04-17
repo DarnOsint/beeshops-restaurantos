@@ -67,12 +67,14 @@ async function resolveConflict(
 
   if (!serverRecord) return 'local_wins'
 
-  const localTime = new Date(localRecord['created_at'] as string).getTime()
+  const localCreatedAt = localRecord['created_at']
+  if (typeof localCreatedAt !== 'string' || !localCreatedAt) return 'local_wins'
+  const localTime = new Date(localCreatedAt).getTime()
   const serverTime = new Date(
     (serverRecord as Record<string, unknown>)['created_at'] as string
   ).getTime()
 
-  if (localTime <= serverTime) {
+  if (!Number.isFinite(localTime) || localTime <= serverTime) {
     return 'local_wins'
   } else {
     await localPut(tableName as Parameters<typeof localPut>[0], {

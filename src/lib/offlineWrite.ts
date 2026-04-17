@@ -8,6 +8,13 @@ export interface OfflineResult<T> {
   offline: boolean
 }
 
+function toQueuePayload(record: Record<string, unknown>): Record<string, unknown> {
+  const payload = { ...record }
+  // local-only marker; not a DB column
+  delete payload['synced']
+  return payload
+}
+
 export async function offlineInsertNoReturn<T extends { id: string }>(
   tableName: StoreName,
   record: T
@@ -44,7 +51,7 @@ export async function offlineUpdateNoReturn<T extends { id: string }>(
   await localPut(tableName, updated)
 
   if (!navigator.onLine) {
-    await queueSync(tableName, 'UPDATE', id, updated as Record<string, unknown>)
+    await queueSync(tableName, 'UPDATE', id, toQueuePayload(updated as Record<string, unknown>))
     return { error: null, offline: true }
   }
 
@@ -58,7 +65,7 @@ export async function offlineUpdateNoReturn<T extends { id: string }>(
   }
 
   if (!navigator.onLine) {
-    await queueSync(tableName, 'UPDATE', id, updated as Record<string, unknown>)
+    await queueSync(tableName, 'UPDATE', id, toQueuePayload(updated as Record<string, unknown>))
     return { error: null, offline: true }
   }
 
@@ -103,7 +110,7 @@ export async function offlineUpdate<T extends { id: string }>(
   await localPut(tableName, updated)
 
   if (!navigator.onLine) {
-    await queueSync(tableName, 'UPDATE', id, updated as Record<string, unknown>)
+    await queueSync(tableName, 'UPDATE', id, toQueuePayload(updated as Record<string, unknown>))
     return { data: updated, error: null, offline: true }
   }
 
@@ -121,7 +128,7 @@ export async function offlineUpdate<T extends { id: string }>(
     return { data: data as T, error: null, offline: false }
   }
 
-  await queueSync(tableName, 'UPDATE', id, updated as Record<string, unknown>)
+  await queueSync(tableName, 'UPDATE', id, toQueuePayload(updated as Record<string, unknown>))
   return { data: updated, error: null, offline: true }
 }
 

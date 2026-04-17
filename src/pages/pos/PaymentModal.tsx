@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { sendPushToStaff } from '../../hooks/usePushNotifications'
 import { isNetworkPrinterAvailable, printViaNetwork } from '../../lib/networkPrinter'
 import { buildReceipt } from '../../hooks/useThermalPrinter'
+import { offlineUpdateNoReturn } from '../../lib/offlineWrite'
 import {
   X,
   Banknote,
@@ -907,6 +908,43 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     const allPeople = Array.from({ length: numPeople }, (_, i) => i + 1)
     if (allPeople.every((p) => paidPeople.includes(p))) {
       const primaryMethod = updatedPayments[0].method
+      if (!navigator.onLine) {
+        const closedAt = new Date().toISOString()
+        await offlineUpdateNoReturn('orders', order.id, {
+          status: 'paid',
+          payment_method: primaryMethod,
+          closed_at: closedAt,
+          total_amount: total,
+          notes:
+            (order.notes || '') +
+            ' [Split: ' +
+            updatedPayments.map((p) => 'P' + p.person + '=' + p.method).join(', ') +
+            ']',
+        } as any)
+        const items = ((order?.order_items || []) as any[]) ?? []
+        for (const it of items) {
+          const catDest = it.menu_items?.menu_categories?.destination || ''
+          const catName = it.menu_items?.menu_categories?.name || ''
+          const norm = normalizeDestination(
+            it.destination || catDest || 'bar',
+            it.menu_items?.name,
+            catName
+          )
+          if (norm === 'bar' || norm === 'mixologist') continue
+          if (it.id) {
+            await offlineUpdateNoReturn('order_items', it.id, { status: 'delivered' } as any)
+          }
+        }
+        await offlineUpdateNoReturn('tables', table.id, {
+          status: 'available',
+          assigned_staff: null,
+        } as any)
+        setPaidOrder({ ...order, payment_method: 'split' })
+        setSuccess(true)
+        setShowReceipt(true)
+        toast.success('Offline Payment', 'Saved offline. Will sync when internet returns.')
+        return
+      }
       await supabase
         .from('orders')
         .update({
@@ -960,6 +998,56 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     }
     setProcessing(true)
     try {
+      if (!navigator.onLine) {
+        if (paymentMethod === 'credit') {
+          toast.error('Offline', 'Credit payments require internet. Use cash/card/transfer.')
+          return
+        }
+
+        const resolvedMethod =
+          paymentMethod === 'transfer'
+            ? `transfer:${bankAccounts.find((b) => b.id === selectedBankId)?.bank_name || 'Bank Transfer'}`
+            : paymentMethod === 'cash+transfer'
+              ? `cash+transfer:${parseFloat(cashSplit || '0')}+${parseFloat(secondarySplit || '0')}`
+              : paymentMethod === 'cash+card'
+                ? `cash+card:${parseFloat(cashSplit || '0')}+${parseFloat(secondarySplit || '0')}`
+                : paymentMethod
+
+        const closedAt = new Date().toISOString()
+        await offlineUpdateNoReturn('orders', order.id, {
+          status: 'paid',
+          payment_method: resolvedMethod,
+          closed_at: closedAt,
+          total_amount: total,
+        } as any)
+
+        const items = ((order?.order_items || []) as any[]) ?? []
+        for (const it of items) {
+          const catDest = it.menu_items?.menu_categories?.destination || ''
+          const catName = it.menu_items?.menu_categories?.name || ''
+          const norm = normalizeDestination(
+            it.destination || catDest || 'bar',
+            it.menu_items?.name,
+            catName
+          )
+          if (norm === 'bar' || norm === 'mixologist') continue
+          if (it.id) {
+            await offlineUpdateNoReturn('order_items', it.id, { status: 'delivered' } as any)
+          }
+        }
+
+        await offlineUpdateNoReturn('tables', table.id, {
+          status: 'available',
+          assigned_staff: null,
+        } as any)
+
+        setPaidOrder({ ...order, payment_method: resolvedMethod } as typeof order)
+        setSuccess(true)
+        setShowReceipt(true)
+        toast.success('Offline Payment', 'Saved offline. Will sync when internet returns.')
+        return
+      }
+
       // Verify total against server-side order_items sum before processing
       // Excludes returned/return-requested items from the billable total
       const { data: serverItems } = await supabase
