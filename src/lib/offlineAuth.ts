@@ -9,8 +9,35 @@ export interface OfflineAuthResult {
   mode: OfflineLoginMode
 }
 
+const LS_KEY = 'offline_credentials_v1'
+
 function normalizeEmail(email?: string): string | undefined {
   return email?.trim().toLowerCase()
+}
+
+function readLocalCredentials(): CredentialRecord[] {
+  try {
+    const raw = localStorage.getItem(LS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as CredentialRecord[]
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function writeLocalCredentials(creds: CredentialRecord[]): void {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(creds.slice(0, 50)))
+  } catch {
+    /* ignore (storage full / blocked) */
+  }
+}
+
+function upsertLocalCredential(record: CredentialRecord): void {
+  const all = readLocalCredentials()
+  const next = [record, ...all.filter((c) => c.id !== record.id)]
+  writeLocalCredentials(next)
 }
 
 export async function cacheCredential(
@@ -29,7 +56,14 @@ export async function cacheCredential(
     created_at: profile.created_at,
     stored_at: new Date().toISOString(),
   }
-  await saveCredential(record)
+  // Prefer IndexedDB, but also write a localStorage fallback for browsers/devices
+  // where IDB is blocked/cleared aggressively.
+  try {
+    await saveCredential(record)
+  } catch (e) {
+    console.warn('[offlineAuth] saveCredential failed; using localStorage fallback', e)
+  }
+  upsertLocalCredential(record)
 }
 
 async function matchVerifier(secret: string, verifier: string): Promise<boolean> {
@@ -38,7 +72,13 @@ async function matchVerifier(secret: string, verifier: string): Promise<boolean>
 }
 
 export async function verifyOfflinePin(pin: string): Promise<OfflineAuthResult | null> {
-  const creds = await getCredentials()
+  let creds: CredentialRecord[] = []
+  try {
+    creds = await getCredentials()
+  } catch {
+    creds = []
+  }
+  if (creds.length === 0) creds = readLocalCredentials()
   for (const cred of creds) {
     if (cred.mode !== 'pin') continue
     if (await matchVerifier(pin, cred.verifier)) {
@@ -64,7 +104,13 @@ export async function verifyOfflinePassword(
 ): Promise<OfflineAuthResult | null> {
   const target = normalizeEmail(email)
   if (!target) return null
-  const creds = await getCredentials()
+  let creds: CredentialRecord[] = []
+  try {
+    creds = await getCredentials()
+  } catch {
+    creds = []
+  }
+  if (creds.length === 0) creds = readLocalCredentials()
   for (const cred of creds) {
     if (cred.mode !== 'password') continue
     if (normalizeEmail(cred.email) !== target) continue
@@ -86,7 +132,13 @@ export async function verifyOfflinePassword(
 }
 
 export async function getCachedProfileById(id: string): Promise<Profile | null> {
-  const creds = await getCredentials()
+  let creds: CredentialRecord[] = []
+  try {
+    creds = await getCredentials()
+  } catch {
+    creds = []
+  }
+  if (creds.length === 0) creds = readLocalCredentials()
   const cred = creds.find((c) => c.id === id)
   if (!cred) return null
   return {
