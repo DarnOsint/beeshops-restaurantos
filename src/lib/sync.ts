@@ -13,6 +13,10 @@ const SEED_TABLES = [
 ] as const
 
 export async function seedLocalDB(): Promise<void> {
+  // NOTE: Seeding pulls a lot of data (high egress). It is currently disabled by default.
+  // Enable by setting `VITE_ENABLE_OFFLINE_SEED=true` at build time.
+  const enableSeed = String(import.meta.env.VITE_ENABLE_OFFLINE_SEED || '').toLowerCase() === 'true'
+  if (!enableSeed) return
   try {
     await Promise.all(
       SEED_TABLES.map(async (table) => {
@@ -162,7 +166,6 @@ export type SyncStatus = 'online' | 'offline' | 'syncing' | 'partial'
 export function startSyncListener(onStatusChange?: (status: SyncStatus) => void): () => void {
   const handleOnline = async () => {
     onStatusChange?.('syncing')
-    await seedLocalDB()
     const result = await replayQueue()
     onStatusChange?.(result.failed > 0 ? 'partial' : 'online')
   }
@@ -172,9 +175,7 @@ export function startSyncListener(onStatusChange?: (status: SyncStatus) => void)
   window.addEventListener('online', handleOnline)
   window.addEventListener('offline', handleOffline)
 
-  if (navigator.onLine) {
-    seedLocalDB()
-  } else {
+  if (!navigator.onLine) {
     onStatusChange?.('offline')
   }
 
