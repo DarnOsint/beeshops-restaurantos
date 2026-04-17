@@ -196,17 +196,21 @@ export default function Login() {
     if (userId) {
       const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).single()
       if (prof) {
-        void cacheCredential(
-          prof as unknown as {
-            id: string
-            full_name: string
-            role: string
-            email?: string
-            created_at?: string
-          },
-          'password',
-          password
-        ).catch((e) => console.warn('cacheCredential(password) failed', e))
+        try {
+          await cacheCredential(
+            prof as unknown as {
+              id: string
+              full_name: string
+              role: string
+              email?: string
+              created_at?: string
+            },
+            'password',
+            password
+          )
+        } catch (e) {
+          console.warn('cacheCredential(password) failed', e)
+        }
         setOfflineSession(
           {
             id: prof.id,
@@ -265,7 +269,7 @@ export default function Login() {
     if (!navigator.onLine) {
       const offlineProfile = await offlineFallback()
       if (!offlineProfile) {
-        setError('Offline and no cached PIN found for this user.')
+        setError('Offline login needs a prior online login on this POS (PIN not cached yet).')
         setLoading(false)
       }
       return
@@ -378,17 +382,21 @@ export default function Login() {
           })
           .select()
       )
-    void cacheCredential(
-      {
-        id: profile.id,
-        full_name: profile.full_name,
-        role: profile.role,
-        email: profile.email,
-        created_at: new Date().toISOString(),
-      },
-      'pin',
-      entered
-    ).catch((e) => console.warn('cacheCredential(pin) failed', e))
+    try {
+      await cacheCredential(
+        {
+          id: profile.id,
+          full_name: profile.full_name,
+          role: profile.role,
+          email: profile.email,
+          created_at: new Date().toISOString(),
+        },
+        'pin',
+        entered
+      )
+    } catch (e) {
+      console.warn('cacheCredential(pin) failed', e)
+    }
     setOfflineSession(
       {
         id: profile.id,
@@ -400,7 +408,7 @@ export default function Login() {
       'pin'
     )
     setLoading(false)
-    window.location.replace('/dashboard')
+    navigate('/dashboard', { replace: true })
   }
 
   const handlePinPress = (digit: string) => {
