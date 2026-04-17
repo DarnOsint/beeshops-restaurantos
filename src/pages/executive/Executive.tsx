@@ -138,7 +138,7 @@ export default function Executive() {
         supabase.from('orders').select('id').eq('status', 'open'),
         supabase.from('tables').select('status'),
         supabase.from('rooms').select('status'),
-        supabase.from('attendance').select('staff_id').filter('clock_out', 'is', null),
+        supabase.from('attendance').select('staff_id').or('clock_out.is.null'),
         supabase.from('inventory').select('id, current_stock, minimum_stock').eq('is_active', true),
         supabase
           .from('orders')

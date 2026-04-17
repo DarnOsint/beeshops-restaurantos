@@ -519,7 +519,7 @@ export default function POS() {
       .from('attendance')
       .select('id, clock_in, date')
       .eq('staff_id', staffId)
-      .filter('clock_out', 'is', null)
+      .or('clock_out.is.null')
       .order('clock_in', { ascending: false })
       .limit(1)
     // Only update if we haven't already confirmed clocked-in — prevents mid-session flicker
@@ -629,7 +629,7 @@ export default function POS() {
       .from('attendance')
       .select('clock_in, date')
       .eq('staff_id', profile?.id)
-      .filter('clock_out', 'is', null)
+      .or('clock_out.is.null')
       .order('clock_in', { ascending: false })
       .limit(1)
     const activeClockIn = attendanceOpen?.[0]?.clock_in
@@ -642,7 +642,7 @@ export default function POS() {
         .from('attendance')
         .select('clock_in, date')
         .eq('staff_id', profile?.id)
-        .filter('clock_out', 'is', null)
+        .or('clock_out.is.null')
         .order('clock_in', { ascending: false })
         .limit(1),
       supabase
@@ -700,7 +700,7 @@ export default function POS() {
       .from('attendance')
       .select('clock_in')
       .eq('staff_id', profile?.id)
-      .filter('clock_out', 'is', null)
+      .or('clock_out.is.null')
       .order('clock_in', { ascending: false })
       .limit(1)
     const windowStart = attendanceOpen?.[0]?.clock_in

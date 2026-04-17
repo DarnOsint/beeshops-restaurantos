@@ -20,7 +20,6 @@ interface Shift {
   role: string
   clock_in: string
   clock_out?: string | null
-  confirmed_at?: string | null
   duration_minutes?: number | null
   date?: string
   pos_machine?: string | null
@@ -87,18 +86,13 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
     if (data) setStaff(data)
   }
   const fetchActiveShifts = async () => {
-    const baseQuery = supabase
-      .from('attendance')
-      .filter('clock_out', 'is', null)
-      .order('clock_in', {
-        ascending: true,
-      })
+    const baseQuery = supabase.from('attendance').or('clock_out.is.null').order('clock_in', {
+      ascending: true,
+    })
 
     // Some deployments may have column-level privileges on attendance (RLS/GRANT).
     // Try richer payload first, then fall back to minimal columns if blocked.
-    const full = await baseQuery.select(
-      'id, staff_id, staff_name, role, clock_in, confirmed_at, pos_machine'
-    )
+    const full = await baseQuery.select('id, staff_id, staff_name, role, clock_in, pos_machine')
     const res = full.error
       ? await baseQuery.select('id, staff_id, staff_name, role, clock_in')
       : full
@@ -134,7 +128,7 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
     end.setDate(end.getDate() + 1)
     const full = await supabase
       .from('attendance')
-      .select('id, staff_id, staff_name, role, clock_in, clock_out, confirmed_at, pos_machine')
+      .select('id, staff_id, staff_name, role, clock_in, clock_out, pos_machine')
       .gte('clock_in', start.toISOString())
       .lt('clock_in', end.toISOString())
       .order('clock_in', { ascending: false })
@@ -176,7 +170,7 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
       .from('attendance')
       .select('id')
       .eq('staff_id', member.id)
-      .filter('clock_out', 'is', null)
+      .or('clock_out.is.null')
       .limit(1)
     if (live && live.length > 0) {
       toast.warning('Already Clocked In', member.full_name + ' is already clocked in')
@@ -348,20 +342,14 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
             </div>
           ) : (
             activeShifts.map((shift) => {
-              const confirmed = !!shift.confirmed_at
               return (
                 <div
                   key={shift.id}
-                  className={`flex items-center justify-between rounded-xl p-3 ${confirmed ? 'bg-green-500/10 border border-green-500/20' : 'bg-amber-500/10 border border-amber-500/30'}`}
+                  className="flex items-center justify-between rounded-xl p-3 bg-green-500/10 border border-green-500/20"
                 >
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-white font-medium">{shift.staff_name}</p>
-                      {!confirmed && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-semibold">
-                          AWAITING LOGIN
-                        </span>
-                      )}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-gray-400 text-xs capitalize">{shift.role}</p>
@@ -372,13 +360,9 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
                         </span>
                       )}
                     </div>
-                    <p
-                      className={`text-xs mt-0.5 flex items-center gap-1 ${confirmed ? 'text-green-400' : 'text-amber-400'}`}
-                    >
+                    <p className="text-xs mt-0.5 flex items-center gap-1 text-green-400">
                       <Timer size={10} />
-                      {confirmed
-                        ? 'Logged in at ' + formatTime(shift.confirmed_at || shift.clock_in)
-                        : 'Clocked in at ' + formatTime(shift.clock_in) + ' — not yet logged in'}
+                      {'Clocked in at ' + formatTime(shift.clock_in)}
                     </p>
                   </div>
                   <button
@@ -518,18 +502,8 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
                   </div>
                   <p className="text-gray-500 text-xs mt-0.5">
                     {formatTime(entry.clock_in)}
-                    {(entry as Shift).confirmed_at &&
-                    (entry as Shift).confirmed_at !== entry.clock_in ? (
-                      <span className="text-amber-400">
-                        {' '}
-                        (logged in {formatTime((entry as Shift).confirmed_at as string)})
-                      </span>
-                    ) : null}
                     {' → '}
                     {entry.clock_out ? formatTime(entry.clock_out) : 'Still on shift'}
-                    {!(entry as Shift).confirmed_at && !entry.clock_out ? (
-                      <span className="text-amber-400 ml-1"> not confirmed</span>
-                    ) : null}
                   </p>
                 </div>
                 <div className="text-right flex flex-col items-end gap-1.5">

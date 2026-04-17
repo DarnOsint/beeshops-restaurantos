@@ -155,7 +155,7 @@ function SupervisorDashboardInner() {
       supabase
         .from('attendance')
         .select('id,staff_id,staff_name,role,clock_in')
-        .filter('clock_out', 'is', null)
+        .or('clock_out.is.null')
         .order('clock_in', { ascending: true }),
       supabase
         .from('waiter_calls')

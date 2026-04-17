@@ -34,7 +34,7 @@ export default function UnassignedCustomerOrders() {
         .from('attendance')
         .select('staff_id, profiles!attendance_staff_id_fkey(id, full_name, role)')
         .eq('date', new Date().toISOString().split('T')[0])
-        .filter('clock_out', 'is', null)
+        .or('clock_out.is.null')
       setWaitrons(
         ((att || []) as Record<string, unknown>[])
           .filter((a) => (a.profiles as Waitron)?.role === 'waitron')

@@ -344,7 +344,7 @@ export default function Login() {
         .from('attendance')
         .select('id')
         .eq('staff_id', profile.id)
-        .filter('clock_out', 'is', null)
+        .or('clock_out.is.null')
         .limit(1)
       if (!activeShift || activeShift.length === 0) {
         setError('You must be clocked in by a manager before logging in.')
@@ -359,13 +359,6 @@ export default function Login() {
     if (profile.pin && profile.pin.startsWith('pbkdf2:')) {
       void supabase.from('profiles').update({ pin: entered }).eq('id', profile.id)
     }
-
-    // Auto-confirm attendance: mark confirmed_at on active shift (proves they are present)
-    await supabase
-      .from('attendance')
-      .update({ confirmed_at: new Date().toISOString() })
-      .eq('staff_id', profile.id)
-      .filter('clock_out', 'is', null)
 
     void fetch('https://api.ipify.org?format=json')
       .then((r) => r.json())

@@ -152,7 +152,7 @@ export default function Management() {
       supabase.from('orders').select('id').eq('status', 'open'),
       supabase.from('tables').select('id').eq('status', 'occupied'),
       supabase.from('rooms').select('status'),
-      supabase.from('attendance').select('staff_id').filter('clock_out', 'is', null),
+      supabase.from('attendance').select('staff_id').or('clock_out.is.null'),
       supabase
         .from('orders')
         .select('total_amount, order_items(total_price, return_requested, return_accepted, status)')
