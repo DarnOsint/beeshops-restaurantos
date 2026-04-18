@@ -44,6 +44,7 @@ import type { Table, MenuItem, Order, OrderItem, Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
 import { localBulkPut, localGetAll } from '../../lib/db'
 import { offlineInsertNoReturn, offlineUpdateNoReturn } from '../../lib/offlineWrite'
+import { useVisibilityInterval } from '../../hooks/useVisibilityInterval'
 
 const normalizeDestination = (
   dest?: string | null,
@@ -493,13 +494,32 @@ export default function POS() {
       )
       .subscribe()
 
-    // Also poll every 15s as safety net (only while a table/order is open)
-    const poll = setInterval(refreshActiveOrder, 15000)
     return () => {
       supabase.removeChannel(ch)
-      clearInterval(poll)
     }
   }, [activeOrder?.id])
+
+  // Safety net polling: only while tab is active and an order is open.
+  useVisibilityInterval(
+    () => {
+      const cur = activeOrderRef.current
+      if (!cur?.id) return
+      supabase
+        .from('orders')
+        .select(
+          `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes,
+        order_items(id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
+          menu_items(name, price, menu_categories(name, destination)))`
+        )
+        .eq('id', cur.id)
+        .single()
+        .then(({ data }) => {
+          if (data) setActiveOrder(data)
+        })
+    },
+    15_000,
+    [activeOrder?.id]
+  )
 
   useEffect(() => {
     if (!profile) return

@@ -37,6 +37,7 @@ import KitchenFridgeTab from './mgmt/KitchenFridgeTab'
 import StationSalesTab from './mgmt/StationSalesTab'
 import { useLateOrders } from '../../hooks/useLateOrders'
 import { useSyncStatus } from '../../hooks/useSyncStatus'
+import { useVisibilityInterval } from '../../hooks/useVisibilityInterval'
 import type { SyncQueueEntry } from '../../lib/db'
 import { getPendingQueue } from '../../lib/db'
 import { HelpTooltip } from '../../components/HelpTooltip'
@@ -305,9 +306,12 @@ export default function Management() {
       setSyncQueue(q || [])
     }
     load()
-    const iv = setInterval(load, 10000)
-    return () => clearInterval(iv)
+    // Poll queue only while tab is active (reduces background egress).
   }, [])
+  useVisibilityInterval(async () => {
+    const q = await getPendingQueue()
+    setSyncQueue(q || [])
+  }, 30_000)
 
   const resolveAlert = async (id: string) => {
     await supabase.from('cv_alerts').update({ resolved: true }).eq('id', id)

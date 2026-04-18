@@ -15,6 +15,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { audit } from '../../lib/audit'
+import { useVisibilityInterval } from '../../hooks/useVisibilityInterval'
 
 const todayStr = () => {
   const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
@@ -375,7 +376,12 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
 
   // Keep saved chiller rows aligned with the live filtered sales count for the selected day.
   useEffect(() => {
-    const syncToDb = async () => {
+    // Intentionally no interval here; handled by visibility-aware polling below to cut egress.
+  }, [stockData, soldMap, date, savedVoidQty])
+
+  useVisibilityInterval(
+    async () => {
+      if (!navigator.onLine) return
       for (const [name, entry] of Object.entries(stockData)) {
         if (!entry.id) continue
         const posSold = soldMap[name] || 0
@@ -392,11 +398,11 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
             .eq('id', entry.id)
         }
       }
-    }
-    void syncToDb()
-    const iv = setInterval(syncToDb, 5 * 60 * 1000) // every 5 minutes
-    return () => clearInterval(iv)
-  }, [stockData, soldMap, date, savedVoidQty])
+    },
+    10 * 60 * 1000,
+    [stockData, soldMap, date, savedVoidQty],
+    { runOnMount: true }
+  )
 
   const updateField = (itemName: string, field: keyof StockEntry, value: number | string) => {
     setStockData((prev) => ({

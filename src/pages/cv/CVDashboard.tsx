@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useNavigate } from 'react-router-dom'
+import { useVisibilityInterval } from '../../hooks/useVisibilityInterval'
 import {
   ArrowLeft,
   Camera,
@@ -126,9 +127,10 @@ export default function CVDashboard() {
 
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 10000) // refresh every 10s
-    return () => clearInterval(interval)
+    // Poll only while tab is active; realtime also updates alerts.
   }, [fetchData])
+
+  useVisibilityInterval(fetchData, 30_000, [fetchData])
 
   // Realtime subscription for new alerts
   useEffect(() => {

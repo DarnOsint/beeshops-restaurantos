@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import { RefreshCw, Camera } from 'lucide-react'
+import { useVisibilityInterval } from '../../hooks/useVisibilityInterval'
 
 import StatCards from './exec/StatCards'
 import RevenueChart from './exec/RevenueChart'
@@ -306,7 +307,6 @@ export default function Executive() {
         if (map['geofence_lat_apartment']) setLatApartment(map['geofence_lat_apartment'])
         if (map['geofence_lng_apartment']) setLngApartment(map['geofence_lng_apartment'])
       })
-    const iv = setInterval(() => scheduleFetchStats(15000), 60000)
     const ch = supabase
       .channel('executive-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () =>
@@ -326,11 +326,12 @@ export default function Executive() {
       )
       .subscribe()
     return () => {
-      clearInterval(iv)
       if (statsRefreshTimer.current) window.clearTimeout(statsRefreshTimer.current)
       supabase.removeChannel(ch)
     }
   }, [scheduleFetchStats])
+
+  useVisibilityInterval(() => scheduleFetchStats(15000), 60_000, [scheduleFetchStats])
 
   useEffect(() => {
     if (!cvTab) return

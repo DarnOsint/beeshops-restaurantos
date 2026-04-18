@@ -4,6 +4,7 @@ import { supabase } from '../../../lib/supabase'
 import { audit } from '../../../lib/audit'
 import { useAuth } from '../../../context/AuthContext'
 import { useToast } from '../../../context/ToastContext'
+import { useVisibilityInterval } from '../../../hooks/useVisibilityInterval'
 import EditOrderModal from './EditOrderModal'
 import type { Profile } from '../../../types'
 
@@ -152,17 +153,17 @@ export default function OpenOrdersTab() {
   useEffect(() => {
     fetchOrders()
     fetchDeleteRequests()
-    const poll = setInterval(fetchDeleteRequests, 10000)
     const ch = supabase
       .channel('open-orders-ch')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchOrders)
       .subscribe()
     return () => {
-      clearInterval(poll)
       supabase.removeChannel(ch)
     }
   }, [fetchOrders, fetchDeleteRequests])
+
+  useVisibilityInterval(fetchDeleteRequests, 30_000, [fetchDeleteRequests])
 
   if (loading)
     return <div className="flex items-center justify-center p-8 text-amber-500">Loading...</div>

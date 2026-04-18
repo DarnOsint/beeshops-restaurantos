@@ -4,6 +4,7 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { audit } from '../../../lib/audit'
 import { useToast } from '../../../context/ToastContext'
+import { useVisibilityInterval } from '../../../hooks/useVisibilityInterval'
 import type { Profile } from '../../../types'
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
@@ -49,12 +50,9 @@ export default function VoidsTab() {
 
   useEffect(() => {
     fetchVoids(date)
-    const poll = setInterval(() => {
-      if (document.visibilityState !== 'visible') return
-      fetchVoids(date)
-    }, 30000)
-    return () => clearInterval(poll)
   }, [date, fetchVoids])
+
+  useVisibilityInterval(() => fetchVoids(date), 60_000, [date, fetchVoids])
 
   const pending = voids.filter((v) => v.status === 'pending')
   const approved = voids.filter((v) => v.status === 'approved')

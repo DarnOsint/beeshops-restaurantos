@@ -16,6 +16,7 @@ import RoomEditModal from './RoomEditModal'
 import type { RoomRow, StayRow, CheckinForm, RoomEditForm, RoomStatus } from './types'
 import { BLANK_CHECKIN } from './types'
 import { useToast } from '../../context/ToastContext'
+import { useVisibilityInterval } from '../../hooks/useVisibilityInterval'
 
 const TABS = [
   { id: 'board', label: 'Room Board', icon: BedDouble },
@@ -147,9 +148,10 @@ export default function RoomManagement() {
   }, [stays, fetchAll])
 
   useEffect(() => {
-    const interval = setInterval(checkOverstays, 60_000)
-    return () => clearInterval(interval)
+    // interval handled by visibility-aware hook
   }, [checkOverstays])
+
+  useVisibilityInterval(checkOverstays, 5 * 60_000, [checkOverstays])
 
   // ── Actions ───────────────────────────────────────────────────────────────
   const openCheckin = (room: RoomRow) => {

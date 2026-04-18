@@ -5,6 +5,7 @@ import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
 import ErrorBoundary from '../../components/ErrorBoundary'
 import { HelpTooltip } from '../../components/HelpTooltip'
+import { useVisibilityInterval } from '../../hooks/useVisibilityInterval'
 import ShiftManager from '../management/ShiftManager'
 import TableAssignment from '../management/TableAssignment'
 import {
@@ -185,7 +186,6 @@ function SupervisorDashboardInner() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll()
-    const iv = setInterval(fetchAll, 30000)
     const ch = supabase
       .channel('supervisor-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchAll)
@@ -195,10 +195,11 @@ function SupervisorDashboardInner() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'store_requests' }, fetchAll)
       .subscribe()
     return () => {
-      clearInterval(iv)
       supabase.removeChannel(ch)
     }
   }, [fetchAll])
+
+  useVisibilityInterval(fetchAll, 60_000, [fetchAll])
 
   // SUSPENDED: late order alerts disabled until further notice
   // useEffect(() => { ... }, [orders])
