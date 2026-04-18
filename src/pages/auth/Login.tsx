@@ -57,6 +57,8 @@ const setOfflineSession = (
       logged_in_at: new Date().toISOString(),
     })
   )
+  // Let AuthContext hydrate immediately without requiring a full reload
+  window.dispatchEvent(new Event('pin_session_updated'))
 }
 
 function useLockoutTimer(
