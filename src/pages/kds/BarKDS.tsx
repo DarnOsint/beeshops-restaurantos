@@ -146,54 +146,64 @@ function BarKDSInner() {
   )
 
   const fetchOrders = useCallback(async () => {
-    // Fetch open orders AND paid orders that still have pending bar items (cash sales/takeaway)
-    const [{ data, error }, { data: pendingReturns, error: pendingErr }] = await Promise.all([
-      supabase
-        .from('orders')
-        .select(
-          `id, created_at, notes, staff_id, order_type, customer_name,
-        tables(name),
-        profiles(full_name),
-        order_items(id, quantity, status, destination, notes, return_requested, return_accepted, return_reason,
-          menu_items(name, menu_categories(name, destination)))`
-        )
-        .in('status', ['open', 'paid'])
-        .order('created_at', { ascending: true }),
-      supabase.from('returns_log').select('order_item_id').eq('status', 'pending'),
-    ])
+    // Egress optimization:
+    // - Fetch ONLY orders that have pending/preparing bar items (via inner join filters).
+    // - Fetch return requests separately (returns_log is usually tiny).
+    const [{ data: barData, error }, { data: pendingReturns, error: pendingErr }] =
+      await Promise.all([
+        supabase
+          .from('orders')
+          .select(
+            `id, created_at, notes, staff_id, order_type, customer_name,
+            tables(name),
+            profiles(full_name),
+            order_items!inner(id, quantity, status, destination, notes, return_requested, return_accepted, return_reason,
+              menu_items(name, menu_categories(name, destination)))`
+          )
+          .in('status', ['open', 'paid'])
+          .eq('order_items.destination', 'bar')
+          .in('order_items.status', ['pending', 'preparing'])
+          .order('created_at', { ascending: true }),
+        supabase.from('returns_log').select('order_item_id').eq('status', 'pending'),
+      ])
 
-    if (!error && !pendingErr && data) {
-      const allOrders = data as unknown as KdsOrder[]
-      const pendingReturnIds = new Set(
-        ((pendingReturns || []) as Array<{ order_item_id: string | null }>)
-          .map((row) => row.order_item_id)
-          .filter(Boolean)
-      )
+    const pendingReturnIds = new Set(
+      ((pendingReturns || []) as Array<{ order_item_id: string | null }>)
+        .map((row) => row.order_item_id)
+        .filter(Boolean)
+    )
 
-      // Active bar orders (not ready/delivered, not return_accepted)
-      const bar = allOrders
+    if (!error && barData) {
+      // Already filtered on server; keep only the bar items that should display.
+      const bar = (barData as unknown as KdsOrder[])
         .map((o) => ({
           ...o,
-          order_items: o.order_items.filter(
-            (i) =>
-              isBarItem(i) &&
-              i.status !== 'delivered' &&
-              i.status !== 'ready' &&
-              i.status !== 'cancelled' &&
-              !i.return_accepted
+          order_items: (o.order_items || []).filter(
+            (i) => (i.status === 'pending' || i.status === 'preparing') && !i.return_accepted
           ),
         }))
         .filter((o) => o.order_items.length > 0)
       setOrders(bar)
+    }
 
-      // Also update sold count tracking for chiller — mark bar items as served
-      // when barman marks them ready (handled by updateItemStatus)
-
-      // Return requests (bar items with return_requested but not yet accepted/rejected)
+    // Return requests: fetch only orders that contain the returned bar items (small set).
+    if (!pendingErr && pendingReturnIds.size > 0) {
+      const ids = Array.from(pendingReturnIds)
+      const { data: retOrders } = await supabase
+        .from('orders')
+        .select(
+          `id, staff_id,
+          tables(name),
+          order_items!inner(id, quantity, status, destination, notes, return_requested, return_accepted, return_reason,
+            menu_items(name, menu_categories(name, destination)))`
+        )
+        .in('order_items.id', ids)
+        .eq('order_items.destination', 'bar')
+        .order('created_at', { ascending: true })
       const returns: typeof returnItems = []
-      allOrders.forEach((o) => {
-        o.order_items.forEach((i) => {
-          if (isBarItem(i) && pendingReturnIds.has(i.id)) {
+      ;((retOrders || []) as unknown as KdsOrder[]).forEach((o) => {
+        ;(o.order_items || []).forEach((i) => {
+          if (pendingReturnIds.has(i.id)) {
             returns.push({
               ...i,
               tableName: (o.tables as { name: string } | null)?.name ?? 'Unknown',
@@ -204,7 +214,10 @@ function BarKDSInner() {
         })
       })
       setReturnItems(returns)
+    } else {
+      setReturnItems([])
     }
+
     setLoading(false)
   }, [])
 
