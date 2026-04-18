@@ -319,12 +319,16 @@ export default function Accounting() {
       recorded_by_name: string
       order_id: string
     }>) {
-      creditMap[d.name] = (creditMap[d.name] || 0) + (d.current_balance || 0)
+      // "recorded_by_name" is the waitron/staff who recorded the debt (pay later).
+      const waitronName = d.recorded_by_name || 'Unknown'
+      creditMap[waitronName] = (creditMap[waitronName] || 0) + (d.current_balance || 0)
       const items = d.order_id ? (itemsByOrder[d.order_id] || []).join(', ') : ''
+      // Keep the customer/debtor name in notes for traceability.
+      const note = [d.name ? `Customer: ${d.name}` : '', d.notes || ''].filter(Boolean).join(' · ')
       creditDetails.push({
-        name: d.name,
+        name: waitronName,
         amount: d.current_balance,
-        notes: d.notes || '',
+        notes: note,
         date: d.created_at,
         by: d.recorded_by_name || '',
         items,

@@ -54,6 +54,7 @@ interface Reconciliation {
   cashCollected: Record<string, number> // waitron name → cash collected
   transferReceipts: Record<string, number> // waitron name → transfer receipt handed in
   outstanding: Record<string, number> // waitron name → outstanding/shortage for the day
+  excess: Record<string, number> // waitron name → excess/surplus for the day
 }
 
 export default function OverviewTab({
@@ -76,6 +77,7 @@ export default function OverviewTab({
     cashCollected: {},
     transferReceipts: {},
     outstanding: {},
+    excess: {},
   })
   const [saving, setSaving] = useState(false)
   const [reconDate, setReconDate] = useState(() => {
@@ -96,6 +98,7 @@ export default function OverviewTab({
     cashCollected: value?.cashCollected || {},
     transferReceipts: value?.transferReceipts || {},
     outstanding: value?.outstanding || {},
+    excess: value?.excess || {},
   })
 
   // Load saved reconciliation — single day or aggregate for range
@@ -119,6 +122,7 @@ export default function OverviewTab({
           cashCollected: {},
           transferReceipts: {},
           outstanding: {},
+          excess: {},
         })
       }
     } else {
@@ -134,6 +138,7 @@ export default function OverviewTab({
         cashCollected: {},
         transferReceipts: {},
         outstanding: {},
+        excess: {},
       }
       for (const entry of allRecons || []) {
         if (!entry.id.startsWith('recon_')) continue
@@ -145,6 +150,8 @@ export default function OverviewTab({
             merged.transferReceipts[k] = (merged.transferReceipts[k] || 0) + (v || 0)
           for (const [k, v] of Object.entries(r.outstanding || {}))
             merged.outstanding[k] = (merged.outstanding[k] || 0) + (v || 0)
+          for (const [k, v] of Object.entries(r.excess || {}))
+            merged.excess[k] = (merged.excess[k] || 0) + (v || 0)
         } catch {
           /* */
         }
@@ -157,15 +164,25 @@ export default function OverviewTab({
     loadRecon()
   }, [loadRecon])
 
-  const autoOutstanding = activeWaitrons.reduce(
+  const autoShortage = activeWaitrons.reduce(
     (acc, w) => {
-      const expectedCash = w.cashExpected || 0
-      const expectedTransfer = w.transferExpected || 0
-      const remittedCash = recon.cashCollected[w.name] || 0
-      const remittedTransfer = recon.transferReceipts[w.name] || 0
-      const shortage =
-        Math.max(0, expectedCash - remittedCash) + Math.max(0, expectedTransfer - remittedTransfer)
+      const expectedTotal = (w.cashExpected || 0) + (w.transferExpected || 0)
+      const remittedTotal =
+        (recon.cashCollected[w.name] || 0) + (recon.transferReceipts[w.name] || 0)
+      const shortage = Math.max(0, expectedTotal - remittedTotal)
       if (shortage > 0) acc[w.name] = shortage
+      return acc
+    },
+    {} as Record<string, number>
+  )
+
+  const autoExcess = activeWaitrons.reduce(
+    (acc, w) => {
+      const expectedTotal = (w.cashExpected || 0) + (w.transferExpected || 0)
+      const remittedTotal =
+        (recon.cashCollected[w.name] || 0) + (recon.transferReceipts[w.name] || 0)
+      const excess = Math.max(0, remittedTotal - expectedTotal)
+      if (excess > 0) acc[w.name] = excess
       return acc
     },
     {} as Record<string, number>
@@ -175,7 +192,8 @@ export default function OverviewTab({
     setSaving(true)
     const payload: Reconciliation = {
       ...recon,
-      outstanding: autoOutstanding,
+      outstanding: autoShortage,
+      excess: autoExcess,
     }
     await supabase.from('settings').upsert(
       {
@@ -208,11 +226,12 @@ export default function OverviewTab({
     0
   )
   // Merge auto shortage + auto credit (pay later) per waitron
-  const mergedOutstanding: Record<string, number> = { ...autoOutstanding }
+  const mergedOutstanding: Record<string, number> = { ...autoShortage }
   for (const [name, amt] of Object.entries(creditByWaitron)) {
     mergedOutstanding[name] = (mergedOutstanding[name] || 0) + amt
   }
   const totalOutstanding = Object.values(mergedOutstanding).reduce((s, v) => s + (v || 0), 0)
+  const totalExcess = Object.values(autoExcess).reduce((s, v) => s + (v || 0), 0)
   const totalReceived = totalCashCollected + totalTransferReceipts
   const expectedRevenue = summary.total
   const revenueGap = expectedRevenue - totalReceived - totalPayouts
@@ -273,52 +292,30 @@ export default function OverviewTab({
       div,
       ctr('OUTSTANDING PER WAITRON'),
       div,
-      ...Object.entries(autoOutstanding)
+      ...Object.entries(mergedOutstanding)
         .filter(([, v]) => v > 0)
         .map(([name, amt]) => row(name, `N${amt.toLocaleString()}`)),
       row('TOTAL OUTSTANDING:', `N${totalOutstanding.toLocaleString()}`),
       div,
-      ctr('BANK TRANSFERS RECEIVED'),
+      ctr('EXCESS PER WAITRON'),
       div,
-      ...Object.entries(recon.bankEntries)
+      ...Object.entries(autoExcess)
         .filter(([, v]) => v > 0)
         .map(([name, amt]) => row(name, `N${amt.toLocaleString()}`)),
-      row('TOTAL BANK:', `N${totalBankReceived.toLocaleString()}`),
-      div,
-      ctr('POS RECEIPTS'),
-      div,
-      ...Object.entries(recon.posEntries)
-        .filter(([, v]) => v > 0)
-        .map(([name, amt]) => row(name, `N${amt.toLocaleString()}`)),
-      row('TOTAL POS:', `N${totalPOSReceived.toLocaleString()}`),
+      row('TOTAL EXCESS:', `N${totalExcess.toLocaleString()}`),
       div,
       ctr('EXPENSES & PAYOUTS'),
       div,
       row('Total Payouts:', `N${totalPayouts.toLocaleString()}`),
       div,
-      ...(recon.debts.length > 0
-        ? [
-            ctr('OUTSTANDING DEBTS'),
-            div,
-            ...recon.debts
-              .filter((d) => d.amount > 0)
-              .map((d) => row(`${d.name}: ${d.note || ''}`, `N${d.amount.toLocaleString()}`)),
-            row('TOTAL DEBTS:', `N${totalDebts.toLocaleString()}`),
-            div,
-          ]
-        : []),
       sol,
       ctr('END OF DAY RECONCILIATION'),
       sol,
       row('Total Sales (POS):', `N${expectedRevenue.toLocaleString()}`),
       row('Total Received:', `N${totalReceived.toLocaleString()}`),
       row('Payouts:', `N${totalPayouts.toLocaleString()}`),
-      row(
-        'Outstanding (Waitrons):',
-        `N${Object.values(autoOutstanding)
-          .reduce((s, v) => s + v, 0)
-          .toLocaleString()}`
-      ),
+      row('Outstanding (Waitrons):', `N${totalOutstanding.toLocaleString()}`),
+      row('Excess (Waitrons):', `N${totalExcess.toLocaleString()}`),
       row('Accounted For:', `N${totalReceived.toLocaleString()}`),
       sol,
       row(
@@ -575,12 +572,13 @@ export default function OverviewTab({
             <AlertTriangle size={13} className="text-red-400" /> Outstanding / Shortage per Waitron
           </h4>
           <p className="text-gray-600 text-xs mb-2">
-            Shortages are calculated automatically from cash and POS/transfer remittance. Surplus
-            counts as zero. Credit and pay-later orders are added automatically.
+            Shortages are calculated automatically from cash and POS/transfer remittance. Surplus is
+            shown as excess. Credit and pay-later orders are added automatically.
           </p>
           <div className="space-y-1.5">
             {activeWaitrons.map((w) => {
-              const shortage = autoOutstanding[w.name] || 0
+              const shortage = autoShortage[w.name] || 0
+              const excess = autoExcess[w.name] || 0
               const credit = creditByWaitron[w.name] || 0
               return (
                 <div key={w.name} className="flex items-center gap-2">
@@ -597,6 +595,11 @@ export default function OverviewTab({
                   <span className="text-red-400 text-xs shrink-0">
                     shortage: ₦{shortage.toLocaleString()}
                   </span>
+                  {excess > 0 && (
+                    <span className="text-green-400 text-xs shrink-0">
+                      excess: ₦{excess.toLocaleString()}
+                    </span>
+                  )}
                   {credit > 0 && (
                     <span className="text-amber-400 text-xs shrink-0">
                       Credit: ₦{credit.toLocaleString()}
