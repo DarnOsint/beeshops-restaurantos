@@ -381,30 +381,45 @@ function KitchenKDSInner() {
   }
 
   const fetchOrders = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('orders')
-      .select(
-        `id, created_at, notes, staff_id,
-        tables(name),
-        order_items(id, quantity, status, destination, created_at, notes, modifier_notes, return_requested, return_accepted, return_reason,
-          menu_items(name, menu_categories(name, destination)))`
-      )
-      .eq('status', 'open')
-      .order('created_at', { ascending: false })
+    // Egress optimization: fetch only orders that have active kitchen items.
+    const [{ data, error }, { data: retItems, error: retErr }] = await Promise.all([
+      supabase
+        .from('orders')
+        .select(
+          `id, created_at, notes, staff_id,
+          tables(name),
+          order_items!inner(id, quantity, status, destination, created_at, notes, modifier_notes, return_requested, return_accepted, return_reason,
+            menu_items(name, menu_categories(name, destination)))`
+        )
+        .eq('status', 'open')
+        .eq('order_items.destination', 'kitchen')
+        .in('order_items.status', ['pending', 'preparing'])
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('order_items')
+        .select(
+          `id, order_id, quantity, status, destination, created_at, notes, modifier_notes, return_requested, return_accepted, return_reason,
+          menu_items(name, menu_categories(name, destination)),
+          orders(id, staff_id, status, tables(name))`
+        )
+        .eq('destination', 'kitchen')
+        .eq('return_requested', true)
+        .eq('return_accepted', false)
+        .in('orders.status', ['open', 'paid'])
+        .order('created_at', { ascending: true }),
+    ])
 
     if (!error && data) {
       const allOrders = data as unknown as KdsOrder[]
-
-      // Active kitchen orders (not ready/delivered, not return_accepted)
       const kitchen = allOrders
         .map((o) => ({
           ...o,
           order_items: sortKitchenItems(
-            o.order_items.filter(
+            (o.order_items || []).filter(
               (i) =>
                 isKitchenItem(i) &&
-                (i.status !== 'delivered' || isTakeawayPack(i)) &&
                 i.status !== 'ready' &&
+                i.status !== 'delivered' &&
                 !i.return_accepted
             ),
             o.created_at
@@ -417,23 +432,24 @@ function KitchenKDSInner() {
             new Date(getKitchenOrderSortTime(a)).getTime()
         )
       setOrders(kitchen)
+    }
 
-      // Return requests (kitchen items with return_requested but not yet accepted/rejected)
+    if (!retErr && retItems) {
       const returns: typeof returnItems = []
-      allOrders.forEach((o) => {
-        o.order_items.forEach((i) => {
-          if (isKitchenItem(i) && i.return_requested && !i.return_accepted) {
-            returns.push({
-              ...i,
-              tableName: (o.tables as { name: string } | null)?.name ?? 'Unknown',
-              orderId: o.id,
-              staffId: o.staff_id,
-            })
-          }
+      ;(retItems as any[]).forEach((i) => {
+        const tableName = i.orders?.tables?.name ?? 'Unknown'
+        returns.push({
+          ...i,
+          tableName,
+          orderId: i.order_id || i.orders?.id,
+          staffId: i.orders?.staff_id || null,
         })
       })
       setReturnItems(returns)
+    } else {
+      setReturnItems([])
     }
+
     setLoading(false)
   }, [])
 
@@ -539,12 +555,17 @@ function KitchenKDSInner() {
     fetchReturnHistory()
     const tickTimer = setInterval(() => setTick((t) => t + 1), 1000)
     const pollTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
       fetchOrders()
       fetchReturnHistory()
-    }, 10000)
+    }, 30000)
     const channel = supabase
       .channel('kitchen-channel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchOrders)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'order_items', filter: 'destination=eq.kitchen' },
+        fetchOrders
+      )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
       .subscribe()
     const onVisible = () => {

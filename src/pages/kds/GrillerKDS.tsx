@@ -430,35 +430,41 @@ function GrillerKDSInner() {
   }
 
   const fetchTickets = async (isRealtime = false) => {
-    const { data, error } = await supabase
-      .from('order_items')
-      .select(
-        `*, menu_items(name, menu_categories(name, destination)),
-        orders(id, order_type, customer_name, staff_id, tables(name))`
-      )
-      .order('created_at', { ascending: true })
+    // Egress optimization: fetch only active griller items + return requests.
+    const [{ data, error }, { data: ret, error: retErr }] = await Promise.all([
+      supabase
+        .from('order_items')
+        .select(
+          `id, order_id, quantity, status, destination, created_at, notes, modifier_notes, return_requested, return_accepted, return_reason,
+          menu_items(name, menu_categories(name, destination)),
+          orders(id, order_type, customer_name, staff_id, tables(name))`
+        )
+        .eq('destination', 'griller')
+        .in('status', ['pending', 'preparing'])
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('order_items')
+        .select(
+          `id, order_id, quantity, status, destination, created_at, notes, modifier_notes, return_requested, return_accepted, return_reason,
+          menu_items(name, menu_categories(name, destination)),
+          orders(id, order_type, customer_name, staff_id, tables(name))`
+        )
+        .eq('destination', 'griller')
+        .eq('return_requested', true)
+        .eq('return_accepted', false)
+        .order('created_at', { ascending: true }),
+    ])
 
     if (error) {
       console.error(error)
       return
     }
 
-    const allItems = (
-      (data || []) as (GrillerItem & {
-        return_requested?: boolean
-        return_accepted?: boolean
-        return_reason?: string | null
-      })[]
-    ).filter((i) => i.menu_items?.menu_categories?.destination === 'griller')
-
-    // Active griller items (not ready/delivered, not return_accepted)
-    const grillerItems = allItems.filter(
-      (i) =>
-        i.status !== 'ready' &&
-        i.status !== 'delivered' &&
-        !i.return_accepted &&
-        (i.status === 'pending' || i.status === 'preparing')
-    )
+    const grillerItems = (data || []) as (GrillerItem & {
+      return_requested?: boolean
+      return_accepted?: boolean
+      return_reason?: string | null
+    })[]
 
     const orderMap: Record<string, GrillerTicket> = {}
     grillerItems.forEach((item) => {
@@ -494,15 +500,17 @@ function GrillerKDSInner() {
     setTickets(newTickets)
 
     // Return requests (griller items with return_requested but not yet accepted)
-    const returns = allItems
-      .filter((i) => i.return_requested && !i.return_accepted)
-      .map((i) => ({
+    if (!retErr && ret) {
+      const returns = (ret as any[]).map((i) => ({
         ...i,
         tableName: i.orders?.tables?.name || i.orders?.customer_name || 'Unknown',
         orderId: i.order_id,
         staffId: i.orders?.staff_id || null,
       }))
-    setReturnItems(returns)
+      setReturnItems(returns)
+    } else {
+      setReturnItems([])
+    }
 
     setLoading(false)
   }
@@ -595,13 +603,16 @@ function GrillerKDSInner() {
     fetchReturnHistory()
     const tickTimer = setInterval(() => setTick((t) => t + 1), 1000)
     const pollTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
       fetchTickets()
       fetchReturnHistory()
-    }, 10000)
+    }, 30000)
     const channel = supabase
       .channel('griller-kds')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () =>
-        fetchTickets(true)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'order_items', filter: 'destination=eq.griller' },
+        () => fetchTickets(true)
       )
       .subscribe()
     const onVisible = () => {
