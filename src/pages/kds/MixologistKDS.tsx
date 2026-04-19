@@ -606,6 +606,7 @@ function MixologistKDSInner() {
             destination="mixologist"
             icon={<BarChart2 size={16} />}
             color="text-emerald-400"
+            includePending
           />
         </div>
       )}

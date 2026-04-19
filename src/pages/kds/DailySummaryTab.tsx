@@ -12,6 +12,10 @@ interface Props {
   destination: 'bar' | 'kitchen' | 'griller' | 'mixologist'
   icon: React.ReactNode
   color: string
+  /**
+   * Mixologist only: show both accepted (preparing/ready/delivered) and pending items.
+   */
+  includePending?: boolean
 }
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
@@ -81,9 +85,49 @@ const inferDestination = (row: {
   return 'bar'
 }
 
-export default function DailySummaryTab({ destination, icon, color }: Props) {
+const buildSummary = (
+  filtered: Array<{
+    quantity: number
+    menu_items?: { name?: string } | null
+    orders?: {
+      profiles?: { full_name: string } | null
+      tables?: { table_categories?: { name: string } | null } | null
+    } | null
+  }>
+): { rows: SummaryItem[]; total: number } => {
+  const itemMap = new Map<string, Map<string, number>>()
+  for (const item of filtered) {
+    const itemName = item.menu_items?.name || 'Unknown'
+    const zone = item.orders?.tables?.table_categories?.name
+    const staffName = item.orders?.profiles?.full_name || 'Unknown'
+    const waitronName = zone ? `${staffName} (${zone})` : staffName
+    if (!itemMap.has(itemName)) itemMap.set(itemName, new Map())
+    const wm = itemMap.get(itemName)!
+    wm.set(waitronName, (wm.get(waitronName) || 0) + (item.quantity || 0))
+  }
+
+  const rows: SummaryItem[] = Array.from(itemMap.entries())
+    .map(([name, wm]) => {
+      const waitrons = Array.from(wm.entries())
+        .map(([wName, qty]) => ({ name: wName, quantity: qty }))
+        .sort((a, b) => b.quantity - a.quantity)
+      return { name, quantity: waitrons.reduce((s, w) => s + w.quantity, 0), waitrons }
+    })
+    .sort((a, b) => b.quantity - a.quantity)
+
+  return { rows, total: rows.reduce((s, i) => s + i.quantity, 0) }
+}
+
+export default function DailySummaryTab({
+  destination,
+  icon,
+  color,
+  includePending = false,
+}: Props) {
   const [summary, setSummary] = useState<SummaryItem[]>([])
   const [totalItems, setTotalItems] = useState(0)
+  const [pendingSummary, setPendingSummary] = useState<SummaryItem[]>([])
+  const [pendingTotal, setPendingTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [date, setDate] = useState(todayWAT())
   const printRef = useRef<HTMLDivElement>(null)
@@ -123,7 +167,7 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
       // - Other stations: keep the broader summary behavior.
 
       if (data) {
-        const filtered = (
+        const base = (
           data as unknown as {
             quantity: number
             status: string
@@ -139,42 +183,32 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
         ).filter((i) => {
           const itemDest = inferDestination(i as any)
           const cancelled = (i.status || '').toLowerCase() === 'cancelled'
-          const acceptedByStation =
-            destination === 'mixologist'
-              ? ['preparing', 'ready', 'delivered'].includes((i.status || '').toLowerCase())
-              : true
           const hasReturn = i.return_accepted || (i as any).return_requested
-          return (
-            itemDest === destination && i.orders && !cancelled && !hasReturn && acceptedByStation
-          )
+          return itemDest === destination && i.orders && !cancelled && !hasReturn
         })
 
-        const itemMap = new Map<string, Map<string, number>>()
-        for (const item of filtered) {
-          const itemName = item.menu_items?.name || 'Unknown'
-          const zone = item.orders?.tables?.table_categories?.name
-          const staffName = item.orders?.profiles?.full_name || 'Unknown'
-          const waitronName = zone ? `${staffName} (${zone})` : staffName
-          if (!itemMap.has(itemName)) itemMap.set(itemName, new Map())
-          const wm = itemMap.get(itemName)!
-          wm.set(waitronName, (wm.get(waitronName) || 0) + item.quantity)
+        if (destination === 'mixologist' && includePending) {
+          const accepted = base.filter((i) =>
+            ['preparing', 'ready', 'delivered'].includes(String(i.status || '').toLowerCase())
+          )
+          const pending = base.filter((i) => String(i.status || '').toLowerCase() === 'pending')
+          const acceptedBuilt = buildSummary(accepted as any[])
+          const pendingBuilt = buildSummary(pending as any[])
+          setSummary(acceptedBuilt.rows)
+          setPendingSummary(pendingBuilt.rows)
+          setPendingTotal(pendingBuilt.total)
+          setTotalItems(acceptedBuilt.total + pendingBuilt.total)
+        } else {
+          const built = buildSummary(base as any[])
+          setSummary(built.rows)
+          setTotalItems(built.total)
+          setPendingSummary([])
+          setPendingTotal(0)
         }
-
-        const result: SummaryItem[] = Array.from(itemMap.entries())
-          .map(([name, wm]) => {
-            const waitrons = Array.from(wm.entries())
-              .map(([wName, qty]) => ({ name: wName, quantity: qty }))
-              .sort((a, b) => b.quantity - a.quantity)
-            return { name, quantity: waitrons.reduce((s, w) => s + w.quantity, 0), waitrons }
-          })
-          .sort((a, b) => b.quantity - a.quantity)
-
-        setSummary(result)
-        setTotalItems(result.reduce((s, i) => s + i.quantity, 0))
       }
       setLoading(false)
     },
-    [destination, date]
+    [destination, date, includePending]
   )
 
   useEffect(() => {
@@ -187,7 +221,14 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
   }
 
   const handlePrint = () => {
-    const label = destination === 'bar' ? 'DRINKS' : destination === 'kitchen' ? 'KITCHEN' : 'GRILL'
+    const label =
+      destination === 'bar'
+        ? 'DRINKS'
+        : destination === 'kitchen'
+          ? 'KITCHEN'
+          : destination === 'griller'
+            ? 'GRILL'
+            : 'MIXOLOGIST'
     const fmtDate = new Date(date).toLocaleDateString('en-NG', {
       day: '2-digit',
       month: 'short',
@@ -218,11 +259,31 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
       div,
       row('ITEM', 'QTY'),
       div,
-      ...summary.map((item, i) => {
-        const itemLine = row(`${i + 1}. ${item.name}`, String(item.quantity))
-        const waitronLines = item.waitrons.map((w) => `   ${w.name}: ${w.quantity}`).join('\n')
-        return itemLine + '\n' + waitronLines
-      }),
+      ...(destination === 'mixologist' && includePending
+        ? [
+            'ACCEPTED',
+            ...summary.map((item, i) => {
+              const itemLine = row(`${i + 1}. ${item.name}`, String(item.quantity))
+              const waitronLines = item.waitrons
+                .map((w) => `   ${w.name}: ${w.quantity}`)
+                .join('\n')
+              return itemLine + '\n' + waitronLines
+            }),
+            pendingTotal > 0 ? div : '',
+            pendingTotal > 0 ? 'PENDING (NOT YET ACCEPTED)' : '',
+            ...pendingSummary.map((item, i) => {
+              const itemLine = row(`${i + 1}. ${item.name}`, String(item.quantity))
+              const waitronLines = item.waitrons
+                .map((w) => `   ${w.name}: ${w.quantity}`)
+                .join('\n')
+              return itemLine + '\n' + waitronLines
+            }),
+          ].filter(Boolean)
+        : summary.map((item, i) => {
+            const itemLine = row(`${i + 1}. ${item.name}`, String(item.quantity))
+            const waitronLines = item.waitrons.map((w) => `   ${w.name}: ${w.quantity}`).join('\n')
+            return itemLine + '\n' + waitronLines
+          })),
       sol,
       row('TOTAL:', String(totalItems)),
       sol,
@@ -296,6 +357,9 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
               : `on ${new Date(date).toLocaleDateString('en-NG', { day: '2-digit', month: 'short' })}`}
           </p>
           <p className={`text-2xl font-bold ${color}`}>{totalItems}</p>
+          {destination === 'mixologist' && includePending && (
+            <p className="text-gray-500 text-xs mt-1">Pending (not accepted): {pendingTotal}</p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {icon}
@@ -308,7 +372,7 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
           </button>
           <button
             onClick={handlePrint}
-            disabled={summary.length === 0}
+            disabled={summary.length === 0 && pendingSummary.length === 0}
             className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-white text-xs font-medium px-3 py-1.5 rounded-xl transition-colors"
             title="Print summary"
           >
@@ -319,12 +383,19 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
 
       {loading ? (
         <div className={`text-center py-8 ${color}`}>Loading...</div>
-      ) : summary.length === 0 ? (
+      ) : summary.length === 0 &&
+        !(destination === 'mixologist' && includePending && pendingTotal > 0) ? (
         <div className="text-center py-12">
           <p className="text-gray-400 text-sm">No {label} served yet today</p>
         </div>
       ) : (
         <div className="space-y-3">
+          {destination === 'mixologist' && includePending && (
+            <div className="flex items-center justify-between px-1">
+              <p className="text-gray-300 text-xs font-bold uppercase tracking-wider">Accepted</p>
+              <p className="text-gray-500 text-xs">total {totalItems - pendingTotal}</p>
+            </div>
+          )}
           {summary.map((item, i) => (
             <div
               key={item.name}
@@ -372,6 +443,49 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
               </div>
             </div>
           ))}
+          {destination === 'mixologist' && includePending && pendingSummary.length > 0 && (
+            <>
+              <div className="flex items-center justify-between px-1 pt-2">
+                <p className="text-amber-400 text-xs font-bold uppercase tracking-wider">
+                  Pending (Not Yet Accepted)
+                </p>
+                <p className="text-gray-500 text-xs">total {pendingTotal}</p>
+              </div>
+              {pendingSummary.map((item, i) => (
+                <div
+                  key={'p_' + item.name}
+                  className="bg-gray-900 border border-amber-500/20 rounded-xl overflow-hidden"
+                >
+                  <div className="flex items-center gap-3 p-3">
+                    <div className="w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center font-bold text-sm text-amber-400">
+                      {i + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-semibold text-sm truncate">{item.name}</p>
+                      <p className="text-gray-500 text-xs">
+                        {item.waitrons.length} waitron{item.waitrons.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-lg text-amber-400">{item.quantity}</p>
+                      <p className="text-gray-500 text-xs">total</p>
+                    </div>
+                  </div>
+                  <div className="border-t border-gray-800 px-3 py-2 space-y-1.5">
+                    {item.waitrons.map((w) => (
+                      <div key={w.name} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-gray-600" />
+                          <p className="text-gray-300 text-xs">{w.name}</p>
+                        </div>
+                        <p className="text-gray-400 text-xs font-medium">{w.quantity}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>
