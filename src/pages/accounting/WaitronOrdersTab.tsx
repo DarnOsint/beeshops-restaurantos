@@ -3,7 +3,10 @@ import { Users, ChevronDown, ChevronUp, Printer, RefreshCw } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getNetOrderAmount, getValidOrderItemCount, getValidOrderItems } from './orderAmounts'
 
-const todayStr = () => new Date().toISOString().slice(0, 10)
+const todayWAT = () =>
+  new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })).toLocaleDateString(
+    'en-CA'
+  )
 
 interface WaitronShift {
   staff_id: string
@@ -104,15 +107,15 @@ const getBarBucket = (name?: string | null, catName?: string | null): BarBucket 
 }
 
 const sessionWindow = (dateStr: string) => {
-  const start = new Date(dateStr)
-  start.setHours(8, 0, 0, 0)
+  // 8am–8am WAT window, independent of device timezone
+  const start = new Date(`${dateStr}T08:00:00+01:00`)
   const end = new Date(start)
   end.setDate(end.getDate() + 1)
   return { start, end }
 }
 
 export default function WaitronOrdersTab() {
-  const [date, setDate] = useState(todayStr())
+  const [date, setDate] = useState(todayWAT())
   const [shifts, setShifts] = useState<WaitronShift[]>([])
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null)
   const [orders, setOrders] = useState<WaitronOrder[]>([])
@@ -156,10 +159,10 @@ export default function WaitronOrdersTab() {
         'id, total_amount, payment_method, order_type, created_at, closed_at, tables(name, table_categories(name)), order_items(quantity, total_price, destination, modifier_notes, return_requested, return_accepted, status, menu_items(name, menu_categories(name, destination)))'
       )
       .eq('staff_id', staffId)
-      .eq('status', 'paid')
-      .gte('closed_at', dayStart.toISOString())
-      .lte('closed_at', dayEnd.toISOString())
-      .order('closed_at', { ascending: true })
+      .or(
+        `and(status.eq.paid,closed_at.gte.${dayStart.toISOString()},closed_at.lt.${dayEnd.toISOString()}),and(status.eq.open,created_at.gte.${dayStart.toISOString()},created_at.lt.${dayEnd.toISOString()})`
+      )
+      .order('created_at', { ascending: true })
     setOrders((data || []) as unknown as WaitronOrder[])
     setOrdersLoading(false)
   }
@@ -167,8 +170,12 @@ export default function WaitronOrdersTab() {
   const selectedShift = shifts.find((s) => s.staff_id === selectedStaff)
   const validItems = (items: WaitronOrder['order_items']) =>
     getValidOrderItems({ order_items: items })
+  const paidOrders = orders.filter((o) => o.status === 'paid')
+  const openOrders = orders.filter((o) => o.status !== 'paid')
   const totalSales = orders.reduce((s, o) => s + getNetOrderAmount(o), 0)
   const totalItems = orders.reduce((s, o) => s + getValidOrderItemCount(o), 0)
+  const paidSales = paidOrders.reduce((s, o) => s + getNetOrderAmount(o), 0)
+  const openSales = openOrders.reduce((s, o) => s + getNetOrderAmount(o), 0)
 
   const printWaitronReport = () => {
     if (!selectedShift || orders.length === 0) return
@@ -364,13 +371,13 @@ export default function WaitronOrdersTab() {
         <input
           type="date"
           value={date}
-          max={todayStr()}
+          max={todayWAT()}
           onChange={(e) => setDate(e.target.value)}
           className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
         />
         <button
-          onClick={() => setDate(todayStr())}
-          className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${date === todayStr() ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+          onClick={() => setDate(todayWAT())}
+          className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${date === todayWAT() ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
         >
           Today
         </button>
@@ -437,6 +444,9 @@ export default function WaitronOrdersTab() {
                     <p className="text-white font-bold">{selectedShift?.staff_name}</p>
                     <p className="text-gray-400 text-xs">
                       {orders.length} orders · ₦{totalSales.toLocaleString()} · {totalItems} items
+                      {orders.length > 0
+                        ? ` (paid ₦${paidSales.toLocaleString()} · open ₦${openSales.toLocaleString()})`
+                        : ''}
                     </p>
                   </div>
                   {orders.length > 0 && (
@@ -450,7 +460,7 @@ export default function WaitronOrdersTab() {
                 </div>
                 {orders.length === 0 ? (
                   <p className="text-gray-600 text-sm text-center py-8">
-                    No paid orders for this staff member on {date}
+                    No orders for this staff member on {date}
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -467,6 +477,16 @@ export default function WaitronOrdersTab() {
                               : o.payment_method?.startsWith('transfer')
                                 ? 'Transfer'
                                 : o.payment_method || '—'
+                      const statusLabel =
+                        o.status === 'paid' ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            PAID
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            OPEN
+                          </span>
+                        )
                       return (
                         <div
                           key={o.id}
@@ -483,6 +503,7 @@ export default function WaitronOrdersTab() {
                                   {zone}
                                 </span>
                               )}
+                              {statusLabel}
                             </div>
                             <div className="text-right">
                               <p className="text-amber-400 font-bold text-sm">
