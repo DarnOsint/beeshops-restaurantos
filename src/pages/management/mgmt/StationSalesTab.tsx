@@ -22,6 +22,11 @@ const inferDestination = (row: any): string => {
   const looksMixo =
     name.includes('cocktail') ||
     name.includes('mocktail') ||
+    name.includes('milkshake') ||
+    name.includes('shake') ||
+    name.includes('smoothie') ||
+    name.includes('fruit punch') ||
+    name.includes('punch') ||
     catName.includes('cocktail') ||
     catName.includes('mocktail')
   if (looksMixo) return 'mixologist'

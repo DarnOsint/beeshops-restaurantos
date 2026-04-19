@@ -33,6 +33,11 @@ const inferDestination = (row: {
   const looksMixo =
     name.includes('cocktail') ||
     name.includes('mocktail') ||
+    name.includes('milkshake') ||
+    name.includes('shake') ||
+    name.includes('smoothie') ||
+    name.includes('fruit punch') ||
+    name.includes('punch') ||
     catName.includes('cocktail') ||
     catName.includes('mocktail')
   if (looksMixo) return 'mixologist'
@@ -68,7 +73,7 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
         status,
         return_accepted,
         destination,
-        menu_items(name, menu_categories(destination)),
+        menu_items(name, menu_categories(name, destination)),
         orders(created_at, order_type, profiles(full_name), tables(table_categories(name)))
       `
         )
