@@ -15,7 +15,10 @@ interface PayrollRow {
   bank_name: string
   account_number: string
   base_salary: number
+  // Manual outstanding saved in payroll table
   outstanding: number
+  // Auto outstanding from daily reconciliation + pay-later (computed, not persisted)
+  auto_outstanding?: number
   docking: number
   days_worked: number
   total_days: number
@@ -144,8 +147,8 @@ export default function PayrollTab() {
       .lt('created_at', monthEndISO.toISOString())
     const creditByStaff: Record<string, number> = {}
     for (const d of (unpaidDebts || []) as any[]) {
-      // Use the debtor name (which is the waitron name for credit_order type)
-      const name = d.name || 'Unknown'
+      // "recorded_by_name" is the waitron/staff who recorded the pay-later debt.
+      const name = d.recorded_by_name || 'Unknown'
       creditByStaff[name] = (creditByStaff[name] || 0) + (d.current_balance || 0)
     }
 
@@ -165,7 +168,8 @@ export default function PayrollTab() {
         bank_name: saved?.bank_name || '',
         account_number: saved?.account_number || '',
         base_salary: saved?.base_salary || 0,
-        outstanding: (saved?.outstanding || 0) + autoOutstanding,
+        outstanding: saved?.outstanding || 0,
+        auto_outstanding: autoOutstanding,
         docking: saved?.docking || 0,
         days_worked: daysMap[s.id]?.size || 0,
         total_days: totalDays,
@@ -185,6 +189,7 @@ export default function PayrollTab() {
           account_number: p.account_number || '',
           base_salary: p.base_salary || 0,
           outstanding: p.outstanding || 0,
+          auto_outstanding: 0,
           docking: p.docking || 0,
           days_worked: daysMap[p.staff_id]?.size || 0,
           total_days: totalDays,
@@ -210,7 +215,8 @@ export default function PayrollTab() {
     return { ...base, ...edits }
   }
 
-  const netPay = (r: PayrollRow) => Math.max(0, r.base_salary - r.outstanding - r.docking)
+  const totalOutstandingFor = (r: PayrollRow) => (r.outstanding || 0) + (r.auto_outstanding || 0)
+  const netPay = (r: PayrollRow) => Math.max(0, r.base_salary - totalOutstandingFor(r) - r.docking)
 
   const updateField = (staffId: string, field: string, value: string | number) => {
     setEdited((prev) => ({ ...prev, [staffId]: { ...(prev[staffId] || {}), [field]: value } }))
@@ -343,7 +349,7 @@ export default function PayrollTab() {
   }
 
   const totalBase = rows.reduce((s, r) => s + getRow(r.staff_id).base_salary, 0)
-  const totalOutstanding = rows.reduce((s, r) => s + getRow(r.staff_id).outstanding, 0)
+  const totalOutstanding = rows.reduce((s, r) => s + totalOutstandingFor(getRow(r.staff_id)), 0)
   const totalDocking = rows.reduce((s, r) => s + getRow(r.staff_id).docking, 0)
   const totalNet = rows.reduce((s, r) => s + netPay(getRow(r.staff_id)), 0)
 
@@ -356,7 +362,9 @@ export default function PayrollTab() {
         'Bank',
         'Account No',
         'Base Salary',
-        'Outstanding',
+        'Outstanding (Total)',
+        'Outstanding (Auto)',
+        'Outstanding (Manual)',
         'Docking',
         'Net Pay',
       ],
@@ -369,7 +377,9 @@ export default function PayrollTab() {
           m.bank_name,
           m.account_number,
           String(m.base_salary),
-          String(m.outstanding),
+          String(totalOutstandingFor(m)),
+          String(m.auto_outstanding || 0),
+          String(m.outstanding || 0),
           String(m.docking),
           String(netPay(m)),
         ]
@@ -408,11 +418,15 @@ export default function PayrollTab() {
       '',
       ...rows.map((row) => {
         const m = getRow(row.staff_id)
+        const outTotal = totalOutstandingFor(m)
         return [
           r(m.staff_name, `(${m.role})`),
           r(`  Days: ${m.days_worked}/${m.total_days}`, `Bank: ${m.bank_name || '—'}`),
           r(`  Acct: ${m.account_number || '—'}`, ''),
-          r(`  Base: ${fmt(m.base_salary)}`, `Outst: ${fmt(m.outstanding)}`),
+          r(`  Base: ${fmt(m.base_salary)}`, `Outst: ${fmt(outTotal)}`),
+          (m.auto_outstanding || 0) > 0
+            ? r(`  Auto: ${fmt(m.auto_outstanding || 0)}`, `Manual: ${fmt(m.outstanding || 0)}`)
+            : '',
           r(`  Dock: ${fmt(m.docking)}`, `NET: ${fmt(netPay(m))}`),
           '',
         ].join('\n')
@@ -562,7 +576,7 @@ export default function PayrollTab() {
                 <th className="text-left px-2 py-2">Bank</th>
                 <th className="text-left px-2 py-2">Account No</th>
                 <th className="text-right px-2 py-2">Base Salary</th>
-                <th className="text-right px-2 py-2">Outstanding</th>
+                <th className="text-right px-2 py-2">Outstanding (Manual)</th>
                 <th className="text-right px-2 py-2">Docking</th>
                 <th className="text-right px-3 py-2">Net Pay</th>
               </tr>
@@ -652,15 +666,28 @@ export default function PayrollTab() {
                       />
                     </td>
                     <td className="px-1 py-1">
-                      <input
-                        type="number"
-                        value={m.outstanding || ''}
-                        placeholder="0"
-                        onChange={(e) =>
-                          updateField(row.staff_id, 'outstanding', Number(e.target.value) || 0)
-                        }
-                        className="w-20 bg-gray-800 border border-gray-700 text-red-400 text-right rounded px-1 py-1 text-xs focus:outline-none focus:border-red-500"
-                      />
+                      <div className="flex flex-col gap-0.5">
+                        <input
+                          type="number"
+                          value={m.outstanding || ''}
+                          placeholder="0"
+                          onChange={(e) =>
+                            updateField(row.staff_id, 'outstanding', Number(e.target.value) || 0)
+                          }
+                          className="w-20 bg-gray-800 border border-gray-700 text-red-400 text-right rounded px-1 py-1 text-xs focus:outline-none focus:border-red-500"
+                        />
+                        {(m.auto_outstanding || 0) > 0 && (
+                          <span className="text-[10px] text-gray-500 text-right">
+                            auto ₦{(m.auto_outstanding || 0).toLocaleString()}
+                          </span>
+                        )}
+                        {(m.outstanding || 0) + (m.auto_outstanding || 0) > 0 && (
+                          <span className="text-[10px] text-gray-400 text-right">
+                            total ₦
+                            {((m.outstanding || 0) + (m.auto_outstanding || 0)).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-1 py-1">
                       <input
