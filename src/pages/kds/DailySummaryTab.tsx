@@ -27,10 +27,26 @@ const inferDestination = (row: {
     menu_categories?: { destination?: string | null; name?: string } | null
   } | null
 }): string => {
-  const raw =
-    (row.destination || row.menu_items?.menu_categories?.destination || '')
-      ?.toString()
-      ?.toLowerCase() || ''
+  const normalize = (d: string) => {
+    const v = (d || '').toString().trim().toLowerCase()
+    if (!v) return ''
+    if (v === 'kitchen') return 'kitchen'
+    if (v === 'griller' || v === 'grill' || v === 'grilling') return 'griller'
+    if (v === 'bar') return 'bar'
+    if (v === 'shisha' || v === 'hookah') return 'shisha'
+    if (v === 'games' || v === 'game' || v === 'games_master' || v === 'gamesmaster') return 'games'
+    if (
+      v === 'mixologist' ||
+      v === 'cocktail' ||
+      v === 'cocktails' ||
+      v === 'mocktail' ||
+      v === 'mocktails'
+    )
+      return 'mixologist'
+    return v
+  }
+
+  const raw = normalize(row.destination || row.menu_items?.menu_categories?.destination || '')
   if (raw) return raw
   const name = (row.menu_items?.name || '').toLowerCase()
   const catName = (row.menu_items?.menu_categories?.name || '').toLowerCase()

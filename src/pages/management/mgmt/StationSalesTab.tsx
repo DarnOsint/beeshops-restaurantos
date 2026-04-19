@@ -12,10 +12,26 @@ interface SaleRow {
 }
 
 const inferDestination = (row: any): string => {
-  const raw =
-    (row?.destination || row?.menu_items?.menu_categories?.destination || '')
-      ?.toString()
-      ?.toLowerCase() || ''
+  const normalize = (d: string) => {
+    const v = (d || '').toString().trim().toLowerCase()
+    if (!v) return ''
+    if (v === 'kitchen') return 'kitchen'
+    if (v === 'griller' || v === 'grill' || v === 'grilling') return 'griller'
+    if (v === 'bar') return 'bar'
+    if (v === 'shisha' || v === 'hookah') return 'shisha'
+    if (v === 'games' || v === 'game' || v === 'games_master' || v === 'gamesmaster') return 'games'
+    if (
+      v === 'mixologist' ||
+      v === 'cocktail' ||
+      v === 'cocktails' ||
+      v === 'mocktail' ||
+      v === 'mocktails'
+    )
+      return 'mixologist'
+    return v
+  }
+
+  const raw = normalize(row?.destination || row?.menu_items?.menu_categories?.destination || '')
   if (raw) return raw
   const name = (row?.menu_items?.name || '').toLowerCase()
   const catName = (row?.menu_items?.menu_categories?.name || '').toLowerCase()
@@ -91,12 +107,6 @@ export default function StationSalesTab({ destination, label }: Props) {
         if (item.orders?.status === 'cancelled') continue
         if (item.status === 'cancelled') continue
         if (inferDestination(item) !== destination) continue
-        // Mixologist orders should only count when mixologist has accepted (ready/delivered).
-        if (
-          destination === 'mixologist' &&
-          !['preparing', 'ready', 'delivered'].includes(String(item.status || '').toLowerCase())
-        )
-          continue
         const name = item.menu_items?.name || 'Item'
         const rev = item.total_price || (item.unit_price || 0) * (item.quantity || 0)
         const zone = item.orders?.tables?.table_categories?.name || 'Takeaway'
