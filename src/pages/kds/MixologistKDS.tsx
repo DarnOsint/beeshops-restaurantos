@@ -12,9 +12,27 @@ import type { KdsOrder } from './types'
 import { sendPushToStaff } from '../../hooks/usePushNotifications'
 
 const isMixologistItem = (item: KdsOrder['order_items'][number]): boolean => {
-  const dest = (item.destination || '').toLowerCase()
+  // Keep this in sync with DailySummaryTab's destination normalization so the same
+  // items show up in Mixologist "Orders" (for acceptance) and "Summary".
+  const normalizeDest = (d?: string | null) => {
+    const v = (d || '').toString().trim().toLowerCase()
+    if (!v) return ''
+    if (
+      v === 'mixologist' ||
+      v === 'mixology' ||
+      v === 'mixo' ||
+      v === 'cocktail' ||
+      v === 'cocktails' ||
+      v === 'mocktail' ||
+      v === 'mocktails'
+    )
+      return 'mixologist'
+    return v
+  }
+
+  const dest = normalizeDest(item.destination)
   if (dest === 'mixologist') return true
-  const catDest = item.menu_items?.menu_categories?.destination?.toLowerCase()
+  const catDest = normalizeDest(item.menu_items?.menu_categories?.destination)
   if (catDest === 'mixologist') return true
   const name = (item.menu_items?.name || '').toLowerCase()
   const catName = (item.menu_items?.menu_categories as any)?.name?.toLowerCase?.() || ''
