@@ -15,6 +15,10 @@ interface Props {
 }
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
+const todayWAT = () =>
+  new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })).toLocaleDateString(
+    'en-CA'
+  )
 
 const inferDestination = (row: {
   destination?: string | null
@@ -48,22 +52,24 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
   const [summary, setSummary] = useState<SummaryItem[]>([])
   const [totalItems, setTotalItems] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [date, setDate] = useState(todayStr())
+  const [date, setDate] = useState(todayWAT())
   const printRef = useRef<HTMLDivElement>(null)
 
   const fetchSummary = useCallback(
     async (d?: string) => {
       setLoading(true)
-      const targetDate = new Date(d || date)
-      targetDate.setHours(8, 0, 0, 0)
-      const todayStr = new Date().toISOString().slice(0, 10)
-      if ((d || date) === todayStr && new Date().getHours() < 8) {
-        targetDate.setDate(targetDate.getDate() - 1)
+      const lagosNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+      const selected = d || date
+      let effective = selected
+      // If user is viewing "today" before 8am WAT, the business day is yesterday.
+      if (selected === todayWAT() && lagosNow.getHours() < 8) {
+        const prev = new Date(lagosNow)
+        prev.setDate(prev.getDate() - 1)
+        effective = prev.toLocaleDateString('en-CA')
       }
-      const startUTC = targetDate.toISOString()
-      const endDate = new Date(targetDate)
-      endDate.setDate(endDate.getDate() + 1)
-      const endUTC = endDate.toISOString()
+      const start = new Date(`${effective}T08:00:00+01:00`)
+      const end = new Date(start)
+      end.setDate(end.getDate() + 1)
 
       const { data } = await supabase
         .from('order_items')
@@ -77,10 +83,11 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
         orders(created_at, order_type, profiles(full_name), tables(table_categories(name)))
       `
         )
-        .gte('created_at', startUTC)
-        .lte('created_at', endUTC)
-      // For mixologist: only count items the mixologist has actually accepted (ready/delivered).
-      // For other stations: keep the broader summary behavior.
+        .gte('created_at', start.toISOString())
+        .lt('created_at', end.toISOString())
+      // Summary is sales/served visibility:
+      // - Mixologist: include all mixologist items recorded for the day (even if auto-accepted historically).
+      // - Other stations: keep the broader summary behavior.
 
       if (data) {
         const filtered = (
@@ -99,10 +106,7 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
         ).filter((i) => {
           const itemDest = inferDestination(i as any)
           const cancelled = (i.status || '').toLowerCase() === 'cancelled'
-          const acceptedByStation =
-            destination === 'mixologist'
-              ? ['preparing', 'ready', 'delivered'].includes((i.status || '').toLowerCase())
-              : true
+          const acceptedByStation = true
           const hasReturn = i.return_accepted || (i as any).return_requested
           return (
             itemDest === destination && i.orders && !cancelled && !hasReturn && acceptedByStation
@@ -225,13 +229,13 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
         <input
           type="date"
           value={date}
-          max={todayStr()}
+          max={todayWAT()}
           onChange={(e) => handleDateChange(e.target.value)}
           className="bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
         />
         <button
-          onClick={() => handleDateChange(todayStr())}
-          className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${date === todayStr() ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+          onClick={() => handleDateChange(todayWAT())}
+          className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${date === todayWAT() ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
         >
           Today
         </button>
