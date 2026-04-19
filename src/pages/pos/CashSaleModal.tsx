@@ -209,6 +209,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         .update({ status: 'delivered' })
         .eq('order_id', orderId)
         .neq('destination', 'bar')
+        .neq('destination', 'mixologist')
 
       if (isCredit) {
         const { data: existingDebtors } = await (customerPhone

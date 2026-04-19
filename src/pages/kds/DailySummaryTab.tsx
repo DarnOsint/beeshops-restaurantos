@@ -51,7 +51,8 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
         )
         .gte('created_at', startUTC)
         .lte('created_at', endUTC)
-      // include all statuses so served/ready/pending all show in summary
+      // For mixologist: only count items the mixologist has actually accepted (ready/delivered).
+      // For other stations: keep the broader summary behavior.
 
       if (data) {
         const filtered = (
@@ -74,8 +75,14 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
             'bar'
           )?.toLowerCase()
           const cancelled = (i.status || '').toLowerCase() === 'cancelled'
+          const acceptedByStation =
+            destination === 'mixologist'
+              ? ['ready', 'delivered'].includes((i.status || '').toLowerCase())
+              : true
           const hasReturn = i.return_accepted || (i as any).return_requested
-          return itemDest === destination && i.orders && !cancelled && !hasReturn
+          return (
+            itemDest === destination && i.orders && !cancelled && !hasReturn && acceptedByStation
+          )
         })
 
         const itemMap = new Map<string, Map<string, number>>()

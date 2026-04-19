@@ -965,6 +965,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         .update({ status: 'delivered' })
         .eq('order_id', order.id)
         .neq('destination', 'bar')
+        .neq('destination', 'mixologist')
       await supabase
         .from('tables')
         .update({ status: 'available', assigned_staff: null })
@@ -1158,6 +1159,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         .update({ status: 'delivered' })
         .eq('order_id', order.id)
         .neq('destination', 'bar')
+        .neq('destination', 'mixologist')
       await supabase
         .from('tables')
         .update({ status: 'available', assigned_staff: null })
