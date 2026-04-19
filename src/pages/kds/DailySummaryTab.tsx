@@ -34,6 +34,11 @@ const inferDestination = (row: {
   if (raw) return raw
   const name = (row.menu_items?.name || '').toLowerCase()
   const catName = (row.menu_items?.menu_categories?.name || '').toLowerCase()
+  if (catName.includes('kitchen') || name.includes('kitchen')) return 'kitchen'
+  if (catName.includes('grill') || name.includes('grill')) return 'griller'
+  if (catName.includes('shisha') || name.includes('shisha') || name.includes('hookah'))
+    return 'shisha'
+  if (catName.includes('game') || name.includes('game')) return 'games'
   const looksMixo =
     name.includes('cocktail') ||
     name.includes('mocktail') ||
@@ -43,7 +48,11 @@ const inferDestination = (row: {
     name.includes('fruit punch') ||
     name.includes('punch') ||
     catName.includes('cocktail') ||
-    catName.includes('mocktail')
+    catName.includes('mocktail') ||
+    catName.includes('milkshake') ||
+    catName.includes('shake') ||
+    catName.includes('smoothie') ||
+    catName.includes('punch')
   if (looksMixo) return 'mixologist'
   return 'bar'
 }
@@ -106,7 +115,10 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
         ).filter((i) => {
           const itemDest = inferDestination(i as any)
           const cancelled = (i.status || '').toLowerCase() === 'cancelled'
-          const acceptedByStation = true
+          const acceptedByStation =
+            destination === 'mixologist'
+              ? ['preparing', 'ready', 'delivered'].includes((i.status || '').toLowerCase())
+              : true
           const hasReturn = i.return_accepted || (i as any).return_requested
           return (
             itemDest === destination && i.orders && !cancelled && !hasReturn && acceptedByStation

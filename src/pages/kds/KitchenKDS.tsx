@@ -391,7 +391,7 @@ function KitchenKDSInner() {
           order_items!inner(id, quantity, status, destination, created_at, notes, modifier_notes, return_requested, return_accepted, return_reason,
             menu_items(name, menu_categories(name, destination)))`
         )
-        .eq('status', 'open')
+        .in('status', ['open', 'paid'])
         .eq('order_items.destination', 'kitchen')
         .in('order_items.status', ['pending', 'preparing'])
         .order('created_at', { ascending: false }),

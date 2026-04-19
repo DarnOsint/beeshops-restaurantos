@@ -338,9 +338,11 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       normDest === 'griller'
     )
       return false
-    // Bar and mixologist items must be ready/delivered before payment
+    // Bar and mixologist items must be accepted before payment.
+    // - Bar: accepted when marked ready.
+    // - Mixologist: accepted when moved from pending → preparing.
     if (i.return_requested || i.return_accepted) return false
-    return i.status === 'pending' || i.status === 'preparing'
+    return i.status === 'pending'
   })
   const hasUnreadyItems = unreadyItems.length > 0
 
@@ -921,20 +923,8 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
             updatedPayments.map((p) => 'P' + p.person + '=' + p.method).join(', ') +
             ']',
         } as any)
-        const items = ((order?.order_items || []) as any[]) ?? []
-        for (const it of items) {
-          const catDest = it.menu_items?.menu_categories?.destination || ''
-          const catName = it.menu_items?.menu_categories?.name || ''
-          const norm = normalizeDestination(
-            it.destination || catDest || 'bar',
-            it.menu_items?.name,
-            catName
-          )
-          if (norm === 'bar' || norm === 'mixologist') continue
-          if (it.id) {
-            await offlineUpdateNoReturn('order_items', it.id, { status: 'delivered' } as any)
-          }
-        }
+        // Do not auto-deliver station items on payment.
+        // Stations (kitchen/grill/bar/mixologist/etc) control readiness, and waitron can mark served.
         await offlineUpdateNoReturn('tables', table.id, {
           status: 'available',
           assigned_staff: null,
@@ -958,14 +948,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
             ']',
         })
         .eq('id', order.id)
-      // Mark non-bar items delivered. Bar items remain pending/ready so BarKDS can still accept them
-      // even if the order is paid while POS is offline or bar served already.
-      await supabase
-        .from('order_items')
-        .update({ status: 'delivered' })
-        .eq('order_id', order.id)
-        .neq('destination', 'bar')
-        .neq('destination', 'mixologist')
+      // Do not auto-deliver station items on payment. Stations manage acceptance/ready.
       await supabase
         .from('tables')
         .update({ status: 'available', assigned_staff: null })
@@ -1022,21 +1005,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           total_amount: total,
         } as any)
 
-        const items = ((order?.order_items || []) as any[]) ?? []
-        for (const it of items) {
-          const catDest = it.menu_items?.menu_categories?.destination || ''
-          const catName = it.menu_items?.menu_categories?.name || ''
-          const norm = normalizeDestination(
-            it.destination || catDest || 'bar',
-            it.menu_items?.name,
-            catName
-          )
-          if (norm === 'bar' || norm === 'mixologist') continue
-          if (it.id) {
-            await offlineUpdateNoReturn('order_items', it.id, { status: 'delivered' } as any)
-          }
-        }
-
+        // Do not auto-deliver station items on payment.
         await offlineUpdateNoReturn('tables', table.id, {
           status: 'available',
           assigned_staff: null,
@@ -1154,12 +1123,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         })
         .eq('id', order.id)
       if (orderErr) throw orderErr
-      await supabase
-        .from('order_items')
-        .update({ status: 'delivered' })
-        .eq('order_id', order.id)
-        .neq('destination', 'bar')
-        .neq('destination', 'mixologist')
+      // Do not auto-deliver station items on payment. Stations manage acceptance/ready.
       await supabase
         .from('tables')
         .update({ status: 'available', assigned_staff: null })

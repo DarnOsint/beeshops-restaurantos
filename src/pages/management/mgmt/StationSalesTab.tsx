@@ -19,6 +19,11 @@ const inferDestination = (row: any): string => {
   if (raw) return raw
   const name = (row?.menu_items?.name || '').toLowerCase()
   const catName = (row?.menu_items?.menu_categories?.name || '').toLowerCase()
+  if (catName.includes('kitchen') || name.includes('kitchen')) return 'kitchen'
+  if (catName.includes('grill') || name.includes('grill')) return 'griller'
+  if (catName.includes('shisha') || name.includes('shisha') || name.includes('hookah'))
+    return 'shisha'
+  if (catName.includes('game') || name.includes('game')) return 'games'
   const looksMixo =
     name.includes('cocktail') ||
     name.includes('mocktail') ||
@@ -28,7 +33,11 @@ const inferDestination = (row: any): string => {
     name.includes('fruit punch') ||
     name.includes('punch') ||
     catName.includes('cocktail') ||
-    catName.includes('mocktail')
+    catName.includes('mocktail') ||
+    catName.includes('milkshake') ||
+    catName.includes('shake') ||
+    catName.includes('smoothie') ||
+    catName.includes('punch')
   if (looksMixo) return 'mixologist'
   return 'bar'
 }
@@ -65,10 +74,8 @@ export default function StationSalesTab({ destination, label }: Props) {
       const { data } = await supabase
         .from('order_items')
         .select(
-          'quantity, unit_price, total_price, status, return_accepted, created_at, menu_items(name), orders(status, profiles(full_name), tables(name, table_categories(name)))'
+          'quantity, unit_price, total_price, status, return_accepted, created_at, destination, menu_items(name, menu_categories(name, destination)), orders(status, profiles(full_name), tables(name, table_categories(name)))'
         )
-        // Include items where destination may be NULL but category destination matches.
-        .or(`destination.eq.${destination},destination.is.null`)
         .gte('created_at', dayStart.toISOString())
         .lt('created_at', dayEnd.toISOString())
         .order('created_at', { ascending: false })

@@ -204,12 +204,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
           closed_at: new Date().toISOString(),
         })
         .eq('id', orderId)
-      await supabase
-        .from('order_items')
-        .update({ status: 'delivered' })
-        .eq('order_id', orderId)
-        .neq('destination', 'bar')
-        .neq('destination', 'mixologist')
+      // Do not auto-deliver station items on payment. Stations manage acceptance/ready.
 
       if (isCredit) {
         const { data: existingDebtors } = await (customerPhone
