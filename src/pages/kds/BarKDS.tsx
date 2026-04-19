@@ -526,7 +526,7 @@ function BarKDSInner() {
     const pollTimer = setInterval(() => {
       if (document.visibilityState !== 'visible') return
       fetchOrders()
-    }, 30000)
+    }, 10000)
     const slowPollTimer = setInterval(() => {
       if (document.visibilityState !== 'visible') return
       fetchReturnHistory()
@@ -536,18 +536,22 @@ function BarKDSInner() {
       .channel('bar-channel')
       .on(
         'postgres_changes',
-        // Important: don't filter only on destination=bar.
-        // Some items are categorized as bar via menu category destination and may have destination null.
-        // This subscription is a lightweight "wake up" signal; fetchOrders still does the filtering.
-        {
-          event: '*',
-          schema: 'public',
-          table: 'order_items',
-          filter: 'status=in.(pending,preparing)',
-        },
-        fetchOrders
+        // Wake up immediately when any new item is created (any station).
+        // fetchOrders still pulls only pending/preparing bar items.
+        { event: 'INSERT', schema: 'public', table: 'order_items' },
+        () => {
+          if (document.visibilityState !== 'visible') return
+          fetchOrders()
+        }
       )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, () => {
+        if (document.visibilityState !== 'visible') return
+        fetchOrders()
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, () => {
+        if (document.visibilityState !== 'visible') return
+        fetchOrders()
+      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, loadMixoRequests)
       .subscribe()
     const onVisible = () => {
