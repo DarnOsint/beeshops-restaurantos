@@ -161,7 +161,6 @@ function BarKDSInner() {
               menu_items(name, menu_categories(name, destination)))`
           )
           .in('status', ['open', 'paid'])
-          .eq('order_items.destination', 'bar')
           .in('order_items.status', ['pending', 'preparing'])
           .order('created_at', { ascending: true }),
         supabase.from('returns_log').select('order_item_id').eq('status', 'pending'),
@@ -174,12 +173,17 @@ function BarKDSInner() {
     )
 
     if (!error && barData) {
-      // Already filtered on server; keep only the bar items that should display.
+      // Already filtered on server to pending/preparing; keep only the bar items that should display.
+      // NOTE: some deployments rely on category destination instead of order_items.destination,
+      // so we must apply `isBarItem` here (not just destination=bar).
       const bar = (barData as unknown as KdsOrder[])
         .map((o) => ({
           ...o,
           order_items: (o.order_items || []).filter(
-            (i) => (i.status === 'pending' || i.status === 'preparing') && !i.return_accepted
+            (i) =>
+              (i.status === 'pending' || i.status === 'preparing') &&
+              !i.return_accepted &&
+              isBarItem(i)
           ),
         }))
         .filter((o) => o.order_items.length > 0)
@@ -198,12 +202,11 @@ function BarKDSInner() {
             menu_items(name, menu_categories(name, destination)))`
         )
         .in('order_items.id', ids)
-        .eq('order_items.destination', 'bar')
         .order('created_at', { ascending: true })
       const returns: typeof returnItems = []
       ;((retOrders || []) as unknown as KdsOrder[]).forEach((o) => {
         ;(o.order_items || []).forEach((i) => {
-          if (pendingReturnIds.has(i.id)) {
+          if (pendingReturnIds.has(i.id) && isBarItem(i)) {
             returns.push({
               ...i,
               tableName: (o.tables as { name: string } | null)?.name ?? 'Unknown',
@@ -533,7 +536,15 @@ function BarKDSInner() {
       .channel('bar-channel')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'order_items', filter: 'destination=eq.bar' },
+        // Important: don't filter only on destination=bar.
+        // Some items are categorized as bar via menu category destination and may have destination null.
+        // This subscription is a lightweight "wake up" signal; fetchOrders still does the filtering.
+        {
+          event: '*',
+          schema: 'public',
+          table: 'order_items',
+          filter: 'status=in.(pending,preparing)',
+        },
         fetchOrders
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
