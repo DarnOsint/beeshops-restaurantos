@@ -176,50 +176,87 @@ function MixologistKDSInner() {
   }, [])
 
   const fetchOrders = useCallback(async () => {
+    // Important: pending station items can still exist even if the parent order
+    // has been closed/settled. If we only fetch `orders` with status open/paid,
+    // Mixologist may see "pending approval" in Summary but nothing in Orders to accept.
+    // So we fetch `order_items` directly and group by order_id.
+    const since = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString() // last 7 days
     const { data, error } = await supabase
-      .from('orders')
+      .from('order_items')
       .select(
-        `id, created_at, notes, staff_id, order_type, customer_name,
-        tables(name),
-        profiles(full_name),
-        order_items(id, quantity, status, destination, notes, return_requested, return_accepted, return_reason,
-          menu_items(name, menu_categories(name, destination)))`
+        `id, order_id, created_at, quantity, status, destination, notes,
+         return_requested, return_accepted, return_reason,
+         menu_items(name, menu_categories(name, destination)),
+         orders:orders(id, created_at, notes, staff_id, order_type, customer_name, status,
+           tables(name),
+           profiles(full_name)
+         )`
       )
-      .in('status', ['open', 'paid'])
+      .gte('created_at', since)
       .order('created_at', { ascending: true })
+      .limit(1000)
 
     if (!error && data) {
-      const allOrders = data as unknown as KdsOrder[]
-      const mixo = allOrders
-        .map((o) => ({
-          ...o,
-          order_items: o.order_items.filter(
-            (i) =>
-              isMixologistItem(i) &&
-              i.status !== 'delivered' &&
-              i.status !== 'ready' &&
-              i.status !== 'cancelled' &&
-              !i.return_accepted
-          ),
-        }))
-        .filter((o) => o.order_items.length > 0)
-      setOrders(mixo)
+      const rows = (data as any[]).filter((r) => {
+        const itemStatus = String(r.status || '').toLowerCase()
+        if (!r.orders) return false
+        if (!isMixologistItem(r as any)) return false
+        if (r.return_accepted) return false
+        if (itemStatus === 'cancelled' || itemStatus === 'delivered' || itemStatus === 'ready')
+          return false
+        return true
+      })
+
+      const byOrder = new Map<string, KdsOrder>()
+      for (const r of rows) {
+        const order = Array.isArray(r.orders) ? r.orders[0] : r.orders
+        if (!order?.id) continue
+        if (!byOrder.has(order.id)) {
+          byOrder.set(order.id, {
+            id: order.id,
+            created_at: order.created_at,
+            notes: order.notes,
+            staff_id: order.staff_id,
+            order_type: order.order_type,
+            customer_name: order.customer_name,
+            tables: order.tables,
+            profiles: order.profiles,
+            order_items: [],
+          } as any)
+        }
+        const existing = byOrder.get(order.id)!
+        existing.order_items.push({
+          id: r.id,
+          quantity: r.quantity,
+          status: r.status,
+          destination: r.destination,
+          notes: r.notes,
+          return_requested: r.return_requested,
+          return_accepted: r.return_accepted,
+          return_reason: r.return_reason,
+          menu_items: r.menu_items,
+        } as any)
+      }
+
+      setOrders(Array.from(byOrder.values()))
 
       const returns: typeof returnItems = []
-      allOrders.forEach((o) => {
-        o.order_items.forEach((i) => {
-          if (isMixologistItem(i) && i.return_requested && !i.return_accepted) {
-            returns.push({
-              ...i,
-              tableName: (o.tables as { name: string } | null)?.name ?? 'Unknown',
-              orderId: o.id,
-              staffId: o.staff_id,
-            })
-          }
-        })
-      })
+      for (const r of data as any[]) {
+        const order = Array.isArray(r.orders) ? r.orders[0] : r.orders
+        if (!order?.id) continue
+        if (!isMixologistItem(r as any)) continue
+        if (r.return_requested && !r.return_accepted) {
+          returns.push({
+            ...r,
+            tableName: (order.tables as { name: string } | null)?.name ?? 'Unknown',
+            orderId: order.id,
+            staffId: order.staff_id,
+          })
+        }
+      }
       setReturnItems(returns)
     }
+
     setLoading(false)
   }, [])
 
