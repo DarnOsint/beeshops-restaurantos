@@ -51,7 +51,20 @@ interface Props {
 
 const normalizeDestination = (dest?: string | null, name?: string): ItemDestination => {
   const lowerName = (name || '').toLowerCase()
-  if (lowerName.includes('cocktail') || lowerName.includes('mocktail')) return 'mixologist'
+  if (
+    lowerName.includes('cocktail') ||
+    lowerName.includes('mocktail') ||
+    lowerName.includes('chapman') ||
+    lowerName.includes('sunrise') ||
+    lowerName.includes('colada') ||
+    lowerName.includes('mojito') ||
+    lowerName.includes('milkshake') ||
+    lowerName.includes('shake') ||
+    lowerName.includes('smoothie') ||
+    lowerName.includes('fruit punch') ||
+    lowerName.includes('punch')
+  )
+    return 'mixologist'
 
   const d = (dest || '').trim().toLowerCase()
   if (d === 'kitchen') return 'kitchen'

@@ -15,7 +15,31 @@ const isMixologistItem = (item: KdsOrder['order_items'][number]): boolean => {
   const dest = (item.destination || '').toLowerCase()
   if (dest === 'mixologist') return true
   const catDest = item.menu_items?.menu_categories?.destination?.toLowerCase()
-  return catDest === 'mixologist'
+  if (catDest === 'mixologist') return true
+  const name = (item.menu_items?.name || '').toLowerCase()
+  const catName = (item.menu_items?.menu_categories as any)?.name?.toLowerCase?.() || ''
+  const looksMixo =
+    name.includes('cocktail') ||
+    name.includes('mocktail') ||
+    name.includes('chapman') ||
+    name.includes('sunrise') ||
+    name.includes('colada') ||
+    name.includes('mojito') ||
+    name.includes('milkshake') ||
+    name.includes('shake') ||
+    name.includes('smoothie') ||
+    name.includes('fruit punch') ||
+    name.includes('punch') ||
+    catName.includes('cocktail') ||
+    catName.includes('mocktail') ||
+    catName.includes('chapman') ||
+    catName.includes('sunrise') ||
+    catName.includes('colada') ||
+    catName.includes('mojito') ||
+    catName.includes('milkshake') ||
+    catName.includes('smoothie') ||
+    catName.includes('punch')
+  return looksMixo
 }
 
 const dayWindow = (dateStr: string) => {

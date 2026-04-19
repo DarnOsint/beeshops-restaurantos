@@ -43,6 +43,10 @@ const inferDestination = (row: any): string => {
   const looksMixo =
     name.includes('cocktail') ||
     name.includes('mocktail') ||
+    name.includes('chapman') ||
+    name.includes('sunrise') ||
+    name.includes('colada') ||
+    name.includes('mojito') ||
     name.includes('milkshake') ||
     name.includes('shake') ||
     name.includes('smoothie') ||
@@ -50,6 +54,10 @@ const inferDestination = (row: any): string => {
     name.includes('punch') ||
     catName.includes('cocktail') ||
     catName.includes('mocktail') ||
+    catName.includes('chapman') ||
+    catName.includes('sunrise') ||
+    catName.includes('colada') ||
+    catName.includes('mojito') ||
     catName.includes('milkshake') ||
     catName.includes('shake') ||
     catName.includes('smoothie') ||

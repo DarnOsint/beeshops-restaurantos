@@ -392,8 +392,10 @@ function KitchenKDSInner() {
             menu_items(name, menu_categories(name, destination)))`
         )
         .in('status', ['open', 'paid'])
-        .eq('order_items.destination', 'kitchen')
         .in('order_items.status', ['pending', 'preparing'])
+        // Some items have destination NULL but category destination=Kitchen.
+        // Pull pending/preparing rows where destination is kitchen OR null, then filter locally.
+        .or('order_items.destination.eq.kitchen,order_items.destination.is.null')
         .order('created_at', { ascending: false }),
       supabase
         .from('order_items')

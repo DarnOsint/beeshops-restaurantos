@@ -80,11 +80,19 @@ const normalizeDestination = (
   const isMixologistItem =
     lowerName.includes('cocktail') ||
     lowerName.includes('mocktail') ||
+    lowerName.includes('chapman') ||
+    lowerName.includes('sunrise') ||
+    lowerName.includes('colada') ||
+    lowerName.includes('mojito') ||
     lowerName.includes('milkshake') ||
     lowerName.includes('shake') ||
     lowerName.includes('smoothie') ||
     lowerName.includes('fruit punch') ||
     lowerName.includes('punch') ||
+    lowerCat.includes('chapman') ||
+    lowerCat.includes('sunrise') ||
+    lowerCat.includes('colada') ||
+    lowerCat.includes('mojito') ||
     lowerCat.includes('cocktail') ||
     lowerCat.includes('mocktail') ||
     lowerCat.includes('milkshake') ||
