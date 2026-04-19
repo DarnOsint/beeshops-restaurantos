@@ -16,6 +16,29 @@ interface Props {
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
 
+const inferDestination = (row: {
+  destination?: string | null
+  menu_items?: {
+    name?: string
+    menu_categories?: { destination?: string | null; name?: string } | null
+  } | null
+}): string => {
+  const raw =
+    (row.destination || row.menu_items?.menu_categories?.destination || '')
+      ?.toString()
+      ?.toLowerCase() || ''
+  if (raw) return raw
+  const name = (row.menu_items?.name || '').toLowerCase()
+  const catName = (row.menu_items?.menu_categories?.name || '').toLowerCase()
+  const looksMixo =
+    name.includes('cocktail') ||
+    name.includes('mocktail') ||
+    catName.includes('cocktail') ||
+    catName.includes('mocktail')
+  if (looksMixo) return 'mixologist'
+  return 'bar'
+}
+
 export default function DailySummaryTab({ destination, icon, color }: Props) {
   const [summary, setSummary] = useState<SummaryItem[]>([])
   const [totalItems, setTotalItems] = useState(0)
@@ -69,15 +92,11 @@ export default function DailySummaryTab({ destination, icon, color }: Props) {
             } | null
           }[]
         ).filter((i) => {
-          const itemDest = (
-            i.menu_items?.menu_categories?.destination ||
-            (i as any).destination ||
-            'bar'
-          )?.toLowerCase()
+          const itemDest = inferDestination(i as any)
           const cancelled = (i.status || '').toLowerCase() === 'cancelled'
           const acceptedByStation =
             destination === 'mixologist'
-              ? ['ready', 'delivered'].includes((i.status || '').toLowerCase())
+              ? ['preparing', 'ready', 'delivered'].includes((i.status || '').toLowerCase())
               : true
           const hasReturn = i.return_accepted || (i as any).return_requested
           return (

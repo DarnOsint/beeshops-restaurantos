@@ -11,6 +11,23 @@ interface SaleRow {
   time: string
 }
 
+const inferDestination = (row: any): string => {
+  const raw =
+    (row?.destination || row?.menu_items?.menu_categories?.destination || '')
+      ?.toString()
+      ?.toLowerCase() || ''
+  if (raw) return raw
+  const name = (row?.menu_items?.name || '').toLowerCase()
+  const catName = (row?.menu_items?.menu_categories?.name || '').toLowerCase()
+  const looksMixo =
+    name.includes('cocktail') ||
+    name.includes('mocktail') ||
+    catName.includes('cocktail') ||
+    catName.includes('mocktail')
+  if (looksMixo) return 'mixologist'
+  return 'bar'
+}
+
 const todayWAT = () => {
   const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
   if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
@@ -45,7 +62,8 @@ export default function StationSalesTab({ destination, label }: Props) {
         .select(
           'quantity, unit_price, total_price, status, return_accepted, created_at, menu_items(name), orders(status, profiles(full_name), tables(name, table_categories(name)))'
         )
-        .eq('destination', destination)
+        // Include items where destination may be NULL but category destination matches.
+        .or(`destination.eq.${destination},destination.is.null`)
         .gte('created_at', dayStart.toISOString())
         .lt('created_at', dayEnd.toISOString())
         .order('created_at', { ascending: false })
@@ -60,10 +78,11 @@ export default function StationSalesTab({ destination, label }: Props) {
         if (item.return_accepted) continue
         if (item.orders?.status === 'cancelled') continue
         if (item.status === 'cancelled') continue
+        if (inferDestination(item) !== destination) continue
         // Mixologist orders should only count when mixologist has accepted (ready/delivered).
         if (
           destination === 'mixologist' &&
-          !['ready', 'delivered'].includes(String(item.status || '').toLowerCase())
+          !['preparing', 'ready', 'delivered'].includes(String(item.status || '').toLowerCase())
         )
           continue
         const name = item.menu_items?.name || 'Item'

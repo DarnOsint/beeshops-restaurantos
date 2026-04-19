@@ -58,7 +58,9 @@ function MixologistKDSInner() {
     Array<{ id: string; item: string; qty: number }>
   >([{ id: crypto.randomUUID(), item: '', qty: 1 }])
   const [barItems, setBarItems] = useState<Array<{ id: string; name: string }>>([])
-  const [mixoReqDate, setMixoReqDate] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }))
+  const [mixoReqDate, setMixoReqDate] = useState(() =>
+    new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+  )
   const [sentRequests, setSentRequests] = useState<
     Array<{
       id: string
@@ -114,7 +116,15 @@ function MixologistKDSInner() {
     })
     await loadRequests()
     setRequestLines([{ id: crypto.randomUUID(), item: '', qty: 1 }])
-    audit({ action: 'MIXO_REQUEST_SENT', entity: 'settings', entityName: 'mixologist_requests', newValue: { items: requestLines.filter(l => l.item).map(l => ({ item: l.item, qty: l.qty })) }, performer: profile as any })
+    audit({
+      action: 'MIXO_REQUEST_SENT',
+      entity: 'settings',
+      entityName: 'mixologist_requests',
+      newValue: {
+        items: requestLines.filter((l) => l.item).map((l) => ({ item: l.item, qty: l.qty })),
+      },
+      performer: profile as any,
+    })
     toast.success('Sent to bar', 'Waiting for bar approval to release drinks')
   }
 
@@ -171,7 +181,11 @@ function MixologistKDSInner() {
     setLoading(false)
   }, [])
 
-  const updateItemStatus = async (orderId: string, itemId: string, status: 'pending' | 'ready') => {
+  const updateItemStatus = async (
+    orderId: string,
+    itemId: string,
+    status: 'pending' | 'preparing' | 'ready'
+  ) => {
     const { error } = await supabase.from('order_items').update({ status }).eq('id', itemId)
     if (error) {
       toast.error('Error', 'Failed to update item: ' + error.message)
@@ -186,6 +200,31 @@ function MixologistKDSInner() {
           `${order.tables?.name || 'Customer'} cocktails are ready`
         ).catch(() => {})
     }
+    fetchOrders()
+  }
+
+  const acceptOrder = async (order: KdsOrder) => {
+    const ids = (order.order_items || [])
+      .filter((i) => isMixologistItem(i) && String(i.status || '').toLowerCase() === 'pending')
+      .map((i) => i.id)
+    if (ids.length === 0) return
+    const { error } = await supabase
+      .from('order_items')
+      .update({ status: 'preparing' })
+      .in('id', ids)
+    if (error) {
+      toast.error('Error', 'Failed to accept order: ' + error.message)
+      return
+    }
+    audit({
+      action: 'MIXO_ORDER_ACCEPTED',
+      entity: 'order_items',
+      entityId: order.id,
+      entityName: order.tables?.name || order.customer_name,
+      newValue: { items: ids.length },
+      performer: profile as any,
+    })
+    toast.success('Accepted', 'Order accepted and started')
     fetchOrders()
   }
 
@@ -208,7 +247,13 @@ function MixologistKDSInner() {
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
-    audit({ action: 'MIXO_RETURN_ACCEPTED', entity: 'order_items', entityId: itemId, newValue: { table: tableName }, performer: profile as any })
+    audit({
+      action: 'MIXO_RETURN_ACCEPTED',
+      entity: 'order_items',
+      entityId: itemId,
+      newValue: { table: tableName },
+      performer: profile as any,
+    })
     toast.success('Return Accepted', 'Item tentatively removed — awaiting manager approval')
     if (staffId)
       await sendPushToStaff(
@@ -250,7 +295,13 @@ function MixologistKDSInner() {
         '❌ Mixologist Rejected Order',
         `Mixologist rejected drinks for ${order.tables?.name || order.customer_name || 'an order'}`
       ).catch(() => {})
-    audit({ action: 'MIXO_ORDER_REJECTED', entity: 'orders', entityId: order.id, entityName: order.tables?.name, performer: profile as any })
+    audit({
+      action: 'MIXO_ORDER_REJECTED',
+      entity: 'orders',
+      entityId: order.id,
+      entityName: order.tables?.name,
+      performer: profile as any,
+    })
     toast.success('Order Rejected', 'Mixologist items cancelled and total updated')
     fetchOrders()
   }
@@ -279,7 +330,13 @@ function MixologistKDSInner() {
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
-    audit({ action: 'MIXO_RETURN_REJECTED', entity: 'order_items', entityId: itemId, newValue: { table: tableName }, performer: profile as any })
+    audit({
+      action: 'MIXO_RETURN_REJECTED',
+      entity: 'order_items',
+      entityId: itemId,
+      newValue: { table: tableName },
+      performer: profile as any,
+    })
     toast.success('Return Rejected', 'Item stays on bill')
     if (staffId)
       await sendPushToStaff(
@@ -322,12 +379,24 @@ function MixologistKDSInner() {
           ) || []
         setBarItems(barList.map((b: any) => ({ id: b.id, name: b.name })))
       })
+    // Poll as a safety net — realtime can drop silently
+    const pollTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      fetchOrders()
+    }, 10000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchOrders()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
     const sub = supabase
       .channel('mixologist-kds')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, fetchOrders)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, loadRequests)
       .subscribe()
     return () => {
+      clearInterval(pollTimer)
+      document.removeEventListener('visibilitychange', onVisible)
       supabase.removeChannel(sub)
     }
   }, [fetchOrders, fetchReturnHistory, loadRequests])
@@ -408,11 +477,19 @@ function MixologistKDSInner() {
                   <div className="flex gap-2">
                     <button
                       onClick={() =>
-                        order.order_items.forEach((i) => updateItemStatus(order.id, i.id, 'ready'))
+                        order.order_items
+                          .filter((i) => String(i.status || '').toLowerCase() === 'preparing')
+                          .forEach((i) => updateItemStatus(order.id, i.id, 'ready'))
                       }
                       className="px-3 py-1.5 text-xs rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
                     >
                       All Ready
+                    </button>
+                    <button
+                      onClick={() => acceptOrder(order)}
+                      className="px-3 py-1.5 text-xs rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                    >
+                      Accept Order
                     </button>
                     <button
                       onClick={() => rejectOrder(order)}
@@ -435,12 +512,21 @@ function MixologistKDSInner() {
                         </p>
                       </div>
                       <div className="flex gap-2">
-                        <button
-                          onClick={() => updateItemStatus(order.id, item.id, 'ready')}
-                          className="px-2 py-1 text-xs rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                        >
-                          Ready
-                        </button>
+                        {String(item.status || '').toLowerCase() === 'pending' ? (
+                          <button
+                            onClick={() => updateItemStatus(order.id, item.id, 'preparing')}
+                            className="px-2 py-1 text-xs rounded-lg bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                          >
+                            Accept
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => updateItemStatus(order.id, item.id, 'ready')}
+                            className="px-2 py-1 text-xs rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                          >
+                            Ready
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -608,82 +694,113 @@ function MixologistKDSInner() {
             <div className="flex items-center gap-2 mb-3 flex-wrap">
               <History size={14} className="text-gray-400" />
               <p className="text-white text-sm font-semibold">My Requests</p>
-              <input type="date" value={mixoReqDate} onChange={(e) => setMixoReqDate(e.target.value)}
-                className="bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1 text-xs ml-auto" />
-              <button onClick={() => setMixoReqDate(new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }))}
-                className={`px-2 py-1 rounded-lg text-xs ${mixoReqDate === new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400'}`}>Today</button>
-              <button onClick={() => { const d = new Date(mixoReqDate); d.setDate(d.getDate() - 1); setMixoReqDate(d.toLocaleDateString('en-CA')) }}
-                className="px-2 py-1 rounded-lg text-xs bg-gray-800 text-gray-400 hover:text-white">Prev</button>
+              <input
+                type="date"
+                value={mixoReqDate}
+                onChange={(e) => setMixoReqDate(e.target.value)}
+                className="bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1 text-xs ml-auto"
+              />
+              <button
+                onClick={() =>
+                  setMixoReqDate(
+                    new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
+                  )
+                }
+                className={`px-2 py-1 rounded-lg text-xs ${mixoReqDate === new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' }) ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400'}`}
+              >
+                Today
+              </button>
+              <button
+                onClick={() => {
+                  const d = new Date(mixoReqDate)
+                  d.setDate(d.getDate() - 1)
+                  setMixoReqDate(d.toLocaleDateString('en-CA'))
+                }}
+                className="px-2 py-1 rounded-lg text-xs bg-gray-800 text-gray-400 hover:text-white"
+              >
+                Prev
+              </button>
             </div>
             {(() => {
               const ds = new Date(mixoReqDate + 'T08:00:00+01:00')
-              const de = new Date(ds); de.setDate(de.getDate() + 1)
-              const dayFiltered = sentRequests.filter((r) => { const t = new Date(r.at).getTime(); return t >= ds.getTime() && t < de.getTime() })
+              const de = new Date(ds)
+              de.setDate(de.getDate() + 1)
+              const dayFiltered = sentRequests.filter((r) => {
+                const t = new Date(r.at).getTime()
+                return t >= ds.getTime() && t < de.getTime()
+              })
               return dayFiltered.length === 0 ? (
-              <p className="text-gray-500 text-sm">No requests for this date.</p>
-            ) : (
-              <div className="space-y-2">
-                {dayFiltered.map((r) => (
-                  <div
-                    key={r.id}
-                    className="bg-gray-800 rounded-xl px-3 py-2 flex items-center justify-between"
-                  >
-                    <div>
-                      <p className="text-white text-sm font-semibold">
-                        {r.items.map((it) => `${it.qty}x ${it.item}`).join(', ')}
-                      </p>
-                      <p className="text-gray-500 text-xs">
-                        {new Date(r.at).toLocaleTimeString('en-NG', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: true,
-                        })}{' '}
-                        · {r.requested_by || 'Mixologist'}
-                      </p>
-                    </div>
-                    <span
-                      className={`text-[11px] px-2 py-1 rounded-lg border ${
-                        r.status === 'approved'
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                          : r.status === 'rejected'
-                            ? 'bg-red-500/10 text-red-400 border-red-500/30'
-                            : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                      }`}
+                <p className="text-gray-500 text-sm">No requests for this date.</p>
+              ) : (
+                <div className="space-y-2">
+                  {dayFiltered.map((r) => (
+                    <div
+                      key={r.id}
+                      className="bg-gray-800 rounded-xl px-3 py-2 flex items-center justify-between"
                     >
-                      {r.status}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )
+                      <div>
+                        <p className="text-white text-sm font-semibold">
+                          {r.items.map((it) => `${it.qty}x ${it.item}`).join(', ')}
+                        </p>
+                        <p className="text-gray-500 text-xs">
+                          {new Date(r.at).toLocaleTimeString('en-NG', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: true,
+                          })}{' '}
+                          · {r.requested_by || 'Mixologist'}
+                        </p>
+                      </div>
+                      <span
+                        className={`text-[11px] px-2 py-1 rounded-lg border ${
+                          r.status === 'approved'
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                            : r.status === 'rejected'
+                              ? 'bg-red-500/10 text-red-400 border-red-500/30'
+                              : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                        }`}
+                      >
+                        {r.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )
             })()}
           </div>
 
           {(() => {
             const ds2 = new Date(mixoReqDate + 'T08:00:00+01:00')
-            const de2 = new Date(ds2); de2.setDate(de2.getDate() + 1)
-            const dayFiltered2 = sentRequests.filter((r) => { const t = new Date(r.at).getTime(); return t >= ds2.getTime() && t < de2.getTime() })
+            const de2 = new Date(ds2)
+            de2.setDate(de2.getDate() + 1)
+            const dayFiltered2 = sentRequests.filter((r) => {
+              const t = new Date(r.at).getTime()
+              return t >= ds2.getTime() && t < de2.getTime()
+            })
             return dayFiltered2.length > 0 ? (
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-2">
-              <p className="text-white font-semibold text-sm">Summary for {mixoReqDate}</p>
-              {Object.entries(
-                dayFiltered2.reduce(
-                  (acc, r) => {
-                    r.items.forEach((it) => {
-                      acc[it.item] = (acc[it.item] || 0) + it.qty
-                    })
-                    return acc
-                  },
-                  {} as Record<string, number>
-                )
-              ).map(([name, qty]) => (
-                <div key={name} className="flex items-center justify-between text-sm text-gray-300">
-                  <span>{name}</span>
-                  <span className="text-amber-400">{qty}</span>
-                </div>
-              ))}
-            </div>
-          ) : null
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-2">
+                <p className="text-white font-semibold text-sm">Summary for {mixoReqDate}</p>
+                {Object.entries(
+                  dayFiltered2.reduce(
+                    (acc, r) => {
+                      r.items.forEach((it) => {
+                        acc[it.item] = (acc[it.item] || 0) + it.qty
+                      })
+                      return acc
+                    },
+                    {} as Record<string, number>
+                  )
+                ).map(([name, qty]) => (
+                  <div
+                    key={name}
+                    className="flex items-center justify-between text-sm text-gray-300"
+                  >
+                    <span>{name}</span>
+                    <span className="text-amber-400">{qty}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null
           })()}
         </div>
       )}

@@ -13,7 +13,7 @@ import type { ItemDestination } from '../../types'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
-import { usePushNotifications } from '../../hooks/usePushNotifications'
+import { sendPushToStaff, usePushNotifications } from '../../hooks/usePushNotifications'
 import {
   LogOut,
   Beer,
@@ -1121,6 +1121,43 @@ export default function POS() {
 
   const orderPanelAddItemRef = useRef<((item: MenuItem) => void) | null>(null)
   const placingOrderRef = useRef(false)
+  const notifyMixologists = async (tableName: string) => {
+    if (!navigator.onLine) return
+    try {
+      const cacheKey = 'mixologist_staff_cache_v1'
+      const raw = localStorage.getItem(cacheKey)
+      const cached = raw ? (JSON.parse(raw) as { at: number; ids: string[] }) : null
+      let ids = cached?.ids || []
+      if (
+        !cached ||
+        !cached.at ||
+        Date.now() - cached.at > 6 * 60 * 60 * 1000 ||
+        ids.length === 0
+      ) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('role', 'mixologist')
+          .eq('is_active', true)
+          .limit(10)
+        ids = (data || []).map((r: any) => r.id).filter(Boolean)
+        localStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), ids }))
+      }
+      await Promise.all(
+        ids.map((id) =>
+          sendPushToStaff(
+            id,
+            '🍸 New Mixologist Order',
+            `${tableName} has new cocktails to accept`,
+            { screen: 'mixologist_kds' }
+          )
+        )
+      )
+    } catch {
+      /* best-effort */
+    }
+  }
+
   const handlePlaceOrder = async ({ table, items, notes, total }: OrderPayload) => {
     if (placingOrderRef.current) return
     placingOrderRef.current = true
@@ -1166,6 +1203,10 @@ export default function POS() {
             return
           }
         }
+        const hasMixo = newItems.some(
+          (i) => String(i.destination || '').toLowerCase() === 'mixologist'
+        )
+        if (hasMixo) void notifyMixologists(table.name)
         await logBarIssues(items, newItems, table, activeOrder.id)
         printStationTickets(
           items.map((i) => ({
@@ -1310,6 +1351,10 @@ export default function POS() {
           return
         }
       }
+      const hasMixo = orderItemRows.some(
+        (i) => String((i as any).destination || '').toLowerCase() === 'mixologist'
+      )
+      if (hasMixo) void notifyMixologists(table.name)
       if (!navigator.onLine) {
         // Persist occupied state locally and queue update; remote will be updated on sync.
         void offlineUpdateNoReturn('tables', table.id, { status: 'occupied' } as any)
