@@ -37,6 +37,9 @@ vi.mock('../../lib/supabase', () => {
   const query = {
     select: () => query,
     gte: () => query,
+    // DailySummaryTab uses `.lt` for the end of the day window.
+    // Keep `.lte` too in case other call sites still use it.
+    lt: () => Promise.resolve({ data: mockData }),
     lte: () => Promise.resolve({ data: mockData }),
   }
   return { supabase: { from: () => query } }

@@ -128,6 +128,7 @@ export default function DailySummaryTab({
   const [totalItems, setTotalItems] = useState(0)
   const [pendingSummary, setPendingSummary] = useState<SummaryItem[]>([])
   const [pendingTotal, setPendingTotal] = useState(0)
+  const [pendingItemIds, setPendingItemIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [date, setDate] = useState(todayWAT())
   const printRef = useRef<HTMLDivElement>(null)
@@ -152,12 +153,14 @@ export default function DailySummaryTab({
         .from('order_items')
         .select(
           `
+        id,
+        order_id,
         quantity,
         status,
         return_accepted,
         destination,
         menu_items(name, menu_categories(name, destination)),
-        orders(created_at, order_type, profiles(full_name), tables(table_categories(name)))
+        orders(id, created_at, order_type, profiles(full_name), tables(table_categories(name)))
       `
         )
         .gte('created_at', start.toISOString())
@@ -169,11 +172,14 @@ export default function DailySummaryTab({
       if (data) {
         const base = (
           data as unknown as {
+            id: string
+            order_id: string
             quantity: number
             status: string
             return_accepted?: boolean
             menu_items: { name: string; menu_categories: { destination: string } } | null
             orders: {
+              id: string
               created_at: string
               order_type?: string
               profiles: { full_name: string } | null
@@ -198,18 +204,32 @@ export default function DailySummaryTab({
           setPendingSummary(pendingBuilt.rows)
           setPendingTotal(pendingBuilt.total)
           setTotalItems(acceptedBuilt.total + pendingBuilt.total)
+          setPendingItemIds(
+            pending
+              .map((i: any) => i.id)
+              .filter((id: any) => typeof id === 'string' && id.length > 0)
+          )
         } else {
           const built = buildSummary(base as any[])
           setSummary(built.rows)
           setTotalItems(built.total)
           setPendingSummary([])
           setPendingTotal(0)
+          setPendingItemIds([])
         }
       }
       setLoading(false)
     },
     [destination, date, includePending]
   )
+
+  const acceptAllPending = async () => {
+    if (destination !== 'mixologist') return
+    if (!includePending) return
+    if (pendingItemIds.length === 0) return
+    await supabase.from('order_items').update({ status: 'preparing' }).in('id', pendingItemIds)
+    fetchSummary()
+  }
 
   useEffect(() => {
     fetchSummary()
@@ -363,6 +383,15 @@ export default function DailySummaryTab({
         </div>
         <div className="flex items-center gap-2">
           {icon}
+          {destination === 'mixologist' && includePending && pendingItemIds.length > 0 && (
+            <button
+              onClick={() => void acceptAllPending()}
+              className="flex items-center gap-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-xs font-bold px-3 py-1.5 rounded-xl border border-blue-500/30 transition-colors"
+              title="Accept all pending mixologist items"
+            >
+              Accept All ({pendingItemIds.length})
+            </button>
+          )}
           <button
             onClick={() => fetchSummary()}
             className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-gray-800"
