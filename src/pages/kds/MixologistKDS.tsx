@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { audit } from '../../lib/audit'
@@ -73,6 +73,8 @@ function MixologistKDSInner() {
   const toast = useToast()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
   const [orders, setOrders] = useState<KdsOrder[]>([])
+  const [promptOrder, setPromptOrder] = useState<KdsOrder | null>(null)
+  const [promptQueue, setPromptQueue] = useState<KdsOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
   const [activeTab, setActiveTab] = useState<'orders' | 'summary' | 'history' | 'requests'>(
@@ -176,89 +178,123 @@ function MixologistKDSInner() {
   }, [])
 
   const fetchOrders = useCallback(async () => {
-    // Important: pending station items can still exist even if the parent order
-    // has been closed/settled. If we only fetch `orders` with status open/paid,
-    // Mixologist may see "pending approval" in Summary but nothing in Orders to accept.
-    // So we fetch `order_items` directly and group by order_id.
+    // Mirror BarKDS behavior: fetch ONLY orders that currently have pending/preparing
+    // mixologist items (inner join filter). Do NOT filter orders.status, because some
+    // deployments can accidentally "close" an order while station items remain pending.
     const since = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString() // last 7 days
-    const { data, error } = await supabase
-      .from('order_items')
-      .select(
-        `id, order_id, created_at, quantity, status, destination, notes,
-         return_requested, return_accepted, return_reason,
-         menu_items(name, menu_categories(name, destination)),
-         orders:orders(id, created_at, notes, staff_id, order_type, customer_name, status,
-           tables(name),
-           profiles(full_name)
-         )`
-      )
-      .gte('created_at', since)
-      .order('created_at', { ascending: true })
-      .limit(1000)
+    const [{ data: mixoData, error }, { data: pendingReturns, error: pendingErr }] =
+      await Promise.all([
+        supabase
+          .from('orders')
+          .select(
+            `id, created_at, notes, staff_id, order_type, customer_name,
+            tables(name),
+            profiles(full_name),
+            order_items!inner(id, quantity, status, destination, notes, return_requested, return_accepted, return_reason,
+              menu_items(name, menu_categories(name, destination)))`
+          )
+          .gte('created_at', since)
+          .in('order_items.status', ['pending', 'preparing'])
+          .order('created_at', { ascending: true }),
+        supabase.from('returns_log').select('order_item_id').eq('status', 'pending'),
+      ])
 
-    if (!error && data) {
-      const rows = (data as any[]).filter((r) => {
-        const itemStatus = String(r.status || '').toLowerCase()
-        if (!r.orders) return false
-        if (!isMixologistItem(r as any)) return false
-        if (r.return_accepted) return false
-        if (itemStatus === 'cancelled' || itemStatus === 'delivered' || itemStatus === 'ready')
-          return false
-        return true
-      })
+    const pendingReturnIds = new Set(
+      ((pendingReturns || []) as Array<{ order_item_id: string | null }>)
+        .map((row) => row.order_item_id)
+        .filter(Boolean)
+    )
 
-      const byOrder = new Map<string, KdsOrder>()
-      for (const r of rows) {
-        const order = Array.isArray(r.orders) ? r.orders[0] : r.orders
-        if (!order?.id) continue
-        if (!byOrder.has(order.id)) {
-          byOrder.set(order.id, {
-            id: order.id,
-            created_at: order.created_at,
-            notes: order.notes,
-            staff_id: order.staff_id,
-            order_type: order.order_type,
-            customer_name: order.customer_name,
-            tables: order.tables,
-            profiles: order.profiles,
-            order_items: [],
-          } as any)
-        }
-        const existing = byOrder.get(order.id)!
-        existing.order_items.push({
-          id: r.id,
-          quantity: r.quantity,
-          status: r.status,
-          destination: r.destination,
-          notes: r.notes,
-          return_requested: r.return_requested,
-          return_accepted: r.return_accepted,
-          return_reason: r.return_reason,
-          menu_items: r.menu_items,
-        } as any)
-      }
+    if (!error && mixoData) {
+      const mixo = (mixoData as unknown as KdsOrder[])
+        .map((o) => ({
+          ...o,
+          order_items: (o.order_items || []).filter(
+            (i) =>
+              (i.status === 'pending' || i.status === 'preparing') &&
+              !i.return_accepted &&
+              isMixologistItem(i)
+          ),
+        }))
+        .filter((o) => o.order_items.length > 0)
 
-      setOrders(Array.from(byOrder.values()))
+      setOrders(mixo)
 
-      const returns: typeof returnItems = []
-      for (const r of data as any[]) {
-        const order = Array.isArray(r.orders) ? r.orders[0] : r.orders
-        if (!order?.id) continue
-        if (!isMixologistItem(r as any)) continue
-        if (r.return_requested && !r.return_accepted) {
-          returns.push({
-            ...r,
-            tableName: (order.tables as { name: string } | null)?.name ?? 'Unknown',
-            orderId: order.id,
-            staffId: order.staff_id,
+      // Return requests: fetch only orders that contain the returned mixologist items (small set).
+      if (!pendingErr && pendingReturnIds.size > 0) {
+        const ids = Array.from(pendingReturnIds)
+        const { data: retOrders } = await supabase
+          .from('orders')
+          .select(
+            `id, staff_id,
+            tables(name),
+            order_items!inner(id, quantity, status, destination, notes, return_requested, return_accepted, return_reason,
+              menu_items(name, menu_categories(name, destination)))`
+          )
+          .in('order_items.id', ids)
+          .order('created_at', { ascending: true })
+        const returns: typeof returnItems = []
+        ;((retOrders || []) as unknown as KdsOrder[]).forEach((o) => {
+          ;(o.order_items || []).forEach((i) => {
+            if (pendingReturnIds.has(i.id) && isMixologistItem(i)) {
+              returns.push({
+                ...i,
+                tableName: (o.tables as { name: string } | null)?.name ?? 'Unknown',
+                orderId: o.id,
+                staffId: o.staff_id,
+              })
+            }
           })
-        }
+        })
+        setReturnItems(returns)
+      } else {
+        setReturnItems([])
       }
-      setReturnItems(returns)
     }
 
     setLoading(false)
   }, [])
+
+  const seenPendingIdsRef = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    // Detect new pending mixologist items and prompt for acceptance/rejection.
+    const pendingItems = orders
+      .flatMap((o) =>
+        (o.order_items || [])
+          .filter((i) => String(i.status || '').toLowerCase() === 'pending')
+          .map((i) => ({ order: o, itemId: i.id }))
+      )
+      .filter((x) => x.itemId)
+
+    const newOrders: KdsOrder[] = []
+    for (const p of pendingItems) {
+      if (!seenPendingIdsRef.current.has(p.itemId)) {
+        seenPendingIdsRef.current.add(p.itemId)
+        if (!newOrders.some((o) => o.id === p.order.id)) newOrders.push(p.order)
+      }
+    }
+
+    if (newOrders.length > 0 && document.visibilityState === 'visible') {
+      setActiveTab('orders')
+      toast.warning(
+        'New mixologist order',
+        `${newOrders[0].tables?.name || newOrders[0].customer_name || 'Takeaway'} awaiting approval`
+      )
+      setPromptQueue((prev) => {
+        const deduped = prev.filter((o) => !newOrders.some((n) => n.id === o.id))
+        return [...deduped, ...newOrders]
+      })
+    }
+  }, [orders, toast])
+
+  useEffect(() => {
+    if (promptOrder) return
+    if (promptQueue.length === 0) return
+    setPromptOrder(promptQueue[0])
+    setPromptQueue((q) => q.slice(1))
+  }, [promptOrder, promptQueue])
+
+  const dismissPrompt = () => setPromptOrder(null)
 
   const updateItemStatus = async (
     orderId: string,
@@ -487,6 +523,70 @@ function MixologistKDSInner() {
 
   return (
     <div className="flex flex-col h-full bg-gray-950">
+      {promptOrder && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg bg-gray-900 border border-gray-800 rounded-2xl p-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs text-amber-400">Pending (Not Yet Accepted)</p>
+                <p className="text-white font-semibold text-lg">
+                  {promptOrder.tables?.name || promptOrder.customer_name || 'Takeaway'}
+                </p>
+                <p className="text-gray-500 text-xs">
+                  by {promptOrder.profiles?.full_name || 'Unknown'} ·{' '}
+                  {new Date(promptOrder.created_at).toLocaleTimeString('en-NG', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true,
+                  })}
+                </p>
+              </div>
+              <button
+                onClick={dismissPrompt}
+                className="p-2 rounded-xl bg-gray-800 text-gray-300 hover:text-white"
+                title="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {(promptOrder.order_items || []).map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center justify-between bg-gray-800 rounded-xl px-3 py-2"
+                >
+                  <div>
+                    <p className="text-white text-sm font-medium">{item.menu_items?.name}</p>
+                    <p className="text-gray-500 text-xs">
+                      {item.quantity}x · {String(item.status || '').toLowerCase()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  void acceptOrder(promptOrder).finally(() => setPromptOrder(null))
+                }}
+                className="px-3 py-2 text-sm rounded-xl bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold"
+              >
+                Accept
+              </button>
+              <button
+                onClick={() => {
+                  void rejectOrder(promptOrder).finally(() => setPromptOrder(null))
+                }}
+                className="px-3 py-2 text-sm rounded-xl bg-red-500/20 text-red-400 border border-red-500/30 font-semibold"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <header className="px-4 py-3 border-b border-gray-900 flex items-center justify-between">
         <div>
           <p className="text-xs text-gray-500">Mixologist KDS</p>
