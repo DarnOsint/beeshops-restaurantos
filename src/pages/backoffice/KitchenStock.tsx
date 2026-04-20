@@ -1164,59 +1164,65 @@ export default function KitchenStock({ onBack }: Props) {
                 Set the benchmark as: <strong>raw quantity</strong> →{' '}
                 <strong>expected cooked output</strong>.
               </div>
-              <div className="grid grid-cols-7 gap-2 items-end">
-                <div>
-                  <label className="text-gray-400 text-xs block mb-1">Raw qty</label>
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={bmForm.raw_qty}
-                    onChange={(e) => bf({ raw_qty: e.target.value })}
-                    placeholder="e.g. 10"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-                  />
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-2 items-end">
+                  <div className="col-span-2">
+                    <label className="text-gray-400 text-xs block mb-1">Raw quantity</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={bmForm.raw_qty}
+                      onChange={(e) => bf({ raw_qty: e.target.value })}
+                      placeholder="e.g. 10"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-base tracking-wide focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-gray-400 text-xs block mb-1">Raw unit</label>
+                    <select
+                      value={bmForm.raw_unit}
+                      onChange={(e) => bf({ raw_unit: e.target.value })}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-amber-500"
+                    >
+                      {UNITS.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div className="col-span-2">
-                  <label className="text-gray-400 text-xs block mb-1">Raw unit</label>
-                  <select
-                    value={bmForm.raw_unit}
-                    onChange={(e) => bf({ raw_unit: e.target.value })}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-2 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-                  >
-                    {UNITS.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="text-center pb-2 text-gray-500 text-lg font-bold">→</div>
-                <div>
-                  <label className="text-gray-400 text-xs block mb-1">Cooked qty</label>
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={bmForm.cooked_qty}
-                    onChange={(e) => bf({ cooked_qty: e.target.value })}
-                    placeholder="e.g. 80"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="text-gray-400 text-xs block mb-1">Cooked unit</label>
-                  <select
-                    value={bmForm.cooked_unit}
-                    onChange={(e) => bf({ cooked_unit: e.target.value })}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-2 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-                  >
-                    {UNITS.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
+
+                <div className="text-center text-gray-500 text-lg font-bold">→</div>
+
+                <div className="grid grid-cols-3 gap-2 items-end">
+                  <div className="col-span-2">
+                    <label className="text-gray-400 text-xs block mb-1">
+                      Expected cooked output
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={bmForm.cooked_qty}
+                      onChange={(e) => bf({ cooked_qty: e.target.value })}
+                      placeholder="e.g. 80"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-base tracking-wide focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-gray-400 text-xs block mb-1">Cooked unit</label>
+                    <select
+                      value={bmForm.cooked_unit}
+                      onChange={(e) => bf({ cooked_unit: e.target.value })}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-amber-500"
+                    >
+                      {UNITS.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
               <div>
