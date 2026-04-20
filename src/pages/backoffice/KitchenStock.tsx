@@ -20,11 +20,26 @@ const todayStr = () => new Date().toISOString().slice(0, 10)
 const UNITS = ['portion', 'kg', 'g', 'litre', 'ml', 'piece', 'pack', 'tray', 'bowl', 'cup'] as const
 const isManager = (role?: string) => ['owner', 'manager'].includes(role || '')
 
+const normalizeUnit = (u: string) => (u || '').toString().trim().toLowerCase()
+const convertQty = (qty: number, fromUnit: string, toUnit: string): number | null => {
+  const from = normalizeUnit(fromUnit)
+  const to = normalizeUnit(toUnit)
+  if (!from || !to) return null
+  if (from === to) return qty
+  if (from === 'kg' && to === 'g') return qty * 1000
+  if (from === 'g' && to === 'kg') return qty / 1000
+  if (from === 'litre' && to === 'ml') return qty * 1000
+  if (from === 'ml' && to === 'litre') return qty / 1000
+  return null
+}
+
 interface Benchmark {
   item_name: string
   expected_yield: number
   tolerance_pct: number
+  raw_qty?: number | null
   raw_unit: string
+  cooked_qty?: number | null
   cooked_unit: string
   note?: string
   set_by?: string
@@ -71,7 +86,8 @@ interface EntryForm {
   note: string
 }
 interface BmForm {
-  expected_yield: string
+  raw_qty: string
+  cooked_qty: string
   tolerance_pct: string
   raw_unit: string
   cooked_unit: string
@@ -94,8 +110,29 @@ function getStatus(
   benchmark: Benchmark | null
 ): StatusResult {
   const v = entry.computed_variance
-  if (benchmark && benchmark.expected_yield > 0 && entry.received_qty > 0) {
-    const expectedSold = entry.received_qty * benchmark.expected_yield
+
+  const bmRawQty = Number(benchmark?.raw_qty ?? 1) || 1
+  const bmCookedQty = (benchmark?.cooked_qty != null ? Number(benchmark.cooked_qty) : null) ?? null
+  const ratio =
+    bmCookedQty != null && bmRawQty > 0 ? bmCookedQty / bmRawQty : benchmark?.expected_yield
+
+  if (benchmark && ratio && ratio > 0 && entry.received_qty > 0) {
+    // Only apply the benchmark when we can express the received qty in the benchmark raw unit.
+    const receivedInRawUnit = convertQty(entry.received_qty, entry.unit, benchmark.raw_unit) ?? null
+    if (receivedInRawUnit == null) {
+      // Unit mismatch: can't compute yield against benchmark reliably.
+      return {
+        key: 'warn',
+        label: 'Unit mismatch',
+        icon: '⚠️',
+        color: 'text-amber-400',
+        bg: 'bg-amber-500/10',
+        border: 'border-amber-500/40',
+        remark: `Benchmark raw unit is ${benchmark.raw_unit} but this entry is in ${entry.unit}. Set matching units to enable yield analysis.`,
+      }
+    }
+
+    const expectedSold = receivedInRawUnit * ratio
     const yieldPct = expectedSold > 0 ? (entry.effective_sold / expectedSold) * 100 : 100
     const tol = benchmark.tolerance_pct ?? 5
     if (yieldPct >= 100 - tol && yieldPct <= 100 + tol)
@@ -189,7 +226,8 @@ const blankForm: EntryForm = {
   note: '',
 }
 const blankBm: BmForm = {
-  expected_yield: '',
+  raw_qty: '1',
+  cooked_qty: '',
   tolerance_pct: '5',
   raw_unit: 'kg',
   cooked_unit: 'portion',
@@ -388,8 +426,14 @@ export default function KitchenStock({ onBack }: Props) {
 
   const openBenchmark = (itemName: string) => {
     const ex = benchmarks[itemName]
+    const rawQty = ex?.raw_qty != null ? String(ex.raw_qty) : '1'
+    const cookedQty =
+      ex?.cooked_qty != null
+        ? String(ex.cooked_qty)
+        : String((Number(ex?.expected_yield || 0) || 0) * (Number(rawQty) || 1) || '')
     setBmForm({
-      expected_yield: String(ex?.expected_yield ?? ''),
+      raw_qty: rawQty,
+      cooked_qty: cookedQty,
       tolerance_pct: String(ex?.tolerance_pct ?? '5'),
       raw_unit: ex?.raw_unit ?? 'kg',
       cooked_unit: ex?.cooked_unit ?? 'portion',
@@ -399,13 +443,22 @@ export default function KitchenStock({ onBack }: Props) {
   }
 
   const saveBenchmark = async () => {
-    if (!bmForm.expected_yield) return
+    if (!bmForm.raw_qty || !bmForm.cooked_qty) return
     const itemName = showBenchmarkFor === '__new__' ? bmForm.item_name : showBenchmarkFor
     if (!itemName) return
+    const rawQty = parseFloat(bmForm.raw_qty)
+    const cookedQty = parseFloat(bmForm.cooked_qty)
+    if (!rawQty || rawQty <= 0 || !cookedQty || cookedQty <= 0) {
+      toast.warning('Invalid benchmark', 'Enter a valid raw quantity and expected cooked quantity')
+      return
+    }
+    const expectedYield = cookedQty / rawQty
     const { error } = await supabase.from('kitchen_stock_benchmarks').upsert(
       {
         item_name: itemName,
-        expected_yield: parseFloat(bmForm.expected_yield),
+        raw_qty: rawQty,
+        cooked_qty: cookedQty,
+        expected_yield: expectedYield,
         tolerance_pct: parseFloat(bmForm.tolerance_pct) || 5,
         raw_unit: bmForm.raw_unit,
         cooked_unit: bmForm.cooked_unit,
@@ -587,9 +640,10 @@ export default function KitchenStock({ onBack }: Props) {
                         </div>
                         {entry.benchmark && (
                           <span className="text-gray-500 text-[10px]">
-                            Benchmark: {entry.benchmark.expected_yield}{' '}
-                            {entry.benchmark.cooked_unit}/{entry.benchmark.raw_unit} ±
-                            {entry.benchmark.tolerance_pct}%
+                            Benchmark: {entry.benchmark.raw_qty ?? 1} {entry.benchmark.raw_unit} →{' '}
+                            {entry.benchmark.cooked_qty ?? entry.benchmark.expected_yield}{' '}
+                            {entry.benchmark.cooked_unit} (×{entry.benchmark.expected_yield} per 1{' '}
+                            {entry.benchmark.raw_unit}) ±{entry.benchmark.tolerance_pct}%
                           </span>
                         )}
                       </div>
@@ -710,7 +764,30 @@ export default function KitchenStock({ onBack }: Props) {
                                 entry.received_qty > 0 &&
                                 (() => {
                                   const bm = entry.benchmark
-                                  const expectedSold = entry.received_qty * bm.expected_yield
+                                  const receivedInRawUnit =
+                                    convertQty(entry.received_qty, entry.unit, bm.raw_unit) ?? null
+                                  if (receivedInRawUnit == null)
+                                    return (
+                                      <div className="bg-gray-800 rounded-xl px-3 py-3 space-y-1.5">
+                                        <p className="text-gray-400 text-xs font-semibold mb-1">
+                                          Yield Analysis
+                                        </p>
+                                        <p className="text-amber-400 text-xs">
+                                          Unit mismatch: this entry is in {entry.unit} but benchmark
+                                          is in {bm.raw_unit}. Set matching units to enable yield
+                                          analysis.
+                                        </p>
+                                      </div>
+                                    )
+
+                                  const bmRawQty = Number(bm.raw_qty ?? 1) || 1
+                                  const bmCookedQty =
+                                    (bm.cooked_qty != null ? Number(bm.cooked_qty) : null) ?? null
+                                  const ratio =
+                                    bmCookedQty != null && bmRawQty > 0
+                                      ? bmCookedQty / bmRawQty
+                                      : bm.expected_yield
+                                  const expectedSold = receivedInRawUnit * ratio
                                   const yieldPct =
                                     expectedSold > 0
                                       ? ((entry.effective_sold / expectedSold) * 100).toFixed(1)
@@ -721,7 +798,7 @@ export default function KitchenStock({ onBack }: Props) {
                                         Yield Analysis
                                       </p>
                                       {[
-                                        ['Raw Input', `${entry.received_qty} ${bm.raw_unit}`],
+                                        ['Raw Input', `${receivedInRawUnit} ${bm.raw_unit}`],
                                         [
                                           'Expected Output',
                                           `${expectedSold.toFixed(1)} ${bm.cooked_unit}`,
@@ -1010,10 +1087,15 @@ export default function KitchenStock({ onBack }: Props) {
                     <div>
                       <p className="text-white font-bold">{bm.item_name}</p>
                       <p className="text-gray-400 text-xs mt-1">
-                        <span className="text-amber-400 font-semibold">1 {bm.raw_unit}</span>
+                        <span className="text-amber-400 font-semibold">
+                          {bm.raw_qty ?? 1} {bm.raw_unit}
+                        </span>
                         {' → '}
                         <span className="text-green-400 font-semibold">
-                          {bm.expected_yield} {bm.cooked_unit}
+                          {bm.cooked_qty ?? bm.expected_yield} {bm.cooked_unit}
+                        </span>
+                        <span className="text-gray-600 ml-2">
+                          ({bm.expected_yield} {bm.cooked_unit}/1 {bm.raw_unit})
                         </span>
                         <span className="text-gray-600 ml-2">±{bm.tolerance_pct}% tolerance</span>
                       </p>
@@ -1079,11 +1161,23 @@ export default function KitchenStock({ onBack }: Props) {
                 </div>
               )}
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 text-xs text-amber-400">
-                How many <strong>cooked units</strong> do you expect from{' '}
-                <strong>1 raw unit</strong>?
+                Set the benchmark as: <strong>raw quantity</strong> →{' '}
+                <strong>expected cooked output</strong>.
               </div>
-              <div className="grid grid-cols-3 gap-2 items-end">
+              <div className="grid grid-cols-7 gap-2 items-end">
                 <div>
+                  <label className="text-gray-400 text-xs block mb-1">Raw qty</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={bmForm.raw_qty}
+                    onChange={(e) => bf({ raw_qty: e.target.value })}
+                    placeholder="e.g. 10"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="col-span-2">
                   <label className="text-gray-400 text-xs block mb-1">Raw unit</label>
                   <select
                     value={bmForm.raw_unit}
@@ -1099,6 +1193,18 @@ export default function KitchenStock({ onBack }: Props) {
                 </div>
                 <div className="text-center pb-2 text-gray-500 text-lg font-bold">→</div>
                 <div>
+                  <label className="text-gray-400 text-xs block mb-1">Cooked qty</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={bmForm.cooked_qty}
+                    onChange={(e) => bf({ cooked_qty: e.target.value })}
+                    placeholder="e.g. 80"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="col-span-2">
                   <label className="text-gray-400 text-xs block mb-1">Cooked unit</label>
                   <select
                     value={bmForm.cooked_unit}
@@ -1114,18 +1220,18 @@ export default function KitchenStock({ onBack }: Props) {
                 </div>
               </div>
               <div>
-                <label className="text-gray-400 text-xs block mb-1">
-                  Expected yield (cooked units per 1 raw unit)
-                </label>
-                <input
-                  type="number"
-                  min="0.1"
-                  step="0.5"
-                  value={bmForm.expected_yield}
-                  onChange={(e) => bf({ expected_yield: e.target.value })}
-                  placeholder="e.g. 8 (1 kg beef = 8 portions)"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-                />
+                <label className="text-gray-400 text-xs block mb-1">Derived yield</label>
+                <div className="bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm">
+                  {(() => {
+                    const rq = parseFloat(bmForm.raw_qty)
+                    const cq = parseFloat(bmForm.cooked_qty)
+                    const ok = rq > 0 && cq > 0
+                    const y = ok ? cq / rq : 0
+                    return ok
+                      ? `${y.toFixed(2)} ${bmForm.cooked_unit} per 1 ${bmForm.raw_unit}`
+                      : '—'
+                  })()}
+                </div>
               </div>
               <div>
                 <label className="text-gray-400 text-xs block mb-1">Tolerance % (±)</label>
@@ -1161,7 +1267,9 @@ export default function KitchenStock({ onBack }: Props) {
               <button
                 onClick={saveBenchmark}
                 disabled={
-                  !bmForm.expected_yield || (showBenchmarkFor === '__new__' && !bmForm.item_name)
+                  !bmForm.raw_qty ||
+                  !bmForm.cooked_qty ||
+                  (showBenchmarkFor === '__new__' && !bmForm.item_name)
                 }
                 className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-black rounded-2xl py-3 text-sm transition-colors"
               >
