@@ -1126,9 +1126,9 @@ export default function KitchenStock({ onBack }: Props) {
       )}
 
       {showBenchmarkFor && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-end sm:items-center justify-center px-4 pb-4 sm:pb-0">
-          <div className="bg-gray-900 border border-gray-700 rounded-3xl w-full max-w-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center px-4 py-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-3xl w-full max-w-sm max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 shrink-0">
               <div>
                 <h2 className="text-white font-bold text-sm">Set Benchmark</h2>
                 <p className="text-gray-500 text-xs mt-0.5">
@@ -1142,7 +1142,7 @@ export default function KitchenStock({ onBack }: Props) {
                 <X size={18} />
               </button>
             </div>
-            <div className="p-5 space-y-4">
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
               {showBenchmarkFor === '__new__' && (
                 <div>
                   <label className="text-gray-400 text-xs block mb-1">Item Name</label>
@@ -1270,6 +1270,8 @@ export default function KitchenStock({ onBack }: Props) {
                   className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
                 />
               </div>
+            </div>
+            <div className="border-t border-gray-800 p-4 shrink-0 bg-gray-900">
               <button
                 onClick={saveBenchmark}
                 disabled={
