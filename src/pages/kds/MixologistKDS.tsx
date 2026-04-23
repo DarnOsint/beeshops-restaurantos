@@ -178,23 +178,24 @@ function MixologistKDSInner() {
   }, [])
 
   const fetchOrders = useCallback(async () => {
-    // Mirror BarKDS behavior: fetch ONLY orders that currently have pending/preparing
-    // mixologist items (inner join filter). Do NOT filter orders.status, because some
-    // deployments can accidentally "close" an order while station items remain pending.
+    // IMPORTANT:
+    // Query `order_items` directly (instead of `orders`) to avoid missing mixologist items
+    // when the restaurant has a lot of other pending station items (PostgREST row limits).
     const since = new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString() // last 7 days
-    const [{ data: mixoData, error }, { data: pendingReturns, error: pendingErr }] =
+    const [{ data: itemRows, error }, { data: pendingReturns, error: pendingErr }] =
       await Promise.all([
         supabase
-          .from('orders')
+          .from('order_items')
           .select(
-            `id, created_at, notes, staff_id, order_type, customer_name,
-            tables(name),
-            profiles(full_name),
-            order_items!inner(id, quantity, status, destination, notes, return_requested, return_accepted, return_reason,
-              menu_items(name, menu_categories(name, destination)))`
+            `id, order_id, quantity, status, destination, notes, return_requested, return_accepted, return_reason,
+          menu_items(name, menu_categories(name, destination)),
+          orders(id, created_at, notes, staff_id, order_type, customer_name, tables(name), profiles(full_name))`
           )
           .gte('created_at', since)
-          .in('order_items.status', ['pending', 'preparing'])
+          .in('status', ['pending', 'preparing'])
+          .or(
+            'destination.eq.mixologist,destination.eq.cocktail,destination.eq.cocktails,destination.eq.mixo,destination.eq.mixology'
+          )
           .order('created_at', { ascending: true }),
         supabase.from('returns_log').select('order_item_id').eq('status', 'pending'),
       ])
@@ -205,19 +206,49 @@ function MixologistKDSInner() {
         .filter(Boolean)
     )
 
-    if (!error && mixoData) {
-      const mixo = (mixoData as unknown as KdsOrder[])
-        .map((o) => ({
-          ...o,
-          order_items: (o.order_items || []).filter(
-            (i) =>
-              (i.status === 'pending' || i.status === 'preparing') &&
-              !i.return_accepted &&
-              isMixologistItem(i)
-          ),
-        }))
-        .filter((o) => o.order_items.length > 0)
+    if (!error && itemRows) {
+      const byOrder = new Map<string, KdsOrder>()
+      for (const row of itemRows as any[]) {
+        const order = Array.isArray(row.orders) ? row.orders[0] : row.orders
+        if (!order?.id) continue
+        if (row.return_accepted) continue
+        if (!isMixologistItem(row as any)) continue
+        const status = String(row.status || '').toLowerCase()
+        if (status !== 'pending' && status !== 'preparing') continue
 
+        const existing = byOrder.get(order.id)
+        const item = {
+          id: row.id,
+          quantity: row.quantity,
+          status: row.status,
+          destination: row.destination,
+          notes: row.notes,
+          return_requested: row.return_requested,
+          return_accepted: row.return_accepted,
+          return_reason: row.return_reason,
+          menu_items: row.menu_items,
+        } as KdsOrder['order_items'][number]
+
+        if (existing) {
+          existing.order_items.push(item)
+        } else {
+          byOrder.set(order.id, {
+            id: order.id,
+            created_at: order.created_at,
+            notes: order.notes,
+            staff_id: order.staff_id,
+            order_type: order.order_type,
+            customer_name: order.customer_name,
+            tables: order.tables,
+            profiles: order.profiles,
+            order_items: [item],
+          })
+        }
+      }
+
+      const mixo = Array.from(byOrder.values()).sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
       setOrders(mixo)
 
       // Return requests: fetch only orders that contain the returned mixologist items (small set).
