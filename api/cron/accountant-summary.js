@@ -54,6 +54,15 @@ function buildTable(headers, rows, emptyMsg = 'No data') {
   return `<table style="width:100%;border-collapse:collapse;"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`
 }
 
+function escapeHtml(input) {
+  return String(input || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export default async function handler(req, res) {
   const isCron     = req.headers['authorization'] === `Bearer ${process.env.CRON_SECRET}`
   const isInternal = req.headers['x-internal-secret'] === process.env.INTERNAL_API_SECRET
@@ -74,6 +83,7 @@ export default async function handler(req, res) {
       { data: payouts },
       { data: attendance },
       { data: reconData },
+      { data: manifestData },
       { data: debtors },
     ] = await Promise.all([
       supabase.from('orders').select('*, profiles(full_name), tables(name), order_items(*, menu_items(name))').gte('created_at', start).lte('created_at', end),
@@ -82,6 +92,7 @@ export default async function handler(req, res) {
       supabase.from('payouts').select('*, profiles(full_name)').gte('created_at', start).lte('created_at', end),
       supabase.from('attendance').select('*').eq('date', dateStr),
       supabase.from('settings').select('value').eq('id', `recon_${dateKey}`).single(),
+      supabase.from('settings').select('value').eq('id', `manifest_${dateKey}`).single(),
       supabase.from('debtors').select('*').gt('balance', 0),
     ])
 
@@ -90,6 +101,8 @@ export default async function handler(req, res) {
     if (reconData?.value) {
       try { recon = JSON.parse(reconData.value) } catch { /* */ }
     }
+
+    const manifestNotes = (manifestData?.value || '').toString().trim()
 
     // Revenue
     const paid = (orders || []).filter(o => o.status === 'paid')
@@ -213,7 +226,16 @@ export default async function handler(req, res) {
     )}</div>` : ''}
   `, '#ef4444')}
 
-  ${reconSaved ? section('Daily Reconciliation', '🏦', `
+  ${section('Daily Reconciliation', reconSaved ? '🏦' : '⚠️', `
+    <div style="background:${manifestNotes ? '#f8fafc' : '#fff7ed'};border:1px solid ${manifestNotes ? '#e5e7eb' : '#fed7aa'};border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+      <div style="font-weight:800;color:#111827;font-size:12px;margin-bottom:6px;">📝 Accountant Notes / Manifest</div>
+      ${manifestNotes
+        ? `<div style="white-space:pre-wrap;color:#374151;font-size:12px;line-height:1.6;">${escapeHtml(manifestNotes)}</div>`
+        : `<div style="color:#ea580c;font-size:12px;">No notes added for this trading day.</div>`
+      }
+    </div>
+
+    ${reconSaved ? `
     ${kpiRow([kpiBox('Cash Collected', fmt(totalCashCollected), '#059669'), kpiBox('Bank Transfers', fmt(totalBankReceived), '#7c3aed'), kpiBox('POS Receipts', fmt(totalPOSReceived), '#2563eb')])}
     <div style="height:12px;"></div>
 
@@ -269,12 +291,13 @@ export default async function handler(req, res) {
         </div>
       </div>
     </div>
-  `, '#f59e0b') : section('Daily Reconciliation', '⚠️', `
+  ` : `
     <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:16px;">
       <div style="color:#ea580c;font-weight:700;font-size:13px;">Reconciliation not yet saved for ${short}</div>
       <div style="color:#9ca3af;font-size:12px;margin-top:4px;">The accountant has not entered the daily reconciliation data. Please complete this in the Accounting → Overview tab.</div>
     </div>
-  `, '#ea580c')}
+  `}
+  `, reconSaved ? '#f59e0b' : '#ea580c')}
 
   ${section('Attendance', '📋', `
     ${kpiRow([kpiBox('Staff Clocked In', clockedIn)])}

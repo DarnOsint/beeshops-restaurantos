@@ -80,6 +80,9 @@ export default function OverviewTab({
     excess: {},
   })
   const [saving, setSaving] = useState(false)
+  const [manifestNotes, setManifestNotes] = useState('')
+  const [manifestLoading, setManifestLoading] = useState(false)
+  const [manifestSaving, setManifestSaving] = useState(false)
   const [reconDate, setReconDate] = useState(() => {
     if (sessionDate) return sessionDate
     const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
@@ -163,6 +166,48 @@ export default function OverviewTab({
   useEffect(() => {
     loadRecon()
   }, [loadRecon])
+
+  const loadManifest = useCallback(async () => {
+    const isSingleDay = !dateRangeType || dateRangeType === 'Today' || dateRangeType === 'Prev Day'
+    if (!isSingleDay) {
+      setManifestNotes('')
+      return
+    }
+    setManifestLoading(true)
+    const { data } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('id', `manifest_${reconDate}`)
+      .single()
+    setManifestNotes(data?.value || '')
+    setManifestLoading(false)
+  }, [reconDate, dateRangeType])
+
+  useEffect(() => {
+    void loadManifest()
+  }, [loadManifest])
+
+  const saveManifest = async () => {
+    if (!isSingleDay) return
+    setManifestSaving(true)
+    await supabase.from('settings').upsert(
+      {
+        id: `manifest_${reconDate}`,
+        value: manifestNotes || '',
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    )
+    audit({
+      action: 'ACCOUNTING_MANIFEST_SAVED',
+      entity: 'settings',
+      entityName: `manifest_${reconDate}`,
+      newValue: { notes: manifestNotes },
+      performer: profile as any,
+    })
+    setManifestSaving(false)
+    toast.success('Saved', 'Accounting notes saved')
+  }
 
   const autoShortage = activeWaitrons.reduce(
     (acc, w) => {
@@ -497,6 +542,38 @@ export default function OverviewTab({
               <Printer size={12} /> Print
             </button>
           </div>
+        </div>
+
+        {/* Daily Notes / Manifest */}
+        <div className="mb-4 bg-gray-950/40 border border-amber-500/20 rounded-xl p-4">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <h4 className="text-gray-200 text-sm font-semibold flex items-center gap-1.5">
+              <Receipt size={13} className="text-amber-400" /> Daily Notes / Manifest
+            </h4>
+            {isSingleDay && (
+              <button
+                onClick={saveManifest}
+                disabled={manifestSaving || manifestLoading}
+                className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+              >
+                <Save size={12} /> {manifestSaving ? 'Saving...' : 'Save Notes'}
+              </button>
+            )}
+          </div>
+          {!isSingleDay ? (
+            <p className="text-gray-500 text-xs">
+              Notes are saved per day. Switch to <span className="text-gray-200">Today</span> or{' '}
+              <span className="text-gray-200">Prev Day</span> to write a manifest.
+            </p>
+          ) : (
+            <textarea
+              value={manifestNotes}
+              onChange={(e) => setManifestNotes(e.target.value)}
+              placeholder="Write a short explanation of what happened today (issues, shortages, notes, special events, etc.)"
+              rows={4}
+              className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+            />
+          )}
         </div>
 
         {/* Waitron Remittance Per Waitron */}

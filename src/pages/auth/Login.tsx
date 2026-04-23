@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { verifyPinServer, verifyPbkdf2, hashPin } from '../../lib/pinHash'
+import { verifyPinServer, verifyPbkdf2 } from '../../lib/pinHash'
 import { cacheCredential, verifyOfflinePassword, verifyOfflinePin } from '../../lib/offlineAuth'
 import { Eye, EyeOff, Delete } from 'lucide-react'
+import type { Profile, Role } from '../../types'
 
 const EMAIL_MAX = 5
 const EMAIL_LOCK_MS = 15 * 60 * 1000
@@ -124,7 +125,6 @@ export default function Login() {
     const s = getRateState('rl_pin')
     return isLockedOut(s, PIN_LOCK_MS) ? getRemaining(s, PIN_LOCK_MS) : 0
   })
-  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const sessionExpired = searchParams.get('reason') === 'timeout'
   const emailLocked = emailRem > 0
@@ -158,7 +158,7 @@ export default function Login() {
       setOfflineSession(offline.profile, 'password')
       resetAttempts('rl_email')
       setLoading(false)
-      navigate('/dashboard')
+      window.location.replace('/dashboard')
       return true
     }
 
@@ -199,30 +199,10 @@ export default function Login() {
       const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).single()
       if (prof) {
         try {
-          await cacheCredential(
-            prof as unknown as {
-              id: string
-              full_name: string
-              role: string
-              email?: string
-              created_at?: string
-            },
-            'password',
-            password
-          )
+          await cacheCredential(prof as unknown as Profile, 'password', password)
         } catch (e) {
           console.warn('cacheCredential(password) failed', e)
         }
-        setOfflineSession(
-          {
-            id: prof.id,
-            full_name: prof.full_name,
-            role: prof.role,
-            email: prof.email,
-            created_at: prof.created_at,
-          },
-          'password'
-        )
       }
     }
 
@@ -242,7 +222,7 @@ export default function Login() {
           .select()
       )
     setLoading(false)
-    navigate('/dashboard')
+    window.location.replace('/dashboard')
   }
 
   const handlePinLogin = async (entered: string) => {
@@ -306,13 +286,15 @@ export default function Login() {
     }
 
     // Cast to typed profile after verification
-    const profile = data as {
-      id: string
-      full_name: string
-      role: string
-      email?: string
-      pin?: string
-    } | null
+    const profile = data as
+      | (Partial<Profile> & {
+          id: string
+          full_name: string
+          role: Role
+          email?: string
+          pin?: string
+        })
+      | null
 
     if (!profile) {
       // If server failed due to network, attempt offline cached login
@@ -385,17 +367,16 @@ export default function Login() {
           .select()
       )
     try {
-      await cacheCredential(
-        {
-          id: profile.id,
-          full_name: profile.full_name,
-          role: profile.role,
-          email: profile.email,
-          created_at: new Date().toISOString(),
-        },
-        'pin',
-        entered
-      )
+      const cacheProfile: Profile = {
+        id: profile.id,
+        full_name: profile.full_name,
+        role: profile.role as Role,
+        email: profile.email,
+        pin: profile.pin,
+        is_active: true,
+        created_at: profile.created_at || new Date().toISOString(),
+      }
+      await cacheCredential(cacheProfile, 'pin', entered)
     } catch (e) {
       console.warn('cacheCredential(pin) failed', e)
     }
@@ -403,14 +384,14 @@ export default function Login() {
       {
         id: profile.id,
         full_name: profile.full_name,
-        role: profile.role,
+        role: profile.role as Role,
         email: profile.email,
         created_at: new Date().toISOString(),
       },
       'pin'
     )
     setLoading(false)
-    navigate('/dashboard', { replace: true })
+    window.location.replace('/dashboard')
   }
 
   const handlePinPress = (digit: string) => {
