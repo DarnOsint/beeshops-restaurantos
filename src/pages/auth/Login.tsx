@@ -144,6 +144,11 @@ export default function Login() {
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     if (emailLocked) return
+    // Ensure a lingering PIN session doesn't block Supabase auth hydration.
+    if (localStorage.getItem('pin_session')) {
+      localStorage.removeItem('pin_session')
+      window.dispatchEvent(new Event('pin_session_updated'))
+    }
     const s = getRateState('rl_email')
     if (isLockedOut(s, EMAIL_LOCK_MS)) {
       setEmailRem(getRemaining(s, EMAIL_LOCK_MS))

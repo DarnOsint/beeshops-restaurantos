@@ -212,17 +212,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Attempt PIN session immediately on init.
-      if (await hydratePinSession()) return
-
-      // Email session
+      // Prefer Supabase (email/password) session if present.
       const {
         data: { session },
       } = await supabase.auth.getSession()
       if (cancelled) return
-      setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
-      else setLoading(false)
+      if (session?.user) {
+        // If an email session exists, it takes precedence over any lingering PIN session.
+        if (localStorage.getItem('pin_session')) {
+          localStorage.removeItem('pin_session')
+          window.dispatchEvent(new Event('pin_session_updated'))
+        }
+        setUser(session.user)
+        fetchProfile(session.user.id)
+        return
+      }
+
+      // Otherwise attempt PIN session.
+      if (await hydratePinSession()) return
+
+      setUser(null)
+      setLoading(false)
     }
 
     void init()
@@ -230,13 +240,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (localStorage.getItem('pin_session')) return
-      setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
-      else {
-        setProfile(null)
-        setLoading(false)
+      const pinSession = localStorage.getItem('pin_session')
+
+      // If Supabase session becomes available (SIGNED_IN / TOKEN_REFRESHED),
+      // it should override any PIN session.
+      if (session?.user) {
+        if (pinSession) {
+          localStorage.removeItem('pin_session')
+          window.dispatchEvent(new Event('pin_session_updated'))
+        }
+        setUser(session.user)
+        fetchProfile(session.user.id)
+        return
       }
+
+      // If Supabase session is cleared but a PIN session exists, keep the PIN session.
+      if (pinSession) return
+
+      setUser(null)
+      setProfile(null)
+      setLoading(false)
     })
 
     const onPinSessionUpdated = () => {
