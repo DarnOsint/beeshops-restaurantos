@@ -68,6 +68,12 @@ const dayWindow = (dateStr: string) => {
   return { start: base.toISOString(), end: end.toISOString() }
 }
 
+const currentBusinessDateWAT = () => {
+  const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+  if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
+  return wat.toLocaleDateString('en-CA')
+}
+
 function MixologistKDSInner() {
   const { profile, signOut } = useAuth()
   const toast = useToast()
@@ -285,6 +291,32 @@ function MixologistKDSInner() {
 
     setLoading(false)
   }, [])
+
+  const autoAcceptTodayPending = useCallback(async () => {
+    if (!profile) return
+    // Migration/cleanup: historically some mixologist items were treated as "summary-visible"
+    // even while pending. Business rule now: only accepted items appear in summary.
+    // So we auto-accept any pending mixologist items in the current business day window.
+    const { start, end } = dayWindow(currentBusinessDateWAT())
+    const { data } = await supabase
+      .from('order_items')
+      .select(
+        `id, status, destination, return_accepted,
+        menu_items(name, menu_categories(name, destination))`
+      )
+      .gte('created_at', start)
+      .lt('created_at', end)
+      .eq('status', 'pending')
+
+    const ids =
+      (data || [])
+        .filter((r: any) => !r.return_accepted && isMixologistItem(r as any))
+        .map((r: any) => r.id)
+        .filter((id: any) => typeof id === 'string' && id.length > 0) || []
+
+    if (ids.length === 0) return
+    await supabase.from('order_items').update({ status: 'preparing' }).in('id', ids)
+  }, [profile])
 
   const seenPendingIdsRef = useRef<Set<string>>(new Set())
   useEffect(() => {
@@ -512,6 +544,7 @@ function MixologistKDSInner() {
   )
 
   useEffect(() => {
+    void autoAcceptTodayPending()
     fetchOrders()
     loadRequests()
     fetchReturnHistory()
@@ -545,7 +578,7 @@ function MixologistKDSInner() {
       document.removeEventListener('visibilitychange', onVisible)
       supabase.removeChannel(sub)
     }
-  }, [fetchOrders, fetchReturnHistory, loadRequests])
+  }, [autoAcceptTodayPending, fetchOrders, fetchReturnHistory, loadRequests])
 
   if (geoStatus === 'outside')
     return <GeofenceBlock status={geoStatus} distance={geoDist} location={geoLocation} />
@@ -792,7 +825,6 @@ function MixologistKDSInner() {
             destination="mixologist"
             icon={<BarChart2 size={16} />}
             color="text-emerald-400"
-            includePending
           />
         </div>
       )}

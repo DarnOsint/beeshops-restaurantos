@@ -109,7 +109,14 @@ export default function MenuManagement({ onBack }: Props) {
       if (editingItem) {
         const { error } = await supabase.from('menu_items').update(payload).eq('id', editingItem.id)
         if (error) throw error
-        audit({ action: 'MENU_ITEM_UPDATED', entity: 'menu_items', entityId: editingItem.id, entityName: itemForm.name, newValue: payload, performer: profile as any })
+        audit({
+          action: 'MENU_ITEM_UPDATED',
+          entity: 'menu_items',
+          entityId: editingItem.id,
+          entityName: itemForm.name,
+          newValue: payload,
+          performer: profile as any,
+        })
       } else {
         const { data: inserted, error } = await supabase
           .from('menu_items')
@@ -117,7 +124,14 @@ export default function MenuManagement({ onBack }: Props) {
           .select('id')
           .single()
         if (error) throw error
-        audit({ action: 'MENU_ITEM_CREATED', entity: 'menu_items', entityId: inserted?.id, entityName: itemForm.name, newValue: payload, performer: profile as any })
+        audit({
+          action: 'MENU_ITEM_CREATED',
+          entity: 'menu_items',
+          entityId: inserted?.id,
+          entityName: itemForm.name,
+          newValue: payload,
+          performer: profile as any,
+        })
         // Auto-add to main store inventory for bar items (not kitchen, griller, mixologist)
         if (inserted) {
           const cat = categories.find((c) => c.id === itemForm.category_id)
@@ -154,7 +168,13 @@ export default function MenuManagement({ onBack }: Props) {
       toast.error('Error', error instanceof Error ? error.message : String(error))
       return
     }
-    audit({ action: item.is_available ? 'MENU_ITEM_DISABLED' : 'MENU_ITEM_ENABLED', entity: 'menu_items', entityId: item.id, entityName: item.name, performer: profile as any })
+    audit({
+      action: item.is_available ? 'MENU_ITEM_DISABLED' : 'MENU_ITEM_ENABLED',
+      entity: 'menu_items',
+      entityId: item.id,
+      entityName: item.name,
+      performer: profile as any,
+    })
     fetchAll()
   }
   const openAddCat = () => {
@@ -216,6 +236,8 @@ export default function MenuManagement({ onBack }: Props) {
       return { label: 'Griller', className: 'bg-orange-500/20 text-orange-400' }
     if (dest === 'shisha') return { label: 'Shisha', className: 'bg-rose-500/20 text-rose-400' }
     if (dest === 'games') return { label: 'Games', className: 'bg-amber-500/20 text-amber-400' }
+    if (dest === 'mixologist')
+      return { label: 'Mixologist', className: 'bg-emerald-500/20 text-emerald-400' }
     return { label: 'Bar', className: 'bg-blue-500/20 text-blue-400' }
   }
 
