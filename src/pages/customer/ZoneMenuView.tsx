@@ -24,6 +24,9 @@ type TableCategory = {
   name: string
 }
 
+type ItemGroup = 'Food' | 'Drinks' | 'Cocktails' | 'Milkshakes' | 'Others'
+type Group = 'All' | ItemGroup
+
 const todayWAT = () => {
   const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
   if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
@@ -44,6 +47,7 @@ export default function ZoneMenuView() {
   const [dataSource, setDataSource] = useState<'api' | 'supabase' | 'unknown'>('unknown')
   const [debugApiError, setDebugApiError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [activeGroup, setActiveGroup] = useState<Group>('All')
   const [rated, setRated] = useState(false)
   const [ratingBusy, setRatingBusy] = useState(false)
   const [ratingError, setRatingError] = useState<string | null>(null)
@@ -199,11 +203,58 @@ export default function ZoneMenuView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoneId])
 
-  const filtered = useMemo(() => {
+  const getGroup = (item: MenuItem): ItemGroup => {
+    const cat = (item.menu_categories?.name || '').toLowerCase().trim()
+    if (!cat) return 'Others'
+
+    if (cat.includes('cocktail') || cat.includes('mocktail')) return 'Cocktails'
+    if (cat.includes('milkshake') || cat.includes('smoothie') || cat.includes('fruit punch'))
+      return 'Milkshakes'
+
+    const drinkCats = new Set([
+      'drinks',
+      'soft drinks',
+      'wine',
+      'spirits',
+      'energy drink',
+      'shot',
+      'beer',
+    ])
+    if (drinkCats.has(cat)) return 'Drinks'
+
+    if (cat === 'food' || cat.includes('food') || cat.includes('grill') || cat.includes('soup'))
+      return 'Food'
+
+    return 'Others'
+  }
+
+  const searchFiltered = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return menu
     return menu.filter((item) => item.name.toLowerCase().includes(q))
   }, [menu, search])
+
+  const groupOrder = useMemo(
+    () => ['Food', 'Drinks', 'Cocktails', 'Milkshakes', 'Others'] as ItemGroup[],
+    []
+  )
+
+  const groupCounts = useMemo(() => {
+    const counts: Record<ItemGroup, number> = {
+      Food: 0,
+      Drinks: 0,
+      Cocktails: 0,
+      Milkshakes: 0,
+      Others: 0,
+    }
+    for (const item of searchFiltered) counts[getGroup(item)] += 1
+    return counts
+  }, [searchFiltered])
+
+  const filtered = useMemo(() => {
+    if (activeGroup === 'All') return searchFiltered
+    return searchFiltered.filter((item) => getGroup(item) === activeGroup)
+  }, [searchFiltered, activeGroup])
 
   const submitRating = async (value: 'up' | 'down') => {
     if (!zoneId || ratingBusy) return
@@ -281,6 +332,45 @@ export default function ZoneMenuView() {
         </div>
       </div>
 
+      <div className="sticky top-[64px] z-20 border-b border-gray-800 bg-gray-950/95 backdrop-blur">
+        <div className="max-w-lg mx-auto w-full px-4 pt-4">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search items…"
+              className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+            />
+          </div>
+        </div>
+
+        <div className="max-w-lg mx-auto w-full px-4 pb-4 pt-3">
+          <div className="flex gap-2 overflow-x-auto">
+            {(['All', ...groupOrder] as Group[]).map((g) => {
+              const count = g === 'All' ? searchFiltered.length : groupCounts[g]
+              if (g !== 'All' && count === 0) return null
+              const active = activeGroup === g
+              return (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setActiveGroup(g)}
+                  className={`shrink-0 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${
+                    active
+                      ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                      : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white hover:border-gray-700'
+                  }`}
+                >
+                  {g}
+                  <span className="ml-2 text-[10px] text-gray-500">{count}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
       <div className="border-b border-gray-800 bg-gray-900/60 px-4 py-4">
         <div className="max-w-lg mx-auto">
           <p className="text-gray-400 text-xs font-semibold mb-2">Rate the service</p>
@@ -319,18 +409,6 @@ export default function ZoneMenuView() {
           <p className="text-gray-600 text-[11px] mt-2">
             This QR code is for checking prices only. Orders are placed through your waitron.
           </p>
-        </div>
-      </div>
-
-      <div className="max-w-lg mx-auto w-full px-4 pt-4">
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search items…"
-            className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-amber-500"
-          />
         </div>
       </div>
 
