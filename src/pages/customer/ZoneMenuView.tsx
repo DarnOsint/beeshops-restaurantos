@@ -41,10 +41,32 @@ export default function ZoneMenuView() {
   const [menu, setMenu] = useState<MenuItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [dataSource, setDataSource] = useState<'api' | 'supabase' | 'unknown'>('unknown')
+  const [debugApiError, setDebugApiError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [rated, setRated] = useState(false)
   const [ratingBusy, setRatingBusy] = useState(false)
   const [ratingError, setRatingError] = useState<string | null>(null)
+
+  const debug = useMemo(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('debug') === '1'
+    } catch {
+      return false
+    }
+  }, [])
+
+  const normalizeMenu = (items: unknown): MenuItem[] => {
+    if (!Array.isArray(items)) return []
+    return (items as any[]).map((item) => ({
+      id: String(item?.id ?? ''),
+      name: String(item?.name ?? ''),
+      price: Number.isFinite(Number(item?.price)) ? Number(item.price) : 0,
+      description: item?.description ?? null,
+      image_url: item?.image_url ?? null,
+      menu_categories: item?.menu_categories ?? null,
+    }))
+  }
 
   const resolveZone = async (): Promise<TableCategory | null> => {
     if (!zoneId) return null
@@ -86,6 +108,8 @@ export default function ZoneMenuView() {
     if (!zoneId) return
     setLoading(true)
     setError(null)
+    setDebugApiError(null)
+    setDataSource('unknown')
     try {
       // Prefer server-side resolved payload (service role) so public scans work even with RLS.
       try {
@@ -102,9 +126,20 @@ export default function ZoneMenuView() {
           }
           if ('zone' in json && json.zone && Array.isArray((json as any).menu)) {
             setZone(json.zone)
-            setMenu((json as any).menu as MenuItem[])
+            setMenu(normalizeMenu((json as any).menu))
+            setDataSource('api')
             setLoading(false)
             return
+          }
+          if (debug && 'error' in json && (json as any).error) {
+            setDebugApiError(String((json as any).error))
+          }
+        } else if (debug) {
+          try {
+            const j = await resp.json()
+            setDebugApiError(String((j as any)?.error ?? resp.statusText))
+          } catch {
+            setDebugApiError(resp.statusText || `HTTP ${resp.status}`)
           }
         }
       } catch {
@@ -141,9 +176,14 @@ export default function ZoneMenuView() {
       setMenu(
         baseMenu.map((item) => ({
           ...item,
-          price: zonePriceByItem.get(item.id) ?? item.price,
+          price: Number.isFinite(zonePriceByItem.get(item.id))
+            ? (zonePriceByItem.get(item.id) as number)
+            : Number.isFinite(Number(item.price))
+              ? Number(item.price)
+              : 0,
         }))
       )
+      setDataSource('supabase')
     } catch {
       setError('Could not load prices. Please refresh.')
     } finally {
@@ -332,6 +372,24 @@ export default function ZoneMenuView() {
           </div>
         )}
       </div>
+
+      {debug ? (
+        <div className="max-w-lg mx-auto w-full px-4 pb-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-[11px] text-gray-400 space-y-1">
+            <div>
+              <span className="text-gray-500">debug</span> · zoneId: {zoneId} · resolved:{' '}
+              {zone?.id || '—'} ({zone?.name || '—'}) · source: {dataSource}
+            </div>
+            <div>
+              items: {menu.length} · priced:{' '}
+              {menu.filter((m) => Number.isFinite(m.price) && m.price > 0).length}
+              {debugApiError ? (
+                <span className="text-red-400"> · apiError: {debugApiError}</span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

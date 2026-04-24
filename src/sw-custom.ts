@@ -1,11 +1,28 @@
 /// <reference lib="webworker" />
+import { registerRoute } from 'workbox-routing'
+import { NetworkFirst } from 'workbox-strategies'
+import { CacheableResponsePlugin } from 'workbox-cacheable-response'
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching'
 
 declare const self: ServiceWorkerGlobalScope
 
 cleanupOutdatedCaches()
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-precacheAndRoute((self as any).__WB_MANIFEST || [])
+const rawManifest = ((self as any).__WB_MANIFEST || []) as Array<{ url?: string }>
+// Avoid pinning old SPA shells (index.html) forever — always try network first for navigations.
+const manifest = rawManifest.filter((entry) => {
+  const u = entry?.url || ''
+  return !(u === 'index.html' || u === '/index.html' || u.endsWith('/index.html'))
+})
+precacheAndRoute(manifest as any)
+
+registerRoute(
+  ({ request }) => request.mode === 'navigate',
+  new NetworkFirst({
+    cacheName: 'html-navigate',
+    plugins: [new CacheableResponsePlugin({ statuses: [200] })],
+  })
+)
 
 self.skipWaiting()
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
