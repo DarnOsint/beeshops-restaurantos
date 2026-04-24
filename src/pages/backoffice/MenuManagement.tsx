@@ -453,190 +453,196 @@ export default function MenuManagement({ onBack }: Props) {
       </div>
 
       {showItemModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-2xl w-full max-w-md border border-gray-800">
-            <div className="flex items-center justify-between p-5 border-b border-gray-800">
-              <h3 className="text-white font-bold">
-                {editingItem ? 'Edit Menu Item' : 'Add Menu Item'}
-              </h3>
-              <button
-                onClick={() => setShowItemModal(false)}
-                className="text-gray-400 hover:text-white"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
-                  Item Name *
-                </label>
-                <input
-                  value={itemForm.name}
-                  onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
-                  placeholder="e.g. Jollof Rice & Chicken"
-                />
-              </div>
-              <div>
-                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
-                  Category *
-                </label>
-                <select
-                  value={itemForm.category_id}
-                  onChange={(e) => setItemForm({ ...itemForm, category_id: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
-                >
-                  <option value="">-- Select category --</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
-                  Base Price (₦) *
-                </label>
-                <input
-                  type="number"
-                  value={itemForm.price}
-                  onChange={(e) => setItemForm({ ...itemForm, price: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={itemForm.description}
-                  onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
-                  rows={2}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 resize-none text-sm"
-                  placeholder="Optional description..."
-                />
-              </div>
-              <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <div>
-                    <p className="text-white text-sm font-semibold">Item photo</p>
-                    <p className="text-gray-500 text-xs">Shows on the public menu QR page</p>
-                  </div>
-                  <div className="w-14 h-14 rounded-xl bg-gray-900 border border-gray-700 overflow-hidden flex items-center justify-center shrink-0">
-                    {itemForm.image_url ? (
-                      <img
-                        src={itemForm.image_url}
-                        alt="Item"
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <span className="text-gray-600 text-xs">No image</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={!editingItem || saving}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0]
-                      if (f) void uploadMenuImage(f)
-                      e.currentTarget.value = ''
-                    }}
-                    className="block w-full text-xs text-gray-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600"
-                  />
-                </div>
-                {!editingItem ? (
-                  <p className="text-gray-500 text-[11px] mt-2">
-                    Save the item first, then upload a photo.
-                  </p>
-                ) : null}
-              </div>
-              <div className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3">
-                <span className="text-white text-sm">Available on menu</span>
+        <div className="fixed inset-0 bg-black/80 z-50 p-4 overflow-y-auto">
+          <div className="min-h-full flex items-start justify-center py-6">
+            <div className="bg-gray-900 rounded-2xl w-full max-w-md border border-gray-800 flex flex-col max-h-[calc(100vh-4rem)]">
+              <div className="flex items-center justify-between p-5 border-b border-gray-800 shrink-0">
+                <h3 className="text-white font-bold">
+                  {editingItem ? 'Edit Menu Item' : 'Add Menu Item'}
+                </h3>
                 <button
-                  onClick={() => setItemForm({ ...itemForm, is_available: !itemForm.is_available })}
+                  onClick={() => setShowItemModal(false)}
+                  className="text-gray-400 hover:text-white"
                 >
-                  {itemForm.is_available ? (
-                    <ToggleRight size={24} className="text-green-400" />
-                  ) : (
-                    <ToggleLeft size={24} className="text-gray-500" />
-                  )}
+                  <X size={20} />
                 </button>
               </div>
-              <button
-                onClick={saveItem}
-                disabled={saving}
-                className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black font-bold rounded-xl py-3 flex items-center justify-center gap-2"
-              >
-                <Save size={16} /> {saving ? 'Saving...' : 'Save Item'}
-              </button>
+              <div className="p-5 space-y-4 overflow-y-auto min-h-0">
+                <div>
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Item Name *
+                  </label>
+                  <input
+                    value={itemForm.name}
+                    onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
+                    placeholder="e.g. Jollof Rice & Chicken"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Category *
+                  </label>
+                  <select
+                    value={itemForm.category_id}
+                    onChange={(e) => setItemForm({ ...itemForm, category_id: e.target.value })}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="">-- Select category --</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Base Price (₦) *
+                  </label>
+                  <input
+                    type="number"
+                    value={itemForm.price}
+                    onChange={(e) => setItemForm({ ...itemForm, price: e.target.value })}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Description
+                  </label>
+                  <textarea
+                    value={itemForm.description}
+                    onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
+                    rows={2}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 resize-none text-sm"
+                    placeholder="Optional description..."
+                  />
+                </div>
+                <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div>
+                      <p className="text-white text-sm font-semibold">Item photo</p>
+                      <p className="text-gray-500 text-xs">Shows on the public menu QR page</p>
+                    </div>
+                    <div className="w-14 h-14 rounded-xl bg-gray-900 border border-gray-700 overflow-hidden flex items-center justify-center shrink-0">
+                      {itemForm.image_url ? (
+                        <img
+                          src={itemForm.image_url}
+                          alt="Item"
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span className="text-gray-600 text-xs">No image</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={!editingItem || saving}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]
+                        if (f) void uploadMenuImage(f)
+                        e.currentTarget.value = ''
+                      }}
+                      className="block w-full text-xs text-gray-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600"
+                    />
+                  </div>
+                  {!editingItem ? (
+                    <p className="text-gray-500 text-[11px] mt-2">
+                      Save the item first, then upload a photo.
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3">
+                  <span className="text-white text-sm">Available on menu</span>
+                  <button
+                    onClick={() =>
+                      setItemForm({ ...itemForm, is_available: !itemForm.is_available })
+                    }
+                  >
+                    {itemForm.is_available ? (
+                      <ToggleRight size={24} className="text-green-400" />
+                    ) : (
+                      <ToggleLeft size={24} className="text-gray-500" />
+                    )}
+                  </button>
+                </div>
+                <button
+                  onClick={saveItem}
+                  disabled={saving}
+                  className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black font-bold rounded-xl py-3 flex items-center justify-center gap-2"
+                >
+                  <Save size={16} /> {saving ? 'Saving...' : 'Save Item'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {showCatModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-2xl w-full max-w-sm border border-gray-800">
-            <div className="flex items-center justify-between p-5 border-b border-gray-800">
-              <h3 className="text-white font-bold">
-                {editingCat ? 'Edit Category' : 'Add Category'}
-              </h3>
-              <button
-                onClick={() => setShowCatModal(false)}
-                className="text-gray-400 hover:text-white"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
-                  Category Name *
-                </label>
-                <input
-                  value={catForm.name}
-                  onChange={(e) => setCatForm({ ...catForm, name: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
-                  placeholder="e.g. Grills"
-                />
+        <div className="fixed inset-0 bg-black/80 z-50 p-4 overflow-y-auto">
+          <div className="min-h-full flex items-start justify-center py-6">
+            <div className="bg-gray-900 rounded-2xl w-full max-w-sm border border-gray-800 flex flex-col max-h-[calc(100vh-4rem)]">
+              <div className="flex items-center justify-between p-5 border-b border-gray-800 shrink-0">
+                <h3 className="text-white font-bold">
+                  {editingCat ? 'Edit Category' : 'Add Category'}
+                </h3>
+                <button
+                  onClick={() => setShowCatModal(false)}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <X size={20} />
+                </button>
               </div>
-              <div>
-                <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
-                  Routes To *
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    ['kitchen', '🍳 Kitchen', 'red'],
-                    ['bar', '🍺 Bar', 'blue'],
-                    ['griller', '🔥 Griller', 'orange'],
-                    ['shisha', '💨 Shisha', 'rose'],
-                    ['games', '🎮 Games', 'amber'],
-                    ['mixologist', '🍸 Mixologist', 'green'],
-                  ].map(([val, label, color]) => (
-                    <button
-                      key={val}
-                      onClick={() => setCatForm({ ...catForm, destination: val })}
-                      className={`py-3 rounded-xl text-sm font-medium border-2 transition-all ${catForm.destination === val ? `border-${color}-500 bg-${color}-500/10 text-${color}-400` : 'border-gray-700 bg-gray-800 text-gray-400'}`}
-                    >
-                      {label}
-                    </button>
-                  ))}
+              <div className="p-5 space-y-4 overflow-y-auto min-h-0">
+                <div>
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Category Name *
+                  </label>
+                  <input
+                    value={catForm.name}
+                    onChange={(e) => setCatForm({ ...catForm, name: e.target.value })}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500"
+                    placeholder="e.g. Grills"
+                  />
                 </div>
+                <div>
+                  <label className="text-gray-400 text-xs uppercase tracking-wide block mb-1">
+                    Routes To *
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      ['kitchen', '🍳 Kitchen', 'red'],
+                      ['bar', '🍺 Bar', 'blue'],
+                      ['griller', '🔥 Griller', 'orange'],
+                      ['shisha', '💨 Shisha', 'rose'],
+                      ['games', '🎮 Games', 'amber'],
+                      ['mixologist', '🍸 Mixologist', 'green'],
+                    ].map(([val, label, color]) => (
+                      <button
+                        key={val}
+                        onClick={() => setCatForm({ ...catForm, destination: val })}
+                        className={`py-3 rounded-xl text-sm font-medium border-2 transition-all ${catForm.destination === val ? `border-${color}-500 bg-${color}-500/10 text-${color}-400` : 'border-gray-700 bg-gray-800 text-gray-400'}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={saveCat}
+                  disabled={saving}
+                  className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black font-bold rounded-xl py-3 flex items-center justify-center gap-2"
+                >
+                  <Save size={16} /> {saving ? 'Saving...' : 'Save Category'}
+                </button>
               </div>
-              <button
-                onClick={saveCat}
-                disabled={saving}
-                className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 text-black font-bold rounded-xl py-3 flex items-center justify-center gap-2"
-              >
-                <Save size={16} /> {saving ? 'Saving...' : 'Save Category'}
-              </button>
             </div>
           </div>
         </div>
