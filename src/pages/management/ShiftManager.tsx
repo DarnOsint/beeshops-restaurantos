@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { todayWAT } from '../../lib/wat'
+import { todayWAT, WAT, watDayRange } from '../../lib/wat'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { audit } from '../../lib/audit'
@@ -23,6 +23,7 @@ interface Shift {
   duration_minutes?: number | null
   date?: string
   pos_machine?: string | null
+  missing_attendance?: boolean
 }
 
 interface Props {
@@ -119,14 +120,16 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
   }
   const fetchTodayLog = async (d?: string) => {
     const dateToFetch = d || logDate
-    const now = new Date()
-    const start = new Date(dateToFetch)
-    start.setHours(8, 0, 0, 0)
-    // If user selected “today” but current time is before 8am, shift window back a day
-    const todayStr = new Date().toISOString().slice(0, 10)
-    if (dateToFetch === todayStr && now.getHours() < 8) start.setDate(start.getDate() - 1)
-    const end = new Date(start)
-    end.setDate(end.getDate() + 1)
+    // 8am–8am WAT trading day window
+    const watNow = new Date(new Date().toLocaleString('en-US', { timeZone: WAT }))
+    let effective = dateToFetch
+    // If user selected “today” but current WAT time is before 8am, shift window back a day
+    if (dateToFetch === todayWAT() && watNow.getHours() < 8) {
+      const prev = new Date(watNow)
+      prev.setDate(prev.getDate() - 1)
+      effective = prev.toLocaleDateString('en-CA')
+    }
+    const { start, end } = watDayRange(effective)
     const full = await supabase
       .from('attendance')
       .select('id, staff_id, staff_name, role, clock_in, clock_out, pos_machine')
@@ -149,8 +152,49 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
         full.error.message
       )
     }
-    if (res.data) setTodayLog(res.data as Shift[])
-    else if (res.error) toast.error('Error', 'Could not load shift log: ' + res.error.message)
+    if (res.error) {
+      toast.error('Error', 'Could not load shift log: ' + res.error.message)
+      return
+    }
+
+    const baseLog = (res.data || []) as Shift[]
+    const seen = new Set(baseLog.map((x) => x.staff_id).filter(Boolean))
+
+    // Also include staff who made sales in this window even if attendance row is missing.
+    const { data: salesRows } = await supabase
+      .from('orders')
+      .select('staff_id, profiles(full_name, role)')
+      .not('staff_id', 'is', null)
+      .or(
+        `and(status.eq.paid,closed_at.gte.${start.toISOString()},closed_at.lt.${end.toISOString()}),and(status.eq.open,created_at.gte.${start.toISOString()},created_at.lt.${end.toISOString()})`
+      )
+      .limit(500)
+
+    const synthetic: Shift[] = []
+    for (const row of (salesRows || []) as Array<{
+      staff_id: string | null
+      profiles?: { full_name?: string | null; role?: string | null } | null
+    }>) {
+      const staffId = row.staff_id
+      if (!staffId || seen.has(staffId)) continue
+      seen.add(staffId)
+      synthetic.push({
+        id: `sales_${staffId}_${effective}`,
+        staff_id: staffId,
+        staff_name: row.profiles?.full_name || 'Unknown',
+        role: row.profiles?.role || 'unknown',
+        clock_in: start.toISOString(),
+        clock_out: end.toISOString(),
+        duration_minutes: null,
+        pos_machine: null,
+        missing_attendance: true,
+      })
+    }
+
+    const combined = [...baseLog, ...synthetic].sort(
+      (a, b) => new Date(b.clock_in).getTime() - new Date(a.clock_in).getTime()
+    )
+    setTodayLog(combined)
   }
 
   const fetchAll = useCallback(async () => {
@@ -494,6 +538,11 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
                   <p className="text-white font-medium">{entry.staff_name}</p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-gray-400 text-xs capitalize">{entry.role}</p>
+                    {entry.missing_attendance && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        Sales found · no clock-in record
+                      </span>
+                    )}
                     {entry.pos_machine && (
                       <span className="flex items-center gap-1 text-cyan-400 text-xs">
                         <Monitor size={10} />
