@@ -24,9 +24,6 @@ type TableCategory = {
   name: string
 }
 
-type ItemGroup = 'Food' | 'Drinks' | 'Cocktails' | 'Milkshakes' | 'Others'
-type Group = 'All' | ItemGroup
-
 const todayWAT = () => {
   const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
   if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
@@ -47,7 +44,7 @@ export default function ZoneMenuView() {
   const [dataSource, setDataSource] = useState<'api' | 'supabase' | 'unknown'>('unknown')
   const [debugApiError, setDebugApiError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
-  const [activeGroup, setActiveGroup] = useState<Group>('All')
+  const [activeCategory, setActiveCategory] = useState<string>('All')
   const [rated, setRated] = useState(false)
   const [ratingBusy, setRatingBusy] = useState(false)
   const [ratingError, setRatingError] = useState<string | null>(null)
@@ -200,33 +197,10 @@ export default function ZoneMenuView() {
     if (zoneId) {
       setRated(Boolean(localStorage.getItem(buildRatedKey(zoneId))))
     }
+    // Reset filter when scanning a different zone QR
+    setActiveCategory('All')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoneId])
-
-  const getGroup = (item: MenuItem): ItemGroup => {
-    const cat = (item.menu_categories?.name || '').toLowerCase().trim()
-    if (!cat) return 'Others'
-
-    if (cat.includes('cocktail') || cat.includes('mocktail')) return 'Cocktails'
-    if (cat.includes('milkshake') || cat.includes('smoothie') || cat.includes('fruit punch'))
-      return 'Milkshakes'
-
-    const drinkCats = new Set([
-      'drinks',
-      'soft drinks',
-      'wine',
-      'spirits',
-      'energy drink',
-      'shot',
-      'beer',
-    ])
-    if (drinkCats.has(cat)) return 'Drinks'
-
-    if (cat === 'food' || cat.includes('food') || cat.includes('grill') || cat.includes('soup'))
-      return 'Food'
-
-    return 'Others'
-  }
 
   const searchFiltered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -234,27 +208,84 @@ export default function ZoneMenuView() {
     return menu.filter((item) => item.name.toLowerCase().includes(q))
   }, [menu, search])
 
-  const groupOrder = useMemo(
-    () => ['Food', 'Drinks', 'Cocktails', 'Milkshakes', 'Others'] as ItemGroup[],
-    []
-  )
+  const getCategoryWeight = (name: string) => {
+    const n = String(name || '')
+      .toLowerCase()
+      .trim()
+    if (!n) return 99
 
-  const groupCounts = useMemo(() => {
-    const counts: Record<ItemGroup, number> = {
-      Food: 0,
-      Drinks: 0,
-      Cocktails: 0,
-      Milkshakes: 0,
-      Others: 0,
+    // Sort similar to the POS/back-office tabs, but in a "Food → Drinks → Cocktails → Milkshakes" order.
+    if (
+      n.includes('food') ||
+      n.includes('grill') ||
+      n.includes('soup') ||
+      n.includes('pasta') ||
+      n.includes('rice') ||
+      n.includes('salad') ||
+      n.includes('starter') ||
+      n.includes('breakfast')
+    ) {
+      return 0
     }
-    for (const item of searchFiltered) counts[getGroup(item)] += 1
+
+    // Drinks + liquor/beer tags
+    if (
+      n.includes('drink') ||
+      n.includes('soft') ||
+      n.includes('wine') ||
+      n.includes('spirit') ||
+      n.includes('beer') ||
+      n.includes('liquor') ||
+      n.includes('liqueur') ||
+      n.includes('energy') ||
+      n.includes('shot')
+    ) {
+      return 1
+    }
+
+    if (n.includes('cocktail') || n.includes('mocktail')) return 2
+    if (n.includes('milkshake') || n.includes('smoothie') || n.includes('fruit punch')) return 3
+
+    return 4
+  }
+
+  const categories = useMemo(() => {
+    const set = new Set<string>()
+    let hasUncategorized = false
+    for (const item of menu) {
+      const cat = item.menu_categories?.name
+      if (cat) set.add(cat)
+      else hasUncategorized = true
+    }
+    const list = Array.from(set).sort((a, b) => {
+      const wa = getCategoryWeight(a)
+      const wb = getCategoryWeight(b)
+      if (wa !== wb) return wa - wb
+      return a.localeCompare(b)
+    })
+    if (hasUncategorized) list.push('Other')
+    return ['All', ...list]
+  }, [menu])
+
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    counts.set('All', searchFiltered.length)
+    for (const c of categories) {
+      if (c !== 'All') counts.set(c, 0)
+    }
+    for (const item of searchFiltered) {
+      const cat = item.menu_categories?.name || 'Other'
+      counts.set(cat, (counts.get(cat) || 0) + 1)
+    }
     return counts
-  }, [searchFiltered])
+  }, [categories, searchFiltered])
 
   const filtered = useMemo(() => {
-    if (activeGroup === 'All') return searchFiltered
-    return searchFiltered.filter((item) => getGroup(item) === activeGroup)
-  }, [searchFiltered, activeGroup])
+    if (activeCategory === 'All') return searchFiltered
+    if (activeCategory === 'Other')
+      return searchFiltered.filter((item) => !item.menu_categories?.name)
+    return searchFiltered.filter((item) => item.menu_categories?.name === activeCategory)
+  }, [searchFiltered, activeCategory])
 
   const submitRating = async (value: 'up' | 'down') => {
     if (!zoneId || ratingBusy) return
@@ -347,22 +378,22 @@ export default function ZoneMenuView() {
 
         <div className="max-w-lg mx-auto w-full px-4 pb-4 pt-3">
           <div className="flex gap-2 overflow-x-auto">
-            {(['All', ...groupOrder] as Group[]).map((g) => {
-              const count = g === 'All' ? searchFiltered.length : groupCounts[g]
-              if (g !== 'All' && count === 0) return null
-              const active = activeGroup === g
+            {categories.map((cat) => {
+              const count = categoryCounts.get(cat) || 0
+              if (cat !== 'All' && count === 0) return null
+              const active = activeCategory === cat
               return (
                 <button
-                  key={g}
+                  key={cat}
                   type="button"
-                  onClick={() => setActiveGroup(g)}
+                  onClick={() => setActiveCategory(cat)}
                   className={`shrink-0 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${
                     active
                       ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
                       : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white hover:border-gray-700'
                   }`}
                 >
-                  {g}
+                  {cat}
                   <span className="ml-2 text-[10px] text-gray-500">{count}</span>
                 </button>
               )
