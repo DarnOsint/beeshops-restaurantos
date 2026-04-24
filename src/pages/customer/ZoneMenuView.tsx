@@ -89,7 +89,9 @@ export default function ZoneMenuView() {
     try {
       // Prefer server-side resolved payload (service role) so public scans work even with RLS.
       try {
-        const resp = await fetch(`/api/public/zone-menu?zone=${encodeURIComponent(zoneId)}`)
+        const resp = await fetch(
+          `/api/public/zone-menu?zone=${encodeURIComponent(zoneId)}&t=${Date.now()}`
+        )
         if (resp.ok) {
           const json = (await resp.json()) as
             | { redirectZoneId?: string | null; zone?: TableCategory; menu?: MenuItem[] }
