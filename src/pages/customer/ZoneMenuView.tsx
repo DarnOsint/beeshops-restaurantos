@@ -87,6 +87,28 @@ export default function ZoneMenuView() {
     setLoading(true)
     setError(null)
     try {
+      // Prefer server-side resolved payload (service role) so public scans work even with RLS.
+      try {
+        const resp = await fetch(`/api/public/zone-menu?zone=${encodeURIComponent(zoneId)}`)
+        if (resp.ok) {
+          const json = (await resp.json()) as
+            | { redirectZoneId?: string | null; zone?: TableCategory; menu?: MenuItem[] }
+            | { error?: string }
+          if ('redirectZoneId' in json && json.redirectZoneId) {
+            navigate(`/zone/${json.redirectZoneId}`, { replace: true })
+            return
+          }
+          if ('zone' in json && json.zone && Array.isArray((json as any).menu)) {
+            setZone(json.zone)
+            setMenu((json as any).menu as MenuItem[])
+            setLoading(false)
+            return
+          }
+        }
+      } catch {
+        /* fall back to client-side Supabase */
+      }
+
       const resolved = await resolveZone()
       if (!resolved) throw new Error('zone_not_found')
 
