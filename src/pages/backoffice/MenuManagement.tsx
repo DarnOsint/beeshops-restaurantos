@@ -15,6 +15,7 @@ interface MenuItem {
   name: string
   price: number
   description?: string
+  image_url?: string | null
   is_available: boolean
   category_id: string
   menu_categories?: MenuCategory | null
@@ -24,6 +25,7 @@ interface ItemForm {
   category_id: string
   price: string
   description: string
+  image_url: string
   is_available: boolean
 }
 interface CatForm {
@@ -54,6 +56,7 @@ export default function MenuManagement({ onBack }: Props) {
     category_id: '',
     price: '',
     description: '',
+    image_url: '',
     is_available: true,
   })
   const [catForm, setCatForm] = useState<CatForm>({ name: '', destination: 'bar' })
@@ -79,6 +82,7 @@ export default function MenuManagement({ onBack }: Props) {
       category_id: categories[0]?.id || '',
       price: '',
       description: '',
+      image_url: '',
       is_available: true,
     })
     setShowItemModal(true)
@@ -90,9 +94,52 @@ export default function MenuManagement({ onBack }: Props) {
       category_id: item.category_id,
       price: item.price.toString(),
       description: item.description || '',
+      image_url: item.image_url || '',
       is_available: item.is_available,
     })
     setShowItemModal(true)
+  }
+
+  const uploadMenuImage = async (file: File) => {
+    if (!editingItem?.id) {
+      toast.warning('Save first', 'Please save the item first, then upload the image.')
+      return
+    }
+    try {
+      setSaving(true)
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const token = session?.access_token
+      if (!token) throw new Error('You are not logged in')
+
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result || ''))
+        reader.onerror = () => reject(new Error('Failed to read file'))
+        reader.readAsDataURL(file)
+      })
+
+      const resp = await fetch('/api/admin/menu-item-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ menuItemId: editingItem.id, dataUrl }),
+      })
+      const json = (await resp.json()) as { ok?: boolean; imageUrl?: string; error?: string }
+      if (!resp.ok || !json.ok || !json.imageUrl) {
+        throw new Error(json.error || 'Upload failed')
+      }
+      setItemForm((f) => ({ ...f, image_url: json.imageUrl }))
+      toast.success('Uploaded', 'Menu item image updated')
+      await fetchAll()
+    } catch (err) {
+      toast.error('Upload error', err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
   }
   const saveItem = async () => {
     if (!itemForm.name || !itemForm.price || !itemForm.category_id)
@@ -103,6 +150,7 @@ export default function MenuManagement({ onBack }: Props) {
       category_id: itemForm.category_id,
       price: parseFloat(itemForm.price),
       description: itemForm.description,
+      image_url: itemForm.image_url || null,
       is_available: itemForm.is_available,
     }
     try {
@@ -326,6 +374,18 @@ export default function MenuManagement({ onBack }: Props) {
                     key={item.id}
                     className={`bg-gray-900 border rounded-xl p-4 flex items-center justify-between gap-3 ${item.is_available ? 'border-gray-800' : 'border-gray-800 opacity-50'}`}
                   >
+                    <div className="w-12 h-12 rounded-xl bg-gray-800 border border-gray-700 overflow-hidden flex items-center justify-center shrink-0">
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span className="text-gray-600 text-xs">IMG</span>
+                      )}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="mb-1">
                         <span
@@ -458,6 +518,44 @@ export default function MenuManagement({ onBack }: Props) {
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 resize-none text-sm"
                   placeholder="Optional description..."
                 />
+              </div>
+              <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-white text-sm font-semibold">Item photo</p>
+                    <p className="text-gray-500 text-xs">Shows on the public menu QR page</p>
+                  </div>
+                  <div className="w-14 h-14 rounded-xl bg-gray-900 border border-gray-700 overflow-hidden flex items-center justify-center shrink-0">
+                    {itemForm.image_url ? (
+                      <img
+                        src={itemForm.image_url}
+                        alt="Item"
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span className="text-gray-600 text-xs">No image</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={!editingItem || saving}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (f) void uploadMenuImage(f)
+                      e.currentTarget.value = ''
+                    }}
+                    className="block w-full text-xs text-gray-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600"
+                  />
+                </div>
+                {!editingItem ? (
+                  <p className="text-gray-500 text-[11px] mt-2">
+                    Save the item first, then upload a photo.
+                  </p>
+                ) : null}
               </div>
               <div className="flex items-center justify-between bg-gray-800 rounded-xl px-4 py-3">
                 <span className="text-white text-sm">Available on menu</span>
