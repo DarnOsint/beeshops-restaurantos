@@ -6,6 +6,7 @@ import { AlertCircle, RefreshCw } from 'lucide-react'
 type TableRow = {
   id: string
   name: string
+  category_id?: string | null
   table_categories?: { id: string; name: string } | null
 }
 
@@ -22,12 +23,12 @@ export default function TableView() {
     try {
       const { data, error: fetchError } = await supabase
         .from('tables')
-        .select('id, name, table_categories(id, name)')
+        .select('id, name, category_id, table_categories(id, name)')
         .eq('id', tableId)
         .single()
       if (fetchError) throw fetchError
       const table = data as TableRow
-      const zoneId = table.table_categories?.id
+      const zoneId = table.table_categories?.id || table.category_id
       if (!zoneId) {
         setError('This table has no zone configured. Please ask your waiter.')
         return

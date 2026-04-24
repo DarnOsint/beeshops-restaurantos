@@ -431,6 +431,14 @@ function AppRoutes() {
             }
           />
           <Route
+            path="/zone-menu/:zoneId"
+            element={
+              <EB title="Menu page error">
+                <ZoneMenuView />
+              </EB>
+            }
+          />
+          <Route
             path="/receipt/:orderId"
             element={
               <EB title="Receipt error">

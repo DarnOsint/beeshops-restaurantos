@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { AlertCircle, RefreshCw, Search, ThumbsDown, ThumbsUp, UtensilsCrossed } from 'lucide-react'
 
@@ -36,6 +36,7 @@ function buildRatedKey(zoneId: string) {
 
 export default function ZoneMenuView() {
   const { zoneId } = useParams<{ zoneId: string }>()
+  const navigate = useNavigate()
   const [zone, setZone] = useState<TableCategory | null>(null)
   const [menu, setMenu] = useState<MenuItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -45,13 +46,52 @@ export default function ZoneMenuView() {
   const [ratingBusy, setRatingBusy] = useState(false)
   const [ratingError, setRatingError] = useState<string | null>(null)
 
+  const resolveZone = async (): Promise<TableCategory | null> => {
+    if (!zoneId) return null
+    // 1) Normal case: zoneId is a real `table_categories.id`
+    const direct = await supabase
+      .from('table_categories')
+      .select('id, name')
+      .eq('id', zoneId)
+      .single()
+    if (!direct.error && direct.data) return direct.data as TableCategory
+
+    // 2) Back-compat: zoneId is a zone name (older/handwritten QR labels)
+    const byName = await supabase
+      .from('table_categories')
+      .select('id, name')
+      .ilike('name', zoneId)
+      .maybeSingle()
+    if (!byName.error && byName.data) return byName.data as TableCategory
+
+    // 3) Back-compat: QR contains a table id but points to /zone/:id.
+    // Redirect to the real zone for that table.
+    const tableRes = await supabase
+      .from('tables')
+      .select('id, category_id, table_categories(id, name)')
+      .eq('id', zoneId)
+      .maybeSingle()
+    if (!tableRes.error && tableRes.data) {
+      const zid = (tableRes.data as any).table_categories?.id || (tableRes.data as any).category_id
+      if (zid) {
+        navigate(`/zone/${zid}`, { replace: true })
+        return null
+      }
+    }
+
+    return null
+  }
+
   const load = async () => {
     if (!zoneId) return
     setLoading(true)
     setError(null)
     try {
+      const resolved = await resolveZone()
+      if (!resolved) throw new Error('zone_not_found')
+
       const [zoneRes, menuRes, zonePriceRes] = await Promise.all([
-        supabase.from('table_categories').select('id, name').eq('id', zoneId).single(),
+        Promise.resolve({ data: resolved, error: null }),
         supabase
           .from('menu_items')
           .select('id, name, price, description, image_url, menu_categories(name)')
@@ -59,7 +99,7 @@ export default function ZoneMenuView() {
         supabase
           .from('menu_item_zone_prices')
           .select('menu_item_id, category_id, price')
-          .eq('category_id', zoneId),
+          .eq('category_id', resolved.id),
       ])
 
       if (zoneRes.error) throw zoneRes.error
