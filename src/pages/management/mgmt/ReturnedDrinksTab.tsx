@@ -53,19 +53,39 @@ export default function ReturnedDrinksTab() {
     const expiry = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const { data: expired } = await supabase
       .from('returns_log')
-      .select('id, order_item_id')
+      .select('id, order_id, order_item_id')
       .eq('status', 'bar_accepted')
       .lt('resolved_at', expiry)
     if (expired && expired.length > 0) {
       // Auto-revert expired returns — items go back to waitron's account
       for (const exp of expired as Array<{
         id: string
+        order_id: string
         order_item_id: string
       }>) {
         await supabase
           .from('order_items')
           .update({ return_accepted: false, return_requested: false, return_reason: null })
           .eq('id', exp.order_item_id)
+        // Restore order total (bar acceptance may have deducted it)
+        const { data: remaining } = await supabase
+          .from('order_items')
+          .select('total_price, extra_charge, status, return_accepted')
+          .eq('order_id', exp.order_id)
+        const newTotal = (remaining || [])
+          .filter((r: { status?: string; return_accepted?: boolean }) => {
+            if ((r.status || '').toLowerCase() === 'cancelled') return false
+            return !r.return_accepted
+          })
+          .reduce(
+            (s: number, r: { total_price?: number; extra_charge?: number }) =>
+              s + (r.total_price || 0) + (r.extra_charge || 0),
+            0
+          )
+        await supabase
+          .from('orders')
+          .update({ total_amount: newTotal, updated_at: new Date().toISOString() })
+          .eq('id', exp.order_id)
         await supabase.from('returns_log').update({ status: 'expired' }).eq('id', exp.id)
       }
     }

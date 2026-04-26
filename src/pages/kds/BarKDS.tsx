@@ -431,8 +431,39 @@ function BarKDSInner() {
     fetchOrders()
   }
 
-  const acceptReturn = async (itemId: string, staffId?: string | null, tableName?: string) => {
-    // Barman acceptance is only a review checkpoint; stock and sales move on manager approval.
+  const recalcOrderTotal = async (orderId: string) => {
+    const { data: remaining, error } = await supabase
+      .from('order_items')
+      .select('total_price, extra_charge, status, return_accepted')
+      .eq('order_id', orderId)
+    if (error) throw error
+    const newTotal = (remaining || [])
+      .filter((r: { status?: string; return_accepted?: boolean }) => {
+        if ((r.status || '').toLowerCase() === 'cancelled') return false
+        // Only deduct once station has ACCEPTED the return.
+        return !r.return_accepted
+      })
+      .reduce(
+        (s: number, r: { total_price?: number; extra_charge?: number }) =>
+          s + (r.total_price || 0) + (r.extra_charge || 0),
+        0
+      )
+    const { error: orderErr } = await supabase
+      .from('orders')
+      .update({ total_amount: newTotal, updated_at: new Date().toISOString() })
+      .eq('id', orderId)
+    if (orderErr) throw orderErr
+    return newTotal
+  }
+
+  const acceptReturn = async (
+    itemId: string,
+    orderId: string,
+    staffId?: string | null,
+    tableName?: string
+  ) => {
+    // Bar acceptance removes the item from the bill immediately (waitron totals),
+    // while stock/sales move on manager approval.
     const resolvedAt = new Date().toISOString()
     const { error, count } = await supabase
       .from('returns_log')
@@ -466,21 +497,43 @@ function BarKDSInner() {
       fetchOrders()
       return
     }
+
+    // Mark the item as accepted return (deducts from waitron/accounting totals)
+    const { error: oiErr } = await supabase
+      .from('order_items')
+      .update({ return_accepted: true, return_accepted_at: resolvedAt })
+      .eq('id', itemId)
+    if (oiErr) {
+      toast.error('Error', 'Failed to accept return: ' + oiErr.message)
+      return
+    }
+    try {
+      await recalcOrderTotal(orderId)
+    } catch (e) {
+      toast.error('Error', 'Failed to update order total')
+      return
+    }
+
     toast.success(
       'Return Accepted',
-      'Awaiting manager approval before stock and sales are adjusted'
+      'Item removed from the bill. Awaiting manager approval before stock and sales are adjusted.'
     )
     if (staffId)
       await sendPushToStaff(
         staffId,
         '↩ Return Accepted by Bar',
-        `Return accepted for ${tableName ?? 'table'} — pending manager approval`
+        `Return accepted for ${tableName ?? 'table'} — item removed from bill, pending manager approval`
       )
     setReturnItems((current) => current.filter((item) => item.id !== itemId))
     fetchOrders()
   }
 
-  const rejectReturn = async (itemId: string, staffId?: string | null, tableName?: string) => {
+  const rejectReturn = async (
+    itemId: string,
+    orderId: string,
+    staffId?: string | null,
+    tableName?: string
+  ) => {
     const { error } = await supabase
       .from('order_items')
       .update({
@@ -512,6 +565,11 @@ function BarKDSInner() {
         '❌ Return Rejected',
         `Return rejected for ${tableName ?? 'table'} — item stays on bill`
       )
+    try {
+      await recalcOrderTotal(orderId)
+    } catch {
+      /* best-effort */
+    }
     fetchOrders()
   }
 
@@ -1035,13 +1093,17 @@ function BarKDSInner() {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => acceptReturn(item.id, item.staffId, item.tableName)}
+                      onClick={() =>
+                        acceptReturn(item.id, item.orderId, item.staffId, item.tableName)
+                      }
                       className="flex-1 flex items-center justify-center gap-1.5 bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 text-green-400 font-semibold text-sm py-2.5 rounded-xl transition-colors"
                     >
                       <CheckCircle size={14} /> Accept Return
                     </button>
                     <button
-                      onClick={() => rejectReturn(item.id, item.staffId, item.tableName)}
+                      onClick={() =>
+                        rejectReturn(item.id, item.orderId, item.staffId, item.tableName)
+                      }
                       className="flex-1 flex items-center justify-center gap-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 font-semibold text-sm py-2.5 rounded-xl transition-colors"
                     >
                       <X size={14} /> Reject
