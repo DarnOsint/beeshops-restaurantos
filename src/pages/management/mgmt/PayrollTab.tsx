@@ -24,6 +24,12 @@ interface PayrollRow {
   total_days: number
 }
 
+const normalizeStaffNameKey = (value: string) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+
 const getMonthStr = (offset = 0) => {
   const d = new Date()
   d.setMonth(d.getMonth() + offset)
@@ -125,7 +131,8 @@ export default function PayrollTab() {
         const recon = JSON.parse(entry.value)
         if (recon.outstanding) {
           for (const [name, amt] of Object.entries(recon.outstanding as Record<string, number>)) {
-            if (amt > 0) reconOutstanding[name] = (reconOutstanding[name] || 0) + amt
+            const key = normalizeStaffNameKey(name)
+            if (amt > 0) reconOutstanding[key] = (reconOutstanding[key] || 0) + amt
           }
         }
       } catch {
@@ -148,8 +155,8 @@ export default function PayrollTab() {
     const creditByStaff: Record<string, number> = {}
     for (const d of (unpaidDebts || []) as any[]) {
       // "recorded_by_name" is the waitron/staff who recorded the pay-later debt.
-      const name = d.recorded_by_name || 'Unknown'
-      creditByStaff[name] = (creditByStaff[name] || 0) + (d.current_balance || 0)
+      const key = normalizeStaffNameKey(d.recorded_by_name || 'Unknown')
+      creditByStaff[key] = (creditByStaff[key] || 0) + (d.current_balance || 0)
     }
 
     // Build rows — auto-populate outstanding from reconciliation + credit orders
@@ -157,13 +164,15 @@ export default function PayrollTab() {
       (staff || []) as Array<{ id: string; full_name: string; role: string; is_active: boolean }>
     ).map((s) => {
       const saved = payMap[s.id]
+      const effectiveRole = saved?.role || s.role || ''
+      const key = normalizeStaffNameKey(s.full_name)
       const autoOutstanding =
-        (reconOutstanding[s.full_name] || 0) + (creditByStaff[s.full_name] || 0)
+        effectiveRole === 'waitron' ? (reconOutstanding[key] || 0) + (creditByStaff[key] || 0) : 0
       return {
         id: saved?.id,
         staff_id: s.id,
         staff_name: s.full_name,
-        role: saved?.role || s.role || '',
+        role: effectiveRole,
         is_active: s.is_active ?? true,
         bank_name: saved?.bank_name || '',
         account_number: saved?.account_number || '',

@@ -53,7 +53,7 @@ import type {
 } from './types'
 import type { Order } from '../../types'
 
-const DATE_RANGES = ['Today', 'Prev Day', 'This Week', 'This Month', 'Custom'] as const
+const DATE_RANGES = ['Today', 'Prev Day', 'Date', 'This Week', 'This Month', 'Custom'] as const
 type DateRange = (typeof DATE_RANGES)[number]
 
 const TABS = [
@@ -108,6 +108,11 @@ export default function Accounting() {
   // ── UI state ──────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('overview')
   const [dateRange, setDateRange] = useState<DateRange>('Today')
+  const [pickedDate, setPickedDate] = useState(() => {
+    const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+    if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
+    return wat.toLocaleDateString('en-CA')
+  })
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
   const [loading, setLoading] = useState(true)
@@ -157,6 +162,11 @@ export default function Accounting() {
       start.setDate(start.getDate() - 1)
       end = new Date(start)
       end.setDate(end.getDate() + 1)
+    } else if (dateRange === 'Date' && pickedDate) {
+      start = new Date(pickedDate)
+      start.setHours(8, 0, 0, 0)
+      end = new Date(start)
+      end.setDate(end.getDate() + 1)
     } else if (dateRange === 'This Week') {
       start = sessionStart()
       start.setDate(start.getDate() - start.getDay())
@@ -178,7 +188,7 @@ export default function Accounting() {
       end.setDate(end.getDate() + 1)
     }
     return { start: start.toISOString(), end: end.toISOString() }
-  }, [dateRange, customStart, customEnd])
+  }, [dateRange, customStart, customEnd, pickedDate])
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -398,6 +408,16 @@ export default function Accounting() {
             </button>
           ))}
         </div>
+        {dateRange === 'Date' && (
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={pickedDate}
+              onChange={(e) => setPickedDate(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-amber-500"
+            />
+          </div>
+        )}
         {dateRange === 'Custom' && (
           <div className="flex items-center gap-2">
             <input
@@ -516,7 +536,13 @@ export default function Accounting() {
             totalPayouts={totalPayouts}
             netRevenue={netRevenue}
             waitronStats={waitronStats}
-            dateLabel={dateRange === 'Custom' ? `${customStart} – ${customEnd}` : dateRange}
+            dateLabel={
+              dateRange === 'Custom'
+                ? `${customStart} – ${customEnd}`
+                : dateRange === 'Date'
+                  ? pickedDate
+                  : dateRange
+            }
             sessionDate={getDateBounds().start.slice(0, 10)}
             sessionEndDate={getDateBounds().end.slice(0, 10)}
             dateRangeType={dateRange}

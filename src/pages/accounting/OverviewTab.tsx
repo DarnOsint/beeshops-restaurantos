@@ -93,9 +93,29 @@ export default function OverviewTab({
   useEffect(() => {
     if (sessionDate) setReconDate(sessionDate)
   }, [sessionDate])
-  const isSingleDay = !dateRangeType || dateRangeType === 'Today' || dateRangeType === 'Prev Day'
+  const isSingleDay =
+    !dateRangeType ||
+    dateRangeType === 'Today' ||
+    dateRangeType === 'Prev Day' ||
+    dateRangeType === 'Date'
   const activeWaitrons =
     waitronStats.filter((w) => (w.revenue || 0) > 0 || (w.orders || 0) > 0) || waitronStats
+
+  const sessionTodayKey = (() => {
+    const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
+    if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
+    return wat.toLocaleDateString('en-CA')
+  })()
+
+  const role = profile?.role || ''
+  const isAccountant = role === 'accountant'
+  const isManagement = role === 'owner' || role === 'manager'
+
+  // Accountants can only save for the current trading session day (8am WAT boundary).
+  // Management/owners can save for any day.
+  const canSaveThisDay =
+    isSingleDay && (isManagement || (isAccountant && reconDate === sessionTodayKey))
+  const canEditThisDay = canSaveThisDay
 
   const normalizeRecon = (value: Partial<Reconciliation> | null | undefined): Reconciliation => ({
     cashCollected: value?.cashCollected || {},
@@ -106,7 +126,11 @@ export default function OverviewTab({
 
   // Load saved reconciliation — single day or aggregate for range
   const loadRecon = useCallback(async () => {
-    const isSingleDay = !dateRangeType || dateRangeType === 'Today' || dateRangeType === 'Prev Day'
+    const isSingleDay =
+      !dateRangeType ||
+      dateRangeType === 'Today' ||
+      dateRangeType === 'Prev Day' ||
+      dateRangeType === 'Date'
 
     if (isSingleDay) {
       const { data } = await supabase
@@ -168,7 +192,11 @@ export default function OverviewTab({
   }, [loadRecon])
 
   const loadManifest = useCallback(async () => {
-    const isSingleDay = !dateRangeType || dateRangeType === 'Today' || dateRangeType === 'Prev Day'
+    const isSingleDay =
+      !dateRangeType ||
+      dateRangeType === 'Today' ||
+      dateRangeType === 'Prev Day' ||
+      dateRangeType === 'Date'
     if (!isSingleDay) {
       setManifestNotes('')
       return
@@ -188,7 +216,7 @@ export default function OverviewTab({
   }, [loadManifest])
 
   const saveManifest = async () => {
-    if (!isSingleDay) return
+    if (!isSingleDay || !canSaveThisDay) return
     setManifestSaving(true)
     await supabase.from('settings').upsert(
       {
@@ -234,6 +262,7 @@ export default function OverviewTab({
   )
 
   const saveRecon = async () => {
+    if (!canSaveThisDay) return
     setSaving(true)
     const payload: Reconciliation = {
       ...recon,
@@ -526,10 +555,15 @@ export default function OverviewTab({
                   })
                 : dateLabel}
             </span>
-            {isSingleDay && (
+            {isSingleDay && !canSaveThisDay && (
+              <span className="text-gray-500 text-[11px]">
+                Read-only (managers can save past days)
+              </span>
+            )}
+            {canSaveThisDay && (
               <button
                 onClick={saveRecon}
-                disabled={saving}
+                disabled={saving || !canSaveThisDay}
                 className="flex items-center gap-1 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs px-3 py-1.5 rounded-lg transition-colors"
               >
                 <Save size={12} /> {saving ? 'Saving...' : 'Save'}
@@ -550,10 +584,10 @@ export default function OverviewTab({
             <h4 className="text-gray-200 text-sm font-semibold flex items-center gap-1.5">
               <Receipt size={13} className="text-amber-400" /> Daily Notes / Manifest
             </h4>
-            {isSingleDay && (
+            {canSaveThisDay && (
               <button
                 onClick={saveManifest}
-                disabled={manifestSaving || manifestLoading}
+                disabled={manifestSaving || manifestLoading || !canSaveThisDay}
                 className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
               >
                 <Save size={12} /> {manifestSaving ? 'Saving...' : 'Save Notes'}
@@ -571,6 +605,7 @@ export default function OverviewTab({
               onChange={(e) => setManifestNotes(e.target.value)}
               placeholder="Write a short explanation of what happened today (issues, shortages, notes, special events, etc.)"
               rows={4}
+              disabled={!canEditThisDay}
               className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
             />
           )}
@@ -604,6 +639,7 @@ export default function OverviewTab({
                       },
                     }))
                   }
+                  disabled={!canEditThisDay}
                   className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500"
                 />
                 <span className="text-gray-600 text-xs w-36">
@@ -622,6 +658,7 @@ export default function OverviewTab({
                       },
                     }))
                   }
+                  disabled={!canEditThisDay}
                   className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500"
                 />
               </div>
