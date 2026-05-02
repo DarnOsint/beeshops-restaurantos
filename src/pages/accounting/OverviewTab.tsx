@@ -237,6 +237,9 @@ export default function OverviewTab({
     toast.success('Saved', 'Accounting notes saved')
   }
 
+  // Shortages:
+  // - Single day: computed from expected vs remitted (and saved into recon_<date>.outstanding on save)
+  // - Range: use locked-in saved shortages per day (summed into recon.outstanding via loadRecon)
   const autoShortage = activeWaitrons.reduce(
     (acc, w) => {
       const expectedTotal = (w.cashExpected || 0) + (w.transferExpected || 0)
@@ -299,8 +302,12 @@ export default function OverviewTab({
     (s, v) => s + (v || 0),
     0
   )
-  // Merge auto shortage + auto credit (pay later) per waitron
-  const mergedOutstanding: Record<string, number> = { ...autoShortage }
+  const shortagesForView: Record<string, number> = isSingleDay
+    ? autoShortage
+    : ((recon.outstanding || {}) as Record<string, number>)
+
+  // Merge shortages + credit (pay later) per waitron
+  const mergedOutstanding: Record<string, number> = { ...shortagesForView }
   for (const [name, amt] of Object.entries(creditByWaitron)) {
     mergedOutstanding[name] = (mergedOutstanding[name] || 0) + amt
   }
@@ -611,74 +618,76 @@ export default function OverviewTab({
           )}
         </div>
 
-        {/* Waitron Remittance Per Waitron */}
-        <div className="mb-5">
-          <h4 className="text-gray-300 text-sm font-semibold mb-2 flex items-center gap-1.5">
-            <Banknote size={13} className="text-emerald-400" /> Waitron Remittance
-          </h4>
-          <p className="text-gray-600 text-xs mb-2">
-            Enter cash collected and POS/transfer receipt submitted by each waitron
-          </p>
-          <div className="space-y-1.5">
-            {activeWaitrons.map((w) => (
-              <div key={w.name} className="flex items-center gap-2">
-                <span className="text-gray-400 text-sm w-32 truncate">{w.name}</span>
-                <span className="text-gray-600 text-xs w-32">
-                  exp cash ₦{(w.cashExpected || 0).toLocaleString()}
+        {/* Waitron Remittance Per Waitron (single-day only) */}
+        {isSingleDay && (
+          <div className="mb-5">
+            <h4 className="text-gray-300 text-sm font-semibold mb-2 flex items-center gap-1.5">
+              <Banknote size={13} className="text-emerald-400" /> Waitron Remittance
+            </h4>
+            <p className="text-gray-600 text-xs mb-2">
+              Enter cash collected and POS/transfer receipt submitted by each waitron
+            </p>
+            <div className="space-y-1.5">
+              {activeWaitrons.map((w) => (
+                <div key={w.name} className="flex items-center gap-2">
+                  <span className="text-gray-400 text-sm w-32 truncate">{w.name}</span>
+                  <span className="text-gray-600 text-xs w-32">
+                    exp cash ₦{(w.cashExpected || 0).toLocaleString()}
+                  </span>
+                  <input
+                    type="number"
+                    placeholder="₦ cash"
+                    value={recon.cashCollected[w.name] || ''}
+                    onChange={(e) =>
+                      setRecon((prev) => ({
+                        ...prev,
+                        cashCollected: {
+                          ...prev.cashCollected,
+                          [w.name]: parseFloat(e.target.value) || 0,
+                        },
+                      }))
+                    }
+                    disabled={!canEditThisDay}
+                    className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500"
+                  />
+                  <span className="text-gray-600 text-xs w-36">
+                    exp POS+transfer ₦{(w.transferExpected || 0).toLocaleString()}
+                  </span>
+                  <input
+                    type="number"
+                    placeholder="₦ POS/transfer"
+                    value={recon.transferReceipts[w.name] || ''}
+                    onChange={(e) =>
+                      setRecon((prev) => ({
+                        ...prev,
+                        transferReceipts: {
+                          ...prev.transferReceipts,
+                          [w.name]: parseFloat(e.target.value) || 0,
+                        },
+                      }))
+                    }
+                    disabled={!canEditThisDay}
+                    className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+              ))}
+              <div className="flex justify-between pt-1 border-t border-gray-700">
+                <span className="text-gray-400 text-sm font-medium">Total Cash Collected</span>
+                <span className="text-emerald-400 font-bold">
+                  ₦{totalCashCollected.toLocaleString()}
                 </span>
-                <input
-                  type="number"
-                  placeholder="₦ cash"
-                  value={recon.cashCollected[w.name] || ''}
-                  onChange={(e) =>
-                    setRecon((prev) => ({
-                      ...prev,
-                      cashCollected: {
-                        ...prev.cashCollected,
-                        [w.name]: parseFloat(e.target.value) || 0,
-                      },
-                    }))
-                  }
-                  disabled={!canEditThisDay}
-                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-emerald-500"
-                />
-                <span className="text-gray-600 text-xs w-36">
-                  exp POS+transfer ₦{(w.transferExpected || 0).toLocaleString()}
-                </span>
-                <input
-                  type="number"
-                  placeholder="₦ POS/transfer"
-                  value={recon.transferReceipts[w.name] || ''}
-                  onChange={(e) =>
-                    setRecon((prev) => ({
-                      ...prev,
-                      transferReceipts: {
-                        ...prev.transferReceipts,
-                        [w.name]: parseFloat(e.target.value) || 0,
-                      },
-                    }))
-                  }
-                  disabled={!canEditThisDay}
-                  className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500"
-                />
               </div>
-            ))}
-            <div className="flex justify-between pt-1 border-t border-gray-700">
-              <span className="text-gray-400 text-sm font-medium">Total Cash Collected</span>
-              <span className="text-emerald-400 font-bold">
-                ₦{totalCashCollected.toLocaleString()}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-400 text-sm font-medium">
-                Total POS and Transfer Receipts
-              </span>
-              <span className="text-purple-400 font-bold">
-                ₦{totalTransferReceipts.toLocaleString()}
-              </span>
+              <div className="flex justify-between">
+                <span className="text-gray-400 text-sm font-medium">
+                  Total POS and Transfer Receipts
+                </span>
+                <span className="text-purple-400 font-bold">
+                  ₦{totalTransferReceipts.toLocaleString()}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Outstanding per Waitron */}
         <div className="mb-5">
@@ -691,7 +700,7 @@ export default function OverviewTab({
           </p>
           <div className="space-y-1.5">
             {activeWaitrons.map((w) => {
-              const shortage = autoShortage[w.name] || 0
+              const shortage = shortagesForView[w.name] || 0
               const excess = autoExcess[w.name] || 0
               const credit = creditByWaitron[w.name] || 0
               return (
@@ -709,7 +718,7 @@ export default function OverviewTab({
                   <span className="text-red-400 text-xs shrink-0">
                     shortage: ₦{shortage.toLocaleString()}
                   </span>
-                  {excess > 0 && (
+                  {isSingleDay && excess > 0 && (
                     <span className="text-green-400 text-xs shrink-0">
                       excess: ₦{excess.toLocaleString()}
                     </span>

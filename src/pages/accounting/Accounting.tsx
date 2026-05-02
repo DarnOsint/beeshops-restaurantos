@@ -392,6 +392,17 @@ export default function Accounting() {
   const totalPayouts = payouts.reduce((s, p) => s + (p.amount || 0), 0)
   const netRevenue = summary.total - totalPayouts
   const paidCount = orders.filter((o) => o.status === 'paid').length
+  const bounds = getDateBounds()
+  const sessionDate = bounds.start.slice(0, 10)
+  const sessionEndDateInclusive = (() => {
+    try {
+      const end = new Date(bounds.end)
+      end.setDate(end.getDate() - 1)
+      return end.toISOString().slice(0, 10)
+    } catch {
+      return bounds.end.slice(0, 10)
+    }
+  })()
 
   return (
     <div className="min-h-full bg-gray-950">
@@ -543,8 +554,8 @@ export default function Accounting() {
                   ? pickedDate
                   : dateRange
             }
-            sessionDate={getDateBounds().start.slice(0, 10)}
-            sessionEndDate={getDateBounds().end.slice(0, 10)}
+            sessionDate={sessionDate}
+            sessionEndDate={sessionEndDateInclusive}
             dateRangeType={dateRange}
             creditByWaitron={creditByWaitron}
             creditDetails={creditDetailsList}
