@@ -287,6 +287,42 @@ export default function ZoneMenuView() {
     return searchFiltered.filter((item) => item.menu_categories?.name === activeCategory)
   }, [searchFiltered, activeCategory])
 
+  const orderedCategoryList = useMemo(() => {
+    const list = categories.filter((c) => c !== 'All')
+    return list
+  }, [categories])
+
+  const grouped = useMemo(() => {
+    const byCat = new Map<string, MenuItem[]>()
+    for (const item of searchFiltered) {
+      const cat = item.menu_categories?.name || 'Other'
+      if (!byCat.has(cat)) byCat.set(cat, [])
+      byCat.get(cat)!.push(item)
+    }
+    // Keep item order stable within each category (server already sorts by name)
+    return byCat
+  }, [searchFiltered])
+
+  const sections = useMemo(() => {
+    // When a category is selected, render only that section (with a header).
+    if (activeCategory !== 'All') {
+      const cat = activeCategory
+      const items =
+        cat === 'Other'
+          ? searchFiltered.filter((item) => !item.menu_categories?.name)
+          : searchFiltered.filter((item) => item.menu_categories?.name === cat)
+      return items.length ? [{ title: cat, items }] : []
+    }
+
+    // All categories: show Food-like categories first (via category weights) then others.
+    const out: Array<{ title: string; items: MenuItem[] }> = []
+    for (const cat of orderedCategoryList) {
+      const items = grouped.get(cat) || []
+      if (items.length) out.push({ title: cat, items })
+    }
+    return out
+  }, [activeCategory, grouped, orderedCategoryList, searchFiltered])
+
   const submitRating = async (value: 'up' | 'down') => {
     if (!zoneId || ratingBusy) return
     if (rated) return
@@ -447,35 +483,43 @@ export default function ZoneMenuView() {
         {filtered.length === 0 ? (
           <div className="py-16 text-center text-gray-600">No items found</div>
         ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {filtered.map((item) => (
-              <div
-                key={item.id}
-                className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden p-3"
-              >
-                <div className="w-full h-20 bg-gray-800 rounded-xl overflow-hidden mb-2 flex items-center justify-center">
-                  {item.image_url ? (
-                    <img
-                      src={item.image_url}
-                      alt={item.name}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <UtensilsCrossed size={18} className="text-gray-600" />
-                  )}
+          <div className="space-y-6">
+            {sections.map((section) => (
+              <div key={section.title}>
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-white font-extrabold text-sm">{section.title}</h2>
+                  <span className="text-gray-500 text-[11px] font-semibold">
+                    {section.items.length} item{section.items.length === 1 ? '' : 's'}
+                  </span>
                 </div>
-                <p className="text-white text-sm font-semibold leading-tight line-clamp-2">
-                  {item.name}
-                </p>
-                <p className="text-amber-400 font-bold text-sm mt-1">
-                  ₦{item.price.toLocaleString()}
-                </p>
-                {item.menu_categories?.name ? (
-                  <p className="text-gray-500 text-[11px] mt-1 truncate">
-                    {item.menu_categories.name}
-                  </p>
-                ) : null}
+
+                <div className="grid grid-cols-2 gap-3">
+                  {section.items.map((item) => (
+                    <div
+                      key={item.id}
+                      className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden p-3"
+                    >
+                      <div className="w-full h-20 bg-gray-800 rounded-xl overflow-hidden mb-2 flex items-center justify-center">
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <UtensilsCrossed size={18} className="text-gray-600" />
+                        )}
+                      </div>
+                      <p className="text-white text-sm font-semibold leading-tight line-clamp-2">
+                        {item.name}
+                      </p>
+                      <p className="text-amber-400 font-bold text-sm mt-1">
+                        ₦{item.price.toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
