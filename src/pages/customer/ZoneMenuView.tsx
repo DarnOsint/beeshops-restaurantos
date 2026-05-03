@@ -486,11 +486,16 @@ export default function ZoneMenuView() {
           <div className="space-y-6">
             {sections.map((section) => (
               <div key={section.title}>
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-white font-extrabold text-sm">{section.title}</h2>
-                  <span className="text-gray-500 text-[11px] font-semibold">
-                    {section.items.length} item{section.items.length === 1 ? '' : 's'}
-                  </span>
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="inline-flex items-center gap-2">
+                    <span className="inline-flex items-center px-3 py-2 rounded-2xl bg-amber-500/15 border border-amber-500/25 text-amber-300 font-extrabold tracking-wide text-[13px] uppercase">
+                      {section.title}
+                    </span>
+                    <span className="text-gray-500 text-[11px] font-semibold">
+                      {section.items.length} item{section.items.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <div className="h-px flex-1 bg-gray-800" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
