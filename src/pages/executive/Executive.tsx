@@ -133,7 +133,7 @@ export default function Executive() {
 
   const fetchStats = useCallback(async () => {
     void supabase.rpc('free_orphaned_tables')
-    const { sessionStartIso } = getSessionWindow()
+    const { sessionStart, sessionEnd, sessionStartIso } = getSessionWindow()
     const [ordersRes, tablesRes, roomsRes, shiftsRes, stockRes, recentRes, revenueRes, trendRes] =
       await Promise.all([
         supabase.from('orders').select('id').eq('status', 'open'),
@@ -155,15 +155,16 @@ export default function Executive() {
             'total_amount, order_items(total_price, return_requested, return_accepted, status)'
           )
           .eq('status', 'paid')
-          .gte('created_at', sessionStartIso),
+          .gte('closed_at', sessionStart.toISOString())
+          .lt('closed_at', sessionEnd.toISOString()),
         supabase
           .from('orders')
           .select(
-            'created_at, total_amount, order_items(total_price, status, return_requested, return_accepted)'
+            'closed_at, total_amount, order_items(total_price, status, return_requested, return_accepted)'
           )
           .eq('status', 'paid')
-          .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-          .order('created_at', { ascending: true }),
+          .gte('closed_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+          .order('closed_at', { ascending: true }),
       ])
     setStats({
       revenue: (revenueRes.data || []).reduce((s: number, o: any) => {
@@ -189,7 +190,7 @@ export default function Executive() {
     setRecentOrders((recentRes.data || []) as Record<string, unknown>[])
     const dayMap: Record<string, TrendDay> = {}
     ;(trendRes.data || []).forEach((o) => {
-      const day = new Date(o.created_at).toLocaleDateString('en-NG', {
+      const day = new Date(o.closed_at).toLocaleDateString('en-NG', {
         weekday: 'short',
         day: 'numeric',
       })

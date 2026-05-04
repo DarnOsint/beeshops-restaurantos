@@ -148,7 +148,7 @@ export default function Management() {
 
   const fetchStats = useCallback(async () => {
     void supabase.rpc('free_orphaned_tables')
-    const { start } = sessionWindow()
+    const { start, end } = sessionWindow()
     const [ordersRes, tablesRes, roomsRes, staffRes, revenueRes] = await Promise.all([
       supabase.from('orders').select('id').eq('status', 'open'),
       supabase.from('tables').select('id').eq('status', 'occupied'),
@@ -158,7 +158,8 @@ export default function Management() {
         .from('orders')
         .select('total_amount, order_items(total_price, return_requested, return_accepted, status)')
         .eq('status', 'paid')
-        .gte('created_at', start.toISOString()),
+        .gte('closed_at', start.toISOString())
+        .lt('closed_at', end.toISOString()),
     ])
     setStats({
       openOrders: ordersRes.data?.length || 0,
