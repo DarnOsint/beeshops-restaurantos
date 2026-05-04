@@ -195,13 +195,17 @@ export default function Accounting() {
     const { start, end } = getDateBounds()
 
     const [ordersRes, tillRes, payoutsRes, trendRes, timesheetRes, auditRes] = await Promise.all([
+      // IMPORTANT:
+      // - Paid sales must be filtered by `closed_at` so end-of-day reports tally with actual sales time.
+      // - Open orders (not yet paid) can be filtered by `created_at` for visibility during the session.
       supabase
         .from('orders')
         .select(
           'id, status, total_amount, payment_method, order_type, created_at, closed_at, staff_id, profiles(full_name), tables(name), order_items(id, quantity, total_price, extra_charge, status, destination, modifier_notes, return_requested, return_accepted, menu_items(name))'
         )
-        .gte('created_at', start)
-        .lte('created_at', end)
+        .or(
+          `and(status.eq.paid,closed_at.gte.${start},closed_at.lt.${end}),and(status.neq.paid,created_at.gte.${start},created_at.lt.${end})`
+        )
         .order('created_at', { ascending: false }),
       supabase
         .from('till_sessions')
