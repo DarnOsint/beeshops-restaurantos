@@ -42,7 +42,7 @@ interface WaitronOrder {
 }
 
 type StationKey = 'bar' | 'kitchen' | 'griller' | 'shisha' | 'games' | 'mixologist'
-type BarBucket = 'drinks' | 'spirits'
+type BarBucket = 'drinks' | 'wine' | 'spirits'
 
 const STATION_LABELS: Record<StationKey, string> = {
   bar: 'Bar',
@@ -111,6 +111,16 @@ const normalizeDestination = (
 const getBarBucket = (name?: string | null, catName?: string | null): BarBucket => {
   const lowerName = (name || '').toLowerCase()
   const lowerCat = (catName || '').toLowerCase()
+  const isWine =
+    lowerCat.includes('wine') ||
+    lowerName.includes('wine') ||
+    lowerCat.includes('champagne') ||
+    lowerName.includes('champagne') ||
+    lowerCat.includes('prosecco') ||
+    lowerName.includes('prosecco') ||
+    lowerCat.includes('sparkling') ||
+    lowerName.includes('sparkling')
+  if (isWine) return 'wine'
   if (lowerCat.includes('spirit') || lowerName.includes('spirit')) return 'spirits'
   return 'drinks'
 }
@@ -238,6 +248,11 @@ export default function WaitronOrdersTab() {
           totalQty: 0,
           items: new Map<string, { qty: number; amount: number }>(),
         },
+        wine: {
+          totalAmount: 0,
+          totalQty: 0,
+          items: new Map<string, { qty: number; amount: number }>(),
+        },
         spirits: {
           totalAmount: 0,
           totalQty: 0,
@@ -335,11 +350,18 @@ export default function WaitronOrdersTab() {
             row('  Total Sales:', `N${bucket.totalAmount.toLocaleString()}`),
           ]
 
-          ;(['drinks', 'spirits'] as BarBucket[]).forEach((barBucket) => {
+          ;(['drinks', 'wine', 'spirits'] as BarBucket[]).forEach((barBucket) => {
             const barSummary = summary.bar[barBucket]
             if (barSummary.totalQty === 0) return
             barSections.push(div)
-            barSections.push((barBucket === 'drinks' ? 'Drinks' : 'Spirits').toUpperCase())
+            barSections.push(
+              (barBucket === 'drinks'
+                ? 'Drinks'
+                : barBucket === 'wine'
+                  ? 'Wine'
+                  : 'Spirits'
+              ).toUpperCase()
+            )
             barSections.push(row('  Qty:', String(barSummary.totalQty)))
             barSections.push(row('  Sales:', `N${barSummary.totalAmount.toLocaleString()}`))
             const lines = renderBucket(barSummary)
