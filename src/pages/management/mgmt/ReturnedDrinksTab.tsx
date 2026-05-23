@@ -49,45 +49,18 @@ export default function ReturnedDrinksTab() {
     const dayEnd = new Date(dayStart)
     dayEnd.setDate(dayEnd.getDate() + 1)
 
-    // Also check for bar_accepted items older than 24 hours that need reverting
+    // Check for bar_accepted items older than 24 hours unresolved by manager.
+    // The bar acceptance permanently removes the item from the waitron's accountability,
+    // so expiry just marks the log entry without reverting order items.
     const expiry = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const { data: expired } = await supabase
       .from('returns_log')
-      .select('id, order_id, order_item_id')
+      .select('id')
       .eq('status', 'bar_accepted')
       .lt('resolved_at', expiry)
     if (expired && expired.length > 0) {
-      // Auto-revert expired returns — items go back to waitron's account
-      for (const exp of expired as Array<{
-        id: string
-        order_id: string
-        order_item_id: string
-      }>) {
-        await supabase
-          .from('order_items')
-          .update({ return_accepted: false, return_requested: false, return_reason: null })
-          .eq('id', exp.order_item_id)
-        // Restore order total (bar acceptance may have deducted it)
-        const { data: remaining } = await supabase
-          .from('order_items')
-          .select('total_price, extra_charge, status, return_accepted')
-          .eq('order_id', exp.order_id)
-        const newTotal = (remaining || [])
-          .filter((r: { status?: string; return_accepted?: boolean }) => {
-            if ((r.status || '').toLowerCase() === 'cancelled') return false
-            return !r.return_accepted
-          })
-          .reduce(
-            (s: number, r: { total_price?: number; extra_charge?: number }) =>
-              s + (r.total_price || 0) + (r.extra_charge || 0),
-            0
-          )
-        await supabase
-          .from('orders')
-          .update({ total_amount: newTotal, updated_at: new Date().toISOString() })
-          .eq('id', exp.order_id)
-        await supabase.from('returns_log').update({ status: 'expired' }).eq('id', exp.id)
-      }
+      const expiredIds = (expired as Array<{ id: string }>).map((e) => e.id)
+      await supabase.from('returns_log').update({ status: 'expired' }).in('id', expiredIds)
     }
 
     // Pull wider range (last 3 days) then filter locally to catch items approved today but requested earlier
@@ -226,11 +199,36 @@ export default function ReturnedDrinksTab() {
 
   const managerReject = async (r: ReturnEntry) => {
     try {
-      const { error: oiErr } = await supabase
-        .from('order_items')
-        .update({ return_accepted: false, return_requested: false, return_reason: null })
-        .eq('id', r.order_item_id)
-      if (oiErr) throw oiErr
+      // Stations that have already accepted the return (bar, kitchen, griller) permanently
+      // remove the item from the waitron's accountability. Manager rejection only logs
+      // the rejection — it does NOT restore the item to the waitron's bill.
+      const stationAccepted = ['bar_accepted', 'kitchen_accepted', 'griller_accepted']
+      const isStationAccepted = stationAccepted.includes(r.status)
+
+      if (!isStationAccepted) {
+        // Pending (bar hasn't accepted yet) — revert the return request on the order item
+        const { error: oiErr } = await supabase
+          .from('order_items')
+          .update({ return_accepted: false, return_requested: false, return_reason: null })
+          .eq('id', r.order_item_id)
+        if (oiErr) throw oiErr
+
+        const { data: remaining, error: remErr } = await supabase
+          .from('order_items')
+          .select('total_price, return_accepted')
+          .eq('order_id', r.order_id)
+        if (remErr) throw remErr
+        const newTotal = (remaining || [])
+          .filter((ri: { return_accepted?: boolean }) => !ri.return_accepted)
+          .reduce((s: number, ri: { total_price: number }) => s + (ri.total_price || 0), 0)
+        const { error: orderErr } = await supabase
+          .from('orders')
+          .update({ total_amount: newTotal })
+          .eq('id', r.order_id)
+        if (orderErr) throw orderErr
+
+        await syncCreditDebtorForOrder(r.order_id, newTotal)
+      }
 
       const { error: retErr } = await supabase
         .from('returns_log')
@@ -244,21 +242,9 @@ export default function ReturnedDrinksTab() {
         .eq('id', r.id)
       if (retErr) throw retErr
 
-      const { data: remaining, error: remErr } = await supabase
-        .from('order_items')
-        .select('total_price, return_accepted')
-        .eq('order_id', r.order_id)
-      if (remErr) throw remErr
-      const newTotal = (remaining || [])
-        .filter((ri: { return_accepted?: boolean }) => !ri.return_accepted)
-        .reduce((s: number, ri: { total_price: number }) => s + (ri.total_price || 0), 0)
-      const { error: orderErr } = await supabase
-        .from('orders')
-        .update({ total_amount: newTotal })
-        .eq('id', r.order_id)
-      if (orderErr) throw orderErr
-
-      await syncCreditDebtorForOrder(r.order_id, newTotal)
+      const restoredMsg = isStationAccepted
+        ? `${r.quantity}x ${r.item_name} rejection noted — item stays off your bill`
+        : `${r.quantity}x ${r.item_name} restored to your order`
 
       await audit({
         action: 'RETURN_MANAGER_REJECTED',
@@ -270,16 +256,13 @@ export default function ReturnedDrinksTab() {
           total: r.item_total,
           table: r.table_name,
           rejected_by: profile?.full_name,
+          station_already_accepted: isStationAccepted,
         },
         performer: profile as Profile,
       })
       if (r.waitron_id)
-        sendPushToStaff(
-          r.waitron_id,
-          '❌ Return Rejected',
-          `${r.quantity}x ${r.item_name} restored to your order`
-        ).catch(() => {})
-      toast.success('Return Rejected', `${r.quantity}x ${r.item_name} added back to order`)
+        sendPushToStaff(r.waitron_id, '❌ Return Rejected', restoredMsg).catch(() => {})
+      toast.success('Return Rejected', restoredMsg)
       fetchReturns(date)
     } catch (e) {
       toast.error('Reject failed', errMsg(e))
@@ -320,13 +303,13 @@ export default function ReturnedDrinksTab() {
       return {
         text: 'Manager Rejected',
         color: 'bg-red-500/20 text-red-400',
-        desc: 'Item restored to order',
+        desc: 'Return rejected — item stays permanently removed',
       }
     if (s === 'expired')
       return {
         text: 'Expired',
         color: 'bg-gray-500/20 text-gray-400',
-        desc: 'Auto-reverted after 24h',
+        desc: 'Unresolved — item stays permanently removed',
       }
     if (s === 'pending')
       return {
@@ -451,8 +434,8 @@ export default function ReturnedDrinksTab() {
             </span>
           </div>
           <p className="text-amber-400/70 text-xs">
-            Bar accepted these returns tentatively. Approve to confirm or reject to restore items to
-            the order. Auto-reverts after 24 hours if not approved.
+            Bar accepted these returns — items are already permanently removed from the waitron's
+            bill. Approve to confirm or reject to log the decision.
           </p>
         </div>
       )}
@@ -566,7 +549,7 @@ export default function ReturnedDrinksTab() {
                       onClick={() => managerReject(r)}
                       className="flex-1 flex items-center justify-center gap-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 font-semibold text-xs py-2 rounded-xl transition-colors"
                     >
-                      <X size={13} /> Reject & Restore
+                      <X size={13} /> Reject Return
                     </button>
                   </div>
                 )}
