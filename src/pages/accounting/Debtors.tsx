@@ -11,6 +11,8 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   X,
   Save,
   CreditCard,
@@ -112,6 +114,58 @@ export default function Debtors({ onBack, embedded = false }: Props) {
 
   const canEdit = ['owner', 'manager'].includes(profile?.role || '')
   const canPay = ['owner', 'manager', 'accountant'].includes(profile?.role || '')
+
+  // Month-based filtering
+  type OutstandingMonth = 'current' | 'previous' | 'custom'
+  const [outstandingMonth, setOutstandingMonth] = useState<OutstandingMonth>('current')
+  const [customYear, setCustomYear] = useState(new Date().getFullYear())
+  const [customMonth, setCustomMonth] = useState(new Date().getMonth())
+
+  const getMonthRange = (type: OutstandingMonth, year?: number, month?: number) => {
+    if (type === 'current') {
+      const now = new Date()
+      return {
+        start: new Date(now.getFullYear(), now.getMonth(), 1),
+        end: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999),
+      }
+    }
+    if (type === 'previous') {
+      const now = new Date()
+      return {
+        start: new Date(now.getFullYear(), now.getMonth() - 1, 1),
+        end: new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999),
+      }
+    }
+    return {
+      start: new Date(year!, month!, 1),
+      end: new Date(year!, month! + 1, 0, 23, 59, 59, 999),
+    }
+  }
+
+  const monthRange = getMonthRange(outstandingMonth, customYear, customMonth)
+  const monthLabel =
+    outstandingMonth === 'current'
+      ? 'This Month'
+      : outstandingMonth === 'previous'
+        ? 'Previous Month'
+        : new Date(customYear, customMonth).toLocaleDateString('en-NG', {
+            month: 'long',
+            year: 'numeric',
+          })
+
+  const navigateMonth = (dir: -1 | 1) => {
+    let y = customYear
+    let m = customMonth + dir
+    if (m < 0) {
+      m = 11
+      y--
+    } else if (m > 11) {
+      m = 0
+      y++
+    }
+    setCustomYear(y)
+    setCustomMonth(m)
+  }
 
   const blankForm: DebtorForm = {
     name: '',
@@ -322,7 +376,9 @@ export default function Debtors({ onBack, embedded = false }: Props) {
     const matchSearch =
       d.name?.toLowerCase().includes(search.toLowerCase()) || d.phone?.includes(search)
     const matchStatus = filterStatus === 'all' || d.status === filterStatus
-    return matchSearch && matchStatus
+    const dDate = new Date(d.created_at)
+    const matchMonth = dDate >= monthRange.start && dDate <= monthRange.end
+    return matchSearch && matchStatus && matchMonth
   })
   const totalOutstanding = debtors
     .filter((d) => d.status !== 'paid')
@@ -365,7 +421,7 @@ export default function Debtors({ onBack, embedded = false }: Props) {
         {(['outstanding', 'partial', 'paid'] as const).map((s) => (
           <div key={s} className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
             <p className={`text-2xl font-bold ${statusConfig[s].color}`}>
-              {debtors.filter((d) => d.status === s).length}
+              {filtered.filter((d) => d.status === s).length}
             </p>
             <p className="text-gray-500 text-xs mt-0.5 capitalize">{s}</p>
           </div>
@@ -374,9 +430,10 @@ export default function Debtors({ onBack, embedded = false }: Props) {
 
       <div className="px-4 pb-3 flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <p className="text-gray-400 text-sm">
-            Total outstanding:{' '}
+          <p className="text-gray-400 text-sm flex items-center gap-2 flex-wrap">
+            <span>{monthLabel}:</span>
             <span className="text-red-400 font-bold">₦{totalOutstanding.toLocaleString()}</span>
+            <span className="text-gray-600">({filtered.length} entries)</span>
           </p>
           {embedded && canEdit && (
             <button
@@ -395,6 +452,37 @@ export default function Debtors({ onBack, embedded = false }: Props) {
             placeholder="Search by name or phone..."
             className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-amber-500"
           />
+        </div>
+        {/* Month filter */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {(['current', 'previous', 'custom'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setOutstandingMonth(m)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium capitalize transition-colors ${outstandingMonth === m ? 'bg-amber-500 text-black' : 'bg-gray-900 border border-gray-800 text-gray-400'}`}
+            >
+              {m === 'current' ? 'This Month' : m === 'previous' ? 'Prev Month' : 'Custom'}
+            </button>
+          ))}
+          {outstandingMonth === 'custom' && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => navigateMonth(-1)}
+                className="p-1 rounded-lg bg-gray-800 text-gray-400 hover:text-white"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <span className="text-white text-xs font-medium min-w-[100px] text-center">
+                {monthLabel}
+              </span>
+              <button
+                onClick={() => navigateMonth(1)}
+                className="p-1 rounded-lg bg-gray-800 text-gray-400 hover:text-white"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           {['all', 'outstanding', 'partial', 'paid'].map((s) => (
