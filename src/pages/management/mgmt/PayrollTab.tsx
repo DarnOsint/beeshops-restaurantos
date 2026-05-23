@@ -93,18 +93,26 @@ export default function PayrollTab() {
       .select('id, full_name, role, is_active')
       .order('full_name')
 
-    // Get attendance for the month
+    // Get attendance for the month with duration
     const { data: attendance } = await supabase
       .from('attendance')
-      .select('staff_id, date')
+      .select('staff_id, date, duration_minutes')
       .gte('date', monthStart)
       .lte('date', monthEnd)
 
-    // Count unique days per staff
+    // Count qualified days: clocked in > 6 hours (360 minutes)
+    // People get one day off per week, naturally reflected in attendance
     const daysMap: Record<string, Set<string>> = {}
-    for (const a of (attendance || []) as Array<{ staff_id: string; date: string }>) {
+    for (const a of (attendance || []) as Array<{
+      staff_id: string
+      date: string
+      duration_minutes: number | null
+    }>) {
       if (!daysMap[a.staff_id]) daysMap[a.staff_id] = new Set()
-      daysMap[a.staff_id].add(a.date)
+      // Only count completed shifts with more than 6 hours
+      if (a.duration_minutes !== null && a.duration_minutes > 360) {
+        daysMap[a.staff_id].add(a.date)
+      }
     }
 
     // Get saved payroll for this month
@@ -225,7 +233,8 @@ export default function PayrollTab() {
   }
 
   const totalOutstandingFor = (r: PayrollRow) => (r.outstanding || 0) + (r.auto_outstanding || 0)
-  const netPay = (r: PayrollRow) => Math.max(0, r.base_salary - totalOutstandingFor(r) - r.docking)
+  const grossPay = (r: PayrollRow) => (r.base_salary || 0) * (r.days_worked || 0)
+  const netPay = (r: PayrollRow) => Math.max(0, grossPay(r) - totalOutstandingFor(r) - r.docking)
 
   const updateField = (staffId: string, field: string, value: string | number) => {
     setEdited((prev) => ({ ...prev, [staffId]: { ...(prev[staffId] || {}), [field]: value } }))
@@ -357,7 +366,7 @@ export default function PayrollTab() {
     }
   }
 
-  const totalBase = rows.reduce((s, r) => s + getRow(r.staff_id).base_salary, 0)
+  const totalGross = rows.reduce((s, r) => s + grossPay(getRow(r.staff_id)), 0)
   const totalOutstanding = rows.reduce((s, r) => s + totalOutstandingFor(getRow(r.staff_id)), 0)
   const totalDocking = rows.reduce((s, r) => s + getRow(r.staff_id).docking, 0)
   const totalNet = rows.reduce((s, r) => s + netPay(getRow(r.staff_id)), 0)
@@ -367,10 +376,11 @@ export default function PayrollTab() {
       [
         'Name',
         'Role',
-        'Days Worked',
+        'Qualified Days (>6h)',
         'Bank',
         'Account No',
-        'Base Salary',
+        'Daily Rate',
+        'Gross Pay',
         'Outstanding (Total)',
         'Outstanding (Auto)',
         'Outstanding (Manual)',
@@ -386,6 +396,7 @@ export default function PayrollTab() {
           m.bank_name,
           m.account_number,
           String(m.base_salary),
+          String(grossPay(m)),
           String(totalOutstandingFor(m)),
           String(m.auto_outstanding || 0),
           String(m.outstanding || 0),
@@ -419,7 +430,7 @@ export default function PayrollTab() {
       r('Month:', monthLabel(month)),
       r('Staff Count:', String(rows.length)),
       div,
-      r('Total Base Salary:', fmt(totalBase)),
+      r('Total Gross Pay:', fmt(totalGross)),
       r('Total Outstanding:', fmt(totalOutstanding)),
       r('Total Docking:', fmt(totalDocking)),
       r('Total Net Pay:', fmt(totalNet)),
@@ -432,11 +443,12 @@ export default function PayrollTab() {
           r(m.staff_name, `(${m.role})`),
           r(`  Days: ${m.days_worked}/${m.total_days}`, `Bank: ${m.bank_name || '—'}`),
           r(`  Acct: ${m.account_number || '—'}`, ''),
-          r(`  Base: ${fmt(m.base_salary)}`, `Outst: ${fmt(outTotal)}`),
+          r(`  Rate: ${fmt(m.base_salary)}/day`, `Gross: ${fmt(grossPay(m))}`),
+          r(`  Outst: ${fmt(outTotal)}`, `Dock: ${fmt(m.docking)}`),
           (m.auto_outstanding || 0) > 0
             ? r(`  Auto: ${fmt(m.auto_outstanding || 0)}`, `Manual: ${fmt(m.outstanding || 0)}`)
             : '',
-          r(`  Dock: ${fmt(m.docking)}`, `NET: ${fmt(netPay(m))}`),
+          r(`  NET PAY:`, `${fmt(netPay(m))}`),
           '',
         ].join('\n')
       }),
@@ -544,7 +556,7 @@ export default function PayrollTab() {
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {[
-          { label: 'Total Base', value: `₦${totalBase.toLocaleString()}`, color: 'text-white' },
+          { label: 'Gross Pay', value: `₦${totalGross.toLocaleString()}`, color: 'text-white' },
           {
             label: 'Outstanding',
             value: `₦${totalOutstanding.toLocaleString()}`,
@@ -584,7 +596,7 @@ export default function PayrollTab() {
                 <th className="text-center px-2 py-2">Days</th>
                 <th className="text-left px-2 py-2">Bank</th>
                 <th className="text-left px-2 py-2">Account No</th>
-                <th className="text-right px-2 py-2">Base Salary</th>
+                <th className="text-right px-2 py-2">Daily Rate</th>
                 <th className="text-right px-2 py-2">Outstanding (Manual)</th>
                 <th className="text-right px-2 py-2">Docking</th>
                 <th className="text-right px-3 py-2">Net Pay</th>
@@ -723,7 +735,7 @@ export default function PayrollTab() {
                 <td className="text-white px-3 py-2" colSpan={5}>
                   TOTAL ({rows.length} staff)
                 </td>
-                <td className="text-white text-right px-2 py-2">₦{totalBase.toLocaleString()}</td>
+                <td className="text-white text-right px-2 py-2">₦{totalGross.toLocaleString()}</td>
                 <td className="text-red-400 text-right px-2 py-2">
                   ₦{totalOutstanding.toLocaleString()}
                 </td>
@@ -785,7 +797,7 @@ export default function PayrollTab() {
               />
               <input
                 type="number"
-                placeholder="Monthly Salary (₦)"
+                placeholder="Daily Rate (₦)"
                 value={newStaff.salary}
                 onChange={(e) => setNewStaff((p) => ({ ...p, salary: e.target.value }))}
                 className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
