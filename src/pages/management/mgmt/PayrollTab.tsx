@@ -15,6 +15,7 @@ interface PayrollRow {
   bank_name: string
   account_number: string
   base_salary: number
+  daily_rate: number
   // Manual outstanding saved in payroll table
   outstanding: number
   // Auto outstanding from daily reconciliation + pay-later (computed, not persisted)
@@ -119,7 +120,7 @@ export default function PayrollTab() {
     const { data: payroll } = await supabase
       .from('payroll')
       .select(
-        'id, staff_id, staff_name, role, is_active, bank_name, account_number, base_salary, outstanding, docking'
+        'id, staff_id, staff_name, role, is_active, bank_name, account_number, base_salary, daily_rate, outstanding, docking'
       )
       .eq('month', month)
 
@@ -184,7 +185,8 @@ export default function PayrollTab() {
         is_active: s.is_active ?? true,
         bank_name: saved?.bank_name || '',
         account_number: saved?.account_number || '',
-        base_salary: saved?.base_salary || 0,
+        daily_rate: saved?.daily_rate ?? saved?.base_salary ?? 0,
+        base_salary: saved?.daily_rate ?? saved?.base_salary ?? 0,
         outstanding: saved?.outstanding || 0,
         auto_outstanding: autoOutstanding,
         docking: saved?.docking || 0,
@@ -204,7 +206,8 @@ export default function PayrollTab() {
           is_active: false,
           bank_name: p.bank_name || '',
           account_number: p.account_number || '',
-          base_salary: p.base_salary || 0,
+          daily_rate: p.daily_rate ?? p.base_salary ?? 0,
+          base_salary: p.daily_rate ?? p.base_salary ?? 0,
           outstanding: p.outstanding || 0,
           auto_outstanding: 0,
           docking: p.docking || 0,
@@ -266,6 +269,7 @@ export default function PayrollTab() {
           bank_name: row.bank_name,
           account_number: row.account_number,
           base_salary: row.base_salary,
+          daily_rate: row.daily_rate,
           outstanding: row.outstanding,
           docking: row.docking,
           month,
@@ -337,6 +341,7 @@ export default function PayrollTab() {
           bank_name: newStaff.bank,
           account_number: newStaff.account,
           base_salary: parseFloat(newStaff.salary) || 0,
+          daily_rate: parseFloat(newStaff.salary) || 0,
           outstanding: 0,
           docking: 0,
           month,
@@ -680,9 +685,11 @@ export default function PayrollTab() {
                         type="number"
                         value={m.base_salary || ''}
                         placeholder="0"
-                        onChange={(e) =>
-                          updateField(row.staff_id, 'base_salary', Number(e.target.value) || 0)
-                        }
+                        onChange={(e) => {
+                          const val = Number(e.target.value) || 0
+                          updateField(row.staff_id, 'base_salary', val)
+                          updateField(row.staff_id, 'daily_rate', val)
+                        }}
                         className="w-20 bg-gray-800 border border-gray-700 text-white text-right rounded px-1 py-1 text-xs focus:outline-none focus:border-amber-500"
                       />
                     </td>
