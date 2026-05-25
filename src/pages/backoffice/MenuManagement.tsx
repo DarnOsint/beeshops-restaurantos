@@ -340,17 +340,17 @@ export default function MenuManagement({ onBack }: Props) {
           <div className="text-amber-500 text-center py-12">Loading...</div>
         ) : view === 'items' ? (
           <>
-            <div className="flex flex-col md:flex-row gap-3 mb-6">
-              <div className="relative flex-1">
+            <div className="space-y-3 mb-6">
+              <div className="relative w-full">
                 <Search
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
+                  size={18}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"
                 />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search menu items..."
-                  className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl pl-9 pr-4 py-2.5 focus:outline-none focus:border-amber-500 text-sm"
+                  className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl pl-11 pr-5 py-3 focus:outline-none focus:border-amber-500 text-base"
                 />
               </div>
               <div className="flex gap-2 overflow-x-auto pb-1">
