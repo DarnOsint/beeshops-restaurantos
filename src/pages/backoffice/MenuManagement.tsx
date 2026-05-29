@@ -142,7 +142,12 @@ export default function MenuManagement({ onBack }: Props) {
     }
   }
   const saveItem = async () => {
-    if (!itemForm.name || !itemForm.price || !itemForm.category_id)
+    if (
+      !itemForm.name.trim() ||
+      !itemForm.category_id ||
+      itemForm.price === '' ||
+      itemForm.price.trim() === ''
+    )
       return toast.warning('Required', 'Name, category and price are required')
     setSaving(true)
     const payload = {
