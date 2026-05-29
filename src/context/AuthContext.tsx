@@ -21,14 +21,6 @@ interface AuthContextValue {
   profile: Profile | null
   loading: boolean
   signOut: () => Promise<void>
-  mfaRequired: boolean
-  mfaVerified: boolean
-  setMfaVerified: (value: boolean) => void
-}
-
-interface MfaStorage {
-  verified: boolean
-  expiry: number
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -42,7 +34,6 @@ const ACTIVITY_EVENTS = [
   'scroll',
   'click',
 ] as const
-const MFA_ROLES = ['owner', 'executive', 'accountant', 'auditor'] as const
 
 // ── Context ───────────────────────────────────────────────────────────────────
 
@@ -54,53 +45,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // ── MFA state ──────────────────────────────────────────────────────────────
-
-  const getMfaVerified = (userId?: string): boolean => {
-    try {
-      const stored = localStorage.getItem('mfa_verified')
-      if (!stored) return false
-      const { verified, expiry, uid } = JSON.parse(stored) as MfaStorage & { uid?: string }
-      // Verify the stored userId matches the current user — prevents reuse across accounts
-      if (userId && uid && uid !== userId) return false
-      return verified && Date.now() < expiry
-    } catch {
-      return false
-    }
-  }
-
-  const [mfaVerified, setMfaVerifiedState] = useState<boolean>(getMfaVerified)
-
-  const setMfaVerified = (value: boolean): void => {
-    if (value) {
-      // Expires at next 8am WAT session boundary — verify once per trading day
-      const expiry = new Date()
-      expiry.setHours(8, 0, 0, 0)
-      if (expiry.getTime() <= Date.now()) expiry.setDate(expiry.getDate() + 1)
-      localStorage.setItem(
-        'mfa_verified',
-        JSON.stringify({
-          verified: true,
-          expiry: expiry.getTime(),
-          uid: user?.id ?? null,
-        })
-      )
-    } else {
-      localStorage.removeItem('mfa_verified')
-    }
-    setMfaVerifiedState(value)
-  }
-
   // ── Session timeout ────────────────────────────────────────────────────────
 
   const doSignOut = useCallback(async (reason: 'timeout' | 'manual' = 'timeout') => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
-    setMfaVerifiedState(false)
     setAuditPerformer(null)
-    // Only clear MFA on explicit sign-out — timeout re-login should not re-trigger OTP
-    if (reason === 'manual') {
-      localStorage.removeItem('mfa_verified')
-    }
 
     const pinSession = localStorage.getItem('pin_session')
     if (pinSession) {
@@ -326,17 +275,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     doSignOut('manual')
   }
 
-  const mfaRequired = !!(
-    profile &&
-    (MFA_ROLES as readonly string[]).includes(profile.role) &&
-    !(user as (User & { pin_session?: boolean }) | null)?.pin_session &&
-    !mfaVerified
-  )
-
   return (
-    <AuthContext.Provider
-      value={{ user, profile, loading, signOut, mfaRequired, mfaVerified, setMfaVerified }}
-    >
+    <AuthContext.Provider value={{ user, profile, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   )

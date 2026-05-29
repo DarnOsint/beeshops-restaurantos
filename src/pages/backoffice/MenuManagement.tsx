@@ -90,9 +90,9 @@ export default function MenuManagement({ onBack }: Props) {
   const openEditItem = (item: MenuItem) => {
     setEditingItem(item)
     setItemForm({
-      name: item.name,
-      category_id: item.category_id,
-      price: item.price.toString(),
+      name: item.name || '',
+      category_id: item.category_id || '',
+      price: item.price != null ? String(item.price) : '',
       description: item.description || '',
       image_url: item.image_url || '',
       is_available: item.is_available,
@@ -142,12 +142,10 @@ export default function MenuManagement({ onBack }: Props) {
     }
   }
   const saveItem = async () => {
-    if (
-      !itemForm.name.trim() ||
-      !itemForm.category_id ||
-      itemForm.price === '' ||
-      itemForm.price.trim() === ''
-    )
+    const nameVal = (itemForm.name || '').trim()
+    const priceVal =
+      itemForm.price !== null && itemForm.price !== undefined ? String(itemForm.price).trim() : ''
+    if (!nameVal || !itemForm.category_id || priceVal === '')
       return toast.warning('Required', 'Name, category and price are required')
     setSaving(true)
     const payload = {

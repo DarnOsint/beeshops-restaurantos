@@ -6,7 +6,6 @@ import NotificationToast from './components/NotificationToast'
 import ErrorBoundary from './components/ErrorBoundary'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import MFAChallenge from './components/MFAChallenge'
 import Login from './pages/auth/Login'
 
 // ── Lazy page chunks — each loads only when first navigated to ─────────────
@@ -60,7 +59,7 @@ function ScrollToTop() {
 }
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { user, profile, loading, mfaRequired, setMfaVerified, signOut } = useAuth()
+  const { user, profile, loading } = useAuth()
 
   // Still loading, or user is set but profile hasn't been fetched yet
   // (the brief window after signInWithPassword resolves but before fetchProfile completes)
@@ -73,21 +72,11 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
   if (!user) return <Navigate to="/login" />
 
-  if (mfaRequired)
-    return (
-      <MFAChallenge
-        user={user}
-        profile={profile}
-        onVerified={() => setMfaVerified(true)}
-        onSignOut={signOut}
-      />
-    )
-
   return <>{children}</>
 }
 
 function RoleGuard({ children, allowed }: { children: React.ReactNode; allowed: Role[] }) {
-  const { user, profile, loading, mfaRequired, setMfaVerified, signOut } = useAuth()
+  const { user, profile, loading } = useAuth()
   if (loading || (user && !profile))
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -95,21 +84,12 @@ function RoleGuard({ children, allowed }: { children: React.ReactNode; allowed: 
       </div>
     )
   if (!profile) return <Navigate to="/login" />
-  if (mfaRequired)
-    return (
-      <MFAChallenge
-        user={user}
-        profile={profile}
-        onVerified={() => setMfaVerified(true)}
-        onSignOut={signOut}
-      />
-    )
   if (!allowed.includes(profile.role as Role)) return <Navigate to="/dashboard" />
   return <>{children}</>
 }
 
 function RoleRoute() {
-  const { user, profile, loading, mfaRequired, setMfaVerified, signOut } = useAuth()
+  const { user, profile, loading } = useAuth()
   if (loading || (user && !profile))
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -117,15 +97,6 @@ function RoleRoute() {
       </div>
     )
   if (!profile) return <Navigate to="/login" />
-  if (mfaRequired)
-    return (
-      <MFAChallenge
-        user={user}
-        profile={profile}
-        onVerified={() => setMfaVerified(true)}
-        onSignOut={signOut}
-      />
-    )
   if (profile.role === 'owner') return <Navigate to="/executive" />
   if (profile.role === 'executive') return <Navigate to="/executive" />
   if (profile.role === 'manager') return <Navigate to="/management" />
