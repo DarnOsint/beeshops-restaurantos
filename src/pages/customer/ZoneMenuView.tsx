@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { AlertCircle, RefreshCw, UtensilsCrossed, Wine } from 'lucide-react'
+import { AlertCircle, RefreshCw, Search, UtensilsCrossed, Wine } from 'lucide-react'
 
 type MenuItem = {
   id: string
@@ -42,6 +42,7 @@ export default function ZoneMenuView() {
   const [dataSource, setDataSource] = useState<'api' | 'supabase' | 'unknown'>('unknown')
   const [debugApiError, setDebugApiError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<MenuTab>('food')
+  const [search, setSearch] = useState('')
 
   const debug = useMemo(() => {
     try {
@@ -197,8 +198,12 @@ export default function ZoneMenuView() {
   }, [menu])
 
   const currentItems = useMemo(() => {
-    return menu.filter((item) => getItemTab(item) === activeTab)
-  }, [menu, activeTab])
+    const q = search.trim().toLowerCase()
+    if (!q) return menu.filter((item) => getItemTab(item) === activeTab)
+    return menu.filter(
+      (item) => getItemTab(item) === activeTab && item.name.toLowerCase().includes(q)
+    )
+  }, [menu, activeTab, search])
 
   const grouped = useMemo(() => {
     const byCat = new Map<string, MenuItem[]>()
@@ -278,8 +283,8 @@ export default function ZoneMenuView() {
       </div>
 
       {/* ─── Tab bar ─── */}
-      <div className="sticky top-[57px] z-20 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
-        <div className="max-w-xl mx-auto px-4 py-3 flex gap-2">
+      <div className="border-b border-zinc-800 bg-zinc-950/95">
+        <div className="max-w-xl mx-auto px-4 pt-3 flex gap-2">
           {tabs.map((tab) => {
             const active = activeTab === tab
             const Icon = tab === 'food' ? UtensilsCrossed : Wine
@@ -300,13 +305,28 @@ export default function ZoneMenuView() {
             )
           })}
         </div>
+
+        {/* ─── Search bar ─── */}
+        <div className="max-w-xl mx-auto w-full px-4 pb-4 pt-3">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search items…"
+              className="w-full bg-zinc-900 border border-zinc-800 text-white rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-amber-500"
+            />
+          </div>
+        </div>
       </div>
 
       {/* ─── Items ─── */}
       <div className="flex-1 max-w-xl mx-auto w-full px-4 py-5">
         {currentItems.length === 0 ? (
           <div className="py-16 text-center text-zinc-600 text-sm">
-            No {TAB_LABELS[activeTab].toLowerCase()} items available
+            {search.trim()
+              ? 'No matching items'
+              : `No ${TAB_LABELS[activeTab].toLowerCase()} items available`}
           </div>
         ) : (
           <div className="space-y-6">
@@ -323,12 +343,12 @@ export default function ZoneMenuView() {
                   <div className="h-px flex-1 bg-zinc-800" />
                 </div>
 
-                {/* Items as compact rows */}
-                <div className="space-y-1.5">
+                {/* Items as 2-column grid */}
+                <div className="grid grid-cols-2 gap-2">
                   {section.items.map((item) => (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between gap-3 px-0.5 py-1"
+                      className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2 min-h-[44px]"
                     >
                       <span className="text-white text-sm font-medium leading-tight truncate">
                         {item.name}
