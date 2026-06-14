@@ -283,7 +283,7 @@ export default function ZoneMenuView() {
       </div>
 
       {/* ─── Tab bar ─── */}
-      <div className="sticky top-[57px] z-20 border-b border-zinc-800 bg-zinc-950/95">
+      <div className="sticky top-[61px] z-20 border-b border-zinc-800 bg-zinc-950/95">
         <div className="max-w-xl mx-auto px-4 pt-3 flex gap-2">
           {tabs.map((tab) => {
             const active = activeTab === tab
