@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { AlertCircle, RefreshCw, Search, ThumbsDown, ThumbsUp, UtensilsCrossed } from 'lucide-react'
+import { AlertCircle, RefreshCw, UtensilsCrossed, Wine } from 'lucide-react'
 
-type MenuCategory = { name?: string | null }
 type MenuItem = {
   id: string
   name: string
   price: number
-  description?: string | null
-  image_url?: string | null
-  menu_categories?: MenuCategory | null
+  menu_categories?: { name?: string | null; destination?: string | null } | null
 }
 
 type ZonePriceRow = {
@@ -24,14 +21,15 @@ type TableCategory = {
   name: string
 }
 
-const todayWAT = () => {
-  const wat = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' }))
-  if (wat.getHours() < 8) wat.setDate(wat.getDate() - 1)
-  return wat.toLocaleDateString('en-CA')
-}
+type MenuTab = 'food' | 'drinks' | 'other'
 
-function buildRatedKey(zoneId: string) {
-  return `rated:${zoneId}:${todayWAT()}`
+const TAB_LABELS: Record<MenuTab, string> = { food: 'Food', drinks: 'Drinks', other: 'Other' }
+
+function getItemTab(item: MenuItem): MenuTab {
+  const dest = item.menu_categories?.destination?.toLowerCase() || ''
+  if (dest === 'kitchen' || dest === 'griller') return 'food'
+  if (dest === 'bar' || dest === 'mixologist') return 'drinks'
+  return 'other'
 }
 
 export default function ZoneMenuView() {
@@ -43,11 +41,7 @@ export default function ZoneMenuView() {
   const [error, setError] = useState<string | null>(null)
   const [dataSource, setDataSource] = useState<'api' | 'supabase' | 'unknown'>('unknown')
   const [debugApiError, setDebugApiError] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
-  const [activeCategory, setActiveCategory] = useState<string>('All')
-  const [rated, setRated] = useState(false)
-  const [ratingBusy, setRatingBusy] = useState(false)
-  const [ratingError, setRatingError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<MenuTab>('food')
 
   const debug = useMemo(() => {
     try {
@@ -63,15 +57,12 @@ export default function ZoneMenuView() {
       id: String(item?.id ?? ''),
       name: String(item?.name ?? ''),
       price: Number.isFinite(Number(item?.price)) ? Number(item.price) : 0,
-      description: item?.description ?? null,
-      image_url: item?.image_url ?? null,
       menu_categories: item?.menu_categories ?? null,
     }))
   }
 
   const resolveZone = async (): Promise<TableCategory | null> => {
     if (!zoneId) return null
-    // 1) Normal case: zoneId is a real `table_categories.id`
     const direct = await supabase
       .from('table_categories')
       .select('id, name')
@@ -79,7 +70,6 @@ export default function ZoneMenuView() {
       .single()
     if (!direct.error && direct.data) return direct.data as TableCategory
 
-    // 2) Back-compat: zoneId is a zone name (older/handwritten QR labels)
     const byName = await supabase
       .from('table_categories')
       .select('id, name')
@@ -87,8 +77,6 @@ export default function ZoneMenuView() {
       .maybeSingle()
     if (!byName.error && byName.data) return byName.data as TableCategory
 
-    // 3) Back-compat: QR contains a table id but points to /zone/:id.
-    // Redirect to the real zone for that table.
     const tableRes = await supabase
       .from('tables')
       .select('id, category_id, table_categories(id, name)')
@@ -101,7 +89,6 @@ export default function ZoneMenuView() {
         return null
       }
     }
-
     return null
   }
 
@@ -112,7 +99,6 @@ export default function ZoneMenuView() {
     setDebugApiError(null)
     setDataSource('unknown')
     try {
-      // Prefer server-side resolved payload (service role) so public scans work even with RLS.
       try {
         const resp = await fetch(
           `/api/public/zone-menu?zone=${encodeURIComponent(zoneId)}&t=${Date.now()}`
@@ -150,11 +136,10 @@ export default function ZoneMenuView() {
       const resolved = await resolveZone()
       if (!resolved) throw new Error('zone_not_found')
 
-      const [zoneRes, menuRes, zonePriceRes] = await Promise.all([
-        Promise.resolve({ data: resolved, error: null }),
+      const [menuRes, zonePriceRes] = await Promise.all([
         supabase
           .from('menu_items')
-          .select('id, name, price, description, image_url, menu_categories(name)')
+          .select('id, name, price, menu_categories(name, destination)')
           .order('name'),
         supabase
           .from('menu_item_zone_prices')
@@ -162,8 +147,9 @@ export default function ZoneMenuView() {
           .eq('category_id', resolved.id),
       ])
 
-      if (zoneRes.error) throw zoneRes.error
-      setZone(zoneRes.data as TableCategory)
+      if (menuRes.error) throw menuRes.error
+      if (!resolved) throw new Error('zone_not_found')
+      setZone(resolved)
 
       const baseMenu = (menuRes.data || []) as MenuItem[]
       const priceRows = (zonePriceRes.data || []) as unknown as ZonePriceRow[]
@@ -194,173 +180,66 @@ export default function ZoneMenuView() {
 
   useEffect(() => {
     void load()
-    if (zoneId) {
-      setRated(Boolean(localStorage.getItem(buildRatedKey(zoneId))))
-    }
-    // Reset filter when scanning a different zone QR
-    setActiveCategory('All')
+    setActiveTab('food')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zoneId])
 
-  const searchFiltered = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return menu
-    return menu.filter((item) => item.name.toLowerCase().includes(q))
-  }, [menu, search])
-
-  const getCategoryWeight = (name: string) => {
-    const n = String(name || '')
-      .toLowerCase()
-      .trim()
-    if (!n) return 99
-
-    // Sort similar to the POS/back-office tabs, but in a "Food → Drinks → Cocktails → Milkshakes" order.
-    if (
-      n.includes('food') ||
-      n.includes('grill') ||
-      n.includes('soup') ||
-      n.includes('pasta') ||
-      n.includes('rice') ||
-      n.includes('salad') ||
-      n.includes('starter') ||
-      n.includes('breakfast')
-    ) {
-      return 0
-    }
-
-    // Drinks + liquor/beer tags
-    if (
-      n.includes('drink') ||
-      n.includes('soft') ||
-      n.includes('wine') ||
-      n.includes('spirit') ||
-      n.includes('beer') ||
-      n.includes('liquor') ||
-      n.includes('liqueur') ||
-      n.includes('energy') ||
-      n.includes('shot')
-    ) {
-      return 1
-    }
-
-    if (n.includes('cocktail') || n.includes('mocktail')) return 2
-    if (n.includes('milkshake') || n.includes('smoothie') || n.includes('fruit punch')) return 3
-
-    return 4
-  }
-
-  const categories = useMemo(() => {
-    const set = new Set<string>()
-    let hasUncategorized = false
+  const tabs = useMemo(() => {
+    const has = { food: false, drinks: false, other: false } as Record<MenuTab, boolean>
     for (const item of menu) {
-      const cat = item.menu_categories?.name
-      if (cat) set.add(cat)
-      else hasUncategorized = true
+      has[getItemTab(item)] = true
     }
-    const list = Array.from(set).sort((a, b) => {
+    const available: MenuTab[] = []
+    if (has.food) available.push('food')
+    if (has.drinks) available.push('drinks')
+    if (has.other) available.push('other')
+    return available
+  }, [menu])
+
+  const currentItems = useMemo(() => {
+    return menu.filter((item) => getItemTab(item) === activeTab)
+  }, [menu, activeTab])
+
+  const grouped = useMemo(() => {
+    const byCat = new Map<string, MenuItem[]>()
+    for (const item of currentItems) {
+      const cat = item.menu_categories?.name || 'Other'
+      if (!byCat.has(cat)) byCat.set(cat, [])
+      byCat.get(cat)!.push(item)
+    }
+    return byCat
+  }, [currentItems])
+
+  const sections = useMemo(() => {
+    const out: Array<{ title: string; items: MenuItem[] }> = []
+    // Show categories in deterministic order (food cats first, then drinks, etc.)
+    const sorted = Array.from(grouped.keys()).sort((a, b) => {
       const wa = getCategoryWeight(a)
       const wb = getCategoryWeight(b)
       if (wa !== wb) return wa - wb
       return a.localeCompare(b)
     })
-    if (hasUncategorized) list.push('Other')
-    return ['All', ...list]
-  }, [menu])
-
-  const categoryCounts = useMemo(() => {
-    const counts = new Map<string, number>()
-    counts.set('All', searchFiltered.length)
-    for (const c of categories) {
-      if (c !== 'All') counts.set(c, 0)
-    }
-    for (const item of searchFiltered) {
-      const cat = item.menu_categories?.name || 'Other'
-      counts.set(cat, (counts.get(cat) || 0) + 1)
-    }
-    return counts
-  }, [categories, searchFiltered])
-
-  const filtered = useMemo(() => {
-    if (activeCategory === 'All') return searchFiltered
-    if (activeCategory === 'Other')
-      return searchFiltered.filter((item) => !item.menu_categories?.name)
-    return searchFiltered.filter((item) => item.menu_categories?.name === activeCategory)
-  }, [searchFiltered, activeCategory])
-
-  const orderedCategoryList = useMemo(() => {
-    const list = categories.filter((c) => c !== 'All')
-    return list
-  }, [categories])
-
-  const grouped = useMemo(() => {
-    const byCat = new Map<string, MenuItem[]>()
-    for (const item of searchFiltered) {
-      const cat = item.menu_categories?.name || 'Other'
-      if (!byCat.has(cat)) byCat.set(cat, [])
-      byCat.get(cat)!.push(item)
-    }
-    // Keep item order stable within each category (server already sorts by name)
-    return byCat
-  }, [searchFiltered])
-
-  const sections = useMemo(() => {
-    // When a category is selected, render only that section (with a header).
-    if (activeCategory !== 'All') {
-      const cat = activeCategory
-      const items =
-        cat === 'Other'
-          ? searchFiltered.filter((item) => !item.menu_categories?.name)
-          : searchFiltered.filter((item) => item.menu_categories?.name === cat)
-      return items.length ? [{ title: cat, items }] : []
-    }
-
-    // All categories: show Food-like categories first (via category weights) then others.
-    const out: Array<{ title: string; items: MenuItem[] }> = []
-    for (const cat of orderedCategoryList) {
+    for (const cat of sorted) {
       const items = grouped.get(cat) || []
       if (items.length) out.push({ title: cat, items })
     }
     return out
-  }, [activeCategory, grouped, orderedCategoryList, searchFiltered])
-
-  const submitRating = async (value: 'up' | 'down') => {
-    if (!zoneId || ratingBusy) return
-    if (rated) return
-    setRatingBusy(true)
-    setRatingError(null)
-    try {
-      const payload = {
-        zone_id: zoneId,
-        zone_name: zone?.name || null,
-        rating: value,
-      }
-      const { error: insertError } = await supabase.from('service_ratings').insert(payload)
-      if (insertError) throw insertError
-      localStorage.setItem(buildRatedKey(zoneId), value)
-      setRated(true)
-    } catch {
-      setRatingError('Ratings are not available right now.')
-    } finally {
-      setRatingBusy(false)
-    }
-  }
+  }, [grouped])
 
   if (loading) {
     return (
-      <div className="min-h-full bg-gray-950 flex items-center justify-center">
-        <div className="flex items-center gap-2 text-amber-500">
-          <RefreshCw size={18} className="animate-spin" />
-          <span className="text-sm">Loading prices…</span>
-        </div>
+      <div className="min-h-full bg-black flex items-center justify-center p-6">
+        <RefreshCw size={20} className="text-amber-500 animate-spin" />
+        <span className="text-gray-400 text-sm ml-3">Loading…</span>
       </div>
     )
   }
 
   if (error || !zoneId) {
     return (
-      <div className="min-h-full bg-gray-950 flex items-center justify-center p-6">
-        <div className="text-center">
-          <AlertCircle size={40} className="text-red-400 mx-auto mb-3" />
+      <div className="min-h-full bg-black flex items-center justify-center p-6">
+        <div className="text-center max-w-sm">
+          <AlertCircle size={36} className="text-red-400 mx-auto mb-3" />
           <p className="text-white font-bold mb-2">Could not load</p>
           <p className="text-gray-500 text-sm mb-4">{error || 'Invalid link.'}</p>
           <button
@@ -375,23 +254,22 @@ export default function ZoneMenuView() {
   }
 
   return (
-    <div className="min-h-full bg-gray-950 flex flex-col">
-      <div className="bg-gray-900 border-b border-gray-800 px-4 py-3 sticky top-0 z-30">
-        <div className="max-w-lg mx-auto flex items-center justify-between gap-3">
+    <div className="min-h-full bg-black flex flex-col">
+      {/* ─── Header ─── */}
+      <div className="bg-zinc-900 border-b border-zinc-800 px-4 py-3 sticky top-0 z-30">
+        <div className="max-w-xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center shrink-0">
               <UtensilsCrossed size={17} className="text-black" />
             </div>
             <div className="min-w-0">
               <h1 className="text-white font-bold text-sm leading-tight">Beeshop&apos;s Place</h1>
-              <p className="text-amber-400 text-xs font-medium truncate">
-                Prices for {zone?.name || 'Zone'}
-              </p>
+              <p className="text-amber-400 text-xs font-medium truncate">{zone?.name || 'Menu'}</p>
             </div>
           </div>
           <button
             onClick={load}
-            className="text-gray-400 hover:text-white p-2 bg-gray-800 rounded-xl border border-gray-700"
+            className="text-zinc-500 hover:text-white p-2 bg-zinc-800 rounded-xl border border-zinc-700"
             title="Refresh"
           >
             <RefreshCw size={16} />
@@ -399,129 +277,65 @@ export default function ZoneMenuView() {
         </div>
       </div>
 
-      <div className="sticky top-[64px] z-20 border-b border-gray-800 bg-gray-950/95 backdrop-blur">
-        <div className="max-w-lg mx-auto w-full px-4 pt-4">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search items…"
-              className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-amber-500"
-            />
-          </div>
-        </div>
-
-        <div className="max-w-lg mx-auto w-full px-4 pb-4 pt-3">
-          <div className="flex gap-2 overflow-x-auto">
-            {categories.map((cat) => {
-              const count = categoryCounts.get(cat) || 0
-              if (cat !== 'All' && count === 0) return null
-              const active = activeCategory === cat
-              return (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setActiveCategory(cat)}
-                  className={`shrink-0 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${
-                    active
-                      ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
-                      : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white hover:border-gray-700'
-                  }`}
-                >
-                  {cat}
-                  <span className="ml-2 text-[10px] text-gray-500">{count}</span>
-                </button>
-              )
-            })}
-          </div>
+      {/* ─── Tab bar ─── */}
+      <div className="sticky top-[57px] z-20 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
+        <div className="max-w-xl mx-auto px-4 py-3 flex gap-2">
+          {tabs.map((tab) => {
+            const active = activeTab === tab
+            const Icon = tab === 'food' ? UtensilsCrossed : Wine
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold border transition-colors ${
+                  active
+                    ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-700'
+                }`}
+              >
+                <Icon size={15} />
+                {TAB_LABELS[tab]}
+              </button>
+            )
+          })}
         </div>
       </div>
 
-      <div className="border-b border-gray-800 bg-gray-900/60 px-4 py-4">
-        <div className="max-w-lg mx-auto">
-          <p className="text-gray-400 text-xs font-semibold mb-2">Rate the service</p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => submitRating('up')}
-              disabled={rated || ratingBusy}
-              className={`flex-1 rounded-xl py-3 text-sm font-bold border transition-colors ${
-                rated
-                  ? 'bg-gray-800 text-gray-500 border-gray-800'
-                  : 'bg-green-500/15 text-green-400 border-green-500/30 hover:bg-green-500/20'
-              }`}
-            >
-              <span className="inline-flex items-center justify-center gap-2">
-                <ThumbsUp size={16} /> Good
-              </span>
-            </button>
-            <button
-              onClick={() => submitRating('down')}
-              disabled={rated || ratingBusy}
-              className={`flex-1 rounded-xl py-3 text-sm font-bold border transition-colors ${
-                rated
-                  ? 'bg-gray-800 text-gray-500 border-gray-800'
-                  : 'bg-red-500/10 text-red-400 border-red-500/25 hover:bg-red-500/15'
-              }`}
-            >
-              <span className="inline-flex items-center justify-center gap-2">
-                <ThumbsDown size={16} /> Bad
-              </span>
-            </button>
+      {/* ─── Items ─── */}
+      <div className="flex-1 max-w-xl mx-auto w-full px-4 py-5">
+        {currentItems.length === 0 ? (
+          <div className="py-16 text-center text-zinc-600 text-sm">
+            No {TAB_LABELS[activeTab].toLowerCase()} items available
           </div>
-          {ratingError ? <p className="text-red-400 text-xs mt-2">{ratingError}</p> : null}
-          {rated && !ratingError ? (
-            <p className="text-gray-500 text-xs mt-2">Thanks — rating received.</p>
-          ) : null}
-          <p className="text-gray-600 text-[11px] mt-2">
-            This QR code is for checking prices only. Orders are placed through your waitron.
-          </p>
-        </div>
-      </div>
-
-      <div className="flex-1 max-w-lg mx-auto w-full px-4 py-4">
-        {filtered.length === 0 ? (
-          <div className="py-16 text-center text-gray-600">No items found</div>
         ) : (
           <div className="space-y-6">
             {sections.map((section) => (
               <div key={section.title}>
-                <div className="flex items-center justify-between gap-3 mb-3">
-                  <div className="inline-flex items-center gap-2">
-                    <span className="inline-flex items-center px-3 py-2 rounded-2xl bg-amber-500/15 border border-amber-500/25 text-amber-300 font-extrabold tracking-wide text-[13px] uppercase">
-                      {section.title}
-                    </span>
-                    <span className="text-gray-500 text-[11px] font-semibold">
-                      {section.items.length} item{section.items.length === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                  <div className="h-px flex-1 bg-gray-800" />
+                {/* Category header */}
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-amber-400 font-extrabold tracking-wider text-[11px] uppercase">
+                    {section.title}
+                  </span>
+                  <span className="text-zinc-700 text-[10px] font-semibold">
+                    {section.items.length}
+                  </span>
+                  <div className="h-px flex-1 bg-zinc-800" />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                {/* Items as compact rows */}
+                <div className="space-y-1.5">
                   {section.items.map((item) => (
                     <div
                       key={item.id}
-                      className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden p-3"
+                      className="flex items-center justify-between gap-3 px-0.5 py-1"
                     >
-                      <div className="w-full h-20 bg-gray-800 rounded-xl overflow-hidden mb-2 flex items-center justify-center">
-                        {item.image_url ? (
-                          <img
-                            src={item.image_url}
-                            alt={item.name}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <UtensilsCrossed size={18} className="text-gray-600" />
-                        )}
-                      </div>
-                      <p className="text-white text-sm font-semibold leading-tight line-clamp-2">
+                      <span className="text-white text-sm font-medium leading-tight truncate">
                         {item.name}
-                      </p>
-                      <p className="text-amber-400 font-bold text-sm mt-1">
+                      </span>
+                      <span className="text-amber-400 font-bold text-sm shrink-0 tabular-nums">
                         ₦{item.price.toLocaleString()}
-                      </p>
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -531,16 +345,25 @@ export default function ZoneMenuView() {
         )}
       </div>
 
+      {/* ─── Footer note ─── */}
+      <div className="border-t border-zinc-800 px-4 py-3">
+        <div className="max-w-xl mx-auto">
+          <p className="text-zinc-600 text-[11px] text-center">
+            Prices checked via QR · Orders placed through your waitron
+          </p>
+        </div>
+      </div>
+
+      {/* ─── Debug ─── */}
       {debug ? (
-        <div className="max-w-lg mx-auto w-full px-4 pb-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-[11px] text-gray-400 space-y-1">
+        <div className="border-t border-zinc-800 px-4 pb-4 pt-2">
+          <div className="max-w-xl mx-auto bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-[11px] text-zinc-500 space-y-1">
             <div>
-              <span className="text-gray-500">debug</span> · zoneId: {zoneId} · resolved:{' '}
-              {zone?.id || '—'} ({zone?.name || '—'}) · source: {dataSource}
+              zoneId: {zoneId} · {zone?.id || '—'} ({zone?.name || '—'}) · source: {dataSource}
             </div>
             <div>
-              items: {menu.length} · priced:{' '}
-              {menu.filter((m) => Number.isFinite(m.price) && m.price > 0).length}
+              items: {menu.length} · food: {menu.filter((i) => getItemTab(i) === 'food').length} ·
+              drinks: {menu.filter((i) => getItemTab(i) === 'drinks').length}
               {debugApiError ? (
                 <span className="text-red-400"> · apiError: {debugApiError}</span>
               ) : null}
@@ -550,4 +373,43 @@ export default function ZoneMenuView() {
       ) : null}
     </div>
   )
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getCategoryWeight(name: string): number {
+  const n = String(name || '')
+    .toLowerCase()
+    .trim()
+  if (!n) return 99
+  if (
+    n.includes('food') ||
+    n.includes('grill') ||
+    n.includes('soup') ||
+    n.includes('pasta') ||
+    n.includes('rice') ||
+    n.includes('salad') ||
+    n.includes('starter') ||
+    n.includes('breakfast') ||
+    n.includes('main')
+  )
+    return 0
+  if (
+    n.includes('drink') ||
+    n.includes('soft') ||
+    n.includes('wine') ||
+    n.includes('spirit') ||
+    n.includes('beer') ||
+    n.includes('liquor') ||
+    n.includes('liqueur') ||
+    n.includes('energy') ||
+    n.includes('shot') ||
+    n.includes('soda') ||
+    n.includes('juice') ||
+    n.includes('water')
+  )
+    return 1
+  if (n.includes('cocktail') || n.includes('mocktail')) return 2
+  if (n.includes('milkshake') || n.includes('smoothie') || n.includes('punch')) return 3
+  return 4
 }

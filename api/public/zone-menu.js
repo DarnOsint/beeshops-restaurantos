@@ -70,7 +70,7 @@ export default async function handler(req, res) {
     const [menuRes, zonePriceRes] = await Promise.all([
       sb
         .from('menu_items')
-        .select('id, name, price, description, image_url, menu_categories(name)')
+        .select('id, name, price, description, image_url, menu_categories(name, destination)')
         .order('name'),
       sb.from('menu_item_zone_prices').select('menu_item_id, category_id, price').eq('category_id', zone.id),
     ])
