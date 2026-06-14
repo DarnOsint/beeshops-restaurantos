@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import {
@@ -114,8 +115,16 @@ interface Stats {
   todayRevenue: number
 }
 export default function Management() {
-  useAuth() // profile/signOut available via context when needed
-  const [activeTab, setActiveTab] = useState<TabId>('overview')
+  useAuth()
+  const [searchParams] = useSearchParams()
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam && TABS.find((t) => t.id === tabParam)) return tabParam as TabId
+    return 'overview'
+  })
+  const [filterLowStock, setFilterLowStock] = useState(
+    () => searchParams.get('lowStock') === 'true'
+  )
   const { lateOrders, threshold, setThreshold, markDelivered } = useLateOrders()
 
   const [activityDate, setActivityDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -252,6 +261,7 @@ export default function Management() {
   useEffect(() => {
     const _ms = document.getElementById('main-scroll')
     if (_ms) _ms.scrollTop = 0
+    if (activeTab !== 'mainstore') setFilterLowStock(false)
   }, [activeTab])
 
   useEffect(() => {
@@ -490,7 +500,12 @@ export default function Management() {
         {activeTab === 'performance' && <StaffPerformanceTab />}
         {activeTab === 'payroll' && <PayrollTab />}
         {activeTab === 'chiller' && <ChillerTab />}
-        {activeTab === 'mainstore' && <MainStoreSummaryTab />}
+        {activeTab === 'mainstore' && (
+          <MainStoreSummaryTab
+            filterLow={filterLowStock}
+            onClearFilterLow={() => setFilterLowStock(false)}
+          />
+        )}
         {activeTab === 'fridge' && <KitchenFridgeTab />}
         {activeTab === 'returns' && <ReturnedDrinksTab />}
         {activeTab === 'voids' && <VoidsTab />}

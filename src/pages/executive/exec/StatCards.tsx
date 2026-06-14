@@ -3,9 +3,10 @@ import type { Stats } from './types'
 
 interface Props {
   stats: Stats
+  onLowStockClick?: () => void
 }
 
-export default function StatCards({ stats }: Props) {
+export default function StatCards({ stats, onLowStockClick }: Props) {
   const cards = [
     {
       label: "Today's Revenue",
@@ -52,15 +53,23 @@ export default function StatCards({ stats }: Props) {
   ]
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-      {cards.map((c) => (
-        <div key={c.label} className="bg-gray-900 rounded-2xl p-4 md:p-5 border border-gray-800">
-          <div className={`inline-flex p-2 rounded-lg ${c.bg} mb-3`}>
-            <c.icon size={18} className={c.color} />
-          </div>
-          <p className="text-gray-400 text-xs md:text-sm">{c.label}</p>
-          <p className="text-white text-xl md:text-2xl font-bold mt-1">{c.value}</p>
-        </div>
-      ))}
+      {cards.map((c) => {
+        const isLowStock = c.label === 'Low Stock Items' && stats.lowStock > 0 && onLowStockClick
+        const Tag = isLowStock ? 'button' : 'div'
+        return (
+          <Tag
+            key={c.label}
+            onClick={isLowStock ? onLowStockClick : undefined}
+            className={`bg-gray-900 rounded-2xl p-4 md:p-5 border ${isLowStock ? 'border-red-500/30 hover:border-red-500/60 cursor-pointer transition-colors' : 'border-gray-800'}`}
+          >
+            <div className={`inline-flex p-2 rounded-lg ${c.bg} mb-3`}>
+              <c.icon size={18} className={c.color} />
+            </div>
+            <p className="text-gray-400 text-xs md:text-sm">{c.label}</p>
+            <p className="text-white text-xl md:text-2xl font-bold mt-1">{c.value}</p>
+          </Tag>
+        )
+      })}
     </div>
   )
 }

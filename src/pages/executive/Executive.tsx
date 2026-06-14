@@ -428,12 +428,15 @@ export default function Executive() {
           lngApartment={lngApartment}
           setLngApartment={setLngApartment}
           peakHour={peakHour}
-          onNavigateBackoffice={() => navigate('/backoffice')}
+          onNavigateLowStock={() => navigate('/management?tab=mainstore&lowStock=true')}
         />
 
         {cvTab && <CctvPanel cvData={cvData} onResolve={resolveAlert} />}
 
-        <StatCards stats={stats} />
+        <StatCards
+          stats={stats}
+          onLowStockClick={() => navigate('/management?tab=mainstore&lowStock=true')}
+        />
         <RevenueChart trendData={trendData} />
         <QuickActions />
         <RecentOrders

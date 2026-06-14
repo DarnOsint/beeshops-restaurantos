@@ -20,7 +20,7 @@ interface Props {
   lngApartment: string
   setLngApartment: (v: string) => void
   peakHour: string | null
-  onNavigateBackoffice: () => void
+  onNavigateLowStock: () => void
 }
 
 export default function GeofenceControls({
@@ -40,7 +40,7 @@ export default function GeofenceControls({
   lngApartment,
   setLngApartment,
   peakHour,
-  onNavigateBackoffice,
+  onNavigateLowStock,
 }: Props) {
   const [geoToggling, setGeoToggling] = useState(false)
   const [radiusSaving, setRadiusSaving] = useState(false)
@@ -123,7 +123,7 @@ export default function GeofenceControls({
 
         {stats.lowStock > 0 && (
           <button
-            onClick={onNavigateBackoffice}
+            onClick={onNavigateLowStock}
             className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 hover:bg-red-500/20 transition-colors"
           >
             <Package size={13} /> {stats.lowStock} Low Stock

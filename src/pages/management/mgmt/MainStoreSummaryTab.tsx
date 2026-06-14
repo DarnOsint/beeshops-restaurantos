@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Package, RefreshCw, Search, Download } from 'lucide-react'
+import { Package, RefreshCw, Search, Download, Filter, Check, X } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
+import { useAuth } from '../../../context/AuthContext'
+import { useToast } from '../../../context/ToastContext'
+import { audit } from '../../../lib/audit'
+import { sendPushToStaff } from '../../../hooks/usePushNotifications'
+import type { Profile } from '../../../types'
 
 interface InventoryItem {
   id: string
@@ -15,14 +20,22 @@ interface InventoryItem {
 interface StoreRequest {
   id: string
   item_name: string
+  inventory_id: string | null
   quantity: number
   unit: string
+  requested_by: string | null
   requested_by_name: string | null
   status: string
   approved_by_name: string | null
   reject_reason: string | null
+  reason: string | null
   created_at: string
   resolved_at: string | null
+}
+
+interface Props {
+  filterLow?: boolean
+  onClearFilterLow?: () => void
 }
 
 const todayWAT = () => {
@@ -32,13 +45,20 @@ const todayWAT = () => {
   return wat.toLocaleDateString('en-CA')
 }
 
-export default function MainStoreSummaryTab() {
-  const [view, setView] = useState<'inventory' | 'requests'>('inventory')
+export default function MainStoreSummaryTab({ filterLow = false, onClearFilterLow }: Props) {
+  const { profile } = useAuth()
+  const toast = useToast()
+  const [view, setView] = useState<'inventory' | 'requests'>(filterLow ? 'inventory' : 'inventory')
   const [items, setItems] = useState<InventoryItem[]>([])
   const [requests, setRequests] = useState<StoreRequest[]>([])
   const [search, setSearch] = useState('')
   const [date, setDate] = useState(todayWAT())
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+
+  const isManager = profile?.role === 'owner' || profile?.role === 'manager'
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -55,7 +75,7 @@ export default function MainStoreSummaryTab() {
       supabase
         .from('store_requests')
         .select(
-          'id, item_name, quantity, unit, requested_by_name, status, approved_by_name, reject_reason, created_at, resolved_at'
+          'id, item_name, inventory_id, quantity, unit, requested_by, requested_by_name, status, approved_by_name, reject_reason, reason, created_at, resolved_at'
         )
         .gte('created_at', dayStart.toISOString())
         .lt('created_at', dayEnd.toISOString())
@@ -78,11 +98,13 @@ export default function MainStoreSummaryTab() {
     }
   }, [fetchData])
 
-  const filtered = items.filter(
-    (i) =>
+  const filtered = items.filter((i) => {
+    const matchSearch =
       i.item_name.toLowerCase().includes(search.toLowerCase()) ||
       (i.category || '').toLowerCase().includes(search.toLowerCase())
-  )
+    const matchLow = !filterLow || (i.current_stock > 0 && i.current_stock <= i.minimum_stock)
+    return matchSearch && matchLow
+  })
 
   const outOfStock = items.filter((i) => i.current_stock <= 0).length
   const lowStock = items.filter(
@@ -95,7 +117,6 @@ export default function MainStoreSummaryTab() {
   const pendingReqs = requests.filter((r) => r.status === 'pending')
   const totalMoved = approvedReqs.reduce((s, r) => s + r.quantity, 0)
 
-  // Group approved by requester
   const byRequester: Record<string, { count: number; qty: number }> = {}
   approvedReqs.forEach((r) => {
     const name = r.requested_by_name || 'Unknown'
@@ -103,6 +124,87 @@ export default function MainStoreSummaryTab() {
     byRequester[name].count++
     byRequester[name].qty += r.quantity
   })
+
+  const approveRequest = async (req: StoreRequest) => {
+    setSaving(true)
+    try {
+      const { data, error } = await supabase.rpc('approve_store_request', {
+        req_id: req.id,
+        approver_name: profile?.full_name ?? null,
+      })
+      if (error) throw error
+      if (!data || (data as any)?.status !== 'approved') {
+        toast.info('Already handled')
+        setSaving(false)
+        return
+      }
+
+      await audit({
+        action: 'STORE_REQUEST_APPROVED',
+        entity: 'store_requests',
+        entityId: req.id,
+        entityName: req.item_name,
+        newValue: {
+          quantity: req.quantity,
+          unit: req.unit,
+          requested_by: req.requested_by_name,
+          approved_by: profile?.full_name,
+        },
+        performer: profile as Profile,
+      })
+
+      if (req.requested_by)
+        sendPushToStaff(
+          req.requested_by,
+          '✅ Request Approved',
+          `${req.quantity}x ${req.item_name} released to chiller`
+        ).catch(() => {})
+      toast.success('Approved', `${req.quantity} ${req.unit} of ${req.item_name} sent to chiller`)
+      fetchData()
+    } catch (e: any) {
+      toast.error('Error', e?.message || 'Failed to approve')
+    }
+    setSaving(false)
+  }
+
+  const rejectRequest = async (req: StoreRequest, reason: string) => {
+    setSaving(true)
+    try {
+      await supabase
+        .from('store_requests')
+        .update({
+          status: 'rejected',
+          approved_by: profile?.id ?? null,
+          approved_by_name: profile?.full_name ?? null,
+          reject_reason: reason || 'Rejected by manager',
+          resolved_at: new Date().toISOString(),
+        })
+        .eq('id', req.id)
+
+      await audit({
+        action: 'STORE_REQUEST_REJECTED',
+        entity: 'store_requests',
+        entityId: req.id,
+        entityName: req.item_name,
+        newValue: { quantity: req.quantity, rejected_by: profile?.full_name, reason },
+        performer: profile as Profile,
+      })
+
+      if (req.requested_by)
+        sendPushToStaff(
+          req.requested_by,
+          '❌ Request Rejected',
+          `${req.item_name} — ${reason || 'No reason'}`
+        ).catch(() => {})
+      toast.success('Rejected', `Request for ${req.item_name} rejected`)
+      setRejectingId(null)
+      setRejectReason('')
+      fetchData()
+    } catch (e: any) {
+      toast.error('Error', e?.message || 'Failed to reject')
+    }
+    setSaving(false)
+  }
 
   const exportCsv = () => {
     const lines = [
@@ -128,6 +230,15 @@ export default function MainStoreSummaryTab() {
     a.click()
   }
 
+  const elapsed = (iso: string) => {
+    const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+    if (mins < 1) return 'just now'
+    if (mins < 60) return `${mins}m`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h`
+    return `${Math.floor(hrs / 24)}d`
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
@@ -142,7 +253,20 @@ export default function MainStoreSummaryTab() {
           className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors ${view === 'requests' ? 'bg-amber-500 text-black' : 'bg-gray-900 text-gray-400 border border-gray-800 hover:text-white'}`}
         >
           Store Requests
+          {pendingReqs.length > 0 && isManager && (
+            <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+              {pendingReqs.length}
+            </span>
+          )}
         </button>
+        {filterLow && (
+          <button
+            onClick={() => onClearFilterLow?.()}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
+          >
+            <Filter size={14} /> Low Stock Active
+          </button>
+        )}
         <button onClick={fetchData} className="p-2 text-gray-400 hover:text-white">
           <RefreshCw size={14} />
         </button>
@@ -155,10 +279,14 @@ export default function MainStoreSummaryTab() {
           {/* KPI cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
-              { label: 'Total Items', value: items.length, color: 'text-white' },
+              {
+                label: 'Total Items',
+                value: filterLow ? filtered.length : items.length,
+                color: 'text-white',
+              },
               {
                 label: 'Out of Stock',
-                value: outOfStock,
+                value: filterLow ? filtered.filter((i) => i.current_stock <= 0).length : outOfStock,
                 color: outOfStock > 0 ? 'text-red-400' : 'text-green-400',
               },
               {
@@ -187,7 +315,7 @@ export default function MainStoreSummaryTab() {
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
               type="text"
-              placeholder="Search items..."
+              placeholder={filterLow ? 'Search low stock items...' : 'Search items...'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-gray-900 border border-gray-800 text-white rounded-xl pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:border-amber-500"
@@ -286,6 +414,82 @@ export default function MainStoreSummaryTab() {
               </div>
             ))}
           </div>
+
+          {/* Pending approvals (manager only) */}
+          {isManager && pendingReqs.length > 0 && (
+            <div className="bg-gray-900 border border-amber-500/30 rounded-xl p-4">
+              <h4 className="text-amber-400 text-sm font-bold mb-3 flex items-center gap-2">
+                <Package size={14} /> Pending Approval ({pendingReqs.length})
+              </h4>
+              <div className="space-y-2">
+                {pendingReqs.map((req) => (
+                  <div
+                    key={req.id}
+                    className="bg-gray-800/50 border border-gray-700 rounded-xl p-3"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <p className="text-white text-sm font-bold">
+                          {req.quantity} {req.unit} of {req.item_name}
+                        </p>
+                        <p className="text-gray-400 text-xs">
+                          by {req.requested_by_name || 'Unknown'} · {elapsed(req.created_at)} ago
+                        </p>
+                        {req.reason && (
+                          <p className="text-gray-500 text-xs italic mt-1">{req.reason}</p>
+                        )}
+                      </div>
+                    </div>
+                    {rejectingId === req.id ? (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Reason for rejection"
+                          value={rejectReason}
+                          onChange={(e) => setRejectReason(e.target.value)}
+                          className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1.5 text-xs"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => rejectRequest(req, rejectReason)}
+                          disabled={saving}
+                          className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-bold"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => {
+                            setRejectingId(null)
+                            setRejectReason('')
+                          }}
+                          className="px-2 py-1.5 bg-gray-800 text-gray-400 rounded-lg text-xs"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => approveRequest(req)}
+                          disabled={saving}
+                          className="flex-1 flex items-center justify-center gap-1.5 bg-green-500/20 hover:bg-green-500/30 border border-green-500/30 text-green-400 font-semibold text-xs py-2 rounded-xl"
+                        >
+                          <Check size={13} /> Approve
+                        </button>
+                        <button
+                          onClick={() => setRejectingId(req.id)}
+                          disabled={saving}
+                          className="flex-1 flex items-center justify-center gap-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 font-semibold text-xs py-2 rounded-xl"
+                        >
+                          <X size={13} /> Reject
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Who took what */}
           {Object.keys(byRequester).length > 0 && (
