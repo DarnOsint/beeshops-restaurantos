@@ -53,6 +53,7 @@ export default function OverviewTab({ stats, pendingCount, onTabChange }: Props)
       icon: ShoppingBag,
       color: 'text-amber-400',
       bg: 'bg-amber-400/10',
+      onClick: () => onTabChange('orders'),
     },
     {
       label: 'Occupied Tables',
@@ -60,6 +61,7 @@ export default function OverviewTab({ stats, pendingCount, onTabChange }: Props)
       icon: LayoutDashboard,
       color: 'text-blue-400',
       bg: 'bg-blue-400/10',
+      onClick: () => onTabChange('orders'),
     },
     {
       label: 'Occupied Rooms',
@@ -67,6 +69,7 @@ export default function OverviewTab({ stats, pendingCount, onTabChange }: Props)
       icon: BedDouble,
       color: 'text-purple-400',
       bg: 'bg-purple-400/10',
+      onClick: () => navigate('/rooms'),
     },
     {
       label: 'Staff On Shift',
@@ -74,6 +77,7 @@ export default function OverviewTab({ stats, pendingCount, onTabChange }: Props)
       icon: Users,
       color: 'text-green-400',
       bg: 'bg-green-400/10',
+      onClick: () => onTabChange('shifts'),
     },
     {
       label: 'Revenue Today',
@@ -81,6 +85,7 @@ export default function OverviewTab({ stats, pendingCount, onTabChange }: Props)
       icon: TrendingUp,
       color: 'text-pink-400',
       bg: 'bg-pink-400/10',
+      onClick: () => navigate('/accounting'),
     },
   ]
 
@@ -154,13 +159,17 @@ export default function OverviewTab({ stats, pendingCount, onTabChange }: Props)
       )}
       <div className="grid grid-cols-2 gap-4">
         {kpis.map((k) => (
-          <div key={k.label} className="bg-gray-900 rounded-2xl p-4 border border-gray-800">
+          <button
+            key={k.label}
+            onClick={k.onClick}
+            className="bg-gray-900 rounded-2xl p-4 border border-gray-800 text-left hover:bg-gray-800 transition-colors cursor-pointer"
+          >
             <div className={`inline-flex p-2 rounded-lg ${k.bg} mb-2`}>
               <k.icon size={18} className={k.color} />
             </div>
             <p className="text-gray-400 text-xs">{k.label}</p>
             <p className="text-white text-xl font-bold mt-0.5">{k.value}</p>
-          </div>
+          </button>
         ))}
       </div>
       <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4">

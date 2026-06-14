@@ -71,7 +71,7 @@ export default function MainStoreSummaryTab({ filterLow = false, onClearFilterLo
         .from('inventory')
         .select('id, item_name, category, unit, current_stock, minimum_stock, cost_price')
         .eq('is_active', true)
-        .order('item_name'),
+        .order('current_stock', { ascending: false }),
       supabase
         .from('store_requests')
         .select(
@@ -102,7 +102,7 @@ export default function MainStoreSummaryTab({ filterLow = false, onClearFilterLo
     const matchSearch =
       i.item_name.toLowerCase().includes(search.toLowerCase()) ||
       (i.category || '').toLowerCase().includes(search.toLowerCase())
-    const matchLow = !filterLow || (i.current_stock > 0 && i.current_stock <= i.minimum_stock)
+    const matchLow = !filterLow || i.current_stock <= i.minimum_stock
     return matchSearch && matchLow
   })
 
