@@ -334,11 +334,11 @@ export default function ZoneMenuView() {
               <div key={section.title}>
                 {/* Category header */}
                 <div className="flex items-center gap-3 mb-3">
-                  <span className="text-amber-400 font-extrabold tracking-wider text-[11px] uppercase">
+                  <span className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/15 border border-amber-500/25 text-amber-300 font-extrabold tracking-wider text-xs uppercase">
                     {section.title}
-                  </span>
-                  <span className="text-zinc-700 text-[10px] font-semibold">
-                    {section.items.length}
+                    <span className="text-[10px] text-amber-500/60 font-semibold">
+                      {section.items.length}
+                    </span>
                   </span>
                   <div className="h-px flex-1 bg-zinc-800" />
                 </div>
