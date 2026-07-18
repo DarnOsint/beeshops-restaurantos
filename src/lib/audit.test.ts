@@ -14,8 +14,8 @@ const mockInsert = vi.fn().mockResolvedValue({ data: null, error: null })
 
 vi.mock('../lib/supabase', () => ({
   supabase: {
-    from: vi.fn(() => ({ insert: mockInsert }))
-  }
+    from: vi.fn(() => ({ insert: mockInsert })),
+  },
 }))
 
 // Import audit AFTER mock is set up

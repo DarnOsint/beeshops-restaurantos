@@ -8,7 +8,17 @@ import GeofenceBlock from '../../components/GeofenceBlock'
 import { useAuth } from '../../context/AuthContext'
 import KitchenStock from '../backoffice/KitchenStock'
 import ErrorBoundary from '../../components/ErrorBoundary'
-import { ChefHat, Clock, LogOut, RefreshCw, CheckCircle, BarChart2, Printer, X } from 'lucide-react'
+import {
+  ChefHat,
+  Clock,
+  LogOut,
+  RefreshCw,
+  CheckCircle,
+  Printer,
+  X,
+  RotateCcw,
+  History,
+} from 'lucide-react'
 import type { KdsOrder } from './types'
 import { useToast } from '../../context/ToastContext'
 import DailySummaryTab from './DailySummaryTab'
@@ -113,7 +123,7 @@ const isKitchenItem = (item: KdsOrder['order_items'][number]): boolean => {
   )
 }
 
-const isTakeawayPack = (item: KdsOrder['order_items'][number]): boolean => {
+const _isTakeawayPack = (item: KdsOrder['order_items'][number]): boolean => {
   return (
     (item.modifier_notes || '').toLowerCase().includes('takeaway pack') ||
     (item.notes || '').toLowerCase().includes('takeaway pack') ||
@@ -252,7 +262,7 @@ function KitchenKDSInner() {
     }
   }
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
-  const [tab, setTab] = useState<'orders' | 'stock' | 'summary'>('orders')
+  const [tab, setTab] = useState<'orders' | 'stock' | 'summary' | 'returns' | 'history'>('orders')
   const [orders, setOrders] = useState<KdsOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
@@ -260,8 +270,8 @@ function KitchenKDSInner() {
     (KdsOrder['order_items'][0] & { tableName: string; orderId: string; staffId?: string | null })[]
   >([])
   // Returns/history disabled for kitchen KDS
-  const [historyDate] = useState(new Date().toISOString().slice(0, 10))
-  const [returnHistory] = useState<Array<any>>([])
+  const [historyDate, setHistoryDate] = useState(new Date().toISOString().slice(0, 10))
+  const [returnHistory, setReturnHistory] = useState<Array<any>>([])
 
   const acceptReturn = async (itemId: string, staffId?: string | null, tableName?: string) => {
     const { error } = await supabase
@@ -454,6 +464,26 @@ function KitchenKDSInner() {
 
     setLoading(false)
   }, [])
+
+  const fetchReturnHistory = useCallback(
+    async (d?: string) => {
+      const targetDate = d || historyDate
+      const dayStart = new Date(targetDate)
+      dayStart.setHours(8, 0, 0, 0)
+      const dayEnd = new Date(dayStart)
+      dayEnd.setDate(dayEnd.getDate() + 1)
+      const { data } = await supabase
+        .from('returns_log')
+        .select(
+          'id, item_name, quantity, item_total, table_name, waitron_name, return_reason, status, requested_at, resolved_at'
+        )
+        .gte('requested_at', dayStart.toISOString())
+        .lte('requested_at', dayEnd.toISOString())
+        .order('requested_at', { ascending: false })
+      if (data) setReturnHistory(data)
+    },
+    [historyDate]
+  )
 
   const updateItemStatus = async (itemId: string, currentStatus: string, orderId: string) => {
     const nextStatus = getNextStatus(currentStatus)

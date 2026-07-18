@@ -16,7 +16,6 @@ let snapshot: Snapshot = {
   lastSynced: null,
 }
 const listeners = new Set<() => void>()
-let pendingInterval: number | null = null
 
 async function refreshPendingCount(): Promise<void> {
   snapshot = { ...snapshot, pendingCount: await getPendingCount() }
@@ -38,7 +37,7 @@ function initOnce(): void {
   })
 
   void refreshPendingCount()
-  pendingInterval = window.setInterval(() => {
+  window.setInterval(() => {
     void refreshPendingCount()
   }, 15_000)
 }

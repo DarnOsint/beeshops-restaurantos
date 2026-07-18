@@ -74,46 +74,31 @@ export default function OrdersByWaitronTab({
 
       const map: Record<string, Row> = {}
       const itemsMap: Record<string, Item[]> = {}
-      ;(data || []).forEach(
-        (oi: {
-          quantity?: number
-          total_price?: number
-          destination?: string | null
-          created_at?: string
-          status?: string
-          return_requested?: boolean
-          return_accepted?: boolean
-          orders?: { profiles?: { full_name?: string | null } | null } | null
-          menu_items?: {
-            name?: string | null
-            menu_categories?: { destination?: string | null } | null
-          } | null
-        }) => {
-          const dest = (
-            oi.destination ||
-            oi.menu_items?.menu_categories?.destination ||
-            ''
-          ).toLowerCase()
-          // Exclude anything returned or pending return, and cancelled items
-          if (oi.return_accepted || oi.return_requested) return
-          if ((oi.status || '').toLowerCase() === 'cancelled') return
-          if (!destinations.includes(dest as Dest)) return
-          const name = oi.orders?.profiles?.full_name || 'Unknown'
-          if (!map[name]) map[name] = { waitron: name, count: 0, total: 0 }
-          map[name].count += oi.quantity || 0
-          map[name].total += oi.total_price || 0
+      ;(data || []).forEach((oi: any) => {
+        const dest = (
+          oi.destination ||
+          oi.menu_items?.menu_categories?.destination ||
+          ''
+        ).toLowerCase()
+        // Exclude anything returned or pending return, and cancelled items
+        if (oi.return_accepted || oi.return_requested) return
+        if ((oi.status || '').toLowerCase() === 'cancelled') return
+        if (!destinations.includes(dest as Dest)) return
+        const name = oi.orders?.profiles?.full_name || 'Unknown'
+        if (!map[name]) map[name] = { waitron: name, count: 0, total: 0 }
+        map[name].count += oi.quantity || 0
+        map[name].total += oi.total_price || 0
 
-          const arr = itemsMap[name] || []
-          arr.push({
-            name: oi.menu_items?.name || 'Item',
-            qty: oi.quantity || 0,
-            total: oi.total_price || 0,
-            at: oi.created_at || '',
-            dest,
-          })
-          itemsMap[name] = arr
-        }
-      )
+        const arr = itemsMap[name] || []
+        arr.push({
+          name: oi.menu_items?.name || 'Item',
+          qty: oi.quantity || 0,
+          total: oi.total_price || 0,
+          at: oi.created_at || '',
+          dest,
+        })
+        itemsMap[name] = arr
+      })
       setRows(Object.values(map).sort((a, b) => b.total - a.total))
       setItemsByWaitron(itemsMap)
     } catch (e) {
@@ -124,7 +109,7 @@ export default function OrdersByWaitronTab({
     } finally {
       setLoading(false)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [destinations.join(','), start, end])
 
   useEffect(() => {

@@ -107,7 +107,7 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
       // Deduplicate by staff_id — keep the most recent row per staff
       // (guards against duplicate clock-ins that slipped through before the live-check fix)
       const seen = new Map<string, any>()
-      for (const row of res.data) {
+      for (const row of res.data as any[]) {
         const existing = seen.get(row.staff_id)
         if (!existing || new Date(row.clock_in) > new Date(existing.clock_in)) {
           seen.set(row.staff_id, row)
@@ -201,6 +201,7 @@ export default function ShiftManager({ onClose, onRefreshStats }: Props) {
     setLoading(true)
     await Promise.all([fetchStaff(), fetchActiveShifts(), fetchTodayLog(), fetchPosMachines()])
     setLoading(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 
 /**
  * We test the conflict resolution logic in isolation.
@@ -49,9 +49,7 @@ describe('resolveConflict', () => {
   })
 
   it('local wins when local record is older (created first)', () => {
-    expect(
-      resolveConflict('2025-01-01T10:00:00Z', '2025-01-01T11:00:00Z')
-    ).toBe('local_wins')
+    expect(resolveConflict('2025-01-01T10:00:00Z', '2025-01-01T11:00:00Z')).toBe('local_wins')
   })
 
   it('local wins when timestamps are equal', () => {
@@ -60,18 +58,16 @@ describe('resolveConflict', () => {
   })
 
   it('server wins when server record is older (server was written first)', () => {
-    expect(
-      resolveConflict('2025-01-01T11:00:00Z', '2025-01-01T10:00:00Z')
-    ).toBe('server_wins')
+    expect(resolveConflict('2025-01-01T11:00:00Z', '2025-01-01T10:00:00Z')).toBe('server_wins')
   })
 
   it('handles millisecond-level precision', () => {
-    expect(
-      resolveConflict('2025-01-01T10:00:00.500Z', '2025-01-01T10:00:00.499Z')
-    ).toBe('server_wins')
-    expect(
-      resolveConflict('2025-01-01T10:00:00.499Z', '2025-01-01T10:00:00.500Z')
-    ).toBe('local_wins')
+    expect(resolveConflict('2025-01-01T10:00:00.500Z', '2025-01-01T10:00:00.499Z')).toBe(
+      'server_wins'
+    )
+    expect(resolveConflict('2025-01-01T10:00:00.499Z', '2025-01-01T10:00:00.500Z')).toBe(
+      'local_wins'
+    )
   })
 })
 

@@ -794,7 +794,7 @@ function MixologistKDSInner() {
                         {r.quantity}x {r.menu_items?.name}
                       </p>
                       <p className="text-gray-500 text-xs">
-                        {r.tableName} — by {r.waitron_name || 'Unknown'}
+                        {r.tableName} — by {(r as any).waitron_name || 'Unknown'}
                       </p>
                     </div>
                     <div className="flex gap-2">

@@ -4,18 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
-import {
-  Gamepad2,
-  Plus,
-  LogOut,
-  RefreshCw,
-  Banknote,
-  CreditCard,
-  Smartphone,
-  CheckCircle,
-  Clock,
-  Trash2,
-} from 'lucide-react'
+import { Gamepad2, LogOut, RefreshCw, Banknote, CreditCard, Smartphone, Trash2 } from 'lucide-react'
 
 interface GameType {
   id: string

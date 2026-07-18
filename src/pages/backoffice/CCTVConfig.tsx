@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Camera, Plus, Trash2, Save, Loader2, Wifi, WifiOff, Eye } from 'lucide-react'
+import { ArrowLeft, Camera, Plus, Trash2, Save, Loader2, Eye } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../context/ToastContext'
 
@@ -151,8 +151,8 @@ export default function CCTVConfig({ onBack }: Props) {
   const [saving, setSaving] = useState(false)
   const [editingCam, setEditingCam] = useState<CameraConfig | null>(null)
   const [showAdd, setShowAdd] = useState(false)
-  const [testingId, setTestingId] = useState<string | null>(null)
-  const [testResults, setTestResults] = useState<Record<string, 'ok' | 'fail'>>({})
+  const [_testingId, _setTestingId] = useState<string | null>(null)
+  const [_testResults, _setTestResults] = useState<Record<string, 'ok' | 'fail'>>({})
 
   const blankCamera: CameraConfig = {
     id: '',

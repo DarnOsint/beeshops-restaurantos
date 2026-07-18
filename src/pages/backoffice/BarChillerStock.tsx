@@ -366,6 +366,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
       setHasChanges(false)
       setLoading(false)
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [loadSoldQty, menuDrinks]
   )
 

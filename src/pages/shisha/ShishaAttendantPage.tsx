@@ -4,16 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { useGeofence } from '../../hooks/useGeofence'
 import GeofenceBlock from '../../components/GeofenceBlock'
-import {
-  Wind,
-  Plus,
-  LogOut,
-  RefreshCw,
-  Banknote,
-  CreditCard,
-  Smartphone,
-  Trash2,
-} from 'lucide-react'
+import { Wind, LogOut, RefreshCw, Banknote, CreditCard, Smartphone, Trash2 } from 'lucide-react'
 
 interface ShishaVariant {
   id: string

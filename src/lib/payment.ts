@@ -55,7 +55,7 @@ export function getPersonItems(
   assignments: Record<string, number>,
   personIdx: number
 ): OrderItem[] {
-  return orderItems.filter(item => assignments[item.id] === personIdx)
+  return orderItems.filter((item) => assignments[item.id] === personIdx)
 }
 
 export function getPersonTotal(
@@ -63,15 +63,17 @@ export function getPersonTotal(
   assignments: Record<string, number>,
   personIdx: number
 ): number {
-  return getPersonItems(orderItems, assignments, personIdx)
-    .reduce((sum, item) => sum + (item.total_price || 0) + (item.extra_charge || 0), 0)
+  return getPersonItems(orderItems, assignments, personIdx).reduce(
+    (sum, item) => sum + (item.total_price || 0) + (item.extra_charge || 0),
+    0
+  )
 }
 
 export function getUnassignedItems(
   orderItems: OrderItem[],
   assignments: Record<string, number>
 ): OrderItem[] {
-  return orderItems.filter(item => assignments[item.id] === undefined)
+  return orderItems.filter((item) => assignments[item.id] === undefined)
 }
 
 export function allItemsAssigned(
@@ -83,11 +85,7 @@ export function allItemsAssigned(
 
 // ─── Till session helpers ─────────────────────────────────────────────────
 
-export function calcExpectedCash(
-  openingFloat: number,
-  cashSales: number,
-  payouts: number
-): number {
+export function calcExpectedCash(openingFloat: number, cashSales: number, payouts: number): number {
   return openingFloat + cashSales - payouts
 }
 

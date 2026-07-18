@@ -74,6 +74,7 @@ export default function TableConfig({ onBack }: Props) {
 
   useEffect(() => {
     fetchAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ── Table CRUD ─────────────────────────────────────────────

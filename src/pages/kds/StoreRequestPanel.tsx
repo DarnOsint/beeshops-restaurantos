@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Package, Search, Plus, RefreshCw, Check, X, Clock } from 'lucide-react'
+import { Package, Search, Plus, RefreshCw, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { sendPushToStaff } from '../../hooks/usePushNotifications'
 import { useAuth } from '../../context/AuthContext'

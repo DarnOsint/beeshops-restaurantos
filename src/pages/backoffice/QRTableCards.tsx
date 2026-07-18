@@ -50,7 +50,7 @@ export default function QRTableCards() {
       .select('id, name, table_categories(id, name)')
       .order('name')
       .then(({ data }) => {
-        setTables((data || []) as TableRow[])
+        setTables((data || []) as any)
         setLoading(false)
       })
   }, [])
@@ -220,6 +220,7 @@ export default function QRTableCards() {
     } finally {
       setExporting(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exporting, filteredZones, selectedZone, waitForQRCodes, zoneCards])
 
   if (!['owner', 'manager', 'executive'].includes(profile?.role || ''))

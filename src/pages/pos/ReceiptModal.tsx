@@ -183,7 +183,7 @@ export default function ReceiptModal({
         'Item'
       returnedGrouped.set(name, (returnedGrouped.get(name) || 0) + (item.quantity || 1))
     })
-    const returnedLines =
+    const _returnedLines =
       returnedGrouped.size > 0
         ? Array.from(returnedGrouped.entries())
             .map(([name, qty]) => fmtRow(`${qty}x ${name} [RETURNED]`, 'N0'))

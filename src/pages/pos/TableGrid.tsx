@@ -8,7 +8,6 @@ import {
   ZONE_FILL_OCCUPIED,
   DEFAULT_ZONE_COLOR,
   CANVAS_W,
-  CANVAS_H,
   getZoneColor,
   normalizeZoneBounds,
   getZoneBoundingBox,

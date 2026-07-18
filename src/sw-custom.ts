@@ -7,7 +7,7 @@ import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching'
 declare const self: ServiceWorkerGlobalScope
 
 cleanupOutdatedCaches()
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 const rawManifest = ((self as any).__WB_MANIFEST || []) as Array<{ url?: string }>
 // Avoid pinning old SPA shells (index.html) forever — always try network first for navigations.
 const manifest = rawManifest.filter((entry) => {
@@ -25,7 +25,6 @@ registerRoute(
 )
 
 self.skipWaiting()
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ;(self as any).clients?.claim()
 
 // ── Push notifications ─────────────────────────────────────────────────────
@@ -56,15 +55,14 @@ self.addEventListener('push', (event: PushEvent) => {
 self.addEventListener('notificationclick', (event: NotificationEvent) => {
   event.notification.close()
   event.waitUntil(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (self as any).clients
       .matchAll({ type: 'window', includeUncontrolled: true })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       .then((clients: any[]) => {
         if (clients.length > 0) {
           return clients[0].focus()
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         return (self as any).clients.openWindow('/')
       })
   )

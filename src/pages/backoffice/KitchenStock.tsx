@@ -327,7 +327,6 @@ export default function KitchenStock({ onBack }: Props) {
   )
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadEntries(date)
   }, [date, loadEntries])
 

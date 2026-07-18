@@ -1,4 +1,4 @@
-import { supabase, auditClient } from './supabase'
+import { auditClient } from './supabase'
 import { getAuditPerformer } from './auditContext'
 import type { AuditParams } from '../types'
 

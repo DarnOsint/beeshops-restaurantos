@@ -148,7 +148,6 @@ export default function ChillerTab() {
     setLoading(false)
   }, [])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     fetchData(date)
   }, [date, fetchData])
@@ -177,7 +176,7 @@ export default function ChillerTab() {
   const saveAll = async () => {
     setSaving(true)
     let count = 0
-    for (const [name, edits] of Object.entries(edited)) {
+    for (const [name, _edits] of Object.entries(edited)) {
       const row = getRow(name)
       if (!row) continue
       const payload = {

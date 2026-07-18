@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Printer, Plus, Trash2, Save, Loader2, Wifi, WifiOff } from 'lucide-react'
+import { ArrowLeft, Printer, Plus, Trash2, Loader2, Wifi, WifiOff } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useToast } from '../../context/ToastContext'
 

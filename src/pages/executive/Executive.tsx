@@ -14,7 +14,6 @@ import CctvPanel from './exec/CctvPanel'
 import GeofenceControls from './exec/GeofenceControls'
 
 import type { Stats, TrendDay, CvData } from './exec/types'
-import type { PostgrestFilterBuilder } from '@supabase/postgrest-js'
 
 function getGreeting() {
   const h = new Date().getHours()

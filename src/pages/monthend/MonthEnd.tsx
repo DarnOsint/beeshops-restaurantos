@@ -9,7 +9,6 @@ import {
   TrendingUp,
   Package,
   Users,
-  DollarSign,
   FileText,
   Plus,
   RefreshCw,

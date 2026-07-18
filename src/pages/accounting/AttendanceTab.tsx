@@ -69,6 +69,7 @@ export default function AttendanceTab() {
     setWeekAttendance(attMap)
     setHoursMap(hMap)
     setLoading(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekDates[0], weekDates[6]])
 
   useEffect(() => {

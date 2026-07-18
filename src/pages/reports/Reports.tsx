@@ -357,7 +357,7 @@ export default function Reports() {
         .filter((r) => r.status === 'checked_out')
         .reduce((s, r) => s + (r.total_amount || 0), 0)
       // Payment aggregation
-      const paymentTotals: Record<string, number> = {}
+      const _paymentTotals: Record<string, number> = {}
       // Group payment methods properly (handles transfer:BankName, cash+transfer:X+Y, cash+card:X+Y)
       const byPayment: Record<string, number> = {}
       paidOrders.forEach((o) => {
@@ -375,7 +375,7 @@ export default function Reports() {
         const net = perOrderNet[o.id] ?? o.total_amount ?? 0
         byPayment[key] = (byPayment[key] || 0) + net
       })
-      const paymentList = Object.entries(byPayment)
+      const _paymentList = Object.entries(byPayment)
         .map(([label, value]) => ({ label, value }))
         .filter((p) => p.value > 0)
         .sort((a, b) => b.value - a.value)
@@ -558,7 +558,7 @@ export default function Reports() {
     URL.revokeObjectURL(url)
   }
 
-  const exportXLSX = () => {
+  const _exportXLSX = () => {
     if (!report) return
     const sheets: Record<string, any[][]> = {
       Summary: [
@@ -1374,7 +1374,6 @@ export default function Reports() {
               (() => {
                 const vat = report.grossRevenue * 0.075
                 const totalWithVat = report.grossRevenue + vat
-                const totalReturnsValue = report.returnedValue || 0
                 const cashTotal = report.paidOrders
                   .filter((o) => o.payment_method === 'cash')
                   .reduce((s, o) => s + (o.total_amount || 0), 0)
@@ -1572,7 +1571,10 @@ export default function Reports() {
                       <div className="flex justify-between my-1 text-sm">
                         <span>Value Voided</span>
                         <span className="text-red-600 font-bold">
-                          ₦{totalVoids.toLocaleString()}
+                          ₦
+                          {(report.voids || [])
+                            .reduce((s: number, v: VoidEntry) => s + (v.total_value || 0), 0)
+                            .toLocaleString()}
                         </span>
                       </div>
                       <div className="border-t border-dashed border-gray-400 my-3" />

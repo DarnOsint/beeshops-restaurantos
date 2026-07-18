@@ -3,13 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 
-type TableRow = {
-  id: string
-  name: string
-  category_id?: string | null
-  table_categories?: { id: string; name: string } | null
-}
-
 export default function TableView() {
   const { tableId } = useParams<{ tableId: string }>()
   const navigate = useNavigate()
@@ -27,7 +20,7 @@ export default function TableView() {
         .eq('id', tableId)
         .single()
       if (fetchError) throw fetchError
-      const table = data as TableRow
+      const table = data as any
       const zoneId = table.table_categories?.id || table.category_id
       if (!zoneId) {
         setError('This table has no zone configured. Please ask your waiter.')

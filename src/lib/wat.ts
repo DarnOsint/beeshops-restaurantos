@@ -57,7 +57,9 @@ export function watDayRange(dateStr?: string): { start: Date; end: Date } {
     ? new Date(dateStr + 'T08:00:00+01:00')
     : (() => {
         const watNow = new Date(new Date().toLocaleString('en-US', { timeZone: WAT }))
-        const d = new Date(new Date().toLocaleDateString('en-CA', { timeZone: WAT }) + 'T08:00:00+01:00')
+        const d = new Date(
+          new Date().toLocaleDateString('en-CA', { timeZone: WAT }) + 'T08:00:00+01:00'
+        )
         if (watNow.getHours() < 8) d.setDate(d.getDate() - 1)
         return d
       })()

@@ -273,7 +273,7 @@ export default function ReturnedDrinksTab() {
   const accepted = returns.filter((r) => r.status === 'accepted')
   const rejected = returns.filter((r) => r.status === 'rejected' || r.status === 'manager_rejected')
   const expired = returns.filter((r) => r.status === 'expired')
-  const pending = returns.filter((r) => r.status === 'pending')
+  const _pending = returns.filter((r) => r.status === 'pending')
   const acceptedTotal = [...barAccepted, ...accepted].reduce((s, r) => s + (r.item_total || 0), 0)
 
   const statusLabel = (s: string) => {

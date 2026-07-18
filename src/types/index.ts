@@ -51,6 +51,7 @@ export interface Profile {
 export interface TableCategory {
   id: string
   name: string
+  hire_fee?: number | null
 }
 
 export interface Table {

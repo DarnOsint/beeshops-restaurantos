@@ -7,6 +7,7 @@ import {
   printHtmlToStation,
   getStationPrinterUrl,
   printViaNetwork,
+  isNetworkPrinterAvailable,
 } from '../../lib/networkPrinter'
 import { buildOrderTicket, buildOrderTicketHTML, type TicketItem } from '../../lib/orderTicket'
 import type { ItemDestination } from '../../types'
@@ -153,6 +154,7 @@ interface OrderPayload {
     menu_categories?: { name?: string; destination?: string } | null
     modifier_notes?: string
     extra_charge?: number
+    destination?: string
   }[]
   notes: string
   total: number
@@ -442,7 +444,7 @@ export default function POS() {
   }
 
   // Get display name for a table including joined tables
-  const getTableDisplayName = (table: Table): string => {
+  const _getTableDisplayName = (table: Table): string => {
     const joined = activeJoins[table.id]
     if (!joined || joined.length === 0) return table.name
     const joinedNames = joined.map((id) => tables.find((t) => t.id === id)?.name).filter(Boolean)
@@ -477,14 +479,14 @@ export default function POS() {
       supabase
         .from('orders')
         .select(
-          `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes,
-          order_items(id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
+          `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes, total_amount,
+          order_items(id, order_id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
             menu_items(name, price, menu_categories(name, destination)))`
         )
         .eq('id', cur.id)
         .single()
         .then(({ data }) => {
-          if (data) setActiveOrder(data)
+          if (data) setActiveOrder(data as any)
         })
     }
 
@@ -515,14 +517,14 @@ export default function POS() {
       supabase
         .from('orders')
         .select(
-          `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes,
-        order_items(id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
+          `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes, total_amount,
+        order_items(id, order_id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
           menu_items(name, price, menu_categories(name, destination)))`
         )
         .eq('id', cur.id)
         .single()
         .then(({ data }) => {
-          if (data) setActiveOrder(data)
+          if (data) setActiveOrder(data as any)
         })
     },
     15_000,
@@ -629,14 +631,14 @@ export default function POS() {
       supabase
         .from('orders')
         .select(
-          `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes,
-          order_items(id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
+          `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes, total_amount,
+          order_items(id, order_id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
             menu_items(name, price, menu_categories(name, destination)))`
         )
         .eq('id', current.id)
         .single()
         .then(({ data }) => {
-          if (data) setActiveOrder(data)
+          if (data) setActiveOrder(data as any)
         })
     }
   }
@@ -744,7 +746,7 @@ export default function POS() {
     const { data } = await supabase
       .from('orders')
       .select(
-        `id, closed_at, payment_method, order_type, status, customer_name,
+        `id, total_amount, closed_at, created_at, payment_method, order_type, status, customer_name,
         tables(name),
         order_items(id, menu_item_id, quantity, total_price, status, return_requested, return_accepted, destination, modifier_notes, extra_charge, created_at,
           menu_items(name))`
@@ -754,7 +756,7 @@ export default function POS() {
       .gte('closed_at', windowStart.toISOString())
       .order('closed_at', { ascending: false })
       .limit(60)
-    setOrderHistory((data || []) as HistoryOrder[])
+    setOrderHistory((data || []) as any as HistoryOrder[])
     setHistoryLoading(false)
   }
 
@@ -837,7 +839,7 @@ export default function POS() {
         .not('table_id', 'is', null),
     ])
     if (!tablesRes.error) {
-      setTables(tablesRes.data || [])
+      setTables((tablesRes.data || []) as any as Table[])
       if (tablesRes.data) {
         void localBulkPut('tables', tablesRes.data as Array<{ id: string }>)
       }
@@ -867,7 +869,7 @@ export default function POS() {
       supabase
         .from('menu_items')
         .select(
-          'id, name, price, description, image_url, is_available, menu_categories(name, destination)'
+          'id, name, price, category_id, description, image_url, is_available, menu_categories(name, destination)'
         )
         .order('name'),
       supabase
@@ -926,7 +928,7 @@ export default function POS() {
         )
       }
       setMenuItems(
-        (menuRes.data || []).map((item: MenuItem) => ({
+        (menuRes.data || []).map((item: any) => ({
           ...item,
           current_stock:
             normalizeDestination(
@@ -1033,7 +1035,7 @@ export default function POS() {
       if (table.status !== 'occupied') {
         void supabase.from('tables').update({ status: 'occupied' }).eq('id', table.id)
       }
-      setActiveOrder(openOrders[0])
+      setActiveOrder(openOrders[0] as any)
       setSelectedTable(table)
       setShowPayment(false)
       return
@@ -1246,13 +1248,13 @@ export default function POS() {
         const { data: refreshed } = await supabase
           .from('orders')
           .select(
-            `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes,
-            order_items(id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
+            `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes, total_amount,
+            order_items(id, order_id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
               menu_items(name, price, menu_categories(name, destination)))`
           )
           .eq('id', activeOrder.id)
           .single()
-        if (refreshed) setActiveOrder(refreshed)
+        if (refreshed) setActiveOrder(refreshed as any)
         setShowPayment(true)
         return
       }
@@ -1261,15 +1263,15 @@ export default function POS() {
       const { data: existingOpen } = await supabase
         .from('orders')
         .select(
-          `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes,
-          order_items(id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
+          `id, created_at, status, table_id, staff_id, order_type, payment_method, customer_name, notes, total_amount,
+          order_items(id, order_id, menu_item_id, quantity, status, destination, modifier_notes, extra_charge, unit_price, total_price, return_requested, return_accepted, return_reason, created_at,
             menu_items(name, price, menu_categories(name, destination)))`
         )
         .eq('table_id', table.id)
         .eq('status', 'open')
         .limit(1)
       if (existingOpen && existingOpen.length > 0) {
-        setActiveOrder(existingOpen[0])
+        setActiveOrder(existingOpen[0] as any)
         setShowPayment(true)
         return
       }
@@ -1407,7 +1409,7 @@ export default function POS() {
         .eq('id', (newOrder as Order).id)
         .single()
       if (freshOrder) {
-        setActiveOrder(freshOrder)
+        setActiveOrder(freshOrder as any)
         setShowPayment(true)
       }
       // Refresh table grid in background — don't await so it doesn't block modal

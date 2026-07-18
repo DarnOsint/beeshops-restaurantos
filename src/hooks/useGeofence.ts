@@ -89,7 +89,6 @@ export function useGeofence(locKey: LocKey = 'main') {
     if (enabled === null || radius === null || !target) return
 
     if (!enabled) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatus('inside')
 
       setDistance(0)

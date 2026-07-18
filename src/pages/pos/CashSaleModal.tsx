@@ -342,7 +342,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
       const hasBarItems = orderItems.some((i) => {
         const dest = normalizeDestination(
           i.menu_categories?.destination || 'bar',
-          i.menu_items?.name
+          (i as any).menu_items?.name
         )
         if (dest === 'shisha') return false
         return dest === 'bar'
@@ -371,7 +371,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         unit_price: item.price,
         total_price: item.total,
         status: 'pending',
-        destination: normalizeDestination(
+        destination: (normalizeDestination as any)(
           item.menu_categories?.destination || 'bar',
           item.name,
           item.menu_categories?.name
@@ -404,9 +404,9 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
         const stationItems: TicketItem[] = orderItems
           .filter(
             (i) =>
-              normalizeDestination(
+              (normalizeDestination as any)(
                 i.menu_categories?.destination,
-                i.menu_items?.name,
+                (i as any).menu_items?.name,
                 i.menu_categories?.name
               ) === station
           )

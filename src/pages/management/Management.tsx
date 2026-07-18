@@ -29,7 +29,7 @@ import ShiftManager from './ShiftManager'
 import TableAssignment from './TableAssignment'
 import TillManagement from './TillManagement'
 import WaiterCalls from './WaiterCalls'
-import KitchenStock from '../backoffice/KitchenStock'
+
 import ReturnedDrinksTab from './mgmt/ReturnedDrinksTab'
 import ChillerTab from './mgmt/ChillerTab'
 import StaffPerformanceTab from './mgmt/StaffPerformanceTab'
@@ -51,7 +51,7 @@ import SyncTab from './mgmt/SyncTab'
 import SettingsTab from './mgmt/SettingsTab'
 import ActivityLogTab from './mgmt/ActivityLogTab'
 import MainStoreSummaryTab from './mgmt/MainStoreSummaryTab'
-import OrdersByWaitronTab from './mgmt/OrdersByWaitronTab'
+
 import VoidsTab from './mgmt/VoidsTab'
 import ServiceRatingsTab from './mgmt/ServiceRatingsTab'
 

@@ -159,6 +159,7 @@ export default function Inventory({ onBack }: Props) {
 
   useEffect(() => {
     fetchAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const saveItem = async () => {
@@ -336,7 +337,7 @@ export default function Inventory({ onBack }: Props) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={fetchAll} className="text-gray-400 hover:text-white p-2">
+          <button onClick={() => fetchAll()} className="text-gray-400 hover:text-white p-2">
             <RefreshCw size={16} />
           </button>
           <button

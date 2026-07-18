@@ -51,7 +51,6 @@ export default function UnassignedCustomerOrders() {
   }, [])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchData()
     const ch = supabase
       .channel('unassigned-customer-orders')

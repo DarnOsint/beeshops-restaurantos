@@ -134,8 +134,7 @@ export default function ActivityLogTab({ dateRange }: Props) {
           // Only add if within current date range and group filter
           const inRange =
             newEntry.created_at >= dateRange.start && newEntry.created_at <= dateRange.end
-          const actions = ACTION_GROUPS[group]
-          const inGroup = !actions || actions.length === 0 || actions.includes(newEntry.action)
+          const inGroup = actionFilter === 'All' || newEntry.action === actionFilter
           if (!inRange || !inGroup) return
           setEntries((prev) => {
             // Deduplicate

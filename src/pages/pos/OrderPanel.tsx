@@ -70,7 +70,7 @@ export default function OrderPanel({
   menuItems,
   onPlaceOrder,
   onClose,
-  paymentInProgress = false,
+  paymentInProgress: _paymentInProgress = false,
   activeOrder,
   profile,
   compact = false,

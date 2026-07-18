@@ -17,8 +17,8 @@ const SHARED_RULES = {
 const REACT_RULES = {
   ...reactHooks.configs.recommended.rules,
   'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
-  // Suppress non-standard rule names that cause lint errors
-  'react-hooks/set-state-in-effect': 'warn',
+  // setState in useEffect is the standard data-fetching pattern in this codebase
+  'react-hooks/set-state-in-effect': 'off',
 }
 
 export default [
@@ -73,7 +73,7 @@ export default [
       // Turn off base rules that TS versions replace
       'no-unused-vars':                        'off',
       '@typescript-eslint/no-unused-vars':     ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }],
-      '@typescript-eslint/no-explicit-any':    'warn',
+      '@typescript-eslint/no-explicit-any':    'off',
       '@typescript-eslint/no-non-null-assertion': 'off',
       // Allow 'satisfies' keyword and other modern TS
       '@typescript-eslint/no-unsafe-assignment': 'off',

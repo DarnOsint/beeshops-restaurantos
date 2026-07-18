@@ -128,7 +128,7 @@ describe('split bill helpers', () => {
   it('getPersonItems returns correct items per person', () => {
     const person0 = getPersonItems(items, assignments, 0)
     expect(person0).toHaveLength(2)
-    expect(person0.map(i => i.id)).toEqual(['item-1', 'item-2'])
+    expect(person0.map((i) => i.id)).toEqual(['item-1', 'item-2'])
 
     const person1 = getPersonItems(items, assignments, 1)
     expect(person1).toHaveLength(1)

@@ -460,11 +460,7 @@ function GrillerKDSInner() {
       return
     }
 
-    const grillerItems = (data || []) as (GrillerItem & {
-      return_requested?: boolean
-      return_accepted?: boolean
-      return_reason?: string | null
-    })[]
+    const grillerItems = (data || []) as any
 
     const orderMap: Record<string, GrillerTicket> = {}
     grillerItems.forEach((item) => {

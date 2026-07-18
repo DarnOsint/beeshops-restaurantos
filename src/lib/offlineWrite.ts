@@ -60,7 +60,7 @@ export async function offlineUpdateNoReturn<T extends { id: string }>(
     await localPut(tableName, {
       ...(updated as unknown as Record<string, unknown>),
       synced: true,
-    } as T)
+    } as unknown as T)
     return { error: null, offline: false }
   }
 

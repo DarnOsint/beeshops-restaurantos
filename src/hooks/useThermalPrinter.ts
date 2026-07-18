@@ -35,6 +35,9 @@ export interface ReceiptData {
     modifier_notes?: string | null
     menu_items?: { name: string } | null
     name?: string
+    return_accepted?: boolean
+    return_requested?: boolean
+    status?: string
   }>
   table?: { name: string } | null
   staffName?: string

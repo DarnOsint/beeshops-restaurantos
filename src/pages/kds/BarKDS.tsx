@@ -253,7 +253,7 @@ function BarKDSInner() {
   const approveMixoRequest = async (id: string) => {
     const updated = mixoRequests.map((r) =>
       r.id === id ? { ...r, status: 'approved', resolved_by: profile?.full_name || null } : r
-    )
+    ) as MixoRequest[]
     await updateMixoRequests(updated)
     const today = new Date().toISOString().slice(0, 10)
     const req = updated.find((r) => r.id === id)
@@ -292,7 +292,7 @@ function BarKDSInner() {
   const rejectMixoRequest = async (id: string) => {
     const updated = mixoRequests.map((r) =>
       r.id === id ? { ...r, status: 'rejected', resolved_by: profile?.full_name || null } : r
-    )
+    ) as MixoRequest[]
     await updateMixoRequests(updated)
     toast.success('Rejected', 'Request declined')
   }
@@ -465,7 +465,7 @@ function BarKDSInner() {
     // Bar acceptance removes the item from the bill immediately (waitron totals),
     // while stock/sales move on manager approval.
     const resolvedAt = new Date().toISOString()
-    const { error, count } = await supabase
+    const { error, data } = await supabase
       .from('returns_log')
       .update({
         status: 'bar_accepted',
@@ -475,13 +475,13 @@ function BarKDSInner() {
       })
       .eq('order_item_id', itemId)
       .eq('status', 'pending')
-      .select('id', { count: 'exact', head: true })
+      .select('id')
     if (error) {
       toast.error('Error', 'Failed to accept return: ' + error.message)
       return
     }
     // If no pending row found, still record barman name on whatever status exists
-    if (!count || count === 0) {
+    if (!data || data.length === 0) {
       const { error: fallbackError } = await supabase
         .from('returns_log')
         .update({
@@ -509,7 +509,7 @@ function BarKDSInner() {
     }
     try {
       await recalcOrderTotal(orderId)
-    } catch (e) {
+    } catch {
       toast.error('Error', 'Failed to update order total')
       return
     }
@@ -574,9 +574,7 @@ function BarKDSInner() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchOrders()
-
     fetchReturnHistory()
     loadMixoRequests()
     const tickTimer = setInterval(() => setTick((t) => t + 1), 1000)
@@ -623,6 +621,7 @@ function BarKDSInner() {
       supabase.removeChannel(channel)
       document.removeEventListener('visibilitychange', onVisible)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchOrders, fetchReturnHistory])
 
   if (geoStatus === 'outside')

@@ -533,7 +533,7 @@ export default function PrinterConfig({ onBack }: Props) {
                       printer.defaultIp
 
                     // Generate the complete server.js as a string
-                    const serverJs = `// Beeshop's Place Print Server — Auto-generated
+                    const _serverJs = `// Beeshop's Place Print Server — Auto-generated
 const http = require('http')
 const net = require('net')
 const fs = require('fs')

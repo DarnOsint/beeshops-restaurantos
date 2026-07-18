@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Users, ChevronDown, ChevronUp, Printer, RefreshCw } from 'lucide-react'
+import { Users, Printer } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { getNetOrderAmount, getValidOrderItemCount, getValidOrderItems } from './orderAmounts'
 

@@ -136,9 +136,9 @@ const getLatestPendingBatch = (
     .filter((item) => {
       const isStation =
         normalizeDestination(
-          item.destination || item.menu_items?.menu_categories?.destination || 'bar',
+          item.destination || (item.menu_items as any)?.menu_categories?.destination || 'bar',
           item.menu_items?.name,
-          item.menu_items?.menu_categories?.name
+          (item.menu_items as any)?.menu_categories?.name
         ) === station
       return isStation && item.status === 'pending'
     })
@@ -233,6 +233,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     return () => {
       void supabase.removeChannel(channel)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order.id])
   const [paymentMethod, setPaymentMethod] = useState<string>('cash')
   const [cashTendered, setCashTendered] = useState('')
@@ -292,6 +293,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     setGrillPendingCount(
       getLatestPendingBatch(items, 'griller', orderCreatedAt, lastPrintedGrillAt).length
     )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?.order_items, lastPrintedKitchenAt, lastPrintedGrillAt])
 
   useState(() => {
@@ -1068,7 +1070,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
           .update({ status: 'available', assigned_staff: null })
           .eq('id', table.id)
         // Deduplicate debtors — match by phone first, then name
-        const { data: existingDebtors } = await (debtorPhone
+        const { data: _existingDebtors } = await (debtorPhone
           ? supabase
               .from('debtors')
               .select('id, current_balance')

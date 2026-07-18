@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { DollarSign, RefreshCw, Save, Plus, Printer, Download, X, UserPlus } from 'lucide-react'
+import { DollarSign, RefreshCw, Save, Printer, Download, X, UserPlus } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { useToast } from '../../../context/ToastContext'

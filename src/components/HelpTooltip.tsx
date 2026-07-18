@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { X, HelpCircle, ChevronRight, ChevronLeft } from 'lucide-react'
 
@@ -31,7 +31,7 @@ export function HelpTooltip({ tips, storageKey }: Props) {
 
   const current = tips[step]
 
-  const calcPos = () => {
+  const calcPos = useCallback(() => {
     if (!open || !btnRef.current) return
     const el =
       (current?.targetId ? document.getElementById(current.targetId) : null) ?? btnRef.current
@@ -49,12 +49,11 @@ export function HelpTooltip({ tips, storageKey }: Props) {
     if (left + cardW > viewW - 16) left = viewW - cardW - 16
     if (left < 16) left = 16
     setPos({ left, top, anchorLeft: rect.left + rect.width / 2 })
-  }
+  }, [open, current])
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     calcPos()
-  }, [open, step, current])
+  }, [open, step, current, calcPos])
   useEffect(() => {
     if (!open) return
     window.addEventListener('scroll', calcPos, true)

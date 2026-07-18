@@ -184,7 +184,6 @@ function SupervisorDashboardInner() {
   }, [])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll()
     const ch = supabase
       .channel('supervisor-rt')

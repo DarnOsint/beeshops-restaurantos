@@ -387,7 +387,6 @@ export default function Accounting() {
 
   // ── Main data fetch ───────────────────────────────────────────────────────
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchAll()
   }, [fetchAll])
 

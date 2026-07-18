@@ -227,7 +227,9 @@ export default function OpenOrdersTab() {
         ) : (
           orders.map((order) => {
             // Hide items that are pending return review by barman
-            const visibleItems = (order.order_items || []).filter((i) => !i.return_requested)
+            const visibleItems = (order.order_items || []).filter(
+              (i) => !(i as any).return_requested
+            )
             const itemsSum = visibleItems.reduce((s, i) => s + (i.total_price || 0), 0)
             const totalMismatch = Math.abs((order.total_amount || 0) - itemsSum) > 1
             const zoneName = (order.tables as unknown as { table_categories?: { name: string } })
