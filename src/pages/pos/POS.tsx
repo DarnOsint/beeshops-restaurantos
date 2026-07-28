@@ -382,15 +382,6 @@ export default function POS() {
           }
         }
       })
-    // Load rave mode
-    supabase
-      .from('settings')
-      .select('value')
-      .eq('id', 'rave_mode')
-      .single()
-      .then(({ data }) => {
-        if (data?.value === 'true') setRaveMode(true)
-      })
   }, [])
 
   const saveJoins = async (joins: Record<string, string[]>) => {
@@ -466,12 +457,27 @@ export default function POS() {
     fetchTables()
     fetchMenu()
     fetchZonePrices()
+    supabase
+      .from('settings')
+      .select('value')
+      .eq('id', 'rave_mode')
+      .single()
+      .then(({ data }) => {
+        if (data?.value === 'true') setRaveMode(true)
+      })
     const channel = supabase
       .channel('tables-channel')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tables' }, () => {
         fetchTables()
-        // Don't re-check clock-in on table updates — causes mid-session logout flicker
       })
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'settings', filter: 'id=eq.rave_mode' },
+        (payload) => {
+          const newVal = payload.new as { value?: string }
+          setRaveMode(newVal?.value === 'true')
+        }
+      )
       .subscribe()
     return () => {
       supabase.removeChannel(channel)
