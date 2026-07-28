@@ -472,7 +472,7 @@ export default function POS() {
       })
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'settings', filter: 'id=eq.rave_mode' },
+        { event: '*', schema: 'public', table: 'settings', filter: 'id=eq.rave_mode' },
         (payload) => {
           const newVal = payload.new as { value?: string }
           setRaveMode(newVal?.value === 'true')

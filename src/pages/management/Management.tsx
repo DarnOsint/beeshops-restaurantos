@@ -301,6 +301,20 @@ export default function Management() {
       .then(({ data }) => {
         if (data?.value === 'true') setRaveMode(true)
       })
+    const ch = supabase
+      .channel('mgmt-rave-mode')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'settings', filter: 'id=eq.rave_mode' },
+        (payload) => {
+          const newVal = payload.new as { value?: string }
+          setRaveMode(newVal?.value === 'true')
+        }
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(ch)
+    }
   }, [])
 
   const toggleRaveMode = async () => {
