@@ -17,6 +17,7 @@ interface Props {
 
 export default function RavePricing({ onBack }: Props) {
   const [items, setItems] = useState<MenuItem[]>([])
+  const [orig, setOrig] = useState<Record<string, number | null>>({})
   const [loading, setLoading] = useState(true)
   const toast = useToast()
   const [saving, setSaving] = useState(false)
@@ -31,6 +32,11 @@ export default function RavePricing({ onBack }: Props) {
       .order('name')
     const menuItems = (itemsRes.data || []) as MenuItem[]
     setItems(menuItems)
+    const origMap: Record<string, number | null> = {}
+    menuItems.forEach((item) => {
+      origMap[item.id] = item.rave_price ?? null
+    })
+    setOrig(origMap)
     setMenuCategories([
       'All',
       ...new Set(menuItems.map((i) => i.menu_categories?.name).filter(Boolean)),
@@ -53,20 +59,32 @@ export default function RavePricing({ onBack }: Props) {
   const saveAll = async () => {
     setSaving(true)
     try {
-      const updates = items
-        .filter((item) => item.rave_price !== undefined)
-        .map((item) => ({
-          id: item.id,
-          rave_price: item.rave_price ?? null,
-        }))
-      for (const u of updates) {
-        const { error } = await supabase
-          .from('menu_items')
-          .update({ rave_price: u.rave_price })
-          .eq('id', u.id)
-        if (error) throw error
+      const changed = items.filter((item) => {
+        const original = orig[item.id] ?? null
+        const current = item.rave_price ?? null
+        return original !== current
+      })
+      if (changed.length === 0) {
+        toast.success('No changes to save')
+        setSaving(false)
+        return
       }
-      toast.success('Rave prices saved')
+      const results = await Promise.all(
+        changed.map((item) =>
+          supabase
+            .from('menu_items')
+            .update({ rave_price: item.rave_price ?? null })
+            .eq('id', item.id)
+        )
+      )
+      const err = results.find((r) => r.error)
+      if (err) throw err.error
+      const newOrig: Record<string, number | null> = { ...orig }
+      changed.forEach((item) => {
+        newOrig[item.id] = item.rave_price ?? null
+      })
+      setOrig(newOrig)
+      toast.success(`${changed.length} rave price${changed.length > 1 ? 's' : ''} saved`)
     } catch (err) {
       toast.error('Error', 'Failed to save: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
