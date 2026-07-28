@@ -17,11 +17,13 @@ import {
   Beer,
   Camera,
   Network,
+  Music,
 } from 'lucide-react'
 import { HelpTooltip } from '../../components/HelpTooltip'
 import StaffManagement from './StaffManagement'
 import MenuManagement from './MenuManagement'
 import ZonePricing from './ZonePricing'
+import RavePricing from './RavePricing'
 import POSMachines from './POSMachines'
 import TableConfig from './TableConfig'
 import Inventory from './Inventory'
@@ -79,6 +81,14 @@ export default function BackOffice() {
       desc: 'Set drink prices per zone',
       icon: MapPin,
       color: 'bg-purple-500',
+      roles: ['owner', 'manager'],
+    },
+    {
+      id: 'ravepricing',
+      label: 'Rave Pricing',
+      desc: 'Set prices that activate when Rave Mode is on',
+      icon: Music,
+      color: 'bg-pink-600',
       roles: ['owner', 'manager'],
     },
     {
@@ -210,6 +220,7 @@ export default function BackOffice() {
   if (activeSection === 'staff') return <StaffManagement onBack={() => setActiveSection(null)} />
   if (activeSection === 'menu') return <MenuManagement onBack={() => setActiveSection(null)} />
   if (activeSection === 'zonepricing') return <ZonePricing onBack={() => setActiveSection(null)} />
+  if (activeSection === 'ravepricing') return <RavePricing onBack={() => setActiveSection(null)} />
   if (activeSection === 'tables') return <TableConfig onBack={() => setActiveSection(null)} />
   if (activeSection === 'floorplan') return <FloorPlan onBack={() => setActiveSection(null)} />
   if (activeSection === 'qrcards') {
