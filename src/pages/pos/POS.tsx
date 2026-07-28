@@ -30,6 +30,7 @@ import {
   X,
   Check,
   Search,
+  Music,
 } from 'lucide-react'
 import TableGrid from './TableGrid'
 import CoversModal from './CoversModal'
@@ -270,6 +271,7 @@ export default function POS() {
   const [tables, setTables] = useState<Table[]>([])
   const [menuItems, setMenuItems] = useState<MenuItemWithZone[]>([])
   const [zonePrices, setZonePrices] = useState<ZonePrice[]>([])
+  const [raveMode, setRaveMode] = useState(false)
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
   const [pendingTable, setPendingTable] = useState<Table | null>(null)
   const [pendingCovers, setPendingCovers] = useState<number | null>(null)
@@ -379,6 +381,15 @@ export default function POS() {
             /* invalid JSON */
           }
         }
+      })
+    // Load rave mode
+    supabase
+      .from('settings')
+      .select('value')
+      .eq('id', 'rave_mode')
+      .single()
+      .then(({ data }) => {
+        if (data?.value === 'true') setRaveMode(true)
       })
   }, [])
 
@@ -869,7 +880,7 @@ export default function POS() {
       supabase
         .from('menu_items')
         .select(
-          'id, name, price, category_id, description, image_url, is_available, menu_categories(name, destination)'
+          'id, name, price, rave_price, category_id, description, image_url, is_available, menu_categories(name, destination)'
         )
         .order('name'),
       supabase
@@ -994,7 +1005,11 @@ export default function POS() {
       const zonePrice = zonePrices.find(
         (zp) => zp.menu_item_id === item.id && zp.category_id === categoryId
       )
-      return { ...item, price: zonePrice ? zonePrice.price : item.price, hasZonePrice: !!zonePrice }
+      let price = zonePrice ? zonePrice.price : item.price
+      if (raveMode && item.rave_price != null) {
+        price = item.rave_price
+      }
+      return { ...item, price, hasZonePrice: !!zonePrice }
     })
   }
 
@@ -1481,6 +1496,11 @@ export default function POS() {
               <p className="text-gray-400 text-xs">Point of Sale</p>
             </div>
             <span className="sm:hidden text-white font-bold text-sm">POS</span>
+            {raveMode && (
+              <span className="flex items-center gap-1 bg-pink-600 text-white text-xs font-bold px-2.5 py-1 rounded-xl animate-pulse">
+                <Music size={12} /> RAVE
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5">
             <button
