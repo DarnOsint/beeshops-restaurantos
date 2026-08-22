@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Beer, RefreshCw, Printer, Wrench } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
+import { fetchZoneUnitsPerSale, chillerQty } from '../../../lib/zoneUnits'
 import BarChillerStock from '../../backoffice/BarChillerStock'
 
 const todayStr = () => {
@@ -59,7 +60,7 @@ export default function ChillerSummaryTab() {
     dayEnd.setDate(dayEnd.getDate() + 1)
     const dateKey = base.toISOString().slice(0, 10)
 
-    const [entriesRes, soldRes, acceptedRes, prevRes] = await Promise.all([
+    const [entriesRes, soldRes, acceptedRes, prevRes, zoneUnits] = await Promise.all([
       supabase
         .from('bar_chiller_stock')
         .select(
@@ -69,7 +70,9 @@ export default function ChillerSummaryTab() {
         .order('item_name'),
       supabase
         .from('order_items')
-        .select('quantity, status, return_accepted, menu_items(name), orders(status)')
+        .select(
+          'quantity, status, return_accepted, menu_item_id, menu_items(name), orders(status, tables(category_id))'
+        )
         .eq('destination', 'bar')
         .gte('created_at', dayStart.toISOString())
         .lte('created_at', dayEnd.toISOString()),
@@ -84,6 +87,7 @@ export default function ChillerSummaryTab() {
         .select('item_name, opening_qty, received_qty, sold_qty, void_qty, closing_qty')
         .lt('date', d)
         .order('date', { ascending: false }),
+      fetchZoneUnitsPerSale(),
     ])
 
     // Carry over from latest available date if empty
@@ -101,10 +105,12 @@ export default function ChillerSummaryTab() {
         prevStart.setHours(8, 0, 0, 0)
         const prevEnd = new Date(prevStart)
         prevEnd.setDate(prevEnd.getDate() + 1)
-        const [{ data: prevSold }, { data: prevAccepted }] = await Promise.all([
+        const [{ data: prevSold }, { data: prevAccepted }, prevZoneUnits] = await Promise.all([
           supabase
             .from('order_items')
-            .select('quantity, status, return_accepted, menu_items(name), orders(status)')
+            .select(
+              'quantity, status, return_accepted, menu_item_id, menu_items(name), orders(status, tables(category_id))'
+            )
             .eq('destination', 'bar')
             .gte('created_at', prevStart.toISOString())
             .lte('created_at', prevEnd.toISOString()),
@@ -114,6 +120,7 @@ export default function ChillerSummaryTab() {
             .eq('status', 'accepted')
             .gte('requested_at', prevStart.toISOString())
             .lte('requested_at', prevEnd.toISOString()),
+          fetchZoneUnitsPerSale(),
         ])
         const prevSoldMap: Record<string, number> = {}
         if (prevSold) {
@@ -121,14 +128,23 @@ export default function ChillerSummaryTab() {
             quantity: number
             status: string
             return_accepted?: boolean
+            menu_item_id?: string | null
             menu_items: { name: string } | null
-            orders: { status: string } | null
+            orders: { status: string; tables?: { category_id?: string | null } | null } | null
           }>) {
             if (item.return_accepted) continue
             if (item.orders?.status === 'cancelled') continue
             if (item.status === 'cancelled') continue
             const name = item.menu_items?.name
-            if (name) prevSoldMap[name] = (prevSoldMap[name] || 0) + item.quantity
+            if (name) {
+              const units = chillerQty(
+                item.quantity,
+                prevZoneUnits,
+                item.menu_item_id,
+                item.orders?.tables?.category_id ?? null
+              )
+              prevSoldMap[name] = (prevSoldMap[name] || 0) + units
+            }
           }
         }
         const prevAcceptedMap = buildAcceptedReturnsMap(
@@ -211,14 +227,23 @@ export default function ChillerSummaryTab() {
         quantity: number
         status: string
         return_accepted?: boolean
+        menu_item_id?: string | null
         menu_items: { name: string } | null
-        orders: { status: string } | null
+        orders: { status: string; tables?: { category_id?: string | null } | null } | null
       }>) {
         if (item.return_accepted) continue
         if (item.orders?.status === 'cancelled') continue
         if (item.status === 'cancelled') continue
         const name = item.menu_items?.name
-        if (name) map[name] = (map[name] || 0) + item.quantity
+        if (name) {
+          const units = chillerQty(
+            item.quantity,
+            zoneUnits,
+            item.menu_item_id,
+            item.orders?.tables?.category_id ?? null
+          )
+          map[name] = (map[name] || 0) + units
+        }
       }
     }
     const acceptedMap = buildAcceptedReturnsMap(

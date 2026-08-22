@@ -4,6 +4,7 @@ import { supabase } from '../../../lib/supabase'
 import { useAuth } from '../../../context/AuthContext'
 import { useToast } from '../../../context/ToastContext'
 import { audit } from '../../../lib/audit'
+import { fetchZoneUnitsPerSale, chillerQty } from '../../../lib/zoneUnits'
 import type { Profile } from '../../../types'
 
 const todayWAT = () => {
@@ -50,7 +51,7 @@ export default function ChillerTab() {
     const dayEnd = new Date(dayStart)
     dayEnd.setDate(dayEnd.getDate() + 1)
 
-    const [{ data: entries }, { data: soldData }] = await Promise.all([
+    const [{ data: entries }, { data: soldData }, zoneUnits] = await Promise.all([
       supabase
         .from('bar_chiller_stock')
         .select('id, item_name, unit, opening_qty, received_qty, void_qty, note')
@@ -59,11 +60,12 @@ export default function ChillerTab() {
       supabase
         .from('order_items')
         .select(
-          'quantity, unit_price, total_price, status, return_accepted, menu_items(name), orders(status, tables(name, table_categories(name)))'
+          'quantity, unit_price, total_price, status, return_accepted, menu_item_id, menu_items(name), orders(status, tables(name, category_id, table_categories(name)))'
         )
         .eq('destination', 'bar')
         .gte('created_at', dayStart.toISOString())
         .lte('created_at', dayEnd.toISOString()),
+      fetchZoneUnitsPerSale(),
     ])
 
     // Build sold map + revenue map + zone breakdown from live POS
@@ -78,10 +80,15 @@ export default function ChillerTab() {
         total_price: number
         status: string
         return_accepted?: boolean
+        menu_item_id?: string | null
         menu_items: { name: string } | null
         orders: {
           status: string
-          tables?: { name: string; table_categories?: { name: string } } | null
+          tables?: {
+            name: string
+            category_id?: string | null
+            table_categories?: { id?: string; name: string } | null
+          } | null
         } | null
       }>) {
         if (item.return_accepted) continue
@@ -90,10 +97,12 @@ export default function ChillerTab() {
         const name = item.menu_items?.name
         const rev = item.total_price || (item.unit_price || 0) * (item.quantity || 0)
         const zone = item.orders?.tables?.table_categories?.name || 'Takeaway'
+        const categoryId = item.orders?.tables?.category_id ?? null
         if (name) {
-          soldMap[name] = (soldMap[name] || 0) + item.quantity
+          const units = chillerQty(item.quantity, zoneUnits, item.menu_item_id, categoryId)
+          soldMap[name] = (soldMap[name] || 0) + units
           totalSalesRevenue += rev
-          totalSalesQty += item.quantity
+          totalSalesQty += units
           zoneRevenue[zone] = (zoneRevenue[zone] || 0) + rev
         }
       }

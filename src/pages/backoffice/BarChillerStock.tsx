@@ -15,6 +15,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { audit } from '../../lib/audit'
+import { fetchZoneUnitsPerSale, chillerQty } from '../../lib/zoneUnits'
 import { useVisibilityInterval } from '../../hooks/useVisibilityInterval'
 
 const todayStr = () => {
@@ -157,10 +158,12 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     const dayStart = new Date(d + 'T08:00:00+01:00')
     const dayEnd = new Date(dayStart)
     dayEnd.setDate(dayEnd.getDate() + 1)
-    const [{ data }, { data: acceptedReturns }] = await Promise.all([
+    const [{ data }, { data: acceptedReturns }, zoneUnits] = await Promise.all([
       supabase
         .from('order_items')
-        .select('quantity, status, return_accepted, menu_items(name), orders(status)')
+        .select(
+          'quantity, status, return_accepted, menu_item_id, menu_items(name), orders(status, tables(category_id))'
+        )
         .eq('destination', 'bar')
         .gte('created_at', dayStart.toISOString())
         .lte('created_at', dayEnd.toISOString()),
@@ -170,6 +173,7 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         .eq('status', 'accepted')
         .gte('requested_at', dayStart.toISOString())
         .lte('requested_at', dayEnd.toISOString()),
+      fetchZoneUnitsPerSale(),
     ])
     if (!data) return
     const map: Record<string, number> = {}
@@ -177,8 +181,9 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
       quantity: number
       status: string
       return_accepted?: boolean
+      menu_item_id?: string | null
       menu_items: { name: string } | null
-      orders: { status: string } | null
+      orders: { status: string; tables?: { category_id?: string | null } | null } | null
     }>) {
       // Exclude returned items
       if (item.return_accepted) continue
@@ -187,7 +192,15 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
       // Exclude cancelled order items
       if (item.status === 'cancelled') continue
       const name = item.menu_items?.name
-      if (name) map[name] = (map[name] || 0) + item.quantity
+      if (name) {
+        const units = chillerQty(
+          item.quantity,
+          zoneUnits,
+          item.menu_item_id,
+          item.orders?.tables?.category_id ?? null
+        )
+        map[name] = (map[name] || 0) + units
+      }
     }
     const acceptedMap = buildAcceptedReturnsMap(
       (acceptedReturns || []) as Array<{
@@ -209,10 +222,12 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
     const dayStart = new Date(d + 'T08:00:00+01:00')
     const dayEnd = new Date(dayStart)
     dayEnd.setDate(dayEnd.getDate() + 1)
-    const [{ data }, { data: acceptedReturns }] = await Promise.all([
+    const [{ data }, { data: acceptedReturns }, zoneUnits] = await Promise.all([
       supabase
         .from('order_items')
-        .select('quantity, return_accepted, menu_items(name), orders(status)')
+        .select(
+          'quantity, return_accepted, menu_item_id, menu_items(name), orders(status, tables(category_id))'
+        )
         .eq('destination', 'bar')
         .gte('created_at', dayStart.toISOString())
         .lte('created_at', dayEnd.toISOString()),
@@ -222,19 +237,29 @@ export default function BarChillerStock({ onBack, embedded = false }: Props) {
         .eq('status', 'accepted')
         .gte('requested_at', dayStart.toISOString())
         .lte('requested_at', dayEnd.toISOString()),
+      fetchZoneUnitsPerSale(),
     ])
     const map: Record<string, number> = {}
     if (data) {
       for (const item of data as unknown as Array<{
         quantity: number
         return_accepted?: boolean
+        menu_item_id?: string | null
         menu_items: { name: string } | null
-        orders: { status: string } | null
+        orders: { status: string; tables?: { category_id?: string | null } | null } | null
       }>) {
         if (item.return_accepted) continue
         if (item.orders?.status === 'cancelled') continue
         const name = item.menu_items?.name
-        if (name) map[name] = (map[name] || 0) + item.quantity
+        if (name) {
+          const units = chillerQty(
+            item.quantity,
+            zoneUnits,
+            item.menu_item_id,
+            item.orders?.tables?.category_id ?? null
+          )
+          map[name] = (map[name] || 0) + units
+        }
       }
     }
     const acceptedMap = buildAcceptedReturnsMap(

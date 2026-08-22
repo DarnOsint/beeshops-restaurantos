@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Beer, ChefHat, Printer, RefreshCw, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { fetchZoneUnitsPerSale, chillerQty } from '../../lib/zoneUnits'
 
 const todayStr = () => {
   const now = new Date()
@@ -53,7 +54,7 @@ export default function StockSummaryTab({ type }: Props) {
       const dayEnd = new Date(dayStart)
       dayEnd.setDate(dayEnd.getDate() + 1)
 
-      const [entriesRes, soldRes] = await Promise.all([
+      const [entriesRes, soldRes, zoneUnits] = await Promise.all([
         supabase
           .from(tableName)
           .select('id, item_name, unit, opening_qty, received_qty, void_qty, note')
@@ -62,11 +63,12 @@ export default function StockSummaryTab({ type }: Props) {
         supabase
           .from('order_items')
           .select(
-            'quantity, unit_price, total_price, status, return_accepted, menu_items(name), orders(status, tables(table_categories(name)))'
+            'quantity, unit_price, total_price, status, return_accepted, menu_item_id, menu_items(name), orders(status, tables(table_categories(name), category_id))'
           )
           .eq('destination', destination)
           .gte('created_at', dayStart.toISOString())
           .lte('created_at', dayEnd.toISOString()),
+        fetchZoneUnitsPerSale(),
       ])
 
       // Build sold map + revenue from live POS data
@@ -81,8 +83,15 @@ export default function StockSummaryTab({ type }: Props) {
           total_price: number
           status: string
           return_accepted?: boolean
+          menu_item_id?: string | null
           menu_items: { name: string } | null
-          orders: { status: string; tables?: { table_categories?: { name: string } } | null } | null
+          orders: {
+            status: string
+            tables?: {
+              table_categories?: { name: string } | null
+              category_id?: string | null
+            } | null
+          } | null
         }>) {
           if (item.return_accepted) continue
           if (item.orders?.status === 'cancelled') continue
@@ -90,10 +99,12 @@ export default function StockSummaryTab({ type }: Props) {
           const name = item.menu_items?.name
           const rev = item.total_price || (item.unit_price || 0) * (item.quantity || 0)
           const zone = item.orders?.tables?.table_categories?.name || 'Takeaway'
+          const categoryId = item.orders?.tables?.category_id ?? null
           if (name) {
-            soldMap[name] = (soldMap[name] || 0) + item.quantity
+            const units = chillerQty(item.quantity, zoneUnits, item.menu_item_id, categoryId)
+            soldMap[name] = (soldMap[name] || 0) + units
             salesRev += rev
-            salesQty += item.quantity
+            salesQty += units
             zoneRev[zone] = (zoneRev[zone] || 0) + rev
           }
         }

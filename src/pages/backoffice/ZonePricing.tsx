@@ -21,6 +21,7 @@ export default function ZonePricing({ onBack }: Props) {
   const [items, setItems] = useState<MenuItem[]>([])
   const [zones, setZones] = useState<Zone[]>([])
   const [prices, setPrices] = useState<Record<string, number | string>>({})
+  const [units, setUnits] = useState<Record<string, number | string>>({})
   const [loading, setLoading] = useState(true)
   const toast = useToast()
   const [saving, setSaving] = useState(false)
@@ -42,12 +43,22 @@ export default function ZonePricing({ onBack }: Props) {
       ...new Set(menuItems.map((i) => i.menu_categories?.name).filter(Boolean)),
     ] as string[])
     const priceMap: Record<string, number> = {}
+    const unitMap: Record<string, number> = {}
     ;(pricesRes.data || []).forEach(
-      (p: { menu_item_id: string; category_id: string; price: number }) => {
+      (p: {
+        menu_item_id: string
+        category_id: string
+        price: number
+        units_per_sale?: number | null
+      }) => {
         priceMap[`${p.menu_item_id}_${p.category_id}`] = p.price
+        const u = Number(p.units_per_sale)
+        if (Number.isFinite(u) && u >= 1)
+          unitMap[`${p.menu_item_id}_${p.category_id}`] = Math.round(u)
       }
     )
     setPrices(priceMap)
+    setUnits(unitMap)
     setLoading(false)
   }
 
@@ -58,22 +69,49 @@ export default function ZonePricing({ onBack }: Props) {
   const getPrice = (itemId: string, zoneId: string) => prices[`${itemId}_${zoneId}`] ?? ''
   const setPrice = (itemId: string, zoneId: string, value: string) =>
     setPrices((prev) => ({ ...prev, [`${itemId}_${zoneId}`]: value }))
+  const getUnits = (itemId: string, zoneId: string) =>
+    units[`${itemId}_${zoneId}`]?.toString() ?? ''
+  const setUnitsValue = (itemId: string, zoneId: string, value: string) =>
+    setUnits((prev) => ({ ...prev, [`${itemId}_${zoneId}`]: value }))
+
+  const resolveUnits = (key: string): number => {
+    const parsed = parseInt(String(units[key] ?? ''), 10)
+    return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1
+  }
 
   const saveAll = async () => {
+    const missingPrice: string[] = []
+    const upserts: {
+      menu_item_id: string
+      category_id: string
+      price: number
+      units_per_sale: number
+    }[] = []
+    items.forEach((item) =>
+      zones.forEach((zone) => {
+        const key = `${item.id}_${zone.id}`
+        const val = prices[key]
+        const unitsVal = resolveUnits(key)
+        if (unitsVal > 1 && (val === '' || val === undefined || val === null))
+          missingPrice.push(`${item.name} (${zone.name})`)
+        if (val !== '' && val !== undefined && val !== null)
+          upserts.push({
+            menu_item_id: item.id,
+            category_id: zone.id,
+            price: parseFloat(String(val)),
+            units_per_sale: unitsVal,
+          })
+      })
+    )
+    if (missingPrice.length > 0) {
+      toast.error(
+        'Price required',
+        `Drinks/sale needs a zone price first: ${missingPrice.slice(0, 5).join(', ')}${missingPrice.length > 5 ? ` +${missingPrice.length - 5} more` : ''}`
+      )
+      return
+    }
     setSaving(true)
     try {
-      const upserts: { menu_item_id: string; category_id: string; price: number }[] = []
-      items.forEach((item) =>
-        zones.forEach((zone) => {
-          const val = prices[`${item.id}_${zone.id}`]
-          if (val !== '' && val !== undefined && val !== null)
-            upserts.push({
-              menu_item_id: item.id,
-              category_id: zone.id,
-              price: parseFloat(String(val)),
-            })
-        })
-      )
       if (upserts.length > 0) {
         const { error } = await supabase
           .from('menu_item_zone_prices')
@@ -108,7 +146,9 @@ export default function ZonePricing({ onBack }: Props) {
           </button>
           <div>
             <h1 className="text-white font-bold">Zone Pricing</h1>
-            <p className="text-gray-400 text-xs">Set menu prices per zone</p>
+            <p className="text-gray-400 text-xs">
+              Set menu prices per zone · Drinks/sale = bottles deducted per line sold
+            </p>
           </div>
         </div>
         <button
@@ -176,13 +216,31 @@ export default function ZonePricing({ onBack }: Props) {
                       </td>
                       {zones.map((zone) => (
                         <td key={zone.id} className="px-4 py-3">
-                          <input
-                            type="number"
-                            value={getPrice(item.id, zone.id)}
-                            onChange={(e) => setPrice(item.id, zone.id, e.target.value)}
-                            placeholder={String(item.price)}
-                            className="w-24 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-amber-500"
-                          />
+                          <div className="flex flex-col gap-1.5">
+                            <input
+                              type="number"
+                              value={getPrice(item.id, zone.id)}
+                              onChange={(e) => setPrice(item.id, zone.id, e.target.value)}
+                              placeholder={String(item.price)}
+                              className="w-24 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-amber-500"
+                            />
+                            {item.menu_categories?.destination === 'bar' && (
+                              <label className="flex items-center gap-1.5">
+                                <span className="text-[10px] uppercase tracking-wider text-gray-500 whitespace-nowrap">
+                                  Drinks/sale
+                                </span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  step={1}
+                                  value={getUnits(item.id, zone.id)}
+                                  onChange={(e) => setUnitsValue(item.id, zone.id, e.target.value)}
+                                  placeholder="1"
+                                  className="w-14 bg-gray-800 border border-gray-700 text-white rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-amber-500"
+                                />
+                              </label>
+                            )}
+                          </div>
                         </td>
                       ))}
                     </tr>
