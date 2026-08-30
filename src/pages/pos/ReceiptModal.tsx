@@ -212,7 +212,8 @@ export default function ReceiptModal({
 
       return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Waiter Copy - ${orderRef}</title>
 <style>* { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; background: #fff; width: 80mm; padding: 4mm; white-space: pre; }
+body { font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: 600; color: #000; background: #fff; width: 80mm; padding: 4mm; white-space: pre; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+strong, .b { font-weight: 800; }
 @media print { body { width: 80mm; } @page { margin: 0; size: 80mm auto; } }
 </style></head><body>${lines}</body></html>`
     }
@@ -254,10 +255,10 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #
   <title>Customer Receipt - ${orderRef}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; background: #fff; width: 80mm; padding: 4mm; }
+    body { font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: 600; color: #000; background: #fff; width: 80mm; padding: 4mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .receipt-text { white-space: pre; }
     .qr-section { text-align: center; margin: 8px 0 4px; }
-    .qr-label { font-size: 10px; color: #555; margin-top: 3px; font-style: italic; }
+    .qr-label { font-size: 10px; color: #333; margin-top: 3px; font-style: italic; }
     .footer { text-align: center; font-size: 11px; margin-top: 6px; }
     @media print { body { width: 80mm; } @page { margin: 0; size: 80mm auto; } }
   </style>
