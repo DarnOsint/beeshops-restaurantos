@@ -581,7 +581,15 @@ export default function Debtors({ onBack, embedded = false }: Props) {
                   )}
                   <div className="flex items-center justify-between mt-2">
                     <p className="text-gray-600 text-xs">
-                      Recorded by {debtor.recorded_by_name || 'system'}
+                      Recorded by {debtor.recorded_by_name || 'system'} ·{' '}
+                      {debtor.created_at
+                        ? new Date(debtor.created_at).toLocaleDateString('en-NG', {
+                            timeZone: 'Africa/Lagos',
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })
+                        : '—'}
                     </p>
                     {isExpanded ? (
                       <ChevronUp size={14} className="text-gray-500" />
