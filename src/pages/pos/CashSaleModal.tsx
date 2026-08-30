@@ -551,7 +551,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
 <html><head><meta charset="UTF-8"><title>Receipt - ${orderRef}</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; background: #fff; width: 80mm; padding: 4mm; white-space: pre; }
+body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; color: #000; background: #fff; width: 80mm; padding: 3mm; white-space: pre; line-height: 1.4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 @media print { body { width: 80mm; } @page { margin: 0; size: 80mm auto; } }
 </style></head><body>${lines}</body></html>`
 

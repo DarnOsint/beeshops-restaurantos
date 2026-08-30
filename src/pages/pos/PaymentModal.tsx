@@ -693,12 +693,16 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Courier New', Courier, monospace;
-      font-size: 13px;
+      font-size: 14px;
+      font-weight: bold;
       color: #000;
       background: #fff;
       width: 80mm;
-      padding: 4mm;
+      padding: 3mm;
       white-space: pre;
+      line-height: 1.4;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
     @media print {
       body { width: 80mm; }
