@@ -213,7 +213,7 @@ export default function ReceiptModal({
       return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Waiter Copy - ${orderRef}</title>
 <style>* { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: auto; }
-body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; color: #000; background: #fff; width: 80mm; padding: 3mm; white-space: pre; line-height: 1.4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; color: #000; background: #fff; width: 80mm; padding: 2mm; white-space: pre; line-height: 1.25; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 @media print { body { width: 80mm; overflow: hidden; } html, body { height: auto; } * { break-inside: avoid; } @page { margin: 0; size: 80mm auto; } }
 </style></head><body>${lines}</body></html>`
     }
@@ -257,18 +257,18 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-wei
     * { margin: 0; padding: 0; box-sizing: border-box; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: auto; }
-    body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; color: #000; background: #fff; width: 80mm; padding: 3mm; line-height: 1.4; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; color: #000; background: #fff; width: 80mm; padding: 2mm; line-height: 1.25; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .receipt-text { white-space: pre; }
-    .qr-section { text-align: center; margin: 8px 0 4px; }
-    .qr-label { font-size: 10px; color: #333; margin-top: 3px; font-style: italic; }
-    .footer { text-align: center; font-size: 11px; margin-top: 6px; }
+    .qr-section { text-align: center; margin: 6px 0 2px; }
+    .qr-label { font-size: 9px; color: #333; margin-top: 2px; font-style: italic; }
+    .footer { text-align: center; font-size: 11px; margin-top: 3px; }
     @media print { body { width: 80mm; overflow: hidden; } html, body { height: auto; } * { break-inside: avoid; } .receipt-text, .qr-section, .footer { page-break-inside: avoid; } @page { margin: 0; size: 80mm auto; } }
   </style>
 </head>
 <body>
   <div class="receipt-text">${customerLines}</div>
   <div class="qr-section">
-    <img src="${qrUrl}" width="90" height="90" alt="QR" style="display:block;margin:0 auto;" onload="window._qrLoaded=true" />
+    <img src="${qrUrl}" width="70" height="70" alt="QR" style="display:block;margin:0 auto;" onload="window._qrLoaded=true" />
     <div class="qr-label">Scan to view your order online</div>
   </div>
   <div class="footer">Thank you for visiting Beeshop's Place!</div>

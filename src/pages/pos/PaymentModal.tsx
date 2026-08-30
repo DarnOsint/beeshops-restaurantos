@@ -699,9 +699,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       color: #000;
       background: #fff;
       width: 80mm;
-      padding: 3mm;
+      padding: 2mm;
       white-space: pre;
-      line-height: 1.4;
+      line-height: 1.25;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
