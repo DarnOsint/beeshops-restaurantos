@@ -691,6 +691,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   <title>Pre-Payment Receipt</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: auto; }
     body {
       font-family: 'Courier New', Courier, monospace;
       font-size: 14px;
@@ -705,7 +706,9 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       print-color-adjust: exact;
     }
     @media print {
-      body { width: 80mm; }
+      body { width: 80mm; overflow: hidden; }
+      html, body { height: auto; }
+      * { break-inside: avoid; }
       @page { margin: 0; size: 80mm auto; }
     }
   </style>
