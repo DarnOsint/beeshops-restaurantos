@@ -25,9 +25,11 @@ import {
   LayoutGrid,
   Package,
   RotateCcw,
+  Banknote,
 } from 'lucide-react'
 import SupervisorMainStoreTab from './SupervisorMainStoreTab'
 import SupervisorReturnsTab from './SupervisorReturnsTab'
+import SupervisorReconTab from './SupervisorReconTab'
 
 interface OpenOrder {
   id: string
@@ -127,6 +129,12 @@ const SUPERVISOR_TIPS = [
       'Four live counts at a glance: open orders, pending items (not yet started in kitchen/bar), items currently being prepared, and total staff on shift. These update every 30 seconds and in real time via live subscriptions.',
   },
   {
+    id: 'sup-recon',
+    title: 'Recon Tab',
+    description:
+      'Enter how much each waitron submitted in cash and POS/transfer at close of work. Expected amounts come from paid sales; shortage and excess are computed automatically. Saved to the same daily reconciliation record the accountant uses.',
+  },
+  {
     id: 'sup-alerts',
     title: 'Alert Badges',
     description:
@@ -143,7 +151,7 @@ function SupervisorDashboardInner() {
   const [voids, setVoids] = useState<VoidEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<
-    'floor' | 'staff' | 'calls' | 'voids' | 'shift' | 'tables' | 'store' | 'returns'
+    'floor' | 'staff' | 'calls' | 'voids' | 'shift' | 'tables' | 'store' | 'returns' | 'recon'
   >('floor')
   const [zoneFilter, setZoneFilter] = useState('All')
   const [lateCount] = useState(0) // SUSPENDED
@@ -247,6 +255,13 @@ function SupervisorDashboardInner() {
     { id: 'shift' as const, label: 'Shift', icon: UserCheck, badge: 0, badgeRed: false },
     { id: 'tables' as const, label: 'Tables', icon: LayoutGrid, badge: 0, badgeRed: false },
     { id: 'returns' as const, label: 'Returns', icon: RotateCcw, badge: 0, badgeRed: false },
+    {
+      id: 'recon' as const,
+      label: 'Recon',
+      icon: Banknote,
+      badge: 0,
+      badgeRed: false,
+    },
   ]
 
   if (geoStatus === 'outside')
@@ -523,6 +538,8 @@ function SupervisorDashboardInner() {
         {tab === 'tables' && <TableAssignment />}
 
         {tab === 'returns' && <SupervisorReturnsTab />}
+
+        {tab === 'recon' && <SupervisorReconTab />}
       </div>
     </div>
   )
