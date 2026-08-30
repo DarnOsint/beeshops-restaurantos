@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { isNetworkPrinterAvailable, printViaNetwork } from '../../lib/networkPrinter'
-import { buildReceipt } from '../../hooks/useThermalPrinter'
 import { X, Printer, Download } from 'lucide-react'
 import type { Order, OrderItem, Table } from '../../types'
 
@@ -79,32 +77,9 @@ export default function ReceiptModal({
 
   const handleThermalPrint = async () => {
     setPrinting(true)
-    let networkAvailable = false
-    // Prefer the dedicated thermal/network printer — a single crisp receipt with
-    // minimal paper. Only fall back to the browser HTML print (which wastes paper)
-    // when no network printer is reachable.
-    try {
-      networkAvailable = await isNetworkPrinterAvailable()
-      if (networkAvailable) {
-        const bytes = buildReceipt({
-          order,
-          items: items as Parameters<typeof buildReceipt>[0]['items'],
-          table,
-          staffName,
-          orderRef,
-          subtotal,
-          vatAmount: 0,
-          total,
-          tipAmount,
-          amountReceived,
-        })
-        await printViaNetwork(bytes)
-      }
-    } catch {
-      networkAvailable = false
-    }
-
-    if (!networkAvailable) handlePrint('customer')
+    // Always open the browser/OS print dialog — this is the venue's normal print
+    // interface for receipts. No background network-thermal print is attempted.
+    handlePrint('customer')
     setPrinting(false)
   }
   // Auto-trigger print when receipt opens — only when autoPrint is true (post-payment flow)

@@ -3,8 +3,6 @@ import { supabase } from '../../lib/supabase'
 import { audit } from '../../lib/audit'
 import { useAuth } from '../../context/AuthContext'
 import { sendPushToStaff } from '../../hooks/usePushNotifications'
-import { isNetworkPrinterAvailable, printViaNetwork } from '../../lib/networkPrinter'
-import { buildReceipt } from '../../hooks/useThermalPrinter'
 import { offlineUpdateNoReturn } from '../../lib/offlineWrite'
 import {
   X,
@@ -583,7 +581,6 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       minute: '2-digit',
       hour12: true,
     })
-    const orderTotal = subtotal
 
     // Fetch bank accounts for transfer details
     const { data: bankData } = await supabase
@@ -712,63 +709,35 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
 <body>${receipt}</body>
 </html>`
 
-    // Prefer the dedicated thermal/network printer — a single crisp receipt with
-    // minimal paper. Only fall back to the browser HTML print (which wastes paper
-    // with QR code and page margins) when no network printer is reachable.
-    let networkAvailable = false
-    try {
-      networkAvailable = await isNetworkPrinterAvailable()
-      if (networkAvailable) {
-        const bytes = buildReceipt({
-          order: { ...order, payment_method: 'PRE-PAYMENT' },
-          items: (order.order_items || []).map((i) => ({
-            quantity: i.quantity,
-            total_price: (i as unknown as { total_price?: number }).total_price || 0,
-            menu_items: i.menu_items,
-            name: i.menu_items?.name || 'Item',
-          })) as Parameters<typeof buildReceipt>[0]['items'],
-          table,
-          staffName: profile?.full_name || 'Staff',
-          orderRef: `BSP-${String(order.id).slice(0, 8).toUpperCase()}`,
-          subtotal: orderTotal,
-          vatAmount: 0,
-          total: orderTotal,
-        })
-        await printViaNetwork(bytes)
-      }
-    } catch {
-      networkAvailable = false
-    }
-
-    if (!networkAvailable) {
-      // Fallback browser print window
-      const win = window.open(
-        '',
-        '_blank',
-        'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
-      )
-      if (win) {
-        win.document.open('text/html', 'replace')
-        win.document.write(html)
-        win.document.close()
-        win.onafterprint = () => win.close()
-        win.onload = () => {
-          setTimeout(() => {
-            try {
-              win.print()
-            } catch {
-              /* already closed */
-            }
-          }, 200)
-        }
+    // Always open the browser/OS print dialog — this is the venue's normal print
+    // interface. (A separate optional network-thermal path could be added later,
+    // but staff print through the standard OS print dialog.)
+    const win = window.open(
+      '',
+      '_blank',
+      'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
+    )
+    if (win) {
+      win.document.open('text/html', 'replace')
+      win.document.write(html)
+      win.document.close()
+      win.onafterprint = () => win.close()
+      win.onload = () => {
         setTimeout(() => {
           try {
-            if (!win.closed) win.close()
+            win.print()
           } catch {
             /* already closed */
           }
-        }, 300000)
+        }, 200)
       }
+      setTimeout(() => {
+        try {
+          if (!win.closed) win.close()
+        } catch {
+          /* already closed */
+        }
+      }, 300000)
     }
   }
 
