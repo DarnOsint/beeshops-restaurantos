@@ -712,38 +712,12 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
 <body>${receipt}</body>
 </html>`
 
-    // Always open browser print — guaranteed path
-    const win = window.open(
-      '',
-      '_blank',
-      'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
-    )
-    if (win) {
-      win.document.open('text/html', 'replace')
-      win.document.write(html)
-      win.document.close()
-      win.onafterprint = () => win.close()
-      win.onload = () => {
-        setTimeout(() => {
-          try {
-            win.print()
-          } catch {
-            /* already closed */
-          }
-        }, 200)
-      }
-      setTimeout(() => {
-        try {
-          if (!win.closed) win.close()
-        } catch {
-          /* already closed */
-        }
-      }, 300000)
-    }
-
-    // Additionally try network printer in background
+    // Prefer the dedicated thermal/network printer — a single crisp receipt with
+    // minimal paper. Only fall back to the browser HTML print (which wastes paper
+    // with QR code and page margins) when no network printer is reachable.
+    let networkAvailable = false
     try {
-      const networkAvailable = await isNetworkPrinterAvailable()
+      networkAvailable = await isNetworkPrinterAvailable()
       if (networkAvailable) {
         const bytes = buildReceipt({
           order: { ...order, payment_method: 'PRE-PAYMENT' },
@@ -763,7 +737,38 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
         await printViaNetwork(bytes)
       }
     } catch {
-      // Network print failed — browser print already handled it
+      networkAvailable = false
+    }
+
+    if (!networkAvailable) {
+      // Fallback browser print window
+      const win = window.open(
+        '',
+        '_blank',
+        'width=500,height=700,toolbar=no,menubar=no,scrollbars=no'
+      )
+      if (win) {
+        win.document.open('text/html', 'replace')
+        win.document.write(html)
+        win.document.close()
+        win.onafterprint = () => win.close()
+        win.onload = () => {
+          setTimeout(() => {
+            try {
+              win.print()
+            } catch {
+              /* already closed */
+            }
+          }, 200)
+        }
+        setTimeout(() => {
+          try {
+            if (!win.closed) win.close()
+          } catch {
+            /* already closed */
+          }
+        }, 300000)
+      }
     }
   }
 

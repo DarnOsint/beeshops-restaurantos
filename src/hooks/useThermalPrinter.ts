@@ -14,6 +14,9 @@ const cmd = {
   normalSize: [ESC, 0x21, 0x00],
   cut: [GS, 0x56, 0x42, 0x00],
   feed: (n: number) => [ESC, 0x64, n],
+  // Increase print darkness/contrast (best-effort, ignored by printers that
+  // don't support density commands). Prevents faded receipts on network printers.
+  density: [0x1d, 0x28, 0x45, 0x03, 0x02, 0x00, 0x05, 0x04],
 } as const
 
 function text(str: string): number[] {
@@ -91,6 +94,8 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
           : pmRaw.toUpperCase()
 
   push(cmd.init)
+  // Increase darkness to avoid faded output on network/thermal printers
+  push(cmd.density)
   push(cmd.alignCenter)
   push(cmd.doubleSize, ...text("BEESHOP'S PLACE\n"), cmd.normalSize)
   push(cmd.bold, ...text('Lounge & Restaurant\n'), cmd.boldOff)
@@ -106,7 +111,7 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
   push(cmd.bold, ...text('ITEM                          AMOUNT\n'), cmd.boldOff)
   push(text(divider))
 
-  // Exclude returned or cancelled items from reprints
+  push(cmd.bold)
   items
     .filter(
       (item) =>
@@ -120,6 +125,7 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
       push(row(name, price))
       if (item.modifier_notes) push(text(`  > ${item.modifier_notes.substring(0, 36)}\n`))
     })
+  push(cmd.boldOff)
 
   push(text(solidDivider))
   push(
@@ -154,7 +160,7 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
   push(text('\n'))
   push(text(centre('Thank you for visiting')))
   push(text(centre("Beeshop's Place")))
-  push(cmd.feed(4))
+  push(cmd.feed(3))
   push(cmd.cut)
 
   return new Uint8Array(bytes)

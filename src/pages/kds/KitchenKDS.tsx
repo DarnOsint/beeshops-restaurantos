@@ -136,6 +136,10 @@ function getNextStatus(status: string): string | null {
   return null // ready items cannot be cycled back
 }
 
+// Tracks the latest item timestamp already printed via the "NEW ITEMS" button,
+// per order, so subsequent prints only include items added after the last print.
+const kitchenNewPrintedAt = new Map<string, string>()
+
 function KitchenKDSInner() {
   const { profile, signOut } = useAuth()
   const toast = useToast()
@@ -200,6 +204,29 @@ function KitchenKDSInner() {
     }
   }
   const printPendingTicket = (order: KdsOrder) => {
+    // Only print kitchen items that have been ADDED since the last "NEW ITEMS" print.
+    // On the very first print for an order, emit just the latest pending batch so we
+    // don't re-print items the kitchen has already seen.
+    const kitchenItems = order.order_items.filter((i) => isKitchenItem(i))
+    const lastPrinted = kitchenNewPrintedAt.get(order.id)
+    const newItems = lastPrinted
+      ? kitchenItems.filter(
+          (i) => i.status === 'pending' && getItemTime(i, order.created_at) > lastPrinted
+        )
+      : getLatestPendingItems(kitchenItems, order.created_at)
+
+    if (!newItems.length) return
+
+    // Remember the newest timestamp we just printed so the next call skips these.
+    const printedMax = newItems.reduce(
+      (latest, i) => {
+        const t = getItemTime(i, order.created_at)
+        return t > latest ? t : latest
+      },
+      getItemTime(newItems[0], order.created_at)
+    )
+    kitchenNewPrintedAt.set(order.id, printedMax)
+
     const W = 40
     const divider = '-'.repeat(W)
     const centre = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
@@ -207,12 +234,7 @@ function KitchenKDSInner() {
       const space = W - l.length - r.length
       return l + ' '.repeat(Math.max(1, space)) + r
     }
-    const pendingItems = getLatestPendingItems(
-      order.order_items.filter((i) => isKitchenItem(i)),
-      order.created_at
-    )
-    if (!pendingItems.length) return
-    const itemLines = pendingItems
+    const itemLines = newItems
       .map((i) =>
         fmtRow(
           `${i.quantity}x ${(i.menu_items?.name ?? i.modifier_notes ?? 'Item').substring(0, 28)}`,
@@ -228,7 +250,7 @@ function KitchenKDSInner() {
       fmtRow('Table:', order.tables?.name ?? 'N/A'),
       fmtRow(
         'Time:',
-        new Date(getItemTime(pendingItems[0], order.created_at)).toLocaleTimeString('en-NG', {
+        new Date(getItemTime(newItems[0], order.created_at)).toLocaleTimeString('en-NG', {
           hour: '2-digit',
           minute: '2-digit',
           hour12: true,

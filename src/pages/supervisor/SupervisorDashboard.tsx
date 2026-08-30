@@ -24,8 +24,10 @@ import {
   UserCheck,
   LayoutGrid,
   Package,
+  RotateCcw,
 } from 'lucide-react'
 import SupervisorMainStoreTab from './SupervisorMainStoreTab'
+import SupervisorReturnsTab from './SupervisorReturnsTab'
 
 interface OpenOrder {
   id: string
@@ -113,6 +115,12 @@ const SUPERVISOR_TIPS = [
       "Today's void log — item name, who authorised it, and when. The total voided value is shown at the top. Unusual void patterns should be escalated to the manager.",
   },
   {
+    id: 'sup-returns',
+    title: 'Returns Tab',
+    description:
+      'Read-only view of all returned items for a chosen day. Switch between dates with the date picker, Today, or Prev Day buttons. This is a view-only tab — approvals and rejections are handled on the Management page.',
+  },
+  {
     id: 'sup-kpis',
     title: 'KPI Strip',
     description:
@@ -135,7 +143,7 @@ function SupervisorDashboardInner() {
   const [voids, setVoids] = useState<VoidEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<
-    'floor' | 'staff' | 'calls' | 'voids' | 'shift' | 'tables' | 'store'
+    'floor' | 'staff' | 'calls' | 'voids' | 'shift' | 'tables' | 'store' | 'returns'
   >('floor')
   const [zoneFilter, setZoneFilter] = useState('All')
   const [lateCount] = useState(0) // SUSPENDED
@@ -238,6 +246,7 @@ function SupervisorDashboardInner() {
     },
     { id: 'shift' as const, label: 'Shift', icon: UserCheck, badge: 0, badgeRed: false },
     { id: 'tables' as const, label: 'Tables', icon: LayoutGrid, badge: 0, badgeRed: false },
+    { id: 'returns' as const, label: 'Returns', icon: RotateCcw, badge: 0, badgeRed: false },
   ]
 
   if (geoStatus === 'outside')
@@ -305,12 +314,12 @@ function SupervisorDashboardInner() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-800 bg-gray-900 sticky top-[61px] z-10">
+      <div className="flex border-b border-gray-800 bg-gray-900 sticky top-[61px] z-10 overflow-x-auto">
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex-1 flex flex-col items-center py-2.5 gap-0.5 relative transition-colors ${tab === t.id ? 'text-amber-400 border-b-2 border-amber-500' : 'text-gray-500'}`}
+            className={`flex-1 min-w-[64px] flex flex-col items-center py-2.5 gap-0.5 relative transition-colors ${tab === t.id ? 'text-amber-400 border-b-2 border-amber-500' : 'text-gray-500'}`}
           >
             <t.icon size={15} />
             <span className="text-[10px] font-medium">{t.label}</span>
@@ -512,6 +521,8 @@ function SupervisorDashboardInner() {
         {tab === 'shift' && <ShiftManager />}
 
         {tab === 'tables' && <TableAssignment />}
+
+        {tab === 'returns' && <SupervisorReturnsTab />}
       </div>
     </div>
   )

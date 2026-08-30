@@ -144,6 +144,10 @@ function getLatestPendingItems(items: GrillerItem[], fallbackCreatedAt: string):
     )
 }
 
+// Tracks the latest item timestamp already printed via the "NEW ITEMS" button,
+// per order, so subsequent prints only include items added after the last print.
+const grillerNewPrintedAt = new Map<string, string>()
+
 function GrillerKDSInner() {
   const { profile, signOut } = useAuth()
   const printOrderTicket = (ticket: GrillerTicket) => {
@@ -199,8 +203,27 @@ function GrillerKDSInner() {
     }
   }
   const printPendingTicket = (ticket: GrillerTicket) => {
-    const pending = getLatestPendingItems(ticket.items, ticket.createdAt)
+    // Only print grill items ADDED since the last "NEW ITEMS" print. On the very
+    // first print for an order, emit just the latest pending batch so we don't
+    // re-print items the grill already has.
+    const lastPrinted = grillerNewPrintedAt.get(ticket.orderId)
+    const pending = lastPrinted
+      ? ticket.items.filter(
+          (i) => i.status === 'pending' && getItemTime(i, ticket.createdAt) > lastPrinted
+        )
+      : getLatestPendingItems(ticket.items, ticket.createdAt)
+
     if (!pending.length) return
+
+    const printedMax = pending.reduce(
+      (latest, i) => {
+        const t = getItemTime(i, ticket.createdAt)
+        return t > latest ? t : latest
+      },
+      getItemTime(pending[0], ticket.createdAt)
+    )
+    grillerNewPrintedAt.set(ticket.orderId, printedMax)
+
     const W = 40
     const divider = '-'.repeat(W)
     const centre = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s

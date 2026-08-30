@@ -79,13 +79,12 @@ export default function ReceiptModal({
 
   const handleThermalPrint = async () => {
     setPrinting(true)
-
-    // Always open browser print — this is the guaranteed path
-    handlePrint('customer')
-
-    // Additionally try network/thermal printer in background
+    let networkAvailable = false
+    // Prefer the dedicated thermal/network printer — a single crisp receipt with
+    // minimal paper. Only fall back to the browser HTML print (which wastes paper)
+    // when no network printer is reachable.
     try {
-      const networkAvailable = await isNetworkPrinterAvailable()
+      networkAvailable = await isNetworkPrinterAvailable()
       if (networkAvailable) {
         const bytes = buildReceipt({
           order,
@@ -102,9 +101,10 @@ export default function ReceiptModal({
         await printViaNetwork(bytes)
       }
     } catch {
-      // Network print failed — browser print already handled it
+      networkAvailable = false
     }
 
+    if (!networkAvailable) handlePrint('customer')
     setPrinting(false)
   }
   // Auto-trigger print when receipt opens — only when autoPrint is true (post-payment flow)
