@@ -553,7 +553,7 @@ export default function CashSaleModal({ type, menuItems, staffId, onSuccess, onC
 * { margin: 0; padding: 0; box-sizing: border-box; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: auto; }
-body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; color: #000; background: #fff; width: 80mm; padding: 2mm; white-space: pre; line-height: 1.25; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; color: #000; background: #fff; width: 80mm; padding: 2mm 5mm; white-space: pre; line-height: 1.25; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 @media print { body { width: 80mm; overflow: hidden; } html, body { height: auto; } * { break-inside: avoid; } @page { margin: 0; size: 80mm auto; } }
 </style></head><body>${lines}</body></html>`
 
@@ -1057,7 +1057,7 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-wei
                         ctr('Please pay at the counter'),
                         '',
                       ].join('\n')
-                      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Bill</title><style>*{margin:0;padding:0;box-sizing:border-box;}html,body{height:auto;}body{font-family:'Courier New',Courier,monospace;font-size:14px;font-weight:bold;color:#000;background:#fff;width:80mm;padding:2mm;white-space:pre;line-height:1.25;-webkit-print-color-adjust:exact;print-color-adjust:exact;}@media print{body{width:80mm;overflow:hidden;}html,body{height:auto;}*{break-inside:avoid;}@page{margin:0;size:80mm auto;}}</style></head><body>${lines}</body></html>`
+                      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Bill</title><style>*{margin:0;padding:0;box-sizing:border-box;}html,body{height:auto;}body{font-family:'Courier New',Courier,monospace;font-size:14px;font-weight:bold;color:#000;background:#fff;width:80mm;padding:2mm 5mm;white-space:pre;line-height:1.25;-webkit-print-color-adjust:exact;print-color-adjust:exact;}@media print{body{width:80mm;overflow:hidden;}html,body{height:auto;}*{break-inside:avoid;}@page{margin:0;size:80mm auto;}}</style></head><body>${lines}</body></html>`
                       const w = window.open(
                         '',
                         '_blank',
