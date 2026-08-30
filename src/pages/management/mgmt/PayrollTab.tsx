@@ -20,6 +20,9 @@ interface PayrollRow {
   outstanding: number
   // Auto outstanding from daily reconciliation + pay-later (computed, not persisted)
   auto_outstanding?: number
+  // Split breakdown of auto outstanding: cash shortages vs credit debts owed
+  shortages_outstanding?: number
+  debts_outstanding?: number
   docking: number
   days_worked: number
   total_days: number
@@ -151,16 +154,12 @@ export default function PayrollTab() {
 
     // Sum UNPAID credit debts per waitron for the month (from debtors table)
     // This respects paid/partial status — paid debts are excluded
-    const monthStartISO = new Date(monthStart + 'T08:00:00+01:00').toISOString()
-    const monthEndISO = new Date(monthEnd + 'T08:00:00+01:00')
-    monthEndISO.setDate(monthEndISO.getDate() + 1)
+    // All unpaid debts a waitron is responsible for are included regardless of month.
     const { data: unpaidDebts } = await supabase
       .from('debtors')
       .select('name, current_balance, recorded_by_name')
       .in('status', ['outstanding', 'partial'])
-      .in('debt_type', ['credit_order', 'table_order', 'fridge'])
-      .gte('created_at', monthStartISO)
-      .lt('created_at', monthEndISO.toISOString())
+      .in('debt_type', ['credit_order', 'table_order', 'fridge', 'bar_tab', 'room_stay'])
     const creditByStaff: Record<string, number> = {}
     for (const d of (unpaidDebts || []) as any[]) {
       // "recorded_by_name" is the waitron/staff who recorded the pay-later debt.
@@ -175,8 +174,9 @@ export default function PayrollTab() {
       const saved = payMap[s.id]
       const effectiveRole = saved?.role || s.role || ''
       const key = normalizeStaffNameKey(s.full_name)
-      const autoOutstanding =
-        effectiveRole === 'waitron' ? (reconOutstanding[key] || 0) + (creditByStaff[key] || 0) : 0
+      const shortages = effectiveRole === 'waitron' ? reconOutstanding[key] || 0 : 0
+      const debts = effectiveRole === 'waitron' ? creditByStaff[key] || 0 : 0
+      const autoOutstanding = shortages + debts
       return {
         id: saved?.id,
         staff_id: s.id,
@@ -189,6 +189,8 @@ export default function PayrollTab() {
         base_salary: saved?.daily_rate ?? saved?.base_salary ?? 0,
         outstanding: saved?.outstanding || 0,
         auto_outstanding: autoOutstanding,
+        shortages_outstanding: shortages,
+        debts_outstanding: debts,
         docking: saved?.docking || 0,
         days_worked: daysMap[s.id]?.size || 0,
         total_days: totalDays,
@@ -210,6 +212,8 @@ export default function PayrollTab() {
           base_salary: p.daily_rate ?? p.base_salary ?? 0,
           outstanding: p.outstanding || 0,
           auto_outstanding: 0,
+          shortages_outstanding: 0,
+          debts_outstanding: 0,
           docking: p.docking || 0,
           days_worked: daysMap[p.staff_id]?.size || 0,
           total_days: totalDays,
@@ -386,9 +390,10 @@ export default function PayrollTab() {
         'Account No',
         'Daily Rate',
         'Gross Pay',
-        'Outstanding (Total)',
-        'Outstanding (Auto)',
-        'Outstanding (Manual)',
+        'Owing (Total)',
+        'Owing (Manual)',
+        'Owing (Shortage)',
+        'Owing (Debts)',
         'Docking',
         'Net Pay',
       ],
@@ -403,8 +408,9 @@ export default function PayrollTab() {
           String(m.base_salary),
           String(grossPay(m)),
           String(totalOutstandingFor(m)),
-          String(m.auto_outstanding || 0),
           String(m.outstanding || 0),
+          String(m.shortages_outstanding || 0),
+          String(m.debts_outstanding || 0),
           String(m.docking),
           String(netPay(m)),
         ]
@@ -450,9 +456,10 @@ export default function PayrollTab() {
           r(`  Acct: ${m.account_number || '—'}`, ''),
           r(`  Rate: ${fmt(m.base_salary)}/day`, `Gross: ${fmt(grossPay(m))}`),
           r(`  Outst: ${fmt(outTotal)}`, `Dock: ${fmt(m.docking)}`),
-          (m.auto_outstanding || 0) > 0
-            ? r(`  Auto: ${fmt(m.auto_outstanding || 0)}`, `Manual: ${fmt(m.outstanding || 0)}`)
+          (m.shortages_outstanding || 0) > 0
+            ? r(`  Shortage: ${fmt(m.shortages_outstanding || 0)}`, '')
             : '',
+          (m.debts_outstanding || 0) > 0 ? r(`  Debts: ${fmt(m.debts_outstanding || 0)}`, '') : '',
           r(`  NET PAY:`, `${fmt(netPay(m))}`),
           '',
         ].join('\n')
@@ -602,7 +609,7 @@ export default function PayrollTab() {
                 <th className="text-left px-2 py-2">Bank</th>
                 <th className="text-left px-2 py-2">Account No</th>
                 <th className="text-right px-2 py-2">Daily Rate</th>
-                <th className="text-right px-2 py-2">Outstanding (Manual)</th>
+                <th className="text-right px-2 py-2">Total Owing (Manual + Shortage + Debts)</th>
                 <th className="text-right px-2 py-2">Docking</th>
                 <th className="text-right px-3 py-2">Net Pay</th>
               </tr>
@@ -694,7 +701,7 @@ export default function PayrollTab() {
                       />
                     </td>
                     <td className="px-1 py-1">
-                      <div className="flex flex-col gap-0.5">
+                      <div className="flex flex-col gap-0.5 items-end">
                         <input
                           type="number"
                           value={m.outstanding || ''}
@@ -702,17 +709,28 @@ export default function PayrollTab() {
                           onChange={(e) =>
                             updateField(row.staff_id, 'outstanding', Number(e.target.value) || 0)
                           }
-                          className="w-20 bg-gray-800 border border-gray-700 text-red-400 text-right rounded px-1 py-1 text-xs focus:outline-none focus:border-red-500"
+                          title="Manual outstanding"
+                          className="w-24 bg-gray-800 border border-gray-700 text-red-400 text-right rounded px-1 py-1 text-xs focus:outline-none focus:border-red-500"
                         />
-                        {(m.auto_outstanding || 0) > 0 && (
-                          <span className="text-[10px] text-gray-500 text-right">
-                            auto ₦{(m.auto_outstanding || 0).toLocaleString()}
+                        {(m.shortages_outstanding || 0) > 0 && (
+                          <span
+                            className="text-[10px] text-gray-500 text-right"
+                            title="Cash shortage from daily reconciliation"
+                          >
+                            shortage ₦{(m.shortages_outstanding || 0).toLocaleString()}
                           </span>
                         )}
-                        {(m.outstanding || 0) + (m.auto_outstanding || 0) > 0 && (
-                          <span className="text-[10px] text-gray-400 text-right">
-                            total ₦
-                            {((m.outstanding || 0) + (m.auto_outstanding || 0)).toLocaleString()}
+                        {(m.debts_outstanding || 0) > 0 && (
+                          <span
+                            className="text-[10px] text-amber-400 text-right"
+                            title="Unpaid credit debts owed"
+                          >
+                            debts ₦{(m.debts_outstanding || 0).toLocaleString()}
+                          </span>
+                        )}
+                        {totalOutstandingFor(m) > 0 && (
+                          <span className="text-[10px] text-red-400 font-semibold text-right">
+                            total ₦{totalOutstandingFor(m).toLocaleString()}
                           </span>
                         )}
                       </div>
