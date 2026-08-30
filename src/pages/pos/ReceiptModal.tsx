@@ -93,7 +93,7 @@ export default function ReceiptModal({
   }, [])
 
   const buildMonoReceipt = (type: 'customer' | 'waiter') => {
-    const W = 40
+    const W = 32
     const fmtRow = (left: string, right: string) => {
       const l = left.substring(0, W - right.length - 1)
       const spaces = W - l.length - right.length
@@ -213,8 +213,8 @@ export default function ReceiptModal({
       return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Waiter Copy - ${orderRef}</title>
 <style>* { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: auto; }
-body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; color: #000; background: #fff; width: 80mm; padding: 2mm 5mm; white-space: pre; line-height: 1.25; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-@media print { body { width: 80mm; overflow: hidden; } html, body { height: auto; } * { break-inside: avoid; } @page { margin: 0; size: 80mm auto; } }
+body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; color: #000; background: #fff; width: 62mm; margin: 0 auto; padding: 2mm 3mm; white-space: pre; line-height: 1.25; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+@media print { body { width: 62mm; overflow: hidden; } html, body { height: auto; } * { break-inside: avoid; } @page { margin: 0; size: 80mm auto; } }
 </style></head><body>${lines}</body></html>`
     }
 
@@ -257,12 +257,12 @@ body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-wei
     * { margin: 0; padding: 0; box-sizing: border-box; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: auto; }
-    body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; color: #000; background: #fff; width: 80mm; padding: 2mm 5mm; line-height: 1.25; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: bold; color: #000; background: #fff; width: 62mm; margin: 0 auto; padding: 2mm 3mm; line-height: 1.25; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .receipt-text { white-space: pre; }
     .qr-section { text-align: center; margin: 6px 0 2px; }
     .qr-label { font-size: 9px; color: #333; margin-top: 2px; font-style: italic; }
     .footer { text-align: center; font-size: 11px; margin-top: 3px; }
-    @media print { body { width: 80mm; overflow: hidden; } html, body { height: auto; } * { break-inside: avoid; } .receipt-text, .qr-section, .footer { page-break-inside: avoid; } @page { margin: 0; size: 80mm auto; } }
+    @media print { body { width: 62mm; overflow: hidden; } html, body { height: auto; } * { break-inside: avoid; } .receipt-text, .qr-section, .footer { page-break-inside: avoid; } @page { margin: 0; size: 80mm auto; } }
   </style>
 </head>
 <body>

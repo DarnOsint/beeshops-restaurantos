@@ -594,7 +594,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       account_name: string
     }[]
 
-    const W = 40
+    const W = 32
     const fmtRow = (left: string, right: string) => {
       const l = left.substring(0, W - right.length - 1)
       const spaces = W - l.length - right.length
@@ -698,15 +698,16 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       font-weight: bold;
       color: #000;
       background: #fff;
-      width: 80mm;
-      padding: 2mm 5mm;
+      width: 62mm;
+      margin: 0 auto;
+      padding: 2mm 3mm;
       white-space: pre;
       line-height: 1.25;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
     @media print {
-      body { width: 80mm; overflow: hidden; }
+      body { width: 62mm; overflow: hidden; }
       html, body { height: auto; }
       * { break-inside: avoid; }
       @page { margin: 0; size: 80mm auto; }
