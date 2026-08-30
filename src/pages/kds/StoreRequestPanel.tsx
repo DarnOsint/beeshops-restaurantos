@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Package, Search, Plus, RefreshCw, X } from 'lucide-react'
+import { Package, Search, Plus, RefreshCw, X, Printer } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { sendPushToStaff } from '../../hooks/usePushNotifications'
 import { useAuth } from '../../context/AuthContext'
@@ -188,6 +188,69 @@ export default function StoreRequestPanel() {
   )
 
   const pendingCount = myRequests.filter((r) => r.status === 'pending').length
+  const approvedRequests = myRequests.filter((r) => r.status === 'approved')
+
+  const printApproved = () => {
+    const W = 40
+    const div = '-'.repeat(W)
+    const sol = '='.repeat(W)
+    const row = (l: string, r: string) => {
+      const left = l.substring(0, W - r.length - 1)
+      return left + ' '.repeat(Math.max(1, W - left.length - r.length)) + r
+    }
+    const ctr = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s
+    const fmtDate = new Date(reqDate + 'T12:00:00').toLocaleDateString('en-NG', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
+    const count = approvedRequests.length
+    const totalQty = approvedRequests.reduce((s, r) => s + (r.quantity || 0), 0)
+    const lines = [
+      '',
+      ctr("BEESHOP'S PLACE"),
+      ctr('STORE COLLECTION'),
+      div,
+      row('Collector:', profile?.full_name || '—'),
+      row('Date:', fmtDate),
+      row('Items:', String(count)),
+      row(
+        'Print time:',
+        new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })
+      ),
+      div,
+      ...approvedRequests.map((r, i) =>
+        [
+          `${String(i + 1).padStart(2, '0')}  ${r.quantity} ${r.unit}  ${r.item_name}`,
+          r.approved_by_name ? `     approved by ${r.approved_by_name}` : '',
+        ]
+          .filter(Boolean)
+          .join('\n')
+      ),
+      sol,
+      row('TOTAL ITEMS:', String(count)),
+      row('TOTAL QTY:', String(totalQty)),
+      sol,
+      '',
+      ctr('*** COLLECTION LIST ***'),
+      '',
+    ].join('\n')
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Store Collection — ${fmtDate}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:13px;color:#000;background:#fff;width:80mm;padding:4mm;white-space:pre}@media print{body{width:80mm}@page{margin:0;size:80mm auto}}</style></head><body>${lines}</body></html>`
+    const win = window.open('', '_blank', 'width=500,height=700,toolbar=no,menubar=no')
+    if (!win) return
+    win.document.open('text/html', 'replace')
+    win.document.write(html)
+    win.document.close()
+    win.onafterprint = () => win.close()
+    win.onload = () =>
+      setTimeout(() => {
+        try {
+          win.print()
+        } catch {
+          /* closed */
+        }
+      }, 200)
+  }
 
   return (
     <div className="max-w-lg mx-auto space-y-4">
@@ -225,6 +288,14 @@ export default function StoreRequestPanel() {
           <button onClick={fetchData} className="text-gray-400 hover:text-white p-1">
             <RefreshCw size={14} />
           </button>
+          {approvedRequests.length > 0 && (
+            <button
+              onClick={printApproved}
+              className="flex items-center gap-1.5 bg-green-500 text-black font-bold text-xs px-3 py-2 rounded-xl hover:bg-green-400"
+            >
+              <Printer size={13} /> Print Approved
+            </button>
+          )}
           <button
             onClick={() => setShowForm(!showForm)}
             className="flex items-center gap-1.5 bg-amber-500 text-black font-bold text-xs px-3 py-2 rounded-xl hover:bg-amber-400"
@@ -348,6 +419,19 @@ export default function StoreRequestPanel() {
             <p className="text-amber-400 text-xs font-bold mb-2">
               {pendingCount} pending request{pendingCount > 1 ? 's' : ''}
             </p>
+          )}
+          {approvedRequests.length > 0 && (
+            <div className="flex items-center justify-between bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-2.5 mb-2">
+              <p className="text-green-400 text-xs font-bold">
+                {approvedRequests.length} approved — ready for collection
+              </p>
+              <button
+                onClick={printApproved}
+                className="flex items-center gap-1.5 bg-green-500 text-black font-bold text-xs px-3 py-1.5 rounded-lg hover:bg-green-400"
+              >
+                <Printer size={13} /> Print
+              </button>
+            </div>
           )}
           {myRequests.map((req) => (
             <div
