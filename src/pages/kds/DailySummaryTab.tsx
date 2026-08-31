@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { fetchZoneUnitsPerSale } from '../../lib/zoneUnits'
 import { RefreshCw, Printer } from 'lucide-react'
 
 interface SummaryItem {
@@ -88,12 +89,17 @@ const inferDestination = (row: {
 const buildSummary = (
   filtered: Array<{
     quantity: number
+    menu_item_id?: string | null
     menu_items?: { name?: string } | null
     orders?: {
       profiles?: { full_name: string } | null
-      tables?: { table_categories?: { name: string } | null } | null
+      tables?: {
+        category_id?: string | null
+        table_categories?: { name?: string } | null
+      } | null
     } | null
-  }>
+  }>,
+  zoneUnits: Record<string, number> = {}
 ): { rows: SummaryItem[]; total: number } => {
   const itemMap = new Map<string, Map<string, number>>()
   for (const item of filtered) {
@@ -101,9 +107,16 @@ const buildSummary = (
     const zone = item.orders?.tables?.table_categories?.name
     const staffName = item.orders?.profiles?.full_name || 'Unknown'
     const waitronName = zone ? `${staffName} (${zone})` : staffName
+    // Physical units handed out = order-line quantity × zone drinks-per-sale.
+    // Applies only when a zone price row with units_per_sale>1 exists (bar drinks);
+    // otherwise defaults to 1 so other stations are unaffected.
+    const categoryId = item.orders?.tables?.category_id ?? null
+    const key = `${item.menu_item_id || ''}:${categoryId || ''}`
+    const unitsPerSale = zoneUnits[key] || 1
+    const units = (item.quantity || 0) * unitsPerSale
     if (!itemMap.has(itemName)) itemMap.set(itemName, new Map())
     const wm = itemMap.get(itemName)!
-    wm.set(waitronName, (wm.get(waitronName) || 0) + (item.quantity || 0))
+    wm.set(waitronName, (wm.get(waitronName) || 0) + units)
   }
 
   const rows: SummaryItem[] = Array.from(itemMap.entries())
@@ -149,22 +162,30 @@ export default function DailySummaryTab({
       const end = new Date(start)
       end.setDate(end.getDate() + 1)
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('order_items')
         .select(
           `
         id,
         order_id,
+        menu_item_id,
         quantity,
         status,
         return_accepted,
         destination,
         menu_items(name, menu_categories(name, destination)),
-        orders(id, created_at, order_type, profiles(full_name), tables(table_categories(name)))
+        orders(id, created_at, order_type, profiles(full_name), tables(category_id, table_categories(name)))
       `
         )
         .gte('created_at', start.toISOString())
         .lt('created_at', end.toISOString())
+
+      // Zone drinks-per-sale multiplier (bar only); cached, empty map => no-op.
+      const zoneUnits = await fetchZoneUnitsPerSale()
+      if (error) {
+        setLoading(false)
+        return
+      }
       // Summary is sales/served visibility:
       // - Mixologist: include all mixologist items recorded for the day (even if auto-accepted historically).
       // - Other stations: keep the broader summary behavior.
@@ -174,6 +195,7 @@ export default function DailySummaryTab({
           data as unknown as {
             id: string
             order_id: string
+            menu_item_id?: string | null
             quantity: number
             status: string
             return_accepted?: boolean
@@ -183,7 +205,10 @@ export default function DailySummaryTab({
               created_at: string
               order_type?: string
               profiles: { full_name: string } | null
-              tables: { table_categories: { name: string } | null } | null
+              tables: {
+                category_id?: string | null
+                table_categories: { name: string } | null
+              } | null
             } | null
           }[]
         ).filter((i) => {
@@ -198,8 +223,8 @@ export default function DailySummaryTab({
             ['preparing', 'ready', 'delivered'].includes(String(i.status || '').toLowerCase())
           )
           const pending = base.filter((i) => String(i.status || '').toLowerCase() === 'pending')
-          const acceptedBuilt = buildSummary(accepted as any[])
-          const pendingBuilt = buildSummary(pending as any[])
+          const acceptedBuilt = buildSummary(accepted as any[], zoneUnits)
+          const pendingBuilt = buildSummary(pending as any[], zoneUnits)
           setSummary(acceptedBuilt.rows)
           setPendingSummary(pendingBuilt.rows)
           setPendingTotal(pendingBuilt.total)
@@ -210,7 +235,7 @@ export default function DailySummaryTab({
               .filter((id: any) => typeof id === 'string' && id.length > 0)
           )
         } else {
-          const built = buildSummary(base as any[])
+          const built = buildSummary(base as any[], zoneUnits)
           setSummary(built.rows)
           setTotalItems(built.total)
           setPendingSummary([])
