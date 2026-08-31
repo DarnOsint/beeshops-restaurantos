@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Package, Search, Plus, RefreshCw, X, Printer } from 'lucide-react'
+import { Package, Search, Plus, RefreshCw, X, Printer, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { sendPushToStaff } from '../../hooks/usePushNotifications'
 import { useAuth } from '../../context/AuthContext'
@@ -25,6 +25,8 @@ interface MyRequest {
   approved_by_name: string | null
   created_at: string
   resolved_at: string | null
+  collected_at: string | null
+  collected_by_name: string | null
 }
 
 const elapsed = (iso: string) => {
@@ -188,7 +190,31 @@ export default function StoreRequestPanel() {
   )
 
   const pendingCount = myRequests.filter((r) => r.status === 'pending').length
-  const approvedRequests = myRequests.filter((r) => r.status === 'approved')
+  const readyRequests = myRequests.filter((r) => r.status === 'approved' && !r.collected_at)
+  const collectedRequests = myRequests.filter((r) => r.status === 'approved' && !!r.collected_at)
+
+  const markCollected = async () => {
+    if (readyRequests.length === 0) return
+    setSending(true)
+    try {
+      const { error } = await supabase
+        .from('store_requests')
+        .update({
+          collected_at: new Date().toISOString(),
+          collected_by_name: profile?.full_name ?? null,
+        })
+        .in(
+          'id',
+          readyRequests.map((r) => r.id)
+        )
+      if (error) throw error
+      toast.success('Collected', `${readyRequests.length} item(s) marked as collected`)
+      fetchData()
+    } catch (e: any) {
+      toast.error('Error', e?.message || 'Failed to mark collected')
+    }
+    setSending(false)
+  }
 
   const printApproved = () => {
     const W = 40
@@ -204,8 +230,8 @@ export default function StoreRequestPanel() {
       month: 'short',
       year: 'numeric',
     })
-    const count = approvedRequests.length
-    const totalQty = approvedRequests.reduce((s, r) => s + (r.quantity || 0), 0)
+    const count = readyRequests.length
+    const totalQty = readyRequests.reduce((s, r) => s + (r.quantity || 0), 0)
     const lines = [
       '',
       ctr("BEESHOP'S PLACE"),
@@ -219,7 +245,7 @@ export default function StoreRequestPanel() {
         new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })
       ),
       div,
-      ...approvedRequests.map((r, i) =>
+      ...readyRequests.map((r, i) =>
         [
           `${String(i + 1).padStart(2, '0')}  ${r.quantity} ${r.unit}  ${r.item_name}`,
           r.approved_by_name ? `     approved by ${r.approved_by_name}` : '',
@@ -288,7 +314,7 @@ export default function StoreRequestPanel() {
           <button onClick={fetchData} className="text-gray-400 hover:text-white p-1">
             <RefreshCw size={14} />
           </button>
-          {approvedRequests.length > 0 && (
+          {readyRequests.length > 0 && (
             <button
               onClick={printApproved}
               className="flex items-center gap-1.5 bg-green-500 text-black font-bold text-xs px-3 py-2 rounded-xl hover:bg-green-400"
@@ -420,17 +446,39 @@ export default function StoreRequestPanel() {
               {pendingCount} pending request{pendingCount > 1 ? 's' : ''}
             </p>
           )}
-          {approvedRequests.length > 0 && (
-            <div className="flex items-center justify-between bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-2.5 mb-2">
-              <p className="text-green-400 text-xs font-bold">
-                {approvedRequests.length} approved — ready for collection
+          {readyRequests.length > 0 && (
+            <div className="space-y-1.5 mb-2">
+              <div className="flex items-center justify-between bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-2.5">
+                <p className="text-green-400 text-xs font-bold">
+                  {readyRequests.length} approved — ready for collection
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={markCollected}
+                    disabled={sending}
+                    className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs px-3 py-1.5 rounded-lg disabled:opacity-50"
+                  >
+                    <Check size={13} /> Mark Collected
+                  </button>
+                  <button
+                    onClick={printApproved}
+                    className="flex items-center gap-1.5 bg-green-500 text-black font-bold text-xs px-3 py-1.5 rounded-lg hover:bg-green-400"
+                  >
+                    <Printer size={13} /> Print
+                  </button>
+                </div>
+              </div>
+              <p className="text-gray-600 text-[10px] px-1">
+                Print lists only items not yet collected. Mark collected after you receive them so
+                later requests never re-print them.
               </p>
-              <button
-                onClick={printApproved}
-                className="flex items-center gap-1.5 bg-green-500 text-black font-bold text-xs px-3 py-1.5 rounded-lg hover:bg-green-400"
-              >
-                <Printer size={13} /> Print
-              </button>
+            </div>
+          )}
+          {collectedRequests.length > 0 && (
+            <div className="flex items-center justify-between bg-blue-500/10 border border-blue-500/30 rounded-xl px-4 py-2.5 mb-2">
+              <p className="text-blue-400 text-xs font-bold">
+                {collectedRequests.length} collected — already given to you
+              </p>
             </div>
           )}
           {myRequests.map((req) => (
@@ -446,17 +494,37 @@ export default function StoreRequestPanel() {
                   <p className="text-gray-500 text-xs">{elapsed(req.created_at)}</p>
                 </div>
                 <span
-                  className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${req.status === 'pending' ? 'bg-amber-500/20 text-amber-400' : req.status === 'approved' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    req.status === 'pending'
+                      ? 'bg-amber-500/20 text-amber-400'
+                      : req.status === 'approved' && req.collected_at
+                        ? 'bg-blue-500/20 text-blue-400'
+                        : req.status === 'approved'
+                          ? 'bg-green-500/20 text-green-400'
+                          : 'bg-red-500/20 text-red-400'
+                  }`}
                 >
                   {req.status === 'pending'
                     ? 'Pending'
-                    : req.status === 'approved'
-                      ? 'Approved'
-                      : 'Rejected'}
+                    : req.status === 'approved' && req.collected_at
+                      ? 'Collected'
+                      : req.status === 'approved'
+                        ? 'Approved'
+                        : 'Rejected'}
                 </span>
               </div>
               {req.status === 'approved' && req.approved_by_name && (
                 <p className="text-green-400/70 text-xs mt-1">Approved by {req.approved_by_name}</p>
+              )}
+              {req.status === 'approved' && req.collected_at && (
+                <p className="text-blue-400/70 text-xs mt-1">
+                  Collected by {req.collected_by_name || 'Barman'} ·{' '}
+                  {new Date(req.collected_at).toLocaleTimeString('en-NG', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true,
+                  })}
+                </p>
               )}
               {req.status === 'rejected' && req.reject_reason && (
                 <p className="text-red-400/70 text-xs mt-1">Reason: {req.reject_reason}</p>
