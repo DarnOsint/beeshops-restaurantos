@@ -258,14 +258,35 @@ function BarKDSInner() {
     const today = new Date().toISOString().slice(0, 10)
     const req = updated.find((r) => r.id === id)
     if (req) {
+      // Resolve physical stock units per request line: map item name -> menu_item_id,
+      // then apply the highest configured units_per_sale for that item (default 1).
+      const names = req.items.map((it) => it.item).filter(Boolean)
+      const [itemsRes, zoneRes] = await Promise.all([
+        supabase.from('menu_items').select('id, name').in('name', names),
+        supabase.from('menu_item_zone_prices').select('menu_item_id, units_per_sale'),
+      ])
+      const idByName: Record<string, string> = {}
+      for (const m of itemsRes.data || []) {
+        if (m?.name) idByName[m.name] = m.id
+      }
+      const maxUnitsByItem: Record<string, number> = {}
+      for (const zp of zoneRes.data || []) {
+        const u = Number(zp.units_per_sale)
+        if (Number.isFinite(u) && u > 1 && zp.menu_item_id) {
+          maxUnitsByItem[zp.menu_item_id] = Math.max(maxUnitsByItem[zp.menu_item_id] || 1, u)
+        }
+      }
       for (const it of req.items) {
+        const menuItemId = idByName[it.item]
+        const unitsPer = menuItemId ? maxUnitsByItem[menuItemId] || 1 : 1
+        const qty = (Number(it.qty) || 0) * unitsPer
         const { data: row } = await supabase
           .from('bar_chiller_stock')
           .select('id, sold_qty')
           .eq('date', today)
           .eq('item_name', it.item)
           .single()
-        const newSold = (row?.sold_qty || 0) + it.qty
+        const newSold = (row?.sold_qty || 0) + qty
         if (row?.id) {
           await supabase
             .from('bar_chiller_stock')
@@ -278,7 +299,7 @@ function BarKDSInner() {
             unit: 'units',
             opening_qty: 0,
             received_qty: 0,
-            sold_qty: it.qty,
+            sold_qty: qty,
             void_qty: 0,
             closing_qty: 0,
             created_at: new Date().toISOString(),

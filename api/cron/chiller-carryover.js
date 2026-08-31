@@ -33,20 +33,44 @@ export default async function handler(req, res) {
     const dayEnd = new Date(dayStart)
     dayEnd.setDate(dayEnd.getDate() + 1)
 
-    const { data: sold } = await supabase
-      .from('order_items')
-      .select('quantity, status, return_accepted, menu_items(name), orders(status)')
-      .eq('destination', 'bar')
-      .gte('created_at', dayStart.toISOString())
-      .lte('created_at', dayEnd.toISOString())
+    const [soldRes, zonePriceRes] = await Promise.all([
+      supabase
+        .from('order_items')
+        .select(
+          'quantity, status, return_accepted, menu_item_id, menu_items(name), orders(status, tables(category_id))'
+        )
+        .eq('destination', 'bar')
+        .gte('created_at', dayStart.toISOString())
+        .lte('created_at', dayEnd.toISOString()),
+      supabase
+        .from('menu_item_zone_prices')
+        .select('menu_item_id, category_id, units_per_sale'),
+    ])
+
+    // Build { menu_item_id: { category_id: units_per_sale } } map for zone-aware deduction.
+    const zoneUnits = {}
+    for (const row of (zonePriceRes.data || [])) {
+      const units = Number(row.units_per_sale)
+      if (Number.isFinite(units) && units > 1) {
+        const key = `${String(row.menu_item_id)}:${String(row.category_id)}`
+        zoneUnits[key] = units
+      }
+    }
+    const lineUnits = (menuItemId, categoryId) => {
+      const units = zoneUnits[`${String(menuItemId || '')}:${String(categoryId || '')}`]
+      return Number.isFinite(units) && units > 1 ? units : 1
+    }
 
     const soldMap = {}
-    for (const item of (sold || [])) {
+    for (const item of (soldRes.data || [])) {
       if (item.return_accepted) continue
       if (item.orders?.status === 'cancelled') continue
       if (item.status === 'cancelled') continue
       const name = item.menu_items?.name
-      if (name) soldMap[name] = (soldMap[name] || 0) + item.quantity
+      if (!name) continue
+      const categoryId = item.orders?.tables?.category_id ?? null
+      const units = (Number(item.quantity) || 0) * lineUnits(item.menu_item_id, categoryId)
+      soldMap[name] = (soldMap[name] || 0) + units
     }
 
     // Step 2: Update yesterday's entries with correct sold/closing
