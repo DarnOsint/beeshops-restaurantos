@@ -106,14 +106,9 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
   push(cmd.bold, ...text('ITEM                          AMOUNT\n'), cmd.boldOff)
   push(text(divider))
 
-  // Exclude returned or cancelled items from reprints
+  // Exclude accepted-returned or cancelled items from reprints
   items
-    .filter(
-      (item) =>
-        !item.return_accepted &&
-        !item.return_requested &&
-        (item.status || '').toLowerCase() !== 'cancelled'
-    )
+    .filter((item) => !item.return_accepted && (item.status || '').toLowerCase() !== 'cancelled')
     .forEach((item) => {
       const name = `${item.quantity}x ${(item.menu_items?.name ?? item.name ?? '').substring(0, 22)}`
       const price = `N${(item.total_price ?? 0).toLocaleString()}`

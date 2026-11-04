@@ -339,7 +339,7 @@ export default function Reports() {
 
       const filteredItems = allItems.filter((i) => {
         const cancelled = (i.status || '').toLowerCase() === 'cancelled'
-        const returned = i.return_requested || i.return_accepted
+        const returned = i.return_accepted
         return i.orders?.status === 'paid' && !cancelled && !returned
       })
 

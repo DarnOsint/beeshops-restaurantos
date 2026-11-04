@@ -306,13 +306,41 @@ export default function OrderPanel({
       return
     }
 
+    // Every removal of a confirmed item needs a recorded reason for the audit trail.
+    const reason = window.prompt(
+      `Reason for removing "${item.name}" from the order (required — recorded for audit):`,
+      ''
+    )
+    if (reason === null) return
+    if (!reason.trim()) {
+      toast.error('Reason Required', 'A reason is required before removing a confirmed item.')
+      return
+    }
+    const deleteReason = reason.trim().slice(0, 200)
+
     // Confirmed items — waitrons cannot delete, must request manager approval
     const isManagerRole = profile && ['owner', 'manager'].includes(profile.role)
     const dbId = item._dbId || dbIdMap[item.id]
     if (!dbId) return
 
     if (isManagerRole) {
-      // Managers can delete directly
+      // Managers can delete directly, but the removal still needs a trail.
+      await supabase.from('returns_log').delete().eq('order_item_id', dbId).eq('status', 'pending')
+      await supabase.from('returns_log').insert({
+        order_id: activeOrder?.id,
+        order_item_id: dbId,
+        item_name: item.name,
+        quantity: item.quantity,
+        item_total: item.total,
+        table_name: table?.name ?? null,
+        waitron_id: profile?.id ?? null,
+        waitron_name: profile?.full_name ?? null,
+        return_reason: `${deleteReason} (manager removed)`,
+        status: 'accepted',
+        barman_name: profile?.full_name ?? null,
+        requested_at: new Date().toISOString(),
+        resolved_at: new Date().toISOString(),
+      })
       const { error } = await supabase.from('order_items').delete().eq('id', dbId)
       if (error) {
         toast.error('Error', 'Failed to delete item: ' + error.message)
@@ -320,16 +348,31 @@ export default function OrderPanel({
       }
       const { data: remaining } = await supabase
         .from('order_items')
-        .select('total_price')
+        .select('total_price, return_accepted')
         .eq('order_id', activeOrder?.id || '')
       const newTotal = (remaining || []).reduce(
-        (sum: number, r: { total_price: number }) => sum + (r.total_price || 0),
+        (sum: number, r: { total_price: number; return_accepted?: boolean }) =>
+          r.return_accepted ? sum : sum + (r.total_price || 0),
         0
       )
       await supabase
         .from('orders')
         .update({ total_amount: newTotal })
         .eq('id', activeOrder?.id || '')
+      await audit({
+        action: 'ITEM_DELETED_BY_MANAGER',
+        entity: 'order_item',
+        entityId: dbId,
+        entityName: item.name,
+        newValue: {
+          order_id: activeOrder?.id,
+          table: table?.name,
+          quantity: item.quantity,
+          total: item.total,
+          reason: deleteReason,
+        },
+        performer: profile as Profile,
+      })
       setOrderItems((prev) => prev.filter((i) => i._dbId !== dbId))
       return
     }
@@ -347,7 +390,7 @@ export default function OrderPanel({
         .from('order_items')
         .update({
           return_requested: true,
-          return_reason: 'Deleted by waitron',
+          return_reason: deleteReason,
           return_requested_at: new Date().toISOString(),
         })
         .eq('id', dbId)
@@ -362,7 +405,7 @@ export default function OrderPanel({
         table_name: table?.name ?? null,
         waitron_id: profile?.id ?? null,
         waitron_name: profile?.full_name ?? null,
-        return_reason: 'Deleted by waitron',
+        return_reason: deleteReason,
         status: 'pending',
         requested_at: new Date().toISOString(),
       })
@@ -377,7 +420,7 @@ export default function OrderPanel({
           sendPushToStaff(
             staff.id,
             '↩ Return Requested',
-            `${item.quantity}x ${item.name} — ${table?.name || 'Table'} — Deleted by ${profile?.full_name || 'waitron'}`
+            `${item.quantity}x ${item.name} — ${table?.name || 'Table'} — Reason: ${deleteReason}`
           ).catch(() => {})
         }
       }
@@ -393,6 +436,7 @@ export default function OrderPanel({
           table: table?.name,
           quantity: item.quantity,
           total: item.total,
+          reason: deleteReason,
           sentToBar: true,
         },
         performer: profile as Profile,
@@ -411,7 +455,7 @@ export default function OrderPanel({
       .from('order_items')
       .update({
         return_requested: true,
-        return_reason: 'Deleted by waitron',
+        return_reason: deleteReason,
         return_requested_at: new Date().toISOString(),
       })
       .eq('id', dbId)
@@ -437,6 +481,7 @@ export default function OrderPanel({
       waitron_id: profile?.id,
       waitron_name: profile?.full_name,
       requested_at: new Date().toISOString(),
+      return_reason: deleteReason,
     })
     await supabase.from('settings').upsert(
       {
@@ -458,7 +503,7 @@ export default function OrderPanel({
       table_name: table?.name || '',
       waitron_id: profile?.id,
       waitron_name: profile?.full_name,
-      return_reason: 'Deleted by waitron',
+      return_reason: deleteReason,
       status: 'pending',
       requested_at: new Date().toISOString(),
     })
@@ -475,6 +520,7 @@ export default function OrderPanel({
         table: table?.name,
         quantity: item.quantity,
         total: item.total,
+        reason: deleteReason,
       },
       performer: profile as Profile,
     })

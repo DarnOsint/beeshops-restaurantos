@@ -168,12 +168,7 @@ export default function Executive() {
     setStats({
       revenue: (revenueRes.data || []).reduce((s: number, o: any) => {
         const net = (o.order_items || [])
-          .filter(
-            (i: any) =>
-              !i.return_requested &&
-              !i.return_accepted &&
-              (i.status || '').toLowerCase() !== 'cancelled'
-          )
+          .filter((i: any) => !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled')
           .reduce((ss: number, i: any) => ss + (i.total_price || 0), 0)
         return s + net
       }, 0),
@@ -195,12 +190,7 @@ export default function Executive() {
       })
       if (!dayMap[day]) dayMap[day] = { day, revenue: 0, orders: 0 }
       const net = (o.order_items || [])
-        .filter(
-          (i: any) =>
-            !i.return_requested &&
-            !i.return_accepted &&
-            (i.status || '').toLowerCase() !== 'cancelled'
-        )
+        .filter((i: any) => !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled')
         .reduce((s: number, i: any) => s + (i.total_price || 0), 0)
       dayMap[day].revenue += net
       dayMap[day].orders++

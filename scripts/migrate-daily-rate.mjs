@@ -1,7 +1,11 @@
 import pg from 'pg'
 
 const projectRef = 'qdibeyhdrcrddckouqmc'
-const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFkaWJleWhkcmNyZGRja291cW1jIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3Mjg3NTgxOCwiZXhwIjoyMDg4NDUxODE4fQ.F5rL5cGFX5sS2_Dl_rM2ZrQFVC9v3_y1WD4-8qK1aJ0'
+const jwt = process.env.SUPABASE_SERVICE_ROLE_KEY
+if (!jwt) {
+  console.error('Missing SUPABASE_SERVICE_ROLE_KEY env var')
+  process.exit(1)
+}
 
 const configs = [
   // Direct connection (IPv4 might work with some DNS configs)

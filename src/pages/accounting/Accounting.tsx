@@ -312,7 +312,7 @@ export default function Accounting() {
         : { data: [] }
     const itemsByOrder: Record<string, string[]> = {}
     for (const oi of (debtOrderItems || []) as any[]) {
-      if (oi.return_requested || oi.return_accepted) continue
+      if (oi.return_accepted) continue
       if (!itemsByOrder[oi.order_id]) itemsByOrder[oi.order_id] = []
       itemsByOrder[oi.order_id].push(`${oi.quantity}x ${oi.menu_items?.name || 'Item'}`)
     }

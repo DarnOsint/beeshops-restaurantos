@@ -53,11 +53,7 @@ export default function ReceiptModal({
   )
   const billableItems = isPaid
     ? items // paid orders: show all items as they were charged
-    : items.filter(
-        (i) =>
-          !(i as unknown as { return_accepted?: boolean }).return_accepted &&
-          !(i as unknown as { return_requested?: boolean }).return_requested
-      )
+    : items.filter((i) => !(i as unknown as { return_accepted?: boolean }).return_accepted)
   const subtotal = isPaid
     ? (order as unknown as { total_amount?: number }).total_amount ||
       items.reduce(
@@ -143,9 +139,7 @@ export default function ReceiptModal({
             : pmRaw.toUpperCase()
 
     const activeItems = items.filter(
-      (i) =>
-        !(i as unknown as { return_accepted?: boolean }).return_accepted &&
-        !(i as unknown as { return_requested?: boolean }).return_requested
+      (i) => !(i as unknown as { return_accepted?: boolean }).return_accepted
     )
     const returnedItems = items.filter(
       (i) =>
