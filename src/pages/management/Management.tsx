@@ -181,12 +181,7 @@ export default function Management() {
         .size,
       todayRevenue: (revenueRes.data || []).reduce((s: number, o: any) => {
         const net = (o.order_items || [])
-          .filter(
-            (i: any) =>
-              !i.return_requested &&
-              !i.return_accepted &&
-              (i.status || '').toLowerCase() !== 'cancelled'
-          )
+          .filter((i: any) => !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled')
           .reduce((ss: number, i: any) => ss + (i.total_price || 0), 0)
         return s + net
       }, 0),

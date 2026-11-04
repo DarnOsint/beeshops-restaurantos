@@ -309,10 +309,10 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
   })
 
   const billableItems = (order?.order_items || []).filter(
-    (i) => !i.return_requested && !i.return_accepted
+    (i) => !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled'
   )
   const returnedItems = (order?.order_items || []).filter(
-    (i) => i.return_requested || i.return_accepted
+    (i) => i.return_accepted || (i.status || '').toLowerCase() === 'cancelled'
   )
   // Calculate subtotal from items directly — never trust stored total_amount alone
   // (stored total may not be updated yet after a bar return acceptance)
@@ -349,7 +349,12 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
     // Bar and mixologist items must be accepted before payment.
     // - Bar: accepted when marked ready.
     // - Mixologist: accepted when moved from pending → preparing.
-    if (i.return_requested || i.return_accepted) return false
+    // Bar and mixologist items must be accepted before payment.
+    // - Bar: accepted when marked ready.
+    // - Mixologist: accepted when moved from pending → preparing.
+    // A pending return request does NOT unblock payment — the item stays on the
+    // bill until the return is actually accepted.
+    if (i.return_accepted) return false
     return i.status === 'pending'
   })
   const hasUnreadyItems = unreadyItems.length > 0
@@ -1011,7 +1016,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       }
 
       // Verify total against server-side order_items sum before processing
-      // Excludes returned/return-requested items from the billable total
+      // Excludes accepted-returned items from the billable total
       const { data: serverItems } = await supabase
         .from('order_items')
         .select('total_price, return_requested, return_accepted')
@@ -1019,8 +1024,7 @@ export default function PaymentModal({ order: orderProp, table, onSuccess, onClo
       if (serverItems && serverItems.length > 0) {
         const serverTotal = serverItems
           .filter(
-            (i: { return_requested?: boolean; return_accepted?: boolean }) =>
-              !i.return_requested && !i.return_accepted
+            (i: { return_requested?: boolean; return_accepted?: boolean }) => !i.return_accepted
           )
           .reduce((s: number, i: { total_price: number }) => s + (i.total_price || 0), 0)
         if (Math.abs(serverTotal - total) > 1) {

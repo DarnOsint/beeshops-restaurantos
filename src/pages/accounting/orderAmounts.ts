@@ -25,11 +25,11 @@ export function getValidOrderItems(order: OrderLike) {
   return (order.order_items || []).filter((item) => {
     const orderItem = item as OrderItemWithReturns | undefined
     if (!orderItem) return false
-    return (
-      !orderItem.return_requested &&
-      !orderItem.return_accepted &&
-      (orderItem.status || '').toLowerCase() !== 'cancelled'
-    )
+    // Pending return requests (return_requested but not yet accepted) must stay in
+    // accounting totals. Only CONFIRMED write-offs (return_accepted) and cancelled
+    // items are excluded. Otherwise a waitron's unapproved delete request would
+    // instantly remove value from dashboard sales and remittance expectations.
+    return !orderItem.return_accepted && (orderItem.status || '').toLowerCase() !== 'cancelled'
   })
 }
 

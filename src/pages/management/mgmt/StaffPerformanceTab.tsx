@@ -71,10 +71,7 @@ export default function StaffPerformanceTab() {
       if (!map[name]) map[name] = { name, orders: 0, revenue: 0, items: 0, avgOrder: 0 }
       map[name].orders++
       const validItems = (o.order_items || []).filter(
-        (i: any) =>
-          !i.return_requested &&
-          !i.return_accepted &&
-          (i.status || '').toLowerCase() !== 'cancelled'
+        (i: any) => !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled'
       )
       const orderRev = validItems.reduce((s: number, i: any) => s + (i.total_price || 0), 0)
       map[name].revenue += orderRev

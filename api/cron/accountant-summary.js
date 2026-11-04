@@ -107,7 +107,7 @@ export default async function handler(req, res) {
     // Revenue
     const paid = (orders || []).filter(o => o.status === 'paid')
     const netOrderAmount = (o) => (o.order_items || [])
-      .filter(i => !i.return_requested && !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled')
+      .filter(i => !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled')
       .reduce((s, i) => s + (i.total_price || 0), 0)
 
     const totalRevenue = paid.reduce((s, o) => s + netOrderAmount(o), 0)

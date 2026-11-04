@@ -716,10 +716,7 @@ export default function POS() {
 
     const filteredOrders = orders.map((o) => {
       const items = o.order_items.filter(
-        (i) =>
-          !i.return_requested &&
-          !i.return_accepted &&
-          (i.status || '').toLowerCase() !== 'cancelled'
+        (i) => !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled'
       )
       const netTotal = items.reduce((s, i) => s + (i.total_price ?? 0), 0)
       return { ...o, order_items: items, netTotal }
@@ -2086,9 +2083,7 @@ export default function POS() {
                                 ? 'Split'
                                 : pmRaw || '—'
                     const activeItems = (order.order_items || []).filter(
-                      (i) =>
-                        !(i as unknown as { return_requested?: boolean }).return_requested &&
-                        !(i as unknown as { return_accepted?: boolean }).return_accepted
+                      (i) => !(i as unknown as { return_accepted?: boolean }).return_accepted
                     )
                     const itemCount = activeItems.reduce((s, i) => s + (i.quantity || 0), 0)
                     const displayTotal = activeItems.reduce((s, i) => s + (i.total_price || 0), 0)

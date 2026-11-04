@@ -80,8 +80,8 @@ export default function OrdersByWaitronTab({
           oi.menu_items?.menu_categories?.destination ||
           ''
         ).toLowerCase()
-        // Exclude anything returned or pending return, and cancelled items
-        if (oi.return_accepted || oi.return_requested) return
+        // Exclude anything accepted-returned, and cancelled items
+        if (oi.return_accepted) return
         if ((oi.status || '').toLowerCase() === 'cancelled') return
         if (!destinations.includes(dest as Dest)) return
         const name = oi.orders?.profiles?.full_name || 'Unknown'

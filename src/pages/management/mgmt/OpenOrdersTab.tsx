@@ -226,9 +226,9 @@ export default function OpenOrdersTab() {
           </div>
         ) : (
           orders.map((order) => {
-            // Hide items that are pending return review by barman
+            // Show all billable items (pending return requests remain on the bill)
             const visibleItems = (order.order_items || []).filter(
-              (i) => !(i as any).return_requested
+              (i) => !(i as any).return_accepted
             )
             const itemsSum = visibleItems.reduce((s, i) => s + (i.total_price || 0), 0)
             const totalMismatch = Math.abs((order.total_amount || 0) - itemsSum) > 1

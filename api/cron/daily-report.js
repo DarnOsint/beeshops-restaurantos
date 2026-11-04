@@ -114,7 +114,7 @@ const methodLabels = {
 }
 
 const netOrderAmount = (o) => (o.order_items || [])
-  .filter(i => !i.return_requested && !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled')
+  .filter(i => !i.return_accepted && (i.status || '').toLowerCase() !== 'cancelled')
   .reduce((s, i) => s + (i.total_price || 0), 0)
 
 function computeMethodGroups(orders) {
@@ -132,7 +132,7 @@ function computeTopItems(orderItems) {
   const map = {}
   for (const item of (orderItems || [])) {
     if (!item.menu_items) continue
-    if (item.return_requested || item.return_accepted) continue
+    if (item.return_accepted) continue
     if ((item.status || '').toLowerCase() === 'cancelled') continue
     const k = item.menu_item_id
     if (!map[k]) map[k] = { name: item.menu_items.name, category: item.menu_items.menu_categories?.name || '—', qty: 0, rev: 0 }

@@ -214,7 +214,7 @@ export default function DailySummaryTab({
         ).filter((i) => {
           const itemDest = inferDestination(i as any)
           const cancelled = (i.status || '').toLowerCase() === 'cancelled'
-          const hasReturn = i.return_accepted || (i as any).return_requested
+          const hasReturn = i.return_accepted
           return itemDest === destination && i.orders && !cancelled && !hasReturn
         })
 
