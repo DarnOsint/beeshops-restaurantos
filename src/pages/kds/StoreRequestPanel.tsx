@@ -159,7 +159,7 @@ export default function StoreRequestPanel() {
       const { data: supervisors } = await supabase
         .from('profiles')
         .select('id')
-        .in('role', ['supervisor', 'manager', 'owner'])
+        .in('role', ['supervisor', 'manager', 'general_manager', 'owner'])
         .eq('is_active', true)
       for (const s of supervisors || []) {
         sendPushToStaff(

@@ -89,7 +89,7 @@ export default function AttendanceTab() {
   const thisWeek = () => setWeekRef(new Date().toISOString().slice(0, 10))
 
   const operational = staffList.filter(
-    (s) => !['owner', 'executive', 'auditor', 'accountant'].includes(s.role)
+    (s) => !['owner', 'general_manager', 'executive', 'auditor', 'accountant'].includes(s.role)
   )
 
   return (

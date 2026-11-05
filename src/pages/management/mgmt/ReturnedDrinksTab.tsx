@@ -26,6 +26,81 @@ interface ReturnEntry {
   resolved_at: string | null
 }
 
+/** Station acceptance is not final: a manager must confirm within this window. */
+const MANAGER_APPROVAL_WINDOW_MS = 24 * 60 * 60 * 1000
+const STATION_ACCEPTED = ['bar_accepted', 'kitchen_accepted', 'griller_accepted']
+
+const syncCreditDebtorForOrder = async (orderId: string, orderTotal: number) => {
+  const { data: debtors, error } = await supabase
+    .from('debtors')
+    .select('id, amount_paid')
+    .eq('order_id', orderId)
+    .eq('debt_type', 'credit_order')
+    .eq('is_active', true)
+  if (error) throw error
+
+  for (const debtor of debtors || []) {
+    const amountPaid = (debtor.amount_paid || 0) as number
+    const currentBalance = Math.max(0, orderTotal - amountPaid)
+    const status = currentBalance <= 0 ? 'paid' : amountPaid > 0 ? 'partial' : 'outstanding'
+    const { error: updErr } = await supabase
+      .from('debtors')
+      .update({
+        credit_limit: orderTotal,
+        current_balance: currentBalance,
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', debtor.id)
+    if (updErr) throw updErr
+  }
+}
+
+const recalcOrderTotal = async (orderId: string) => {
+  const { data: items, error } = await supabase
+    .from('order_items')
+    .select('total_price, extra_charge, status, return_accepted')
+    .eq('order_id', orderId)
+  if (error) throw error
+  const newTotal = (items || [])
+    .filter((i: { status?: string; return_accepted?: boolean }) => {
+      if ((i.status || '').toLowerCase() === 'cancelled') return false
+      return !i.return_accepted
+    })
+    .reduce(
+      (s: number, i: { total_price?: number; extra_charge?: number }) =>
+        s + (i.total_price || 0) + (i.extra_charge || 0),
+      0
+    )
+  const { error: orderErr } = await supabase
+    .from('orders')
+    .update({ total_amount: newTotal, updated_at: new Date().toISOString() })
+    .eq('id', orderId)
+  if (orderErr) throw orderErr
+  await syncCreditDebtorForOrder(orderId, newTotal)
+  return newTotal
+}
+
+/**
+ * Puts a returned item back on the waitron's bill.
+ * Used when management rejects a station-accepted return, or when nobody
+ * confirms it within the approval window.
+ */
+const restoreItemToWaitron = async (r: ReturnEntry) => {
+  const { error } = await supabase
+    .from('order_items')
+    .update({
+      return_accepted: false,
+      return_requested: false,
+      return_reason: null,
+      return_accepted_at: null,
+      return_requested_at: null,
+    })
+    .eq('id', r.order_item_id)
+  if (error) throw error
+  if (r.order_id) await recalcOrderTotal(r.order_id)
+}
+
 export default function ReturnedDrinksTab() {
   const { profile } = useAuth()
   const toast = useToast()
@@ -49,18 +124,40 @@ export default function ReturnedDrinksTab() {
     const dayEnd = new Date(dayStart)
     dayEnd.setDate(dayEnd.getDate() + 1)
 
-    // Check for bar_accepted items older than 24 hours unresolved by manager.
-    // The bar acceptance permanently removes the item from the waitron's accountability,
-    // so expiry just marks the log entry without reverting order items.
-    const expiry = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    // Station-accepted returns are only provisional. If management has not
+    // confirmed them within the approval window, the item goes back on the
+    // waitron's bill — same as an explicit rejection.
+    const expiry = new Date(Date.now() - MANAGER_APPROVAL_WINDOW_MS).toISOString()
     const { data: expired } = await supabase
       .from('returns_log')
-      .select('id')
-      .eq('status', 'bar_accepted')
+      .select(
+        'id, order_id, order_item_id, item_name, quantity, item_total, table_name, waitron_id, waitron_name, barman_name, return_reason, status, requested_at, resolved_at'
+      )
+      .in('status', STATION_ACCEPTED)
       .lt('resolved_at', expiry)
     if (expired && expired.length > 0) {
-      const expiredIds = (expired as Array<{ id: string }>).map((e) => e.id)
-      await supabase.from('returns_log').update({ status: 'expired' }).in('id', expiredIds)
+      for (const row of expired as ReturnEntry[]) {
+        try {
+          await restoreItemToWaitron(row)
+          await supabase
+            .from('returns_log')
+            .update({
+              status: 'expired',
+              reviewed: true,
+              reviewed_by_name: 'Auto — not confirmed within 24h',
+              reviewed_at: new Date().toISOString(),
+            })
+            .eq('id', row.id)
+          if (row.waitron_id)
+            sendPushToStaff(
+              row.waitron_id,
+              '↩ Return Not Confirmed',
+              `${row.quantity}x ${row.item_name} was not confirmed by management — it is back on your bill`
+            ).catch(() => {})
+        } catch (e) {
+          console.error('Failed to expire return', row.id, errMsg(e))
+        }
+      }
     }
 
     // Pull wider range (last 3 days) then filter locally to catch items approved today but requested earlier
@@ -90,32 +187,6 @@ export default function ReturnedDrinksTab() {
     fetchReturns(date)
   }, [date, fetchReturns])
 
-  const syncCreditDebtorForOrder = async (orderId: string, orderTotal: number) => {
-    const { data: debtors, error } = await supabase
-      .from('debtors')
-      .select('id, amount_paid')
-      .eq('order_id', orderId)
-      .eq('debt_type', 'credit_order')
-      .eq('is_active', true)
-    if (error) throw error
-
-    for (const debtor of debtors || []) {
-      const amountPaid = (debtor.amount_paid || 0) as number
-      const currentBalance = Math.max(0, orderTotal - amountPaid)
-      const status = currentBalance <= 0 ? 'paid' : amountPaid > 0 ? 'partial' : 'outstanding'
-      const { error: updErr } = await supabase
-        .from('debtors')
-        .update({
-          credit_limit: orderTotal,
-          current_balance: currentBalance,
-          status,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', debtor.id)
-      if (updErr) throw updErr
-    }
-  }
-
   const managerApprove = async (r: ReturnEntry) => {
     try {
       const { error: oiErr } = await supabase
@@ -124,21 +195,7 @@ export default function ReturnedDrinksTab() {
         .eq('id', r.order_item_id)
       if (oiErr) throw oiErr
 
-      const { data: remaining, error: remErr } = await supabase
-        .from('order_items')
-        .select('total_price, return_accepted')
-        .eq('order_id', r.order_id)
-      if (remErr) throw remErr
-      const newTotal = (remaining || [])
-        .filter((ri: { return_accepted?: boolean }) => !ri.return_accepted)
-        .reduce((s: number, ri: { total_price: number }) => s + (ri.total_price || 0), 0)
-      const { error: orderErr } = await supabase
-        .from('orders')
-        .update({ total_amount: newTotal })
-        .eq('id', r.order_id)
-      if (orderErr) throw orderErr
-
-      await syncCreditDebtorForOrder(r.order_id, newTotal)
+      await recalcOrderTotal(r.order_id)
 
       if (r.item_name) {
         const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' })
@@ -199,36 +256,9 @@ export default function ReturnedDrinksTab() {
 
   const managerReject = async (r: ReturnEntry) => {
     try {
-      // Stations that have already accepted the return (bar, kitchen, griller) permanently
-      // remove the item from the waitron's accountability. Manager rejection only logs
-      // the rejection — it does NOT restore the item to the waitron's bill.
-      const stationAccepted = ['bar_accepted', 'kitchen_accepted', 'griller_accepted']
-      const isStationAccepted = stationAccepted.includes(r.status)
-
-      if (!isStationAccepted) {
-        // Pending (bar hasn't accepted yet) — revert the return request on the order item
-        const { error: oiErr } = await supabase
-          .from('order_items')
-          .update({ return_accepted: false, return_requested: false, return_reason: null })
-          .eq('id', r.order_item_id)
-        if (oiErr) throw oiErr
-
-        const { data: remaining, error: remErr } = await supabase
-          .from('order_items')
-          .select('total_price, return_accepted')
-          .eq('order_id', r.order_id)
-        if (remErr) throw remErr
-        const newTotal = (remaining || [])
-          .filter((ri: { return_accepted?: boolean }) => !ri.return_accepted)
-          .reduce((s: number, ri: { total_price: number }) => s + (ri.total_price || 0), 0)
-        const { error: orderErr } = await supabase
-          .from('orders')
-          .update({ total_amount: newTotal })
-          .eq('id', r.order_id)
-        if (orderErr) throw orderErr
-
-        await syncCreditDebtorForOrder(r.order_id, newTotal)
-      }
+      // Bar/kitchen/grill acceptance is provisional. Rejecting — or letting the
+      // approval window lapse — puts the item straight back on the waitron's bill.
+      await restoreItemToWaitron(r)
 
       const { error: retErr } = await supabase
         .from('returns_log')
@@ -242,9 +272,7 @@ export default function ReturnedDrinksTab() {
         .eq('id', r.id)
       if (retErr) throw retErr
 
-      const restoredMsg = isStationAccepted
-        ? `${r.quantity}x ${r.item_name} rejection noted — item stays off your bill`
-        : `${r.quantity}x ${r.item_name} restored to your order`
+      const restoredMsg = `${r.quantity}x ${r.item_name} is back on the waitron's bill`
 
       await audit({
         action: 'RETURN_MANAGER_REJECTED',
@@ -256,7 +284,8 @@ export default function ReturnedDrinksTab() {
           total: r.item_total,
           table: r.table_name,
           rejected_by: profile?.full_name,
-          station_already_accepted: isStationAccepted,
+          restored_to_waitron: true,
+          station_status: r.status,
         },
         performer: profile as Profile,
       })
@@ -281,19 +310,19 @@ export default function ReturnedDrinksTab() {
       return {
         text: 'Bar Accepted',
         color: 'bg-amber-500/20 text-amber-400',
-        desc: 'Awaiting manager approval',
+        desc: 'Awaiting manager approval — reject returns it to the waitron',
       }
     if (s === 'kitchen_accepted')
       return {
         text: 'Kitchen Accepted',
         color: 'bg-blue-500/20 text-blue-300',
-        desc: 'Kitchen approved — manager final decision needed',
+        desc: 'Kitchen approved — manager approval still required',
       }
     if (s === 'griller_accepted')
       return {
         text: 'Grill Accepted',
         color: 'bg-orange-500/20 text-orange-300',
-        desc: 'Grill approved — manager final decision needed',
+        desc: 'Grill approved — manager approval still required',
       }
     if (s === 'accepted')
       return { text: 'Approved', color: 'bg-green-500/20 text-green-400', desc: 'Manager approved' }
@@ -303,13 +332,13 @@ export default function ReturnedDrinksTab() {
       return {
         text: 'Manager Rejected',
         color: 'bg-red-500/20 text-red-400',
-        desc: 'Return rejected — item stays permanently removed',
+        desc: "Return rejected — item is back on the waitron's bill",
       }
     if (s === 'expired')
       return {
         text: 'Expired',
         color: 'bg-gray-500/20 text-gray-400',
-        desc: 'Unresolved — item stays permanently removed',
+        desc: "Not approved in 24h — item is back on the waitron's bill",
       }
     if (s === 'pending')
       return {
@@ -434,8 +463,9 @@ export default function ReturnedDrinksTab() {
             </span>
           </div>
           <p className="text-amber-400/70 text-xs">
-            Bar accepted these returns — items are already permanently removed from the waitron's
-            bill. Approve to confirm or reject to log the decision.
+            Bar accepted these returns — items are temporarily off the waitron's bill. Approve to
+            confirm, or reject and the item goes back on the waitron&apos;s account. Unconfirmed
+            returns return automatically after 24 hours.
           </p>
         </div>
       )}

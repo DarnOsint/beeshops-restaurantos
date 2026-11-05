@@ -57,8 +57,8 @@ export default async function handler(req, res) {
   if (callerError || !callerProfile) {
     return res.status(403).json({ error: 'Unable to verify caller permissions' })
   }
-  if (!['owner', 'manager'].includes(callerProfile.role)) {
-    return res.status(403).json({ error: 'Only owners and managers can upload menu images' })
+  if (!['owner', 'general_manager', 'manager'].includes(callerProfile.role)) {
+    return res.status(403).json({ error: 'Only owners, general managers and managers can upload menu images' })
   }
 
   const { menuItemId, dataUrl } = req.body || {}

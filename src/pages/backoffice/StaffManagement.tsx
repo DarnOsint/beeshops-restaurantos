@@ -22,6 +22,8 @@ import {
 } from 'lucide-react'
 import type { Profile } from '../../types'
 import { useToast } from '../../context/ToastContext'
+import { useAuth } from '../../context/AuthContext'
+import { isOwnerLevel, OWNER_LEVEL_ROLES } from '../../lib/roles'
 
 const DEFAULT_ROLES = [
   'waitron',
@@ -38,6 +40,7 @@ const DEFAULT_ROLES = [
   'apartment_manager',
   'social_media_manager',
   'manager',
+  'general_manager',
   'accountant',
   'auditor',
   'owner',
@@ -62,6 +65,7 @@ interface CustomRoleConfig {
 }
 const roleColors: Record<string, string> = {
   owner: 'bg-amber-500/20 text-amber-400',
+  general_manager: 'bg-amber-600/20 text-amber-300',
   manager: 'bg-purple-500/20 text-purple-400',
   accountant: 'bg-blue-500/20 text-blue-400',
   auditor: 'bg-indigo-500/20 text-indigo-400',
@@ -115,6 +119,7 @@ const formatRoleLabel = (role: string) =>
     .join(' ')
 
 export default function StaffManagement({ onBack }: Props) {
+  const { profile: viewer } = useAuth()
   const [staff, setStaff] = useState<Profile[]>([])
   const [customRoles, setCustomRoles] = useState<CustomRoleConfig[]>([])
   const [loading, setLoading] = useState(true)
@@ -186,7 +191,7 @@ export default function StaffManagement({ onBack }: Props) {
 
   const allRoles = Array.from(
     new Set([...DEFAULT_ROLES, ...customRoles.map((entry) => entry.role)])
-  )
+  ).filter((role) => isOwnerLevel(viewer?.role) || !OWNER_LEVEL_ROLES.includes(role as never))
   const isFloorRole = (role: string) =>
     DEFAULT_FLOOR_ROLES.includes(role) ||
     customRoles.some((entry) => entry.role === role && entry.access === 'floor')

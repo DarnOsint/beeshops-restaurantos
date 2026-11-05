@@ -223,7 +223,7 @@ export default function QRTableCards() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exporting, filteredZones, selectedZone, waitForQRCodes, zoneCards])
 
-  if (!['owner', 'manager', 'executive'].includes(profile?.role || ''))
+  if (!['owner', 'general_manager', 'manager', 'executive'].includes(profile?.role || ''))
     return (
       <div className="min-h-full bg-gray-950 flex items-center justify-center text-gray-400">
         Access denied

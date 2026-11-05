@@ -42,7 +42,7 @@ interface TableGridProps {
   activeJoins?: Record<string, string[]>
 }
 
-const BYPASS_ROLES = ['owner', 'manager', 'accountant', 'supervisor']
+const BYPASS_ROLES = ['owner', 'general_manager', 'manager', 'accountant', 'supervisor']
 
 const ALL_CATEGORIES = ['All', 'Outdoor', 'Indoor', 'VIP Lounge', 'The Nook'] as const
 

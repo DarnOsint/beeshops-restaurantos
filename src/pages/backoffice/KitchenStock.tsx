@@ -18,7 +18,7 @@ import { useToast } from '../../context/ToastContext'
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
 const UNITS = ['portion', 'kg', 'g', 'litre', 'ml', 'piece', 'pack', 'tray', 'bowl', 'cup'] as const
-const isManager = (role?: string) => ['owner', 'manager'].includes(role || '')
+const isManager = (role?: string) => ['owner', 'general_manager', 'manager'].includes(role || '')
 
 const normalizeUnit = (u: string) => (u || '').toString().trim().toLowerCase()
 const convertQty = (qty: number, fromUnit: string, toUnit: string): number | null => {

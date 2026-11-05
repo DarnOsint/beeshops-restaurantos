@@ -37,7 +37,7 @@ export default function ShishaAttendantPage() {
   const { profile, signOut } = useAuth()
   const toast = useToast()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
-  const isManager = ['owner', 'manager'].includes(profile?.role || '')
+  const isManager = ['owner', 'general_manager', 'manager'].includes(profile?.role || '')
 
   const [variants, setVariants] = useState<ShishaVariant[]>([])
   const [sales, setSales] = useState<ShishaSale[]>([])

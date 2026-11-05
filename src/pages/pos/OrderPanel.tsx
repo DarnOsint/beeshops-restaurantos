@@ -319,7 +319,7 @@ export default function OrderPanel({
     const deleteReason = reason.trim().slice(0, 200)
 
     // Confirmed items — waitrons cannot delete, must request manager approval
-    const isManagerRole = profile && ['owner', 'manager'].includes(profile.role)
+    const isManagerRole = profile && ['owner', 'general_manager', 'manager'].includes(profile.role)
     const dbId = item._dbId || dbIdMap[item.id]
     if (!dbId) return
 

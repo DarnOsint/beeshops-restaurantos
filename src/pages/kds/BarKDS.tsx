@@ -483,8 +483,8 @@ function BarKDSInner() {
     staffId?: string | null,
     tableName?: string
   ) => {
-    // Bar acceptance removes the item from the bill immediately (waitron totals),
-    // while stock/sales move on manager approval.
+    // Bar acceptance takes the item off the bill provisionally. It becomes final
+    // only when management confirms it; otherwise it returns to the waitron's bill.
     const resolvedAt = new Date().toISOString()
     const { error, data } = await supabase
       .from('returns_log')
@@ -537,13 +537,13 @@ function BarKDSInner() {
 
     toast.success(
       'Return Accepted',
-      'Item removed from the bill. Awaiting manager approval before stock and sales are adjusted.'
+      'Sent for manager approval. If it is not approved within 24 hours the item goes back on the waitron\u2019s bill.'
     )
     if (staffId)
       await sendPushToStaff(
         staffId,
         '↩ Return Accepted by Bar',
-        `Return accepted for ${tableName ?? 'table'} — item removed from bill, pending manager approval`
+        `Return accepted for ${tableName ?? 'table'} — manager must confirm, otherwise it returns to your bill`
       )
     setReturnItems((current) => current.filter((item) => item.id !== itemId))
     fetchOrders()

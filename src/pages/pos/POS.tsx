@@ -555,7 +555,7 @@ export default function POS() {
   }, [profile?.id])
 
   const fetchAssignedTables = async (role: string, staffId: string) => {
-    if (['owner', 'manager', 'accountant'].includes(role)) {
+    if (['owner', 'general_manager', 'manager', 'accountant'].includes(role)) {
       setAssignedTableIds(null)
       setAssignedZoneNames(null)
       setIsClockedIn(true)

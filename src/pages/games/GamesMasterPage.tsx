@@ -42,7 +42,7 @@ export default function GamesMasterPage() {
   const { profile, signOut } = useAuth()
   const toast = useToast()
   const { status: geoStatus, distance: geoDist, location: geoLocation } = useGeofence('main')
-  const isManager = ['owner', 'manager'].includes(profile?.role || '')
+  const isManager = ['owner', 'general_manager', 'manager'].includes(profile?.role || '')
 
   const [gameTypes, setGameTypes] = useState<GameType[]>([])
   const [sales, setSales] = useState<GameSale[]>([])

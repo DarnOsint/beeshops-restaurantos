@@ -109,7 +109,7 @@ export default function OverviewTab({
 
   const role = profile?.role || ''
   const isAccountant = role === 'accountant'
-  const isManagement = role === 'owner' || role === 'manager'
+  const isManagement = role === 'owner' || role === 'general_manager' || role === 'manager'
 
   // Accountants can only save for the current trading session day (8am WAT boundary).
   // Management/owners can save for any day.

@@ -77,7 +77,7 @@ async function checkAndAlert(specificItemId = null) {
     if (lastAlerts[key] && now - lastAlerts[key] < COOLDOWN_MS) continue
 
     await sendRolePush(
-      ['owner', 'manager'],
+      ['owner', 'general_manager', 'manager'],
       `🔴 Out of Stock: ${item.item_name}`,
       `${item.item_name} is completely out of stock. Current: 0 ${item.unit}. Restock immediately.`,
       { type: 'stock_alert', level: 'out', item_id: item.id, item_name: item.item_name }
@@ -93,7 +93,7 @@ async function checkAndAlert(specificItemId = null) {
 
     const pct = Math.round((item.current_stock / item.minimum_stock) * 100)
     await sendRolePush(
-      ['owner', 'manager'],
+      ['owner', 'general_manager', 'manager'],
       `🟡 Low Stock: ${item.item_name}`,
       `${item.item_name} is low — ${item.current_stock} ${item.unit} remaining (min: ${item.minimum_stock}). ${pct}% of minimum threshold.`,
       { type: 'stock_alert', level: 'low', item_id: item.id, item_name: item.item_name }

@@ -168,7 +168,7 @@ export default function ApartmentDashboard() {
     setServiceOrders((serviceRes.data || []) as ServiceOrder[])
     setStaff(
       ((staffRes.data || []) as StaffMember[]).filter(
-        (s) => !['apartment_manager', 'manager', 'owner'].includes(s.role)
+        (s) => !['apartment_manager', 'manager', 'general_manager', 'owner'].includes(s.role)
       )
     )
     setLoading(false)

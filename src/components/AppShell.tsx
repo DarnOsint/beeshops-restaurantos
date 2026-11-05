@@ -33,16 +33,19 @@ interface NavItem {
   path: string
 }
 
+const OWNER_NAV: NavItem[] = [
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/executive' },
+  { label: 'Reports', icon: TrendingUp, path: '/reports' },
+  { label: 'Analytics', icon: BarChart2, path: '/analytics' },
+  { label: 'CV', icon: Camera, path: '/cv' },
+  { label: 'Back Office', icon: Settings, path: '/backoffice' },
+  { label: 'Month End', icon: CalendarDays, path: '/month-end' },
+  { label: 'Rooms', icon: BedDouble, path: '/apartment' },
+]
+
 const NAV_ITEMS: Record<string, NavItem[]> = {
-  owner: [
-    { label: 'Dashboard', icon: LayoutDashboard, path: '/executive' },
-    { label: 'Reports', icon: TrendingUp, path: '/reports' },
-    { label: 'Analytics', icon: BarChart2, path: '/analytics' },
-    { label: 'CV', icon: Camera, path: '/cv' },
-    { label: 'Back Office', icon: Settings, path: '/backoffice' },
-    { label: 'Month End', icon: CalendarDays, path: '/month-end' },
-    { label: 'Rooms', icon: BedDouble, path: '/apartment' },
-  ],
+  owner: OWNER_NAV,
+  general_manager: OWNER_NAV,
   manager: [
     { label: 'Dashboard', icon: LayoutDashboard, path: '/management' },
     { label: 'POS', icon: ShoppingBag, path: '/pos' },
@@ -192,7 +195,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [tables, setTables] = useState<TableRow[]>([])
 
   useEffect(() => {
-    if (!['owner', 'manager'].includes(role)) return
+    if (!['owner', 'general_manager', 'manager'].includes(role)) return
     const fetchTables = async () => {
       const { data } = await supabase
         .from('tables')
@@ -250,7 +253,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               />
             ))}
           </nav>
-          {['owner', 'manager'].includes(role) && tables.length > 0 && (
+          {['owner', 'general_manager', 'manager'].includes(role) && tables.length > 0 && (
             <TableWidget tables={tables} />
           )}
           <div className="px-3 py-3 border-t border-gray-800 space-y-2">

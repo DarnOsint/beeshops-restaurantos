@@ -40,7 +40,8 @@ const buildAcceptedReturnsMap = (
 
 export default function ChillerSummaryTab() {
   const { profile } = useAuth()
-  const isManager = profile?.role === 'owner' || profile?.role === 'manager'
+  const isManager =
+    profile?.role === 'owner' || profile?.role === 'general_manager' || profile?.role === 'manager'
   const [date, setDate] = useState(todayStr())
   const [entries, setEntries] = useState<ChillerEntry[]>([])
   const [loading, setLoading] = useState(true)

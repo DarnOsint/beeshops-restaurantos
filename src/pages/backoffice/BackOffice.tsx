@@ -65,7 +65,7 @@ export default function BackOffice() {
       desc: 'Add, edit and manage staff roles and PINs',
       icon: Users,
       color: 'bg-blue-500',
-      roles: ['owner', 'manager'],
+      roles: ['owner', 'general_manager', 'manager'],
     },
     {
       id: 'menu',
@@ -73,7 +73,7 @@ export default function BackOffice() {
       desc: 'Add and edit menu items, prices, availability',
       icon: UtensilsCrossed,
       color: 'bg-green-500',
-      roles: ['owner', 'manager'],
+      roles: ['owner', 'general_manager', 'manager'],
     },
     {
       id: 'zonepricing',
@@ -81,7 +81,7 @@ export default function BackOffice() {
       desc: 'Set drink prices per zone',
       icon: MapPin,
       color: 'bg-purple-500',
-      roles: ['owner', 'manager'],
+      roles: ['owner', 'general_manager', 'manager'],
     },
     {
       id: 'ravepricing',
@@ -89,7 +89,7 @@ export default function BackOffice() {
       desc: 'Set prices that activate when Rave Mode is on',
       icon: Music,
       color: 'bg-pink-600',
-      roles: ['owner', 'manager'],
+      roles: ['owner', 'general_manager', 'manager'],
     },
     {
       id: 'tables',
@@ -97,7 +97,7 @@ export default function BackOffice() {
       desc: 'Edit table names and capacity',
       icon: LayoutGrid,
       color: 'bg-amber-500',
-      roles: ['owner', 'manager'],
+      roles: ['owner', 'general_manager', 'manager'],
     },
     {
       id: 'floorplan',
@@ -105,7 +105,7 @@ export default function BackOffice() {
       desc: 'Drag-and-drop table layout — arrange tables as they are on site',
       icon: Map,
       color: 'bg-emerald-600',
-      roles: ['owner', 'manager'],
+      roles: ['owner', 'general_manager', 'manager'],
     },
     {
       id: 'inventory',
@@ -113,7 +113,7 @@ export default function BackOffice() {
       desc: 'Master stock levels, restocking, supplier logs — the big store',
       icon: Package,
       color: 'bg-blue-600',
-      roles: ['owner', 'manager'],
+      roles: ['owner', 'general_manager', 'manager'],
     },
     {
       id: 'barchiller',
@@ -121,7 +121,7 @@ export default function BackOffice() {
       desc: 'Daily bar chiller register — what was received, sold, and remaining',
       icon: Beer,
       color: 'bg-cyan-600',
-      roles: ['owner', 'manager', 'bar'],
+      roles: ['owner', 'general_manager', 'manager', 'bar'],
     },
     {
       id: 'kitchenstock',
@@ -129,7 +129,7 @@ export default function BackOffice() {
       desc: 'Daily food received vs sold vs remaining — variance tracking',
       icon: ChefHat,
       color: 'bg-orange-600',
-      roles: ['owner', 'manager', 'kitchen'],
+      roles: ['owner', 'general_manager', 'manager', 'kitchen'],
     },
     {
       id: 'suppliers',
@@ -137,7 +137,7 @@ export default function BackOffice() {
       desc: 'Manage suppliers and purchase orders',
       icon: Truck,
       color: 'bg-teal-600',
-      roles: ['owner', 'manager'],
+      roles: ['owner', 'general_manager', 'manager'],
     },
     {
       id: 'takeawaypacks',
@@ -145,7 +145,7 @@ export default function BackOffice() {
       desc: 'Configure pack sizes and prices for takeaway orders',
       icon: ShoppingBag,
       color: 'bg-lime-600',
-      roles: ['owner', 'manager'],
+      roles: ['owner', 'general_manager', 'manager'],
     },
     {
       id: 'qrcards',
@@ -153,7 +153,7 @@ export default function BackOffice() {
       desc: 'Print one QR code per zone (pricing only)',
       icon: QrCode,
       color: 'bg-rose-500',
-      roles: ['owner', 'manager'],
+      roles: ['owner', 'general_manager', 'manager'],
     },
     {
       id: 'posmachines',
@@ -161,7 +161,7 @@ export default function BackOffice() {
       desc: 'Name and manage your POS terminals for shift reconciliation',
       icon: Monitor,
       color: 'bg-cyan-500',
-      roles: ['owner', 'manager'],
+      roles: ['owner', 'general_manager', 'manager'],
     },
     {
       id: 'cctvconfig',
@@ -169,7 +169,7 @@ export default function BackOffice() {
       desc: 'Configure cameras, zones, and AI detection settings',
       icon: Camera,
       color: 'bg-violet-600',
-      roles: ['owner', 'manager'],
+      roles: ['owner', 'general_manager', 'manager'],
     },
     {
       id: 'networkprinters',
@@ -177,7 +177,7 @@ export default function BackOffice() {
       desc: 'Configure all thermal printers on the network by IP and function',
       icon: Network,
       color: 'bg-indigo-600',
-      roles: ['owner', 'manager'],
+      roles: ['owner', 'general_manager', 'manager'],
     },
     {
       id: 'printerconfig',
@@ -185,7 +185,7 @@ export default function BackOffice() {
       desc: 'Legacy print server URL configuration',
       icon: Printer,
       color: 'bg-indigo-500',
-      roles: ['owner', 'manager'],
+      roles: ['owner', 'general_manager', 'manager'],
     },
     {
       id: 'changepassword',
@@ -195,6 +195,7 @@ export default function BackOffice() {
       color: 'bg-gray-600',
       roles: [
         'owner',
+        'general_manager',
         'manager',
         'accountant',
         'auditor',

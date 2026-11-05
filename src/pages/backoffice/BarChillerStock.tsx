@@ -117,7 +117,8 @@ const NOTE_PRESETS = ['Broken bottle', 'Expired', 'Given out free', 'Damaged lab
 export default function BarChillerStock({ onBack, embedded = false }: Props) {
   const { profile } = useAuth()
   const toast = useToast()
-  const isManager = profile?.role === 'owner' || profile?.role === 'manager'
+  const isManager =
+    profile?.role === 'owner' || profile?.role === 'general_manager' || profile?.role === 'manager'
   const [date, setDate] = useState(todayStr())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)

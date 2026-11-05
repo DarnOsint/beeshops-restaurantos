@@ -42,6 +42,7 @@ const ShishaAttendantPage = lazy(() => import('./pages/shisha/ShishaAttendantPag
 const TableView = lazy(() => import('./pages/customer/TableView'))
 const ReceiptView = lazy(() => import('./pages/customer/ReceiptView'))
 const ZoneMenuView = lazy(() => import('./pages/customer/ZoneMenuView'))
+import { OWNER_LEVEL_ROLES } from './lib/roles'
 import type { Role } from './types'
 
 function ScrollToTop() {
@@ -97,7 +98,8 @@ function RoleRoute() {
       </div>
     )
   if (!profile) return <Navigate to="/login" />
-  if (profile.role === 'owner') return <Navigate to="/executive" />
+  if (profile.role === 'owner' || profile.role === 'general_manager')
+    return <Navigate to="/executive" />
   if (profile.role === 'executive') return <Navigate to="/executive" />
   if (profile.role === 'manager') return <Navigate to="/management" />
   if (profile.role === 'accountant') return <Navigate to="/accounting" />
@@ -147,7 +149,7 @@ function AppRoutes() {
             path="/executive"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner']}>
+                <RoleGuard allowed={OWNER_LEVEL_ROLES}>
                   <EB title="Dashboard error">
                     <Executive />
                   </EB>
@@ -159,7 +161,7 @@ function AppRoutes() {
             path="/management"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager']}>
                   <EB title="Management error">
                     <Management />
                   </EB>
@@ -171,7 +173,7 @@ function AppRoutes() {
             path="/accounting"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'accountant', 'auditor']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager', 'accountant', 'auditor']}>
                   <EB title="Accounting error">
                     <Accounting />
                   </EB>
@@ -183,7 +185,7 @@ function AppRoutes() {
             path="/backoffice"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager']}>
                   <EB title="Back office error">
                     <BackOffice />
                   </EB>
@@ -195,7 +197,7 @@ function AppRoutes() {
             path="/backoffice/qr-cards"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'executive'] as Role[]}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager', 'executive'] as Role[]}>
                   <EB title="QR cards error">
                     <QRTableCards />
                   </EB>
@@ -207,7 +209,7 @@ function AppRoutes() {
             path="/pos"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'waitron']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager', 'waitron']}>
                   <EB title="POS error">
                     <POS />
                   </EB>
@@ -219,7 +221,7 @@ function AppRoutes() {
             path="/kds/kitchen"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'kitchen']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager', 'kitchen']}>
                   <EB title="Kitchen display error">
                     <KitchenKDS />
                   </EB>
@@ -231,7 +233,7 @@ function AppRoutes() {
             path="/kds/bar"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'bar']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager', 'bar']}>
                   <EB title="Bar display error">
                     <BarKDS />
                   </EB>
@@ -243,7 +245,7 @@ function AppRoutes() {
             path="/kds/mixologist"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'mixologist']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager', 'mixologist']}>
                   <EB title="Mixologist display error">
                     <MixologistKDS />
                   </EB>
@@ -255,7 +257,7 @@ function AppRoutes() {
             path="/kds/griller"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'griller']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager', 'griller']}>
                   <EB title="Grill display error">
                     <GrillerKDS />
                   </EB>
@@ -267,7 +269,7 @@ function AppRoutes() {
             path="/rooms"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager']}>
                   <EB title="Room management error">
                     <RoomManagement />
                   </EB>
@@ -279,7 +281,7 @@ function AppRoutes() {
             path="/debtors"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'accountant', 'auditor']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager', 'accountant', 'auditor']}>
                   <EB title="Debtors error">
                     <Debtors onBack={() => window.history.back()} />
                   </EB>
@@ -291,7 +293,7 @@ function AppRoutes() {
             path="/reports"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'accountant', 'auditor']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager', 'accountant', 'auditor']}>
                   <EB title="Reports error">
                     <Reports />
                   </EB>
@@ -303,7 +305,7 @@ function AppRoutes() {
             path="/analytics"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'accountant', 'auditor']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager', 'accountant', 'auditor']}>
                   <EB title="Analytics error">
                     <Analytics />
                   </EB>
@@ -315,7 +317,7 @@ function AppRoutes() {
             path="/cv"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager']}>
                   <EB title="CV Dashboard error">
                     <CVDashboard />
                   </EB>
@@ -327,7 +329,7 @@ function AppRoutes() {
             path="/supervisor"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'supervisor'] as Role[]}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager', 'supervisor'] as Role[]}>
                   <SupervisorDashboard />
                 </RoleGuard>
               </PrivateRoute>
@@ -337,7 +339,7 @@ function AppRoutes() {
             path="/apartment"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'apartment_manager']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'apartment_manager']}>
                   <EB title="Apartment dashboard error">
                     <ApartmentDashboard />
                   </EB>
@@ -350,7 +352,7 @@ function AppRoutes() {
             path="/month-end"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'accountant', 'auditor']}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager', 'accountant', 'auditor']}>
                   <EB title="Month End error">
                     <MonthEnd />
                   </EB>
@@ -363,7 +365,7 @@ function AppRoutes() {
             path="/games"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'games_master'] as Role[]}>
+                <RoleGuard allowed={[...OWNER_LEVEL_ROLES, 'manager', 'games_master'] as Role[]}>
                   <EB title="Games error">
                     <GamesMasterPage />
                   </EB>
@@ -375,7 +377,9 @@ function AppRoutes() {
             path="/shisha"
             element={
               <PrivateRoute>
-                <RoleGuard allowed={['owner', 'manager', 'shisha_attendant'] as Role[]}>
+                <RoleGuard
+                  allowed={[...OWNER_LEVEL_ROLES, 'manager', 'shisha_attendant'] as Role[]}
+                >
                   <EB title="Shisha error">
                     <ShishaAttendantPage />
                   </EB>

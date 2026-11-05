@@ -58,7 +58,8 @@ export default function MainStoreSummaryTab({ filterLow = false, onClearFilterLo
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
 
-  const isManager = profile?.role === 'owner' || profile?.role === 'manager'
+  const isManager =
+    profile?.role === 'owner' || profile?.role === 'general_manager' || profile?.role === 'manager'
 
   const fetchData = useCallback(async () => {
     setLoading(true)

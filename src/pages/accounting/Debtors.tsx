@@ -112,8 +112,8 @@ export default function Debtors({ onBack, embedded = false }: Props) {
   const [sendingStatement, setSendingStatement] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const canEdit = ['owner', 'manager'].includes(profile?.role || '')
-  const canPay = ['owner', 'manager', 'accountant'].includes(profile?.role || '')
+  const canEdit = ['owner', 'general_manager', 'manager'].includes(profile?.role || '')
+  const canPay = ['owner', 'general_manager', 'manager', 'accountant'].includes(profile?.role || '')
 
   // Month-based filtering
   type OutstandingMonth = 'current' | 'previous' | 'custom'
