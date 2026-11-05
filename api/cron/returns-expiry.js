@@ -1,6 +1,6 @@
 /**
  * api/cron/returns-expiry.js
- * Runs hourly. A station (bar / kitchen / grill) accepting a return only takes the
+ * Runs daily (Vercel Hobby allows only daily crons). A station (bar / kitchen / grill) accepting a return only takes the
  * item off the waitron's bill provisionally — management has 24 hours to confirm.
  * Anything still unconfirmed after that goes back on the waitron's bill.
  */
