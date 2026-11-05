@@ -15,10 +15,6 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/returns-expiry",
-      "schedule": "0 0 * * *"
-    },
-    {
       "path": "/api/cron/daily-report",
       "schedule": "0 7 * * *"
     },
